@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="EscapeFromDarkzone/EscapeFromDarkzone.vcxproj" Id="e8d336a8-aa98-4eff-8af6-b9c2777f6d72" />
+</Solution>
