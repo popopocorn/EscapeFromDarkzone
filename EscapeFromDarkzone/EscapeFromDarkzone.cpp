@@ -11,7 +11,7 @@ HINSTANCE						ghAppInstance;
 TCHAR							szTitle[MAX_LOADSTRING];
 TCHAR							szWindowClass[MAX_LOADSTRING];
 
-std::unique_ptr<CGameFramework>					gGameFramework;
+CGameFramework					gGameFramework;
 
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitInstance(HINSTANCE, int);
@@ -29,7 +29,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	::LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	::LoadString(hInstance, IDC_ESCAPEFROMDARKZONE, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
-	gGameFramework = std::make_unique<CGameFramework>();
+
 	if (!InitInstance(hInstance, nCmdShow)) return(FALSE);
 
 	hAccelTable = ::LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_ESCAPEFROMDARKZONE));
@@ -47,10 +47,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 		}
 		else
 		{
-			gGameFramework->FrameAdvance();
+			gGameFramework.FrameAdvance();
 		}
 	}
-	gGameFramework->OnDestroy();
+	gGameFramework.OnDestroy();
 
 	return((int)msg.wParam);
 }
@@ -87,13 +87,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (!hMainWnd) return(FALSE);
 
-	gGameFramework->OnCreate(hInstance, hMainWnd);
+	gGameFramework.OnCreate(hInstance, hMainWnd);
 
 	::ShowWindow(hMainWnd, nCmdShow);
 	::UpdateWindow(hMainWnd);
 
 #ifdef _WITH_SWAPCHAIN_FULLSCREEN_STATE
-	gGameFramework->ChangeSwapChainState();
+	gGameFramework.ChangeSwapChainState();
 #endif
 
 	return(TRUE);
@@ -115,7 +115,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_MOUSEMOVE:
 	case WM_KEYDOWN:
 	case WM_KEYUP:
-		gGameFramework->OnProcessingWindowMessage(hWnd, message, wParam, lParam);
+		gGameFramework.OnProcessingWindowMessage(hWnd, message, wParam, lParam);
 		break;
 	case WM_COMMAND:
 		wmId = LOWORD(wParam);
