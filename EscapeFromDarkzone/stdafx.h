@@ -7,6 +7,7 @@
 
 #define WIN32_LEAN_AND_MEAN             // 거의 사용되지 않는 내용은 Windows 헤더에서 제외합니다.
 // Windows 헤더 파일:
+#define _HAS_STD_BYTE 0
 #include <windows.h>
 
 // C의 런타임 헤더 파일입니다.
@@ -17,13 +18,11 @@
 #include <math.h>
 
 #include <string>
-#include <wrl.h>
+
 #include <shellapi.h>
 
 #include <fstream>
 #include <vector>
-
-using namespace std;
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -35,6 +34,8 @@ using namespace std;
 
 #include <Mmsystem.h>
 
+#define _DEBUG
+
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -42,8 +43,8 @@ using namespace std;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 
+#include <wrl.h>
 using Microsoft::WRL::ComPtr;
-
 extern HINSTANCE						ghAppInstance;
 
 //#define _WITH_SWAPCHAIN_FULLSCREEN_STATE
