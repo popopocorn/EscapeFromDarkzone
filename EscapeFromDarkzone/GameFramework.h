@@ -48,9 +48,9 @@ private:
 	int							m_nWndClientWidth;
 	int							m_nWndClientHeight;
         
-	IDXGIFactory4				*m_pdxgiFactory = NULL;
-	IDXGISwapChain3				*m_pdxgiSwapChain = NULL;
-	ID3D12Device				*m_pd3dDevice = NULL;
+	ComPtr<IDXGIFactory4>		m_pdxgiFactory;
+	ComPtr<IDXGISwapChain3>		m_pdxgiSwapChain;
+	ComPtr<ID3D12Device>		m_pd3dDevice;
 
 	bool						m_bMsaa4xEnable = false;
 	UINT						m_nMsaa4xQualityLevels = 0;
@@ -58,8 +58,8 @@ private:
 	static const UINT			m_nSwapChainBuffers = 2;
 	UINT						m_nSwapChainBufferIndex;
 
-	ID3D12Resource				*m_ppd3dSwapChainBackBuffers[m_nSwapChainBuffers];
-	ID3D12DescriptorHeap		*m_pd3dRtvDescriptorHeap = NULL;
+	std::array<ComPtr<ID3D12Resource>, m_nSwapChainBuffers>		m_ppd3dSwapChainBackBuffers;
+	ComPtr<ID3D12DescriptorHeap>								m_pd3dRtvDescriptorHeap = NULL;
 
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
 	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
