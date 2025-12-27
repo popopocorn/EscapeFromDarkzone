@@ -13,7 +13,6 @@ CGameFramework::CGameFramework()
 	m_pd3dCommandQueue = NULL;
 	m_pd3dCommandList = NULL;
 
-	m_pd3dDsvDescriptorHeap = NULL;
 
 	m_hFenceEvent = NULL;
 	m_pd3dFence = NULL;
@@ -195,7 +194,7 @@ void CGameFramework::CreateRtvAndDsvDescriptorHeaps()
 
 	d3dDescriptorHeapDesc.NumDescriptors = 1;
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	hResult = m_pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc, __uuidof(ID3D12DescriptorHeap), (void **)&m_pd3dDsvDescriptorHeap);
+	hResult = m_pd3dDevice->CreateDescriptorHeap(&d3dDescriptorHeapDesc,IID_PPV_ARGS(& m_pd3dDsvDescriptorHeap));
 	::gnDsvDescriptorIncrementSize = m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 }
 
@@ -364,8 +363,6 @@ void CGameFramework::OnDestroy()
     ReleaseObjects();
 
 	::CloseHandle(m_hFenceEvent);
-
-	if (m_pd3dDsvDescriptorHeap) m_pd3dDsvDescriptorHeap->Release();
 
 	for (int i = 0; i < m_nSwapChainBuffers; i++) if (m_ppd3dSwapChainBackBuffers[i]) m_ppd3dSwapChainBackBuffers[i].Reset();
 

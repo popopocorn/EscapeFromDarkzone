@@ -61,8 +61,8 @@ private:
 	std::array<ComPtr<ID3D12Resource>, m_nSwapChainBuffers>		m_ppd3dSwapChainBackBuffers;
 	ComPtr<ID3D12DescriptorHeap>								m_pd3dRtvDescriptorHeap = NULL;
 
-	ComPtr<ID3D12Resource>		m_pd3dDepthStencilBuffer;
-	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
+	ComPtr<ID3D12Resource>		 m_pd3dDepthStencilBuffer;
+	ComPtr<ID3D12DescriptorHeap> m_pd3dDsvDescriptorHeap;
 
 	ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
 	ID3D12CommandQueue			*m_pd3dCommandQueue = NULL;
