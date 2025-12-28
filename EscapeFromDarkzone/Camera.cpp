@@ -27,6 +27,8 @@ CCamera::CCamera(CCamera *pCamera)
 	if (pCamera)
 	{
 		*this = *pCamera;
+		m_pd3dcbCamera = nullptr;
+		m_pcbMappedCamera = nullptr;
 	}
 	else
 	{
@@ -51,6 +53,7 @@ CCamera::CCamera(CCamera *pCamera)
 
 CCamera::~CCamera()
 { 
+	ReleaseShaderVariables();
 }
 
 void CCamera::SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ, float fMaxZ)
@@ -116,6 +119,7 @@ void CCamera::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsComm
 
 void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
+	if (!m_pcbMappedCamera) return;
 	XMFLOAT4X4 xmf4x4View;
 	XMStoreFloat4x4(&xmf4x4View, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4View)));
 	::memcpy(&m_pcbMappedCamera->m_xmf4x4View, &xmf4x4View, sizeof(XMFLOAT4X4));
@@ -132,11 +136,11 @@ void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 
 void CCamera::ReleaseShaderVariables()
 {
-	if (m_pd3dcbCamera)
-	{
+	if (m_pd3dcbCamera && m_pcbMappedCamera) {
 		m_pd3dcbCamera->Unmap(0, NULL);
-		m_pd3dcbCamera->Release();
+		m_pcbMappedCamera = nullptr; 
 	}
+	m_pd3dcbCamera.Reset(); 
 }
 
 void CCamera::SetViewportsAndScissorRects(ID3D12GraphicsCommandList *pd3dCommandList)

@@ -64,11 +64,11 @@ private:
 	ComPtr<ID3D12Resource>		 m_pd3dDepthStencilBuffer;
 	ComPtr<ID3D12DescriptorHeap> m_pd3dDsvDescriptorHeap;
 
-	ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
-	ID3D12CommandQueue			*m_pd3dCommandQueue = NULL;
-	ID3D12GraphicsCommandList	*m_pd3dCommandList = NULL;
+	std::array<ComPtr<ID3D12CommandAllocator>, m_nSwapChainBuffers>	m_pd3dCommandAllocator;
+	ComPtr<ID3D12CommandQueue>          m_pd3dCommandQueue;
+	ComPtr<ID3D12GraphicsCommandList>   m_pd3dCommandList;
 
-	ID3D12Fence					*m_pd3dFence = NULL;
+	ComPtr<ID3D12Fence>			m_pd3dFence;
 	UINT64						m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE						m_hFenceEvent;
 

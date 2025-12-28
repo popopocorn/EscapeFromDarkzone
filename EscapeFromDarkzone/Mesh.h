@@ -57,16 +57,16 @@ protected:
 
 	XMFLOAT3						*m_pxmf3Positions = NULL;
 
-	ID3D12Resource					*m_pd3dPositionBuffer = NULL;
-	ID3D12Resource					*m_pd3dPositionUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dPositionBuffer;
+	ComPtr<ID3D12Resource>			m_pd3dPositionUploadBuffer;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dPositionBufferView;
 
 	int								m_nSubMeshes = 0;
 	int								*m_pnSubSetIndices = NULL;
 	UINT							**m_ppnSubSetIndices = NULL;
 
-	ID3D12Resource					**m_ppd3dSubSetIndexBuffers = NULL;
-	ID3D12Resource					**m_ppd3dSubSetIndexUploadBuffers = NULL;
+	std::vector<ComPtr<ID3D12Resource>> m_ppd3dSubSetIndexBuffers;
+	std::vector<ComPtr<ID3D12Resource>>	m_ppd3dSubSetIndexUploadBuffers;
 	D3D12_INDEX_BUFFER_VIEW			*m_pd3dSubSetIndexBufferViews = NULL;
 
 public:
@@ -119,16 +119,16 @@ protected:
 	XMFLOAT2						*m_pxmf2TextureCoords0 = NULL;
 	XMFLOAT2						*m_pxmf2TextureCoords1 = NULL;
 
-	ID3D12Resource					*m_pd3dColorBuffer = NULL;
-	ID3D12Resource					*m_pd3dColorUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dColorBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dColorUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dColorBufferView;
 
-	ID3D12Resource					*m_pd3dTextureCoord0Buffer = NULL;
-	ID3D12Resource					*m_pd3dTextureCoord0UploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord0Buffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord0UploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dTextureCoord0BufferView;
 
-	ID3D12Resource					*m_pd3dTextureCoord1Buffer = NULL;
-	ID3D12Resource					*m_pd3dTextureCoord1UploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord1Buffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord1UploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dTextureCoord1BufferView;
 
 public:
@@ -173,24 +173,24 @@ protected:
 	XMFLOAT2						*m_pxmf2TextureCoords0 = NULL;
 	XMFLOAT2						*m_pxmf2TextureCoords1 = NULL;
 
-	ID3D12Resource					*m_pd3dTextureCoord0Buffer = NULL;
-	ID3D12Resource					*m_pd3dTextureCoord0UploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord0Buffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord0UploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dTextureCoord0BufferView;
 
-	ID3D12Resource					*m_pd3dTextureCoord1Buffer = NULL;
-	ID3D12Resource					*m_pd3dTextureCoord1UploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord1Buffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTextureCoord1UploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dTextureCoord1BufferView;
 
-	ID3D12Resource					*m_pd3dNormalBuffer = NULL;
-	ID3D12Resource					*m_pd3dNormalUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dNormalBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dNormalUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dNormalBufferView;
 
-	ID3D12Resource					*m_pd3dTangentBuffer = NULL;
-	ID3D12Resource					*m_pd3dTangentUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTangentBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dTangentUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dTangentBufferView;
 
-	ID3D12Resource					*m_pd3dBiTangentBuffer = NULL;
-	ID3D12Resource					*m_pd3dBiTangentUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBiTangentBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBiTangentUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dBiTangentBufferView;
 
 public:
@@ -212,12 +212,12 @@ public:
 	virtual ~CSkinnedMesh();
 
 protected:
-	ID3D12Resource					*m_pd3dBoneIndexBuffer = NULL;
-	ID3D12Resource					*m_pd3dBoneIndexUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBoneIndexBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBoneIndexUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dBoneIndexBufferView;
 
-	ID3D12Resource					*m_pd3dBoneWeightBuffer = NULL;
-	ID3D12Resource					*m_pd3dBoneWeightUploadBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBoneWeightBuffer = NULL;
+	ComPtr<ID3D12Resource>			m_pd3dBoneWeightUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dBoneWeightBufferView;
 
 protected:

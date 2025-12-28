@@ -8,14 +8,9 @@
 CGameFramework::CGameFramework()
 {
 	m_nSwapChainBufferIndex = 0;
-
-	m_pd3dCommandAllocator = NULL;
-	m_pd3dCommandQueue = NULL;
-	m_pd3dCommandList = NULL;
-
+	
 
 	m_hFenceEvent = NULL;
-	m_pd3dFence = NULL;
 	for (int i = 0; i < m_nSwapChainBuffers; i++) m_nFenceValues[i] = 0;
 
 	m_nWndClientWidth = FRAME_BUFFER_WIDTH;
@@ -86,7 +81,7 @@ void CGameFramework::CreateSwapChain()
 
 	// 2. 기본 스왑체인 생성 (타입 불일치 방지)
 	HRESULT hResult = m_pdxgiFactory->CreateSwapChainForHwnd(
-		m_pd3dCommandQueue,
+		m_pd3dCommandQueue.Get(),
 		m_hWnd,
 		&dxgiSwapChainDesc,
 		&dxgiSwapChainFullScreenDesc,
@@ -97,7 +92,7 @@ void CGameFramework::CreateSwapChain()
 	if (SUCCEEDED(hResult))
 	{
 
-		hResult = pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&m_pdxgiSwapChain);
+		hResult = pSwapChain1->QueryInterface(IID_PPV_ARGS(&m_pdxgiSwapChain));
 		pSwapChain1->Release();
 	}
 
@@ -116,13 +111,14 @@ void CGameFramework::CreateDirect3DDevice()
 
 	UINT nDXGIFactoryFlags = 0;
 #if defined(_DEBUG)
-	ID3D12Debug *pd3dDebugController = NULL;
-	hResult = D3D12GetDebugInterface(__uuidof(ID3D12Debug), (void **)&pd3dDebugController);
-	if (pd3dDebugController)
+	ComPtr<ID3D12Debug1> debugController1;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController1))))
 	{
-		pd3dDebugController->EnableDebugLayer();
-		pd3dDebugController->Release();
+		debugController1->EnableDebugLayer();
+		// 핵심: GPU 기반 검증 활성화
+		debugController1->SetEnableGPUBasedValidation(TRUE);
 	}
+
 	nDXGIFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
@@ -153,7 +149,7 @@ void CGameFramework::CreateDirect3DDevice()
 	m_nMsaa4xQualityLevels = d3dMsaaQualityLevels.NumQualityLevels;
 	m_bMsaa4xEnable = (m_nMsaa4xQualityLevels > 1) ? true : false;
 
-	hResult = m_pd3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), (void **)&m_pd3dFence);
+	hResult = m_pd3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(& m_pd3dFence));
 	for (UINT i = 0; i < m_nSwapChainBuffers; i++) m_nFenceValues[i] = 0;
 
 	m_hFenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -173,11 +169,17 @@ void CGameFramework::CreateCommandQueueAndList()
 	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
 	d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	d3dCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	hResult = m_pd3dDevice->CreateCommandQueue(&d3dCommandQueueDesc, _uuidof(ID3D12CommandQueue), (void **)&m_pd3dCommandQueue);
+	hResult = m_pd3dDevice->CreateCommandQueue(&d3dCommandQueueDesc, IID_PPV_ARGS(&m_pd3dCommandQueue));
 
-	hResult = m_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void **)&m_pd3dCommandAllocator);
+	for (UINT i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		hResult = m_pd3dDevice->CreateCommandAllocator(
+			D3D12_COMMAND_LIST_TYPE_DIRECT,
+			IID_PPV_ARGS(&m_pd3dCommandAllocator[i]) // 각 인덱스에 생성
+		);
+	}
 
-	hResult = m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), (void **)&m_pd3dCommandList);
+	hResult = m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocator[0].Get(), NULL,IID_PPV_ARGS(& m_pd3dCommandList));
 	hResult = m_pd3dCommandList->Close();
 }
 
@@ -360,17 +362,13 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
+	WaitForGpuComplete();
     ReleaseObjects();
 
 	::CloseHandle(m_hFenceEvent);
 
 	for (int i = 0; i < m_nSwapChainBuffers; i++) if (m_ppd3dSwapChainBackBuffers[i]) m_ppd3dSwapChainBackBuffers[i].Reset();
 
-	if (m_pd3dCommandAllocator) m_pd3dCommandAllocator->Release();
-	if (m_pd3dCommandQueue) m_pd3dCommandQueue->Release();
-	if (m_pd3dCommandList) m_pd3dCommandList->Release();
-
-	if (m_pd3dFence) m_pd3dFence->Release();
 
 	m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
 
@@ -388,15 +386,16 @@ void CGameFramework::OnDestroy()
 
 void CGameFramework::BuildObjects()
 {
-	m_pd3dCommandList->Reset(m_pd3dCommandAllocator, NULL);
+	m_pd3dCommandAllocator[0]->Reset();
+	m_pd3dCommandList->Reset(m_pd3dCommandAllocator[0].Get(), NULL);
 
 	m_pScene = new CScene();
-	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice.Get(), m_pd3dCommandList);
+	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice.Get(), m_pd3dCommandList.Get());
 
 #ifdef _WITH_TERRAIN_PLAYER
-	CTerrainPlayer *pPlayer = new CTerrainPlayer(m_pd3dDevice.Get(), m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), m_pScene->m_pTerrain);
+	CTerrainPlayer *pPlayer = new CTerrainPlayer(m_pd3dDevice.Get(), m_pd3dCommandList.Get(), m_pScene->GetGraphicsRootSignature(), m_pScene->m_pTerrain);
 #else
-	CAirplanePlayer *pPlayer = new CAirplanePlayer(m_pd3dDevice.Get(), m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), NULL);
+	CAirplanePlayer *pPlayer = new CAirplanePlayer(m_pd3dDevice.Get(), m_pd3dCommandList.Get(), m_pScene->GetGraphicsRootSignature(), NULL);
 	pPlayer->SetPosition(XMFLOAT3(425.0f, 240.0f, 640.0f));
 #endif
 
@@ -404,7 +403,7 @@ void CGameFramework::BuildObjects()
 	m_pCamera = m_pPlayer->GetCamera();
 
 	m_pd3dCommandList->Close();
-	ID3D12CommandList *ppd3dCommandLists[] = { m_pd3dCommandList };
+	ID3D12CommandList *ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
@@ -472,7 +471,7 @@ void CGameFramework::AnimateObjects(float fTimeElapsed)
 void CGameFramework::WaitForGpuComplete()
 {
 	const UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
-	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence, nFenceValue);
+	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence.Get(), nFenceValue);
 
 	if (m_pd3dFence->GetCompletedValue() < nFenceValue)
 	{
@@ -486,7 +485,7 @@ void CGameFramework::MoveToNextFrame()
 	m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
 
 	UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
-	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence, nFenceValue);
+	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence.Get(), nFenceValue);
 
 	if (m_pd3dFence->GetCompletedValue() < nFenceValue)
 	{															
@@ -506,8 +505,8 @@ void CGameFramework::FrameAdvance()
 
     AnimateObjects(fTimeElapsed);
 
-	HRESULT hResult = m_pd3dCommandAllocator->Reset();
-	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocator, NULL);
+	HRESULT hResult = m_pd3dCommandAllocator[m_nSwapChainBufferIndex]->Reset();
+	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocator[m_nSwapChainBufferIndex].Get(), NULL);
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
@@ -530,7 +529,7 @@ void CGameFramework::FrameAdvance()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	if (m_pScene) m_pScene->Render(m_pd3dCommandList, m_pCamera);
+	if (m_pScene) m_pScene->Render(m_pd3dCommandList.Get(), m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
@@ -541,7 +540,7 @@ void CGameFramework::FrameAdvance()
 	if (m_pPlayer->m_pSkinnedAnimationController)
 	{
 		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
-		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
+		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList.Get());
 	}
 	else
 	{
@@ -549,7 +548,7 @@ void CGameFramework::FrameAdvance()
 		m_pPlayer->UpdateTransform(NULL);
 	}
 
-	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, m_pCamera);
+	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList.Get(), m_pCamera);
 
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -558,7 +557,7 @@ void CGameFramework::FrameAdvance()
 
 	hResult = m_pd3dCommandList->Close();
 	
-	ID3D12CommandList *ppd3dCommandLists[] = { m_pd3dCommandList };
+	ID3D12CommandList *ppd3dCommandLists[] = { m_pd3dCommandList.Get()};
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();

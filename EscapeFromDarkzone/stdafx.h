@@ -36,7 +36,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-
+#define _DEBUG
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
