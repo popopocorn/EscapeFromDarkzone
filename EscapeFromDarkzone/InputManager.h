@@ -14,10 +14,15 @@ public:
 	bool KeyPress(INPUT_KEY key) { return GetState(key) == KEY_STATE::PRESS; }
 	bool KeyRelease(INPUT_KEY key) { return GetState(key) == KEY_STATE::UP; }
 
-	KEY_STATE GetState(INPUT_KEY key) { return key_states[static_cast<size_t>(key)]; }
-
 private:
-	InputManager() = default;
+	InputManager() : m_hwnd(nullptr) {}
+
+	InputManager(const InputManager&) = delete;
+	InputManager& operator=(const InputManager&) = delete;
+
+	KEY_STATE GetState(INPUT_KEY key);
+
+
 	HWND m_hwnd;
 	std::vector<KEY_STATE> key_states;
 	POINT cur_pos;

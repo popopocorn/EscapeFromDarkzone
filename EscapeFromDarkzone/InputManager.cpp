@@ -32,13 +32,22 @@ void InputManager::update()
 			else
 				state = KEY_STATE::NONE;
 		}
-		if (key_states[key] != KEY_STATE::NONE) {
+		/*if (key_states[key] != KEY_STATE::NONE) {
 			wchar_t buffer[128];
 			swprintf_s(buffer, L"Key: %u, State: %d\n", key, key_states[key]);
 			OutputDebugStringW(buffer);
-		}
+		}*/
 	}
 	
 	::GetCursorPos(&cur_pos);
 	::ScreenToClient(m_hwnd, &cur_pos);
+}
+
+KEY_STATE InputManager::GetState(INPUT_KEY key)
+{
+	size_t idx = static_cast<size_t>(key);
+	if (idx >= key_states.size())
+		return KEY_STATE::NONE;
+	return key_states[idx];
+
 }
