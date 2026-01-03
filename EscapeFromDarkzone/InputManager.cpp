@@ -14,7 +14,6 @@ void InputManager::update()
 		return;
 	for (UINT32 key = 0; key < 256; key++)
 	{
-		// 키가 눌려 있으면 true
 		if (asciiKeys[key] & 0x80)
 		{
 			KEY_STATE& state = key_states[key];
