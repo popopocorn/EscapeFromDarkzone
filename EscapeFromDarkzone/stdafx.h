@@ -373,3 +373,37 @@ namespace Plane
 		return(xmf4Result);
 	}
 }
+
+enum class INPUT_KEY {
+	UP = VK_UP,
+	DOWN = VK_DOWN,
+	LEFT = VK_LEFT,
+	RIGHT = VK_RIGHT,
+
+	W = 'W',
+	A = 'A',
+	S = 'S',
+	D = 'D',
+
+	E = 'E',
+	G = 'G',
+	I = 'I',
+
+	KEY_1 = '1',
+	KEY_2 = '2',
+	KEY_3 = '3',
+	KEY_4 = '4',
+
+	SHIFT = VK_SHIFT,
+
+	LBUTTON = VK_LBUTTON,
+	RBUTTON = VK_RBUTTON,
+};
+
+enum class KEY_STATE
+{
+	NONE,
+	PRESS,
+	DOWN,
+	UP
+};

@@ -7,11 +7,13 @@
 #include "Player.h"
 #include "Scene.h"
 
+
 class CGameFramework
 {
 public:
 	CGameFramework();
 	~CGameFramework();
+
 
 	bool OnCreate(HINSTANCE hInstance, HWND hMainWnd);
 	void OnDestroy();
@@ -71,6 +73,7 @@ private:
 	ID3D12Fence					*m_pd3dFence = NULL;
 	UINT64						m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE						m_hFenceEvent;
+
 
 #if defined(_DEBUG)
 	ID3D12Debug					*m_pd3dDebugController;

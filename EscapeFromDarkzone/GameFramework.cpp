@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "GameFramework.h"
+#include "InputManager.h"
 
 CGameFramework::CGameFramework()
 {
@@ -32,6 +33,7 @@ CGameFramework::CGameFramework()
 	m_pPlayer = NULL;
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
+	
 }
 
 CGameFramework::~CGameFramework()
@@ -43,6 +45,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	m_hInstance = hInstance;
 	m_hWnd = hMainWnd;
 
+	InputManager::Instance().init(hMainWnd);
 	CreateDirect3DDevice();
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
@@ -512,6 +515,7 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(30.0f);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
+	InputManager::Instance().update();
 	ProcessInput();
 
     AnimateObjects(fTimeElapsed);
