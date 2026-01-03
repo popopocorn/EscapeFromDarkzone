@@ -392,11 +392,7 @@ void CStandardObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12Graphi
 
 void CStandardObjectsShader::ReleaseObjects()
 {
-	if (m_ppObjects)
-	{
-		for (int j = 0; j < m_nObjects; j++) if (m_ppObjects[j]) m_ppObjects[j]->Release();
-		delete[] m_ppObjects;
-	}
+	m_ppObjects.clear();
 }
 
 void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
@@ -406,14 +402,14 @@ void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CStandardObjectsShader::ReleaseUploadBuffers()
 {
-	for (int j = 0; j < m_nObjects; j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
 void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
 {
 	CStandardShader::Render(pd3dCommandList, pCamera);
 
-	for (int j = 0; j < m_nObjects; j++)
+	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
 		{
@@ -461,8 +457,9 @@ XMFLOAT3 RandomPositionInSphere(XMFLOAT3 xmf3Center, float fRadius, int nColumn,
 
 void CHellicopterObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext)
 {
-	m_nObjects = 40;
-	m_ppObjects = new CGameObject*[m_nObjects];
+	int m_nObjects = 40;
+
+	m_ppObjects.resize(m_nObjects);
 
 	CLoadedModelInfo *pSuperCobraModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SuperCobra.bin", this);
 	CLoadedModelInfo *pGunshipModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Gunship.bin", this);
@@ -538,11 +535,7 @@ void CSkinnedAnimationObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D
 
 void CSkinnedAnimationObjectsShader::ReleaseObjects()
 {
-	if (m_ppObjects)
-	{
-		for (int j = 0; j < m_nObjects; j++) if (m_ppObjects[j]) m_ppObjects[j]->Release();
-		delete[] m_ppObjects;
-	}
+	m_ppObjects.clear();
 }
 
 void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
@@ -552,14 +545,14 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CSkinnedAnimationObjectsShader::ReleaseUploadBuffers()
 {
-	for (int j = 0; j < m_nObjects; j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
 void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
 {
 	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera);
 
-	for (int j = 0; j < m_nObjects; j++)
+	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
 		{
@@ -583,9 +576,9 @@ void CAngrybotObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12Graphi
 {
 	int xObjects = 3, zObjects = 3, i = 0;
 
-	m_nObjects = (xObjects * 2 + 1) * (zObjects * 2 + 1);
+	int m_nObjects = (xObjects * 2 + 1) * (zObjects * 2 + 1);
 
-	m_ppObjects = new CGameObject*[m_nObjects];
+	m_ppObjects.resize(m_nObjects);
 
 	float fxPitch = 7.0f * 2.5f;
 	float fzPitch = 7.0f * 2.5f;
@@ -630,9 +623,9 @@ void CEthanObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsC
 {
 	int xObjects = 3, zObjects = 3, i = 0;
 
-	m_nObjects = (xObjects * 2 + 1) * (zObjects * 2 + 1);
+	int m_nObjects = (xObjects * 2 + 1) * (zObjects * 2 + 1);
 
-	m_ppObjects = new CGameObject*[m_nObjects];
+	m_ppObjects.resize(m_nObjects);
 
 	float fxPitch = 7.0f * 2.5f;
 	float fzPitch = 7.0f * 2.5f;

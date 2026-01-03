@@ -119,8 +119,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera);
 
 protected:
-	CGameObject						**m_ppObjects = 0;
-	int								m_nObjects = 0;
+	std::vector<CGameObject*>		m_ppObjects;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,8 +162,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera);
 
 protected:
-	CGameObject						**m_ppObjects = 0;
-	int								m_nObjects = 0;
+	std::vector<CGameObject*>		m_ppObjects;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
