@@ -1,10 +1,10 @@
 //-----------------------------------------------------------------------------
 // File: CPlayer.cpp
 //-----------------------------------------------------------------------------
-
 #include "stdafx.h"
 #include "Player.h"
 #include "Shader.h"
+#include "InputManager.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CPlayer
@@ -353,26 +353,69 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
-	CLoadedModelInfo *pAngrybotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Angrybot.bin", NULL);
-	SetChild(pAngrybotModel->m_pModelRootObject, true);
 
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pAngrybotModel);
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, 0);
-	m_pSkinnedAnimationController->SetTrackAnimationSet(1, 1);
+	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
+	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
+
+	if (pPlayerModel)
+	{
+		// idle 애니메이션 로드
+		CLoadedModelInfo* pAnimIdle = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Rifle_Idle.bin", NULL);
+		if (pAnimIdle && pAnimIdle->m_pAnimationSets)
+		{
+			// idle 애니메이션을 animationsets에 추가
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimIdle->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimIdle;
+		}
+		// walk 애니메이션 로드
+		CLoadedModelInfo* pAnimRun = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Rifle_Run.bin", NULL);
+		if (pAnimRun && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimRun->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimRun;
+		}
+		// shffling 애니메이션 로드	
+		CLoadedModelInfo* pAnimShuffling = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Shuffling.bin", NULL);
+		if (pAnimShuffling && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimShuffling->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimShuffling;
+		}
+		// (4) death 애니메이션 로드
+		CLoadedModelInfo* pAnimDeath = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Death.bin", NULL);
+		if (pAnimDeath && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimDeath->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimDeath;
+		}
+	}
+	SetChild(pPlayerModel->m_pModelRootObject, true);
+
+//	사운드 일단 보류
+	//m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
+
+//#ifdef _WITH_SOUND_RESOURCE
+//	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
+//	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
+//#else
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.2f, (void*)_T("Sound/Footstep01.wav"));
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.5f, (void*)_T("Sound/Footstep02.wav"));
+////	m_pSkinnedAnimationController->SetCallbackKey(1, 2, 0.39f, _T("Sound/Footstep03.wav"));
+//#endif
+//	CAnimationCallbackHandler *pAnimationCallbackHandler = new CSoundCallbackHandler();
+//	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
+
+	// 2. 컨트롤러 생성(Idle, Action)
+	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
+
+	// 트랙 0: Idle - 항상 켜
+	m_pSkinnedAnimationController->SetTrackAnimationSet(0, 1);
+	m_pSkinnedAnimationController->SetTrackEnable(0, true);
+
+	// 트랙 1: Action - 처음엔 꺼
+	m_pSkinnedAnimationController->SetTrackAnimationSet(1, 2);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
-
-	m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
-#ifdef _WITH_SOUND_RESOURCE
-	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
-	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
-	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
-#else
-	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.2f, (void*)_T("Sound/Footstep01.wav"));
-	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.5f, (void*)_T("Sound/Footstep02.wav"));
-//	m_pSkinnedAnimationController->SetCallbackKey(1, 2, 0.39f, _T("Sound/Footstep03.wav"));
-#endif
-	CAnimationCallbackHandler *pAnimationCallbackHandler = new CSoundCallbackHandler();
-	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	
@@ -383,7 +426,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 	SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
 	SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
-	if (pAngrybotModel) delete pAngrybotModel;
+	if (pPlayerModel) delete pPlayerModel;
 }
 
 CTerrainPlayer::~CTerrainPlayer()
@@ -494,14 +537,83 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	CPlayer::Update(fTimeElapsed);
 
-	if (m_pSkinnedAnimationController)
+	CAnimationController* pController = m_pSkinnedAnimationController;
+	if (!pController && m_pChild)
 	{
-		float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
-		if (::IsZero(fLength))
+		pController = m_pChild->m_pSkinnedAnimationController;
+	}
+
+	float fMoveSpeed = 300.0f;
+	bool bIsMoving = false;
+	bool bIsSpecialAction = false;
+
+	// ====================================================
+	// 1. 이동 처리
+	// ====================================================
+	if (InputManager::Instance().KeyPress((INPUT_KEY)0x57) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x53) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x41) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x44))
+	{
+		if (pController)
 		{
-			m_pSkinnedAnimationController->SetTrackEnable(0, true);
-			m_pSkinnedAnimationController->SetTrackEnable(1, false);
-			m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
+			// 현재 2번 트랙이 달리기가 아니면 달리기로 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 2)
+				pController->SetTrackAnimationSet(1, 2);
 		}
+
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x57)) Move(DIR_FORWARD, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x53)) Move(DIR_BACKWARD, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x41)) Move(DIR_LEFT, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x44)) Move(DIR_RIGHT, fMoveSpeed * fTimeElapsed, true);
+
+		bIsMoving = true;
+	}
+
+	// ====================================================
+	// 2. 특수 동작 처리(Action)
+	// ====================================================
+	if (!bIsMoving && pController)
+	{
+		// KeyPress를 쓰면 누르고 있는 동안 재생
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x33))
+		{
+			// 현재 셔플이 아니면 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 3)
+				pController->SetTrackAnimationSet(1, 3);
+
+			pController->SetTrackEnable(1, true);
+			pController->SetTrackEnable(0, false);
+
+			bIsSpecialAction = true;
+		}
+		// 키 4번: 죽기 (Index 4)
+		else if (InputManager::Instance().KeyPress((INPUT_KEY)0x34))
+		{
+			// 현재 죽기가 아니면 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 4)
+				pController->SetTrackAnimationSet(1, 4);
+
+			pController->SetTrackEnable(1, true);
+			pController->SetTrackEnable(0, false);
+
+			bIsSpecialAction = true;
+		}
+	}
+
+	// ====================================================
+	// 3. 정지 상태 (Idle)
+	// ====================================================
+	if (!bIsMoving && !bIsSpecialAction && pController)
+	{
+		pController->SetTrackEnable(1, false);
+
+		pController->SetTrackEnable(0, true);
+	}
+
+	// 지형 높이 보정 콜백
+	if (m_pPlayerUpdatedContext)
+	{
+		OnPlayerUpdateCallback(fTimeElapsed);
 	}
 }
