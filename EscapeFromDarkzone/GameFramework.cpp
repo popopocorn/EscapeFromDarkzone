@@ -397,7 +397,7 @@ void CGameFramework::OnDestroy()
 #endif
 }
 
-#define _WITH_TERRAIN_PLAYER
+//#define _WITH_TERRAIN_PLAYER
 
 void CGameFramework::BuildObjects()
 {
