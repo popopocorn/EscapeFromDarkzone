@@ -476,12 +476,12 @@ void CHellicopterObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12Gra
         {
 			if (nObjects % 2)
 			{
-				m_ppObjects[nObjects] = new CSuperCobraObject(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+				m_ppObjects[nObjects] = std::make_unique<CSuperCobraObject>(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 				m_ppObjects[nObjects]->SetChild(pSuperCobraModel->m_pModelRootObject, true);
 			}
 			else
 			{
-				m_ppObjects[nObjects] = new CGunshipObject(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+				m_ppObjects[nObjects] =std::make_unique<CGunshipObject>(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 				m_ppObjects[nObjects]->SetChild(pGunshipModel->m_pModelRootObject, true);
 			}
 			float fHeight = pTerrain->GetHeight(390.0f, 670.0f);
@@ -499,12 +499,12 @@ void CHellicopterObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12Gra
         {
 			if (nObjects % 2)
 			{
-				m_ppObjects[nObjects] = new CSuperCobraObject(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+				m_ppObjects[nObjects] = std::make_unique<CSuperCobraObject>(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 				m_ppObjects[nObjects]->SetChild(pSuperCobraModel->m_pModelRootObject, true);
 			}
 			else
 			{
-				m_ppObjects[nObjects] = new CGunshipObject(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+				m_ppObjects[nObjects] = std::make_unique<CGunshipObject>(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 				m_ppObjects[nObjects]->SetChild(pGunshipModel->m_pModelRootObject, true);
 			}
 			m_ppObjects[nObjects]->SetPosition(RandomPositionInSphere(XMFLOAT3(0.0f, 0.0f, 0.0f), Random(20.0f, 100.0f), nColumnSize - int(floor(nColumnSize / 2.0f)), nColumnSpace));

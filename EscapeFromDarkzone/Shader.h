@@ -19,7 +19,7 @@ private:
 public:
 	void AddRef() { m_nReferences++; }
 	void Release() { if (--m_nReferences <= 0) delete this; }
-	virtual void addObjects(CGameObject* obj) { }
+	virtual void addObjects(std::unique_ptr<CGameObject> obj) { }
 	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
 	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
 	virtual D3D12_BLEND_DESC CreateBlendState();
@@ -112,7 +112,7 @@ public:
 
 	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL);
 	virtual void AnimateObjects(float fTimeElapsed);
-	virtual void addObjects(CGameObject* obj) { m_ppObjects.push_back(obj); }
+	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void ReleaseObjects();
 
 	virtual void ReleaseUploadBuffers();
@@ -120,7 +120,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera);
 
 protected:
-	std::vector<CGameObject*>		m_ppObjects;
+	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
