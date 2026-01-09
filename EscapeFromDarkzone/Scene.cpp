@@ -28,8 +28,7 @@ CScene::~CScene()
 void CScene::BuildDefaultLightsAndMaterials()
 {
 	m_nLights = 5;
-	m_pLights = new LIGHT[m_nLights];
-	::ZeroMemory(m_pLights, sizeof(LIGHT) * m_nLights);
+	m_pLights.resize(5);
 
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
@@ -91,7 +90,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	BuildDefaultLightsAndMaterials();
 
-	m_pSkyBox = new CSkyBox(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
@@ -248,7 +247,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	if (pEthanModel) delete pEthanModel;
 //*/
 	
-	CShader* stdshader = new CStandardObjectsShader();
+	std:unique_ptr<CShader> stdshader = std::make_unique<CStandardObjectsShader>();
 
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -257,11 +256,12 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
 	::rewind(pInFile);
 
-	std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL , pInFile, stdshader, 0));
+	std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL , pInFile, stdshader.get(), 0));
 	map->SetPosition(425, 250, 640);
 	stdshader->addObjects(std::move(map));
 
-	m_ppShaders.push_back(stdshader);
+	m_ppShaders.push_back(std::move(stdshader));
+	CreateShaderVariables(pd3dDevice, pd3dCommandList); 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
@@ -277,7 +277,7 @@ void CScene::ReleaseObjects()
 
 
 	if (m_pTerrain) delete m_pTerrain;
-	if (m_pSkyBox) delete m_pSkyBox;
+	
 
 	if (m_ppHierarchicalGameObjects)
 	{
@@ -287,7 +287,7 @@ void CScene::ReleaseObjects()
 
 	ReleaseShaderVariables();
 
-	if (m_pLights) delete[] m_pLights;
+	m_pLights.clear();
 }
 
 ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevice)
@@ -491,7 +491,7 @@ void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsComma
 
 void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
-	::memcpy(m_pcbMappedLights->m_pLights, m_pLights, sizeof(LIGHT) * m_nLights);
+	::memcpy(m_pcbMappedLights->m_pLights, m_pLights.data(), sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
 }
@@ -597,7 +597,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Animate(fTimeElapsed);
 	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 
-	if (m_pLights)
+	if (not m_pLights.empty())
 	{
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
