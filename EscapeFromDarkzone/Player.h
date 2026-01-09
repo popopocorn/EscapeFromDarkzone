@@ -10,57 +10,6 @@
 
 #include "Object.h"
 #include "Camera.h"
-#include "InputManager.h"
-
-// 애니메이션 열거형
-enum class EPlayerAnim
-{
-	T_POSE = 0,
-	IDLE = 1,
-	RUN = 2,
-	SHUFFLE = 3,
-	DEATH = 4
-};
-class CTerrainPlayer;
-
-// 플레이어 상태 추상 클래스
-class CPlayerState
-{
-public:
-	virtual ~CPlayerState() {}
-	virtual void Enter(CTerrainPlayer* pPlayer) = 0;
-	virtual void Update(CTerrainPlayer* pPlayer, float fTimeElapsed) = 0;
-	virtual void Exit(CTerrainPlayer* pPlayer) = 0;
-};
-
-class CIdleState : public CPlayerState
-{
-public:
-	virtual void Enter(CTerrainPlayer* pPlayer);
-	virtual void Update(CTerrainPlayer* pPlayer, float fTimeElapsed);
-	virtual void Exit(CTerrainPlayer* pPlayer) {}
-};
-class CRunState : public CPlayerState
-{
-public:
-	virtual void Enter(CTerrainPlayer* pPlayer);
-	virtual void Update(CTerrainPlayer* pPlayer, float fTimeElapsed);
-	virtual void Exit(CTerrainPlayer* pPlayer) {}
-};
-class CShuffleState : public CPlayerState
-{
-public:
-	virtual void Enter(CTerrainPlayer* pPlayer);
-	virtual void Update(CTerrainPlayer* pPlayer, float fTimeElapsed);
-	virtual void Exit(CTerrainPlayer* pPlayer) {}
-};
-class CDeathState : public CPlayerState
-{
-public:
-	virtual void Enter(CTerrainPlayer* pPlayer);
-	virtual void Update(CTerrainPlayer* pPlayer, float fTimeElapsed);
-	virtual void Exit(CTerrainPlayer* pPlayer) {}
-};
 
 class CPlayer : public CGameObject
 {
@@ -176,17 +125,9 @@ public:
 
 	virtual void OnPlayerUpdateCallback(float fTimeElapsed);
 	virtual void OnCameraUpdateCallback(float fTimeElapsed);
+
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
+
 	virtual void Update(float fTimeElapsed);
-
-public:
-	void ChangeState(CPlayerState* pNewState);	//상태 변경 함수
-	void PlayAnimation(EPlayerAnim eAnim);		//애니메이션 재생 함수
-
-private:
-	CPlayerState* m_pCurrentState = nullptr;   // 현재 상태 객체
 };
-
-
-
 
