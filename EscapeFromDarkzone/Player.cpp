@@ -1,10 +1,10 @@
 //-----------------------------------------------------------------------------
 // File: CPlayer.cpp
 //-----------------------------------------------------------------------------
-
 #include "stdafx.h"
 #include "Player.h"
 #include "Shader.h"
+#include "InputManager.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CPlayer
@@ -234,104 +234,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
-CAirplanePlayer::CAirplanePlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, void *pContext)
-{
-	m_pCamera = ChangeCamera(/*SPACESHIP_CAMERA*/THIRD_PERSON_CAMERA, 0.0f);
 
-	CLoadedModelInfo *pModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Mi24.bin", NULL);
-	SetChild(pModel->m_pModelRootObject, true);
-
-	OnPrepareAnimate();
-
-	CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
-	if (pModel) delete pModel;
-}
-
-CAirplanePlayer::~CAirplanePlayer()
-{
-}
-
-void CAirplanePlayer::OnPrepareAnimate()
-{
-	m_pMainRotorFrame = FindFrame("Top_Rotor");
-	m_pTailRotorFrame = FindFrame("Tail_Rotor");
-}
-
-void CAirplanePlayer::Animate(float fTimeElapsed)
-{
-	if (m_pMainRotorFrame)
-	{
-		XMMATRIX xmmtxRotate = XMMatrixRotationY(XMConvertToRadians(360.0f * 2.0f) * fTimeElapsed);
-		m_pMainRotorFrame->m_xmf4x4ToParent = Matrix4x4::Multiply(xmmtxRotate, m_pMainRotorFrame->m_xmf4x4ToParent);
-	}
-	if (m_pTailRotorFrame)
-	{
-		XMMATRIX xmmtxRotate = XMMatrixRotationX(XMConvertToRadians(360.0f * 4.0f) * fTimeElapsed);
-		m_pTailRotorFrame->m_xmf4x4ToParent = Matrix4x4::Multiply(xmmtxRotate, m_pTailRotorFrame->m_xmf4x4ToParent);
-	}
-
-	CPlayer::Animate(fTimeElapsed);
-}
-
-void CAirplanePlayer::OnPrepareRender()
-{
-	CPlayer::OnPrepareRender();
-}
-
-CCamera *CAirplanePlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
-{
-	DWORD nCurrentCameraMode = (m_pCamera) ? m_pCamera->GetMode() : 0x00;
-	if (nCurrentCameraMode == nNewCameraMode) return(m_pCamera);
-	switch (nNewCameraMode)
-	{
-		case FIRST_PERSON_CAMERA:
-			SetFriction(2.0f);
-			SetGravity(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			SetMaxVelocityXZ(2.5f);
-			SetMaxVelocityY(40.0f);
-			m_pCamera = OnChangeCamera(FIRST_PERSON_CAMERA, nCurrentCameraMode);
-			m_pCamera->SetTimeLag(0.0f);
-			m_pCamera->SetOffset(XMFLOAT3(0.0f, 20.0f, 0.0f));
-			m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
-			m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
-			m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
-			break;
-		case SPACESHIP_CAMERA:
-			SetFriction(100.5f);
-			SetGravity(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			SetMaxVelocityXZ(40.0f);
-			SetMaxVelocityY(40.0f);
-			m_pCamera = OnChangeCamera(SPACESHIP_CAMERA, nCurrentCameraMode);
-			m_pCamera->SetTimeLag(0.0f);
-			m_pCamera->SetOffset(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
-			m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
-			m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
-			break;
-		case THIRD_PERSON_CAMERA:
-			SetFriction(20.5f);
-			SetGravity(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			SetMaxVelocityXZ(25.5f);
-			SetMaxVelocityY(20.0f);
-			m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
-			m_pCamera->SetTimeLag(0.25f);
-			m_pCamera->SetOffset(XMFLOAT3(0.0f, 15.0f, -30.0f));
-			m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
-			m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
-			m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
-			break;
-		default:
-			break;
-	}
-	m_pCamera->SetPosition(Vector3::Add(m_xmf3Position, m_pCamera->GetOffset()));
-	Update(fTimeElapsed);
-
-	return(m_pCamera);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 
 #define _WITH_DEBUG_CALLBACK_DATA
 
 void CSoundCallbackHandler::HandleCallback(void *pCallbackData, float fTrackPosition)
@@ -353,26 +256,69 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
-	CLoadedModelInfo *pAngrybotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Angrybot.bin", NULL);
-	SetChild(pAngrybotModel->m_pModelRootObject, true);
 
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pAngrybotModel);
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, 0);
-	m_pSkinnedAnimationController->SetTrackAnimationSet(1, 1);
+	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
+	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
+
+	if (pPlayerModel)
+	{
+		// idle 애니메이션 로드
+		CLoadedModelInfo* pAnimIdle = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Rifle_Idle.bin", NULL);
+		if (pAnimIdle && pAnimIdle->m_pAnimationSets)
+		{
+			// idle 애니메이션을 animationsets에 추가
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimIdle->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimIdle;
+		}
+		// walk 애니메이션 로드
+		CLoadedModelInfo* pAnimRun = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Rifle_Run.bin", NULL);
+		if (pAnimRun && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimRun->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimRun;
+		}
+		// shffling 애니메이션 로드	
+		CLoadedModelInfo* pAnimShuffling = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Shuffling.bin", NULL);
+		if (pAnimShuffling && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimShuffling->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimShuffling;
+		}
+		// (4) death 애니메이션 로드
+		CLoadedModelInfo* pAnimDeath = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Death.bin", NULL);
+		if (pAnimDeath && pAnimRun->m_pAnimationSets)
+		{
+			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimDeath->m_pAnimationSets->m_vAnimationSets[0]);
+			delete pAnimDeath;
+		}
+	}
+	SetChild(pPlayerModel->m_pModelRootObject, true);
+
+//	사운드 일단 보류
+	//m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
+
+//#ifdef _WITH_SOUND_RESOURCE
+//	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
+//	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
+//#else
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.2f, (void*)_T("Sound/Footstep01.wav"));
+//	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.5f, (void*)_T("Sound/Footstep02.wav"));
+////	m_pSkinnedAnimationController->SetCallbackKey(1, 2, 0.39f, _T("Sound/Footstep03.wav"));
+//#endif
+//	CAnimationCallbackHandler *pAnimationCallbackHandler = new CSoundCallbackHandler();
+//	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
+
+	// 2. 컨트롤러 생성(Idle, Action)
+	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
+
+	// 트랙 0: Idle - 항상 켜
+	m_pSkinnedAnimationController->SetTrackAnimationSet(0, 1);
+	m_pSkinnedAnimationController->SetTrackEnable(0, true);
+
+	// 트랙 1: Action - 처음엔 꺼
+	m_pSkinnedAnimationController->SetTrackAnimationSet(1, 2);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
-
-	m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
-#ifdef _WITH_SOUND_RESOURCE
-	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
-	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
-	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
-#else
-	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.2f, (void*)_T("Sound/Footstep01.wav"));
-	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.5f, (void*)_T("Sound/Footstep02.wav"));
-//	m_pSkinnedAnimationController->SetCallbackKey(1, 2, 0.39f, _T("Sound/Footstep03.wav"));
-#endif
-	CAnimationCallbackHandler *pAnimationCallbackHandler = new CSoundCallbackHandler();
-	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	
@@ -383,7 +329,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 	SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
 	SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
-	if (pAngrybotModel) delete pAngrybotModel;
+	if (pPlayerModel) delete pPlayerModel;
 }
 
 CTerrainPlayer::~CTerrainPlayer()
@@ -494,14 +440,83 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	CPlayer::Update(fTimeElapsed);
 
-	if (m_pSkinnedAnimationController)
+	CAnimationController* pController = m_pSkinnedAnimationController;
+	if (!pController && m_pChild)
 	{
-		float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
-		if (::IsZero(fLength))
+		pController = m_pChild->m_pSkinnedAnimationController;
+	}
+
+	float fMoveSpeed = 300.0f;
+	bool bIsMoving = false;
+	bool bIsSpecialAction = false;
+
+	// ====================================================
+	// 1. 이동 처리
+	// ====================================================
+	if (InputManager::Instance().KeyPress((INPUT_KEY)0x57) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x53) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x41) ||
+		InputManager::Instance().KeyPress((INPUT_KEY)0x44))
+	{
+		if (pController)
 		{
-			m_pSkinnedAnimationController->SetTrackEnable(0, true);
-			m_pSkinnedAnimationController->SetTrackEnable(1, false);
-			m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
+			// 현재 2번 트랙이 달리기가 아니면 달리기로 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 2)
+				pController->SetTrackAnimationSet(1, 2);
 		}
+
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x57)) Move(DIR_FORWARD, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x53)) Move(DIR_BACKWARD, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x41)) Move(DIR_LEFT, fMoveSpeed * fTimeElapsed, true);
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x44)) Move(DIR_RIGHT, fMoveSpeed * fTimeElapsed, true);
+
+		bIsMoving = true;
+	}
+
+	// ====================================================
+	// 2. 특수 동작 처리(Action)
+	// ====================================================
+	if (!bIsMoving && pController)
+	{
+		// KeyPress를 쓰면 누르고 있는 동안 재생
+		if (InputManager::Instance().KeyPress((INPUT_KEY)0x33))
+		{
+			// 현재 셔플이 아니면 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 3)
+				pController->SetTrackAnimationSet(1, 3);
+
+			pController->SetTrackEnable(1, true);
+			pController->SetTrackEnable(0, false);
+
+			bIsSpecialAction = true;
+		}
+		// 키 4번: 죽기 (Index 4)
+		else if (InputManager::Instance().KeyPress((INPUT_KEY)0x34))
+		{
+			// 현재 죽기가 아니면 교체
+			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 4)
+				pController->SetTrackAnimationSet(1, 4);
+
+			pController->SetTrackEnable(1, true);
+			pController->SetTrackEnable(0, false);
+
+			bIsSpecialAction = true;
+		}
+	}
+
+	// ====================================================
+	// 3. 정지 상태 (Idle)
+	// ====================================================
+	if (!bIsMoving && !bIsSpecialAction && pController)
+	{
+		pController->SetTrackEnable(1, false);
+
+		pController->SetTrackEnable(0, true);
+	}
+
+	// 지형 높이 보정 콜백
+	if (m_pPlayerUpdatedContext)
+	{
+		OnPlayerUpdateCallback(fTimeElapsed);
 	}
 }

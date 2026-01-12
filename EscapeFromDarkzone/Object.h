@@ -7,6 +7,8 @@
 #include "Mesh.h"
 #include "Camera.h"
 
+#include <vector>
+
 #define DIR_FORWARD					0x01
 #define DIR_BACKWARD				0x02
 #define DIR_LEFT					0x04
@@ -221,7 +223,8 @@ public:
 
 public:
 	int								m_nAnimationSets = 0;
-	CAnimationSet					**m_pAnimationSets = NULL;
+	//CAnimationSet					**m_pAnimationSets = NULL;		//벡터나 맵으로 변경해 여러 애니메이션
+	std::vector<CAnimationSet*>     m_vAnimationSets;
 
 	int								m_nBoneFrames = 0; 
 	CGameObject						**m_ppBoneFrameCaches = NULL; //[m_nBoneFrames]
