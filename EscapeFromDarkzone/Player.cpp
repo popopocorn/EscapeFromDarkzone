@@ -284,7 +284,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 			pPlayerModel->m_pAnimationSets->m_vAnimationSets.push_back(pAnimShuffling->m_pAnimationSets->m_vAnimationSets[0]);
 			delete pAnimShuffling;
 		}
-		// (4) death 애니메이션 로드
+		// death 애니메이션 로드
 		CLoadedModelInfo* pAnimDeath = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR@Death.bin", NULL);
 		if (pAnimDeath && pAnimRun->m_pAnimationSets)
 		{

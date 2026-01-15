@@ -211,7 +211,7 @@ public:
 	CSkinnedMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
 	virtual ~CSkinnedMesh();
 
-protected:
+public:	// Skinning Buffers
 	ID3D12Resource					*m_pd3dBoneIndexBuffer = NULL;
 	ID3D12Resource					*m_pd3dBoneIndexUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dBoneIndexBufferView;
@@ -220,7 +220,7 @@ protected:
 	ID3D12Resource					*m_pd3dBoneWeightUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dBoneWeightBufferView;
 
-protected:
+public:	// Skinning Info
 	int								m_nBonesPerVertex = 4;
 
 	XMINT4*							m_pxmn4BoneIndices = NULL;

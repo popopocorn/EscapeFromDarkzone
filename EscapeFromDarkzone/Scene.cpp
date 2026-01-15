@@ -4,6 +4,9 @@
 
 #include "stdafx.h"
 #include "Scene.h"
+#include "Player.h"
+#include "EnemyObject.h"
+
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -97,7 +100,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
 	m_pTerrain = new CHeightMapTerrain(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, _T("Terrain/HeightMap.raw"), 257, 257, xmf3Scale, xmf4Color);
 
-	m_nHierarchicalGameObjects = 21;
+	m_nHierarchicalGameObjects = 22;
 	m_ppHierarchicalGameObjects = new CGameObject*[m_nHierarchicalGameObjects];
 
 	CLoadedModelInfo *pAngrybotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, "Model/Angrybot.bin", NULL);
@@ -239,12 +242,55 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	if (pEagleModel) delete pEagleModel;
 
+	// 적 객체 생성
+	CLoadedModelInfo* pXBotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, "Model/X_bot.bin", NULL);
+
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pXBotModel);
+
+	// [위치 설정] 플레이어의 "정면"에 소환
+	if (m_pPlayer)
+	{
+		XMFLOAT3 xmf3PlayerPos = m_pPlayer->GetPosition();
+		XMFLOAT3 xmf3PlayerLook = m_pPlayer->GetLookVector();
+
+		// 플레이어 위치에서 시선 방향으로 50만큼 떨어진 위치 계산
+		// (Vector3::Add, ScalarProduct 등은 stdafx.h에 있는 헬퍼 함수 사용)
+		XMFLOAT3 xmf3Pos;
+		xmf3Pos.x = xmf3PlayerPos.x + (xmf3PlayerLook.x * 10.0f);
+		xmf3Pos.z = xmf3PlayerPos.z + (xmf3PlayerLook.z * 10.0f);
+
+		// 높이는 지형에 맞춤 (지형보다 약간 위에 띄움 +1.0f)
+		float fHeight = m_pTerrain->GetHeight(xmf3Pos.x, xmf3Pos.z);
+		xmf3Pos.y = fHeight + 1.0f;
+
+		pEnemy->SetPosition(xmf3Pos);
+	}
+	else
+	{
+		// 플레이어가 없으면 임시 위치
+		pEnemy->SetPosition(1.0f, 1.0f, 1.0f);
+	}
+
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+
+	// [정보 주입]
+	pEnemy->SetPlayer(m_pPlayer);
+	pEnemy->SetTerrain(m_pTerrain);
+
+	m_ppHierarchicalGameObjects[21] = pEnemy;
+
+	if (pXBotModel) delete pXBotModel;
 ///*
 	m_nShaders = 1;
 	m_ppShaders = new CShader*[m_nShaders];
 
 	CEthanObjectsShader *pEthanObjectsShader = new CEthanObjectsShader();
 	pEthanObjectsShader->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pEthanModel, m_pTerrain);
+
+	if (m_ppHierarchicalGameObjects[21])
+	{
+		m_ppHierarchicalGameObjects[21]->SetShader(pEthanObjectsShader);
+	}
 
 	m_ppShaders[0] = pEthanObjectsShader;
 //*/

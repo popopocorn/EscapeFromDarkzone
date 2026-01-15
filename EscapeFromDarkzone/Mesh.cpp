@@ -546,6 +546,43 @@ void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCom
 				m_d3dBiTangentBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
 			}
 		}
+		/*else if (!strcmp(pstrToken, "<BoneIndices>:"))
+		{
+			int nBoneIndices = 0;
+			nReads = (UINT)::fread(&nBoneIndices, sizeof(int), 1, pInFile);
+			if (nBoneIndices > 0)
+			{
+				// 현재 메쉬가 SkinnedMesh라고 가정하고 캐스팅
+				CSkinnedMesh* pSkinnedMesh = (CSkinnedMesh*)this;
+
+				pSkinnedMesh->m_pxmn4BoneIndices = new XMINT4[nBoneIndices];
+				nReads = (UINT)::fread(pSkinnedMesh->m_pxmn4BoneIndices, sizeof(XMINT4), nBoneIndices, pInFile);
+
+				pSkinnedMesh->m_pd3dBoneIndexBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pSkinnedMesh->m_pxmn4BoneIndices, sizeof(XMINT4) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &pSkinnedMesh->m_pd3dBoneIndexUploadBuffer);
+
+				pSkinnedMesh->m_d3dBoneIndexBufferView.BufferLocation = pSkinnedMesh->m_pd3dBoneIndexBuffer->GetGPUVirtualAddress();
+				pSkinnedMesh->m_d3dBoneIndexBufferView.StrideInBytes = sizeof(XMINT4);
+				pSkinnedMesh->m_d3dBoneIndexBufferView.SizeInBytes = sizeof(XMINT4) * m_nVertices;
+			}
+		}
+		else if (!strcmp(pstrToken, "<BoneWeights>:"))
+		{
+			int nBoneWeights = 0;
+			nReads = (UINT)::fread(&nBoneWeights, sizeof(int), 1, pInFile);
+			if (nBoneWeights > 0)
+			{
+				CSkinnedMesh* pSkinnedMesh = (CSkinnedMesh*)this;
+
+				pSkinnedMesh->m_pxmf4BoneWeights = new XMFLOAT4[nBoneWeights];
+				nReads = (UINT)::fread(pSkinnedMesh->m_pxmf4BoneWeights, sizeof(XMFLOAT4), nBoneWeights, pInFile);
+
+				pSkinnedMesh->m_pd3dBoneWeightBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pSkinnedMesh->m_pxmf4BoneWeights, sizeof(XMFLOAT4) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &pSkinnedMesh->m_pd3dBoneWeightUploadBuffer);
+
+				pSkinnedMesh->m_d3dBoneWeightBufferView.BufferLocation = pSkinnedMesh->m_pd3dBoneWeightBuffer->GetGPUVirtualAddress();
+				pSkinnedMesh->m_d3dBoneWeightBufferView.StrideInBytes = sizeof(XMFLOAT4);
+				pSkinnedMesh->m_d3dBoneWeightBufferView.SizeInBytes = sizeof(XMFLOAT4) * m_nVertices;
+			}
+		}*/
 		else if (!strcmp(pstrToken, "<SubMeshes>:"))
 		{
 			nReads = (UINT)::fread(&(m_nSubMeshes), sizeof(int), 1, pInFile);

@@ -1,3 +1,4 @@
+//#define _WITH_SKINNED_BONES_ANIMATION
 using System.Collections;
 
 using System.Collections.Generic;
@@ -928,7 +929,13 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
         }
 
-
+#if _WITH_SKINNED_BONES_ANIMATION
+        if (mesh.boneWeights.Length > 0)
+        {
+            WriteBoneIndices("<BoneIndices>:", mesh.boneWeights);
+            WriteBoneWeights("<BoneWeights>:", mesh.boneWeights);
+        }
+#endif
 
         WriteInteger("<SubMeshes>:", mesh.subMeshCount);
 
