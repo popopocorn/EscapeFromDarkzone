@@ -232,6 +232,23 @@ void CPlayer::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamer
 	if (nCameraMode == THIRD_PERSON_CAMERA) CGameObject::Render(pd3dCommandList, pCamera);
 }
 
+void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
+{
+	if (!new_state)
+		return;
+
+	// 같은 타입이면 전이 안 함 (선택)
+	if (state && typeid(*state) == typeid(*new_state))
+		return;
+
+	if (state)
+		state->Exit(this);
+
+	state = std::move(new_state);
+
+	state->Enter(this);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -446,77 +463,169 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		pController = m_pChild->m_pSkinnedAnimationController;
 	}
 
-	float fMoveSpeed = 300.0f;
 	bool bIsMoving = false;
 	bool bIsSpecialAction = false;
+	
+	while (not event_queue.empty()) {
+		const GameEvent& ev = event_queue.front();
 
-	// ====================================================
-	// 1. 이동 처리
-	// ====================================================
-	if (InputManager::Instance().KeyPress((INPUT_KEY)0x57) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x53) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x41) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x44))
-	{
-		if (pController)
+		switch (ev.type)
 		{
-			// 현재 2번 트랙이 달리기가 아니면 달리기로 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 2)
-				pController->SetTrackAnimationSet(1, 2);
+		case EventType::Input:
+		{
+			if (ev.keyEvent.state == KEY_STATE::DOWN) {
+				switch (ev.keyEvent.key)
+				{
+				case INPUT_KEY::W:
+				case INPUT_KEY::A:
+				case INPUT_KEY::S:
+				case INPUT_KEY::D:
+					ChangeState(make_unique<PlayerRun>());
+				default:
+					break;
+				}
+			}
+			if (ev.keyEvent.state == KEY_STATE::UP) {
+				switch (ev.keyEvent.key)
+				{
+				case INPUT_KEY::W:
+				case INPUT_KEY::A:
+				case INPUT_KEY::S:
+				case INPUT_KEY::D:
+					ChangeState(make_unique<PlayerIdle>());
+				default:
+					break;
+				}
+			}
 		}
+		break;
+		case EventType::Timeout:
 
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x57)) Move(DIR_FORWARD, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x53)) Move(DIR_BACKWARD, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x41)) Move(DIR_LEFT, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x44)) Move(DIR_RIGHT, fMoveSpeed * fTimeElapsed, true);
-
-		bIsMoving = true;
+			break;
+		default:
+			break;
+		}
+		event_queue.pop();
 	}
 
-	// ====================================================
-	// 2. 특수 동작 처리(Action)
-	// ====================================================
-	if (!bIsMoving && pController)
-	{
-		// KeyPress를 쓰면 누르고 있는 동안 재생
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x33))
-		{
-			// 현재 셔플이 아니면 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 3)
-				pController->SetTrackAnimationSet(1, 3);
 
-			pController->SetTrackEnable(1, true);
-			pController->SetTrackEnable(0, false);
+	//// ====================================================
+	//// 1. 이동 처리
+	//// ====================================================
+	//if (InputManager::Instance().KeyHold((INPUT_KEY)0x57) ||
+	//	InputManager::Instance().KeyHold((INPUT_KEY)0x53) ||
+	//	InputManager::Instance().KeyHold((INPUT_KEY)0x41) ||
+	//	InputManager::Instance().KeyHold((INPUT_KEY)0x44))
+	//{
+	//	if (pController)
+	//	{
+	//		// 현재 2번 트랙이 달리기가 아니면 달리기로 교체
+	//		if (pController->m_pAnimationTracks[1].m_nAnimationSet != 2)
+	//			pController->SetTrackAnimationSet(1, 2);
+	//	}
 
-			bIsSpecialAction = true;
-		}
-		// 키 4번: 죽기 (Index 4)
-		else if (InputManager::Instance().KeyPress((INPUT_KEY)0x34))
-		{
-			// 현재 죽기가 아니면 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 4)
-				pController->SetTrackAnimationSet(1, 4);
+	//	bIsMoving = true;
+	//}
+	//
 
-			pController->SetTrackEnable(1, true);
-			pController->SetTrackEnable(0, false);
+	//// ====================================================
+	//// 2. 특수 동작 처리(Action)
+	//// ====================================================
+	//if (!bIsMoving && pController)
+	//{
+	//	// KeyPress를 쓰면 누르고 있는 동안 재생
+	//	if (InputManager::Instance().KeyHold(INPUT_KEY::E))
+	//	{
+	//		// 현재 셔플이 아니면 교체
+	//		if (pController->m_pAnimationTracks[1].m_nAnimationSet != 3)
+	//			pController->SetTrackAnimationSet(1, 3);
 
-			bIsSpecialAction = true;
-		}
-	}
+	//		pController->SetTrackEnable(1, true);
+	//		pController->SetTrackEnable(0, false);
 
-	// ====================================================
-	// 3. 정지 상태 (Idle)
-	// ====================================================
-	if (!bIsMoving && !bIsSpecialAction && pController)
-	{
-		pController->SetTrackEnable(1, false);
+	//		bIsSpecialAction = true;
+	//	}
+	//	// 키 4번: 죽기 (Index 4)
+	//	else if (InputManager::Instance().KeyHold((INPUT_KEY)0x34))
+	//	{
+	//		// 현재 죽기가 아니면 교체
+	//		if (pController->m_pAnimationTracks[1].m_nAnimationSet != 4)
+	//			pController->SetTrackAnimationSet(1, 4);
 
-		pController->SetTrackEnable(0, true);
-	}
+	//		pController->SetTrackEnable(1, true);
+	//		pController->SetTrackEnable(0, false);
+
+	//		bIsSpecialAction = true;
+	//	}
+	//}
+
+	//// ====================================================
+	//// 3. 정지 상태 (Idle)
+	//// ====================================================
+	//if (!bIsMoving && !bIsSpecialAction && pController)
+	//{
+	//	pController->SetTrackEnable(1, false);
+
+	//	pController->SetTrackEnable(0, true);
+	//}
 
 	// 지형 높이 보정 콜백
 	if (m_pPlayerUpdatedContext)
 	{
 		OnPlayerUpdateCallback(fTimeElapsed);
 	}
+}
+
+bool PlayerIdle::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackEnable(0, true);
+	pctrl->SetTrackEnable(1, false);
+
+	return true;
+}
+
+void PlayerIdle::Update(CPlayer* Player)
+{
+}
+
+void PlayerIdle::Exit(CPlayer* Player)
+{
+}
+//-------------------------------------------------------------------------
+bool PlayerRun::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackAnimationSet(1, 2);
+	pctrl->SetTrackEnable(0, false);
+	pctrl->SetTrackEnable(1, true);
+	return true;
+}
+
+void PlayerRun::Update(CPlayer* Player)
+{
+}
+
+void PlayerRun::Exit(CPlayer* Player)
+{
+}
+//-------------------------------------------------------------------------
+bool PlayerDie::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackAnimationSet(1, 4);
+	pctrl->SetTrackEnable(0, false);
+	pctrl->SetTrackEnable(1, true);
+	return true;
+}
+
+void PlayerDie::Update(CPlayer* Player)
+{
+}
+
+void PlayerDie::Exit(CPlayer* Player)
+{
 }

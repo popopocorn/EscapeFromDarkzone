@@ -323,7 +323,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				case VK_F1:
 				case VK_F2:
 				case VK_F3:
-					m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
+					//m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
 					break;
 				case VK_F9:
 					ChangeSwapChainState();
@@ -454,10 +454,10 @@ void CGameFramework::ProcessInput()
 		DWORD dwDirection = 0;
 		auto& input = InputManager::Instance();
 
-		if (input.KeyDown(INPUT_KEY::W) || input.KeyPress(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
-		if (input.KeyDown(INPUT_KEY::S) || input.KeyPress(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
-		if (input.KeyDown(INPUT_KEY::A) || input.KeyPress(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
-		if (input.KeyDown(INPUT_KEY::D) || input.KeyPress(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
+		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
+		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
+		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
+		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
 
 		if (pKeysBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
 		if (pKeysBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
@@ -471,7 +471,7 @@ void CGameFramework::ProcessInput()
 				else
 					m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 			}
-			if (dwDirection) m_pPlayer->Move(dwDirection, 12.25f, true);
+			if (dwDirection) m_pPlayer->Move(dwDirection, 10.0f, true);
 		}
 	}
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());

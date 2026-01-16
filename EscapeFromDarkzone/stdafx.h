@@ -22,6 +22,8 @@
 
 #include <fstream>
 #include <vector>
+#include<array>
+#include<queue>
 
 using namespace std;
 
@@ -48,8 +50,8 @@ extern HINSTANCE						ghAppInstance;
 
 //#define _WITH_SWAPCHAIN_FULLSCREEN_STATE
 
-#define FRAME_BUFFER_WIDTH				640
-#define FRAME_BUFFER_HEIGHT				480
+#define FRAME_BUFFER_WIDTH				1392
+#define FRAME_BUFFER_HEIGHT				738
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -402,7 +404,7 @@ enum class INPUT_KEY {
 enum class KEY_STATE
 {
 	NONE,
-	PRESS,
+	HOLD,
 	DOWN,
 	UP
 };

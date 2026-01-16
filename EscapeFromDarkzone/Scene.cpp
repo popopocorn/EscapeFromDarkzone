@@ -84,7 +84,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 76); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 77); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -573,15 +573,64 @@ bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!m_pPlayer) return false;
+
 	switch (nMessageID)
 	{
 	case WM_KEYDOWN:
-		break;
-	default:
-		break;
+	case WM_KEYUP:
+	{
+		INPUT_KEY key;
+		bool validKey = true;
+
+		switch (wParam)
+		{
+		case VK_UP:     key = INPUT_KEY::UP; break;
+		case VK_DOWN:   key = INPUT_KEY::DOWN; break;
+		case VK_LEFT:   key = INPUT_KEY::LEFT; break;
+		case VK_RIGHT:  key = INPUT_KEY::RIGHT; break;
+
+		case 'W': key = INPUT_KEY::W; break;
+		case 'A': key = INPUT_KEY::A; break;
+		case 'S': key = INPUT_KEY::S; break;
+		case 'D': key = INPUT_KEY::D; break;
+
+		case 'E': key = INPUT_KEY::E; break;
+		case 'G': key = INPUT_KEY::G; break;
+		case 'I': key = INPUT_KEY::I; break;
+
+		case '1': key = INPUT_KEY::KEY_1; break;
+		case '2': key = INPUT_KEY::KEY_2; break;
+		case '3': key = INPUT_KEY::KEY_3; break;
+		case '4': key = INPUT_KEY::KEY_4; break;
+
+		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
+		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
+		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
+
+		default:
+			validKey = false;
+			break;
+		}
+
+		if (!validKey)
+			break;
+
+		KEY_STATE state =
+			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
+
+		GameEvent e;
+		e.type = EventType::Input;
+		e.keyEvent = { key, state };
+
+		m_pPlayer->AddEvent(e);
+		return true;
 	}
-	return(false);
+	}
+
+	return false;
 }
+
 
 bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 {

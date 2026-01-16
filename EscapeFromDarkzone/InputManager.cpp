@@ -18,15 +18,15 @@ void InputManager::update()
 		{
 			KEY_STATE& state = key_states[key];
 
-			if (state == KEY_STATE::PRESS || state == KEY_STATE::DOWN)
-				state = KEY_STATE::PRESS;
+			if (state == KEY_STATE::HOLD || state == KEY_STATE::DOWN)
+				state = KEY_STATE::HOLD;
 			else
 				state = KEY_STATE::DOWN;
 		}
 		else
 		{
 			KEY_STATE& state = key_states[key];
-			if (state == KEY_STATE::PRESS || state == KEY_STATE::DOWN)
+			if (state == KEY_STATE::HOLD || state == KEY_STATE::DOWN)
 				state = KEY_STATE::UP;
 			else
 				state = KEY_STATE::NONE;
