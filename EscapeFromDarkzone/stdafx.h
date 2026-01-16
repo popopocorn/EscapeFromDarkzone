@@ -36,7 +36,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-
+//#define _DEBUG
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -52,6 +52,7 @@ extern HINSTANCE						ghAppInstance;
 
 #define FRAME_BUFFER_WIDTH				1392
 #define FRAME_BUFFER_HEIGHT				738
+//#define _WITH_ANIMATION_SRT
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")

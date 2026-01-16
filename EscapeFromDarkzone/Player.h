@@ -55,6 +55,7 @@ protected:
 	CCamera						*m_pCamera = NULL;
 	std::unique_ptr<PlayerState> state;
 	std::queue<GameEvent>		event_queue;
+	XMFLOAT2					dir = XMFLOAT2(0, 0);
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -107,6 +108,7 @@ public:
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
+	XMFLOAT2 GetDirection() { return dir; }
 };
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler
@@ -118,6 +120,16 @@ public:
 public:
 	virtual void HandleCallback(void *pCallbackData, float fTrackPosition); 
 };
+
+
+enum PLAYER_ANIM {
+	ANIM_IDLE = 0,
+	ANIM_RUN_F,
+	ANIM_RUN_L,
+	ANIM_RUN_R,
+	ANIM_RUN_B,
+};
+
 
 class CTerrainPlayer : public CPlayer
 {
@@ -134,6 +146,7 @@ public:
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
 
 	virtual void Update(float fTimeElapsed);
+
 };
 
 
