@@ -143,7 +143,7 @@ void CPlayer::Rotate(float x, float y, float z)
 
 void CPlayer::Update(float fTimeElapsed)
 {
-	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, m_xmf3Gravity);
+	
 	float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
 	float fMaxVelocityXZ = m_fMaxVelocityXZ;
 	if (fLength > m_fMaxVelocityXZ)
@@ -167,7 +167,7 @@ void CPlayer::Update(float fTimeElapsed)
 	m_pCamera->RegenerateViewMatrix();
 
 	fLength = Vector3::Length(m_xmf3Velocity);
-	float fDeceleration = (m_fFriction * fTimeElapsed * 1.05);
+	float fDeceleration = (m_fFriction * fTimeElapsed);
 	if (fDeceleration > fLength) fDeceleration = fLength;
 	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true));
 }
@@ -304,12 +304,12 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	
-	SetPlayerUpdatedContext(pContext);
-	SetCameraUpdatedContext(pContext);
+	//SetPlayerUpdatedContext(pContext);
+	//SetCameraUpdatedContext(pContext);
 
-	CHeightMapTerrain *pTerrain = (CHeightMapTerrain *)pContext;
-	SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
-	SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
+	//CHeightMapTerrain *pTerrain = (CHeightMapTerrain *)pContext;
+	//SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
+	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
 }
@@ -355,7 +355,7 @@ CCamera *CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 			SetMaxVelocityY(400.0f);
 			m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
 			m_pCamera->SetTimeLag(0.25f);
-			m_pCamera->SetOffset(XMFLOAT3(0.0f, 120, -50.0f));
+			m_pCamera->SetOffset(XMFLOAT3(0.0f, 15, -5.0f));
 			m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
 			m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
 			m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
@@ -477,11 +477,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	if(state.get())
 		state.get()->Update(this);
 
-	// 지형 높이 보정 콜백
-	if (m_pPlayerUpdatedContext)
-	{
-		OnPlayerUpdateCallback(fTimeElapsed);
-	}
+	//// 지형 높이 보정 콜백
+	//if (m_pPlayerUpdatedContext)
+	//{
+	//	OnPlayerUpdateCallback(fTimeElapsed);
+	//}
 }
 
 bool PlayerIdle::Enter(CPlayer* Player)
