@@ -11,7 +11,7 @@ public:
 	void init(HWND hwnd);
 	void update();
 	bool KeyDown(INPUT_KEY key) { return GetState(key) == KEY_STATE::DOWN; }
-	bool KeyPress(INPUT_KEY key) { return GetState(key) == KEY_STATE::PRESS; }
+	bool KeyHold(INPUT_KEY key) { return GetState(key) == KEY_STATE::HOLD; }
 	bool KeyRelease(INPUT_KEY key) { return GetState(key) == KEY_STATE::UP; }
 
 private:

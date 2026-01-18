@@ -1,4 +1,4 @@
-//-----------------------------------------------------------------------------
+Ôªø//-----------------------------------------------------------------------------
 // File: CGameObject.cpp
 //-----------------------------------------------------------------------------
 
@@ -521,7 +521,7 @@ CAnimationController::CAnimationController(ID3D12Device *pd3dDevice, ID3D12Graph
 	m_ppd3dcbSkinningBoneTransforms = new ID3D12Resource*[m_nSkinnedMeshes];
 	m_ppcbxmf4x4MappedSkinningBoneTransforms = new XMFLOAT4X4*[m_nSkinnedMeshes];
 
-	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255); //256¿« πËºˆ
+	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255); //256Ïùò Î∞∞Ïàò
 	for (int i = 0; i < m_nSkinnedMeshes; i++)
 	{
 		m_ppd3dcbSkinningBoneTransforms[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
@@ -565,7 +565,7 @@ void CAnimationController::SetTrackAnimationSet(int nAnimationTrack, int nAnimat
 {
 	if (m_pAnimationTracks)
 	{
-		// ∫§≈Õ π¸¿ß √º≈© »ƒ º≥¡§
+		// Î≤°ÌÑ∞ Î≤îÏúÑ Ï≤¥ÌÅ¨ ÌõÑ ÏÑ§Ï†ï
 		if (m_pAnimationSets && (nAnimationSet < m_pAnimationSets->m_vAnimationSets.size()))
 		{
 			m_pAnimationTracks[nAnimationTrack].SetAnimationSet(nAnimationSet);
@@ -1214,7 +1214,7 @@ CGameObject *CGameObject::LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, I
 					if (pChild) pGameObject->SetChild(pChild);
 #ifdef _WITH_DEBUG_FRAME_HIERARCHY
 					TCHAR pstrDebug[256] = { 0 };
-					_stprintf_s(pstrDebug, 256, "(Frame: %p) (Parent: %p)\n"), pChild, pGameObject);
+					_stprintf_s(pstrDebug, 256, _T("(Frame: %p) (Parent: %p)\n"), pChild, pGameObject);
 					OutputDebugString(pstrDebug);
 #endif
 				}
@@ -1355,7 +1355,7 @@ CLoadedModelInfo *CGameObject::LoadGeometryAndAnimationFromFile(ID3D12Device *pd
 
 #ifdef _WITH_DEBUG_FRAME_HIERARCHY
 	TCHAR pstrDebug[256] = { 0 };
-	_stprintf_s(pstrDebug, 256, "Frame Hierarchy\n"));
+	_stprintf_s(pstrDebug, 256, _T("Frame Hierarchy\n"));
 	OutputDebugString(pstrDebug);
 
 	CGameObject::PrintFrameInfo(pGameObject, NULL);

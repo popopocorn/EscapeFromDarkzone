@@ -63,7 +63,7 @@ public:
 
 	void ReleaseUploadBuffers();
 
-	CPlayer								*m_pPlayer = NULL;
+	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
@@ -98,21 +98,23 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-	int									m_nGameObjects = 0;
-	CGameObject							**m_ppGameObjects = NULL;
+	
+	std::vector<CGameObject*>			m_ppGameObjects;
+	//objectshader로 관리할거라 필요 없을거 같음
+	//아마 사용한다면 shader와 이것 모두 shared_ptr?
 
 	int									m_nHierarchicalGameObjects = 0;
 	CGameObject							**m_ppHierarchicalGameObjects = NULL;
+	//사용 안할거, 게임 제작시 삭제
 
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	int									m_nShaders = 0;
-	CShader								**m_ppShaders = NULL;
+	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
 
-	CSkyBox								*m_pSkyBox = NULL;
-	CHeightMapTerrain					*m_pTerrain = NULL;
+	std::unique_ptr<CSkyBox>								m_pSkyBox;
+	CHeightMapTerrain					*m_pTerrain = NULL;//안쓸거
 
-	LIGHT								*m_pLights = NULL;
+	std::vector<LIGHT>					m_pLights;
 	int									m_nLights = 0;
 
 	XMFLOAT4							m_xmf4GlobalAmbient;

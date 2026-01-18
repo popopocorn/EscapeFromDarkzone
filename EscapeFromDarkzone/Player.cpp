@@ -59,9 +59,9 @@ void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 	{
 		XMFLOAT3 xmf3Shift = XMFLOAT3(0, 0, 0);
 		if (dwDirection & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, fDistance);
-		if (dwDirection & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, -fDistance);
-		if (dwDirection & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, fDistance);
-		if (dwDirection & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, -fDistance);
+		if (dwDirection & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, -fDistance/1.3);
+		if (dwDirection & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, fDistance/1.1);
+		if (dwDirection & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, -fDistance/1.1);
 		if (dwDirection & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, fDistance);
 		if (dwDirection & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, -fDistance);
 
@@ -143,7 +143,7 @@ void CPlayer::Rotate(float x, float y, float z)
 
 void CPlayer::Update(float fTimeElapsed)
 {
-	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, m_xmf3Gravity);
+	
 	float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
 	float fMaxVelocityXZ = m_fMaxVelocityXZ;
 	if (fLength > m_fMaxVelocityXZ)
@@ -232,6 +232,23 @@ void CPlayer::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamer
 	if (nCameraMode == THIRD_PERSON_CAMERA) CGameObject::Render(pd3dCommandList, pCamera);
 }
 
+void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
+{
+	if (!new_state)
+		return;
+
+	// 같은 타입이면 전이 안 함 (선택)
+	if (state && typeid(*state) == typeid(*new_state))
+		return;
+
+	if (state)
+		state->Exit(this);
+
+	state = std::move(new_state);
+
+	state->Enter(this);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -313,21 +330,18 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
 
 	// 트랙 0: Idle - 항상 켜
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, 1);
+	m_pSkinnedAnimationController->SetTrackAnimationSet(0, ANIM_IDLE);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-
-	// 트랙 1: Action - 처음엔 꺼
-	m_pSkinnedAnimationController->SetTrackAnimationSet(1, 2);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	
-	SetPlayerUpdatedContext(pContext);
-	SetCameraUpdatedContext(pContext);
+	//SetPlayerUpdatedContext(pContext);
+	//SetCameraUpdatedContext(pContext);
 
-	CHeightMapTerrain *pTerrain = (CHeightMapTerrain *)pContext;
-	SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
-	SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
+	//CHeightMapTerrain *pTerrain = (CHeightMapTerrain *)pContext;
+	//SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
+	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
 }
@@ -373,7 +387,7 @@ CCamera *CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 			SetMaxVelocityY(400.0f);
 			m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
 			m_pCamera->SetTimeLag(0.25f);
-			m_pCamera->SetOffset(XMFLOAT3(0.0f, 20.0f, -50.0f));
+			m_pCamera->SetOffset(XMFLOAT3(0.0f, 15, -5.0f));
 			m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
 			m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
 			m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
@@ -427,12 +441,6 @@ void CTerrainPlayer::OnCameraUpdateCallback(float fTimeElapsed)
 
 void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 {
-	if (dwDirection)
-	{
-		m_pSkinnedAnimationController->SetTrackEnable(0, false);
-		m_pSkinnedAnimationController->SetTrackEnable(1, true);
-	}
-
 	CPlayer::Move(dwDirection, fDistance, bUpdateVelocity);
 }
 
@@ -445,78 +453,142 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	{
 		pController = m_pChild->m_pSkinnedAnimationController;
 	}
+	dir = XMFLOAT2(0, 0);
+	while (not event_queue.empty()) {
+		const GameEvent& ev = event_queue.front();
 
-	float fMoveSpeed = 300.0f;
-	bool bIsMoving = false;
-	bool bIsSpecialAction = false;
-
-	// ====================================================
-	// 1. 이동 처리
-	// ====================================================
-	if (InputManager::Instance().KeyPress((INPUT_KEY)0x57) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x53) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x41) ||
-		InputManager::Instance().KeyPress((INPUT_KEY)0x44))
-	{
-		if (pController)
+		switch (ev.type)
 		{
-			// 현재 2번 트랙이 달리기가 아니면 달리기로 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 2)
-				pController->SetTrackAnimationSet(1, 2);
-		}
-
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x57)) Move(DIR_FORWARD, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x53)) Move(DIR_BACKWARD, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x41)) Move(DIR_LEFT, fMoveSpeed * fTimeElapsed, true);
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x44)) Move(DIR_RIGHT, fMoveSpeed * fTimeElapsed, true);
-
-		bIsMoving = true;
-	}
-
-	// ====================================================
-	// 2. 특수 동작 처리(Action)
-	// ====================================================
-	if (!bIsMoving && pController)
-	{
-		// KeyPress를 쓰면 누르고 있는 동안 재생
-		if (InputManager::Instance().KeyPress((INPUT_KEY)0x33))
+		case EventType::Input:
 		{
-			// 현재 셔플이 아니면 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 3)
-				pController->SetTrackAnimationSet(1, 3);
-
-			pController->SetTrackEnable(1, true);
-			pController->SetTrackEnable(0, false);
-
-			bIsSpecialAction = true;
+			if (ev.keyEvent.state == KEY_STATE::DOWN) {
+				switch (ev.keyEvent.key)
+				{
+				case INPUT_KEY::W:
+					dir.x += 1;
+					ChangeState(make_unique<PlayerRun>());
+					break;
+				case INPUT_KEY::A:
+					dir.y -= 1;
+					ChangeState(make_unique<PlayerRun>());
+					break;
+				case INPUT_KEY::S:
+					dir.x -= 1;
+					ChangeState(make_unique<PlayerRun>());
+					break;
+				case INPUT_KEY::D:
+					dir.y += 1;
+					ChangeState(make_unique<PlayerRun>());
+					break;
+				default:
+					break;
+				}
+			}
+			if (ev.keyEvent.state == KEY_STATE::UP) {
+				switch (ev.keyEvent.key)
+				{
+				case INPUT_KEY::W:
+				case INPUT_KEY::A:
+				case INPUT_KEY::S:
+				case INPUT_KEY::D:
+					ChangeState(make_unique<PlayerIdle>());
+				default:
+					break;
+				}
+			}
 		}
-		// 키 4번: 죽기 (Index 4)
-		else if (InputManager::Instance().KeyPress((INPUT_KEY)0x34))
-		{
-			// 현재 죽기가 아니면 교체
-			if (pController->m_pAnimationTracks[1].m_nAnimationSet != 4)
-				pController->SetTrackAnimationSet(1, 4);
+		break;
+		case EventType::Timeout:
 
-			pController->SetTrackEnable(1, true);
-			pController->SetTrackEnable(0, false);
-
-			bIsSpecialAction = true;
+			break;
+		default:
+			break;
 		}
+		event_queue.pop();
 	}
+	if(state.get())
+		state.get()->Update(this);
 
-	// ====================================================
-	// 3. 정지 상태 (Idle)
-	// ====================================================
-	if (!bIsMoving && !bIsSpecialAction && pController)
+	//// 지형 높이 보정 콜백
+	//if (m_pPlayerUpdatedContext)
+	//{
+	//	OnPlayerUpdateCallback(fTimeElapsed);
+	//}
+}
+
+bool PlayerIdle::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackAnimationSet(0, 0);
+	pctrl->SetTrackEnable(0, true);
+	pctrl->SetTrackEnable(1, false);
+
+	return true;
+}
+
+void PlayerIdle::Update(CPlayer* Player)
+{
+}
+
+void PlayerIdle::Exit(CPlayer* Player)
+{
+}
+//-------------------------------------------------------------------------
+bool PlayerRun::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackAnimationSet(1,1);
+	pctrl->SetTrackEnable(0, false);
+	pctrl->SetTrackEnable(1, true);
+	return true;
+}
+
+void PlayerRun::Update(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return;
+
+	const XMFLOAT2 dir = Player->GetDirection();
+	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
+
+	float angle = atan2f(dir.y, dir.x);
+	int nextAnim;
+
+	if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
+		nextAnim = ANIM_RUN_F;
+	else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
+		nextAnim = ANIM_RUN_R;
+	else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
+		nextAnim = ANIM_RUN_L;
+	else
+		nextAnim = ANIM_RUN_B;
+
+	if (pctrl->m_pAnimationTracks[1].m_nAnimationSet != nextAnim)
 	{
-		pController->SetTrackEnable(1, false);
-
-		pController->SetTrackEnable(0, true);
+		pctrl->SetTrackAnimationSet(1, nextAnim);
 	}
+}
 
-	// 지형 높이 보정 콜백
-	if (m_pPlayerUpdatedContext)
-	{
-		OnPlayerUpdateCallback(fTimeElapsed);
-	}
+void PlayerRun::Exit(CPlayer* Player)
+{
+}
+//-------------------------------------------------------------------------
+bool PlayerDie::Enter(CPlayer* Player)
+{
+	auto* pctrl = Player->GetAnimationController();
+	if (!pctrl) return false;
+	pctrl->SetTrackAnimationSet(1, 4);
+	pctrl->SetTrackEnable(0, false);
+	pctrl->SetTrackEnable(1, true);
+	return true;
+}
+
+void PlayerDie::Update(CPlayer* Player)
+{
+}
+
+void PlayerDie::Exit(CPlayer* Player)
+{
 }

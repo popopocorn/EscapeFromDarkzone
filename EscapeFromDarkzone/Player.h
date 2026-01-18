@@ -11,6 +11,24 @@
 #include "Object.h"
 #include "Camera.h"
 
+
+
+enum class EventType {
+	Input,
+	Timeout,
+};
+struct InputEvent {
+	INPUT_KEY key;
+	KEY_STATE state;
+};
+
+struct GameEvent {
+	EventType type;
+	InputEvent keyEvent;
+};
+
+class PlayerState;
+
 class CPlayer : public CGameObject
 {
 protected:
@@ -35,7 +53,9 @@ protected:
 	LPVOID						m_pCameraUpdatedContext = NULL;
 
 	CCamera						*m_pCamera = NULL;
-
+	std::unique_ptr<PlayerState> state;
+	std::queue<GameEvent>		event_queue;
+	XMFLOAT2					dir = XMFLOAT2(0, 0);
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -84,8 +104,12 @@ public:
 	virtual CCamera *ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed) { return(NULL); }
 	virtual void OnPrepareRender();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera = NULL);
-};
 
+	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
+	void AddEvent(const GameEvent& event) { event_queue.push(event); }
+	void ChangeState(std::unique_ptr<PlayerState> new_state);
+	XMFLOAT2 GetDirection() { return dir; }
+};
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler
 {
@@ -96,6 +120,16 @@ public:
 public:
 	virtual void HandleCallback(void *pCallbackData, float fTrackPosition); 
 };
+
+
+enum PLAYER_ANIM {
+	ANIM_IDLE = 0,
+	ANIM_RUN_F,
+	ANIM_RUN_L,
+	ANIM_RUN_R,
+	ANIM_RUN_B,
+};
+
 
 class CTerrainPlayer : public CPlayer
 {
@@ -112,5 +146,33 @@ public:
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
 
 	virtual void Update(float fTimeElapsed);
+
 };
 
+
+class PlayerState {
+public:
+	virtual ~PlayerState() {};
+	virtual bool Enter(CPlayer* Player) { return false; }
+	virtual void Update(CPlayer* Player) {}
+	virtual void Exit(CPlayer* Player) {}
+};
+
+
+class PlayerIdle : public PlayerState {
+	virtual bool Enter(CPlayer* Player);
+	virtual void Update(CPlayer* Player);
+	virtual void Exit(CPlayer* Player);
+};
+
+class PlayerRun : public PlayerState {
+	virtual bool Enter(CPlayer* Player);
+	virtual void Update(CPlayer* Player);
+	virtual void Exit(CPlayer* Player);
+};
+
+class PlayerDie : public PlayerState {
+	virtual bool Enter(CPlayer* Player);
+	virtual void Update(CPlayer* Player);
+	virtual void Exit(CPlayer* Player);
+};
