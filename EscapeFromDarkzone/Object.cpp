@@ -1239,14 +1239,14 @@ void CGameObject::PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent)
 	if (pGameObject->m_pChild) CGameObject::PrintFrameInfo(pGameObject->m_pChild, pGameObject);
 }
 
-void CGameObject::LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoadedModel)
+void CGameObject::LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel)
 {
 	char pstrToken[64] = { '\0' };
 	UINT nReads = 0;
 
 	int nAnimationSets = 0;
 
-	for ( ; ; )
+	for (; ; )
 	{
 		::ReadStringFromFile(pInFile, pstrToken);
 		if (!strcmp(pstrToken, "<AnimationSets>:"))
@@ -1256,13 +1256,22 @@ void CGameObject::LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoaded
 		}
 		else if (!strcmp(pstrToken, "<FrameNames>:"))
 		{
-			pLoadedModel->m_pAnimationSets->m_nBoneFrames = ::ReadIntegerFromFile(pInFile); 
-			pLoadedModel->m_pAnimationSets->m_ppBoneFrameCaches = new CGameObject*[pLoadedModel->m_pAnimationSets->m_nBoneFrames];
+			pLoadedModel->m_pAnimationSets->m_nBoneFrames = ::ReadIntegerFromFile(pInFile);
+			pLoadedModel->m_pAnimationSets->m_ppBoneFrameCaches = new CGameObject * [pLoadedModel->m_pAnimationSets->m_nBoneFrames];
 
 			for (int j = 0; j < pLoadedModel->m_pAnimationSets->m_nBoneFrames; j++)
 			{
 				::ReadStringFromFile(pInFile, pstrToken);
-				pLoadedModel->m_pAnimationSets->m_ppBoneFrameCaches[j] = pLoadedModel->m_pModelRootObject->FindFrame(pstrToken);
+
+				// [수정] 본 프레임을 찾아서 저장하되, NULL인지 체크
+				CGameObject* pFoundFrame = pLoadedModel->m_pModelRootObject->FindFrame(pstrToken);
+				pLoadedModel->m_pAnimationSets->m_ppBoneFrameCaches[j] = pFoundFrame;
+
+				// 프레임을 못 찾았으면(NULL이면) 아래 디버그 코드 실행 시 뻗으므로 건너뜀
+				if (pFoundFrame == NULL)
+				{
+					continue;
+				}
 
 #ifdef _WITH_DEBUG_SKINNING_BONE
 				TCHAR pstrDebug[256] = { 0 };
@@ -1270,7 +1279,8 @@ void CGameObject::LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoaded
 				TCHAR pwstrBoneCacheName[64] = { 0 };
 				size_t nConverted = 0;
 				mbstowcs_s(&nConverted, pwstrAnimationBoneName, 64, pstrToken, _TRUNCATE);
-				mbstowcs_s(&nConverted, pwstrBoneCacheName, 64, pLoadedModel->m_ppBoneFrameCaches[j]->m_pstrFrameName, _TRUNCATE);
+				// 위에서 pFoundFrame이 NULL이 아님을 확인했으므로 안전함
+				mbstowcs_s(&nConverted, pwstrBoneCacheName, 64, pLoadedModel->m_pAnimationSets->m_ppBoneFrameCaches[j]->m_pstrFrameName, _TRUNCATE);
 				_stprintf_s(pstrDebug, 256, _T("AnimationBoneFrame:: Cache(%s) AnimationBone(%s)\n"), pwstrBoneCacheName, pwstrAnimationBoneName);
 				OutputDebugString(pstrDebug);
 #endif
@@ -1298,12 +1308,13 @@ void CGameObject::LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoaded
 					float fKeyTime = ::ReadFloatFromFile(pInFile);
 
 #ifdef _WITH_ANIMATION_SRT
-					m_pfKeyFrameScaleTimes[i] = fKeyTime;
-					m_pfKeyFrameRotationTimes[i] = fKeyTime;
-					m_pfKeyFrameTranslationTimes[i] = fKeyTime;
-					nReads = (UINT)::fread(pAnimationSet->m_ppxmf3KeyFrameScales[i], sizeof(XMFLOAT3), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
-					nReads = (UINT)::fread(pAnimationSet->m_ppxmf4KeyFrameRotations[i], sizeof(XMFLOAT4), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
-					nReads = (UINT)::fread(pAnimationSet->m_ppxmf3KeyFrameTranslations[i], sizeof(XMFLOAT3), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
+					// 주의: 원본 코드의 변수명(pAnimationSet) 오류 가능성을 pNewAnimationSet으로 맞춰둠
+					pNewAnimationSet->m_pfKeyFrameScaleTimes[i] = fKeyTime;
+					pNewAnimationSet->m_pfKeyFrameRotationTimes[i] = fKeyTime;
+					pNewAnimationSet->m_pfKeyFrameTranslationTimes[i] = fKeyTime;
+					nReads = (UINT)::fread(pNewAnimationSet->m_ppxmf3KeyFrameScales[i], sizeof(XMFLOAT3), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
+					nReads = (UINT)::fread(pNewAnimationSet->m_ppxmf4KeyFrameRotations[i], sizeof(XMFLOAT4), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
+					nReads = (UINT)::fread(pNewAnimationSet->m_ppxmf3KeyFrameTranslations[i], sizeof(XMFLOAT3), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);
 #else
 					pNewAnimationSet->m_pfKeyFrameTimes[i] = fKeyTime;
 					nReads = (UINT)::fread(pNewAnimationSet->m_ppxmf4x4KeyFrameTransforms[i], sizeof(XMFLOAT4X4), pLoadedModel->m_pAnimationSets->m_nBoneFrames, pInFile);

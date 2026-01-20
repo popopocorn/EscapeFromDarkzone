@@ -97,11 +97,15 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
-	//m_pTerrain = new CHeightMapTerrain(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, _T("Terrain/HeightMap.raw"), 257, 257, xmf3Scale, xmf4Color);
+	m_pTerrain = new CHeightMapTerrain(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, _T("Terrain/HeightMap.raw"), 257, 257, xmf3Scale, xmf4Color);
 
 	m_nHierarchicalGameObjects = 22;
 	m_ppHierarchicalGameObjects = new CGameObject*[m_nHierarchicalGameObjects];
 
+	for (int i = 0; i < m_nHierarchicalGameObjects; i++)
+	{
+		m_ppHierarchicalGameObjects[i] = NULL;
+	}
 	CLoadedModelInfo *pAngrybotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, "Model/Angrybot.bin", NULL);
 	m_ppHierarchicalGameObjects[0] = new CAngrybotObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pAngrybotModel, 1);
 	m_ppHierarchicalGameObjects[0]->m_pSkinnedAnimationController->SetTrackAnimationSet(0, 0);
@@ -197,6 +201,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	m_ppHierarchicalGameObjects[12]->m_pSkinnedAnimationController->SetTrackSpeed(1, 0.025f);
 	m_ppHierarchicalGameObjects[12]->SetPosition(380.0f, 0.0f, 680.0f);
 
+	if (pEthanModel) delete pEthanModel;
+
 	CLoadedModelInfo *pEagleModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, "Model/Eagle.bin", NULL);
 	m_ppHierarchicalGameObjects[13] = new CEagleObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pEagleModel, 1);
 	m_ppHierarchicalGameObjects[13]->m_pSkinnedAnimationController->SetTrackAnimationSet(0, 0);
@@ -239,76 +245,39 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	m_ppHierarchicalGameObjects[20]->SetPosition(270.0f, 0.0f + 25.0f, 800.0f);
 	m_ppHierarchicalGameObjects[20]->Rotate(0.0f, 180.0f, 0.0f);
 
+	if (pEagleModel) delete pEagleModel;
 	
-
-	// 적 객체 생성
-	CLoadedModelInfo* pXBotModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, "Model/X_bot.bin", NULL);
-
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pXBotModel);
-
-	// [위치 설정] 플레이어의 "정면"에 소환
-	if (m_pPlayer)
-	{
-		XMFLOAT3 xmf3PlayerPos = m_pPlayer->GetPosition();
-		XMFLOAT3 xmf3PlayerLook = m_pPlayer->GetLookVector();
-
-		// 플레이어 위치에서 시선 방향으로 50만큼 떨어진 위치 계산
-		// (Vector3::Add, ScalarProduct 등은 stdafx.h에 있는 헬퍼 함수 사용)
-		XMFLOAT3 xmf3Pos;
-		xmf3Pos.x = xmf3PlayerPos.x + (xmf3PlayerLook.x * 10.0f);
-		xmf3Pos.z = xmf3PlayerPos.z + (xmf3PlayerLook.z * 10.0f);
-
-		// 높이는 지형에 맞춤 (지형보다 약간 위에 띄움 +1.0f)
-		float fHeight = m_pTerrain->GetHeight(xmf3Pos.x, xmf3Pos.z);
-		xmf3Pos.y = fHeight + 1.0f;
-
-		pEnemy->SetPosition(xmf3Pos);
-	}
-	else
-	{
-		// 플레이어가 없으면 임시 위치
-		pEnemy->SetPosition(1.0f, 1.0f, 1.0f);
-	}
-
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-
-	// [정보 주입]
-	pEnemy->SetPlayer(m_pPlayer);
-	pEnemy->SetTerrain(m_pTerrain);
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	m_ppHierarchicalGameObjects[21] = pEnemy;
 
-	if (pXBotModel) delete pXBotModel;
-///*
-	m_nShaders = 1;
-	m_ppShaders = new CShader*[m_nShaders];
-/*
+	//if (m_pPlayer) pEnemy->SetPlayer(m_pPlayer);
 
-	CEthanObjectsShader *pEthanObjectsShader = new CEthanObjectsShader();
-	pEthanObjectsShader->BuildObjects(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pEthanModel, m_pTerrain);
+	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 
-	if (m_ppHierarchicalGameObjects[21])
-	{
-		m_ppHierarchicalGameObjects[21]->SetShader(pEthanObjectsShader);
-	}
-
-	m_ppShaders[0] = pEthanObjectsShader;
-//*/
-	m_ppShaders.push_back(pEthanObjectsShader);
-	if (pEthanModel) delete pEthanModel;
-//*/
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	
 	std:unique_ptr<CShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+
 	FILE* pInFile = NULL;
 	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
-	::rewind(pInFile);
+	if (pInFile)
+	{
+		::rewind(pInFile);
 
-	std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL , pInFile, stdshader.get(), 0));
-	map->SetPosition(0, 0, 0);
-	stdshader->addObjects(std::move(map));
+		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
+		map->SetPosition(0, 0, 0);
+		stdshader->addObjects(std::move(map));
+
+		::fclose(pInFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: Map file not found.\n");
+	}
 
 	m_ppShaders.push_back(std::move(stdshader));
 	CreateShaderVariables(pd3dDevice, pd3dCommandList); 
@@ -701,8 +670,11 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 
 	}
-
-//**/
+	if (m_pLights.size() > 1)
+	{
+		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	}
 	static float fAngle = 0.0f;
 	fAngle += 1.50f;
 //	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
@@ -711,10 +683,22 @@ void CScene::AnimateObjects(float fTimeElapsed)
 //	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._41 = m_xmf3RotatePosition.x + xmf3Position.x;
 //	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._42 = m_xmf3RotatePosition.y + xmf3Position.y;
 //	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._43 = m_xmf3RotatePosition.z + xmf3Position.z;
-
+	if (m_ppHierarchicalGameObjects[11])
+	{
+		m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent = Matrix4x4::AffineTransformation(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, -fAngle, 0.0f), Vector3::Add(m_xmf3RotatePosition, xmf3Position));
+		m_ppHierarchicalGameObjects[11]->Rotate(0.0f, -1.5f, 0.0f);
+	}
 	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent = Matrix4x4::AffineTransformation(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, -fAngle, 0.0f), Vector3::Add(m_xmf3RotatePosition, xmf3Position));
 	m_ppHierarchicalGameObjects[11]->Rotate(0.0f, -1.5f, 0.0f);
-//**/
+
+	if (m_ppHierarchicalGameObjects[21])
+	{
+		CEnemyObject* pEnemy = (CEnemyObject*)m_ppHierarchicalGameObjects[21];
+
+		if (m_pPlayer) pEnemy->SetPlayer(m_pPlayer);
+
+		pEnemy->Animate(fTimeElapsed);
+	}
 }
 
 void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
