@@ -556,10 +556,28 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 	{
 		if (m_ppObjects[j])
 		{
+			if (m_ppObjects[j]->m_pSkinnedAnimationController)
+			{
+				m_ppObjects[j]->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, m_ppObjects[j].get());
+
+				m_ppObjects[j]->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
+			}
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->Render(pd3dCommandList, pCamera);
 		}
 	}
+	//for (const auto& pObject : m_ppObjects)
+	//{
+	//	if (pObject->m_pSkinnedAnimationController)
+	//	{
+	//		pObject->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, pObject.get());
+
+	//		pObject->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
+	//	}
+
+	//	// °´Ã¼ ±×¸®±â
+	//	pObject->Render(pd3dCommandList, pCamera);
+	//}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

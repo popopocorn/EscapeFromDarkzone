@@ -99,7 +99,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
 	m_pTerrain = new CHeightMapTerrain(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, _T("Terrain/HeightMap.raw"), 257, 257, xmf3Scale, xmf4Color);
 
-	m_nHierarchicalGameObjects = 22;
+	m_nHierarchicalGameObjects = 21;
 	m_ppHierarchicalGameObjects = new CGameObject*[m_nHierarchicalGameObjects];
 
 	for (int i = 0; i < m_nHierarchicalGameObjects; i++)
@@ -247,31 +247,35 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	if (pEagleModel) delete pEagleModel;
 	
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	m_ppHierarchicalGameObjects[21] = pEnemy;
-
-	//if (m_pPlayer) pEnemy->SetPlayer(m_pPlayer);
-
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
-
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	
-	std:unique_ptr<CShader> stdshader = std::make_unique<CStandardObjectsShader>();
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+
+	m_pEnemyCursor = pEnemy;
+
+	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
+
+	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+
+	m_ppShaders.push_back(std::move(pSkinnedShader));
+
+	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-
 	FILE* pInFile = NULL;
+
 	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
 	if (pInFile)
 	{
 		::rewind(pInFile);
-
 		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
 		map->SetPosition(0, 0, 0);
 		stdshader->addObjects(std::move(map));
-
 		::fclose(pInFile);
 	}
 	else
@@ -280,7 +284,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	}
 
 	m_ppShaders.push_back(std::move(stdshader));
-	CreateShaderVariables(pd3dDevice, pd3dCommandList); 
+	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
 void CScene::ReleaseObjects()
@@ -299,7 +303,9 @@ void CScene::ReleaseObjects()
 
 	if (m_ppHierarchicalGameObjects)
 	{
-		for (int i = 0; i < m_nHierarchicalGameObjects; i++) if (m_ppHierarchicalGameObjects[i]) m_ppHierarchicalGameObjects[i]->Release();
+		for (int i = 0; i < m_nHierarchicalGameObjects; i++) 
+			if (m_ppHierarchicalGameObjects[i]) 
+				m_ppHierarchicalGameObjects[i]->Release();
 		delete[] m_ppHierarchicalGameObjects;
 	}
 
@@ -498,7 +504,6 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 
 	return(pd3dGraphicsRootSignature);
 }
-
 void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256ÀÇ ¹è¼ö
@@ -506,14 +511,12 @@ void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsComma
 
 	m_pd3dcbLights->Map(0, NULL, (void **)&m_pcbMappedLights);
 }
-
 void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	::memcpy(m_pcbMappedLights->m_pLights, m_pLights.data(), sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
 }
-
 void CScene::ReleaseShaderVariables()
 {
 	if (m_pd3dcbLights)
@@ -528,9 +531,15 @@ void CScene::ReleaseUploadBuffers()
 	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 	if (m_pTerrain) m_pTerrain->ReleaseUploadBuffers();
 
-	for (int i = 0; i < m_ppShaders.size(); i++) m_ppShaders[i]->ReleaseUploadBuffers();
-	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->ReleaseUploadBuffers();
-	for (int i = 0; i < m_nHierarchicalGameObjects; i++) m_ppHierarchicalGameObjects[i]->ReleaseUploadBuffers();
+	for (int i = 0; i < m_ppShaders.size(); i++) 
+		if (m_ppShaders[i])
+			m_ppShaders[i]->ReleaseUploadBuffers();
+	for (int i = 0; i < m_ppGameObjects.size(); i++) 
+		if (m_ppGameObjects[i]) 
+			m_ppGameObjects[i]->ReleaseUploadBuffers();
+	for (int i = 0; i < m_nHierarchicalGameObjects; i++) 
+		if (m_ppHierarchicalGameObjects[i])
+			m_ppHierarchicalGameObjects[i]->ReleaseUploadBuffers();
 }
 
 void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
@@ -547,7 +556,6 @@ void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstant
 	m_d3dSrvCPUDescriptorNextHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 	m_d3dSrvGPUDescriptorNextHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 }
-
 D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride)
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle = m_d3dCbvGPUDescriptorNextHandle;
@@ -563,7 +571,6 @@ D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device *pd3d
 	}
 	return(d3dCbvGPUDescriptorHandle);
 }
-
 void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
 	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
@@ -585,12 +592,10 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	int nRootParameters = pTexture->GetRootParameters();
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 }
-
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return(false);
 }
-
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_pPlayer) return false;
@@ -650,8 +655,6 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 	return false;
 }
-
-
 bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 {
 	return(false);
@@ -675,6 +678,13 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
+
+	if (m_pEnemyCursor)
+	{
+		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
+		m_pEnemyCursor->Animate(fTimeElapsed);
+	}
+
 	static float fAngle = 0.0f;
 	fAngle += 1.50f;
 //	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
@@ -688,17 +698,15 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent = Matrix4x4::AffineTransformation(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, -fAngle, 0.0f), Vector3::Add(m_xmf3RotatePosition, xmf3Position));
 		m_ppHierarchicalGameObjects[11]->Rotate(0.0f, -1.5f, 0.0f);
 	}
-	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent = Matrix4x4::AffineTransformation(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, -fAngle, 0.0f), Vector3::Add(m_xmf3RotatePosition, xmf3Position));
-	m_ppHierarchicalGameObjects[11]->Rotate(0.0f, -1.5f, 0.0f);
 
-	if (m_ppHierarchicalGameObjects[21])
+	/*if (m_ppHierarchicalGameObjects[21])
 	{
 		CEnemyObject* pEnemy = (CEnemyObject*)m_ppHierarchicalGameObjects[21];
 
 		if (m_pPlayer) pEnemy->SetPlayer(m_pPlayer);
 
 		pEnemy->Animate(fTimeElapsed);
-	}
+	}*/
 }
 
 void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
