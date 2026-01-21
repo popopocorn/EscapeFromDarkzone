@@ -540,7 +540,18 @@ void CSkinnedAnimationObjectsShader::ReleaseObjects()
 
 void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 {
-	m_fElapsedTime = fTimeElapsed;
+	for (int i = 0; i < m_ppObjects.size(); i++)
+	{
+		if (m_ppObjects[i])
+		{
+			m_ppObjects[i]->Animate(fTimeElapsed);
+
+			if (m_ppObjects[i]->m_pSkinnedAnimationController)
+			{
+				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i].get());
+			}
+		}
+	}
 }
 
 void CSkinnedAnimationObjectsShader::ReleaseUploadBuffers()
@@ -552,7 +563,7 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 {
 	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera);
 
-	for (int j = 0; j < m_ppObjects.size(); j++)
+	/*for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
 		{
@@ -565,19 +576,19 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->Render(pd3dCommandList, pCamera);
 		}
+	}*/
+	for (const auto& pObject : m_ppObjects)
+	{
+		if (pObject->m_pSkinnedAnimationController)
+		{
+			pObject->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, pObject.get());
+
+			pObject->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
+		}
+
+		// 按眉 弊府扁
+		pObject->Render(pd3dCommandList, pCamera);
 	}
-	//for (const auto& pObject : m_ppObjects)
-	//{
-	//	if (pObject->m_pSkinnedAnimationController)
-	//	{
-	//		pObject->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, pObject.get());
-
-	//		pObject->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
-	//	}
-
-	//	// 按眉 弊府扁
-	//	pObject->Render(pd3dCommandList, pCamera);
-	//}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
