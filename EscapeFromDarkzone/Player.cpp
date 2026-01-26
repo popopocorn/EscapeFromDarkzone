@@ -314,6 +314,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	if (pPlayerModel) delete pPlayerModel;
 	dir = XMFLOAT2(0, 0);
+	SetOOBB();
 }
 
 CTerrainPlayer::~CTerrainPlayer()
@@ -478,11 +479,19 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	XMFLOAT3 direction = MoveDir;
 	direction = Vector3::ScalarProduct(direction, 8.0f, false);
 	CPlayer::Move(direction, true);
+
+	wchar_t buffer[128];
+	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+		direction.x, direction.y, direction.z);
+	//OutputDebugStringW(buffer);
+
+
 	CPlayer::Update(fTimeElapsed);
 }
 
 bool PlayerIdle::Enter(CPlayer* Player)
 {
+	
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return false;
 	pctrl->SetTrackAnimationSet(0, 0);
@@ -553,6 +562,7 @@ void PlayerRun::Update(CPlayer* Player)
 
 void PlayerRun::Exit(CPlayer* Player)
 {
+	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 }
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
