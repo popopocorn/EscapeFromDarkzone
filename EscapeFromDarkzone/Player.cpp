@@ -67,11 +67,7 @@ void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 	if (dwDirection & DIR_UP)       dir = Vector3::Add(dir, m_xmf3Up, 1.0f);
 	if (dwDirection & DIR_DOWN)     dir = Vector3::Add(dir, m_xmf3Up, -1.0f);
 
-	float len = Vector3::Length(dir);
-	if (len > 0.0f)
-	{
-		dir = Vector3::ScalarProduct(dir, 1.0f / len, false);
-	}
+	dir = Vector3::Normalize(dir);
 	XMFLOAT3 shift = Vector3::ScalarProduct(dir, fDistance, false);
 
 	Move(shift, bUpdateVelocity);
@@ -317,6 +313,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
+	dir = XMFLOAT2(0, 0);
 }
 
 CTerrainPlayer::~CTerrainPlayer()
@@ -419,13 +416,13 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-
+	dir = XMFLOAT2(0, 0);
 	CAnimationController* pController = m_pSkinnedAnimationController;
 	if (!pController && m_pChild)
 	{
 		pController = m_pChild->m_pSkinnedAnimationController;
 	}
-	dir = XMFLOAT2(0, 0);
+	
 	while (not event_queue.empty()) {
 		const GameEvent& ev = event_queue.front();
 
@@ -437,19 +434,9 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				switch (ev.keyEvent.key)
 				{
 				case INPUT_KEY::W:
-					dir.x += 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::A:
-					dir.y -= 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::S:
-					dir.x -= 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::D:
-					dir.y += 1;
 					ChangeState(make_unique<PlayerRun>());
 					break;
 				default:
@@ -493,9 +480,15 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
 	if (dwDirection) Move(dwDirection, 8.0f, true);
 
-	
+
+
 	state.get()->Update(this);
 
+	XMFLOAT3 direction = XMFLOAT3(0, 0, 0);
+	direction.x = m_xmf3Look.x * dir.x + m_xmf3Right.x * dir.y;
+	direction.z = m_xmf3Look.z * dir.x + m_xmf3Right.z * dir.y;
+	direction = Vector3::Normalize(direction);
+	SetMoveDir(direction);
 
 	CPlayer::Update(fTimeElapsed);
 }
@@ -531,6 +524,12 @@ bool PlayerRun::Enter(CPlayer* Player)
 
 void PlayerRun::Update(CPlayer* Player)
 {
+	auto& input = InputManager::Instance();
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) Player->dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) Player->dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) Player->dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) Player->dir.y += 1;
+
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return;
 
