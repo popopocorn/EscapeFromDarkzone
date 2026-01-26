@@ -313,7 +313,6 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
-	dir = XMFLOAT2(0, 0);
 	SetOOBB();
 }
 
@@ -417,7 +416,6 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-	dir = XMFLOAT2(0, 0);
 	CAnimationController* pController = m_pSkinnedAnimationController;
 	if (!pController && m_pChild)
 	{
@@ -521,18 +519,19 @@ bool PlayerRun::Enter(CPlayer* Player)
 
 void PlayerRun::Update(CPlayer* Player)
 {
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+
+
 	auto& input = InputManager::Instance();
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) Player->dir.x += 1;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) Player->dir.x -= 1;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) Player->dir.y -= 1;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) Player->dir.y += 1;
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
 
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return;
-
-	const XMFLOAT2 dir = Player->GetDirection();
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
-
 	float angle = atan2f(dir.y, dir.x);
 	int nextAnim;
 

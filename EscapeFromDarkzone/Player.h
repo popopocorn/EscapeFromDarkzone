@@ -111,9 +111,6 @@ public:
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
-	XMFLOAT2					dir = XMFLOAT2(0, 0);
-	
-	XMFLOAT2 GetDirection() { return dir; }
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
 
 };

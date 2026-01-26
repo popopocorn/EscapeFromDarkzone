@@ -709,6 +709,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 		pEnemy->Animate(fTimeElapsed);
 	}*/
+
+	//충돌검사
 }
 
 void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
