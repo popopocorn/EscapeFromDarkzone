@@ -553,9 +553,15 @@ void PlayerRun::Update(CPlayer* Player)
 	{
 		pctrl->SetTrackAnimationSet(1, nextAnim);
 	}
+	//XMFLOAT3 look = Player->GetLookVector();
+	//XMFLOAT3 right = Player->GetRightVector();
 
-
-
+	//XMFLOAT3 direction;
+	//direction.x = look.x * dir.x + right.x * dir.y;
+	//direction.z = look.z * dir.x + right.z * dir.y;
+	//direction = Vector3::Normalize(direction);
+	//direction = Vector3::ScalarProduct(direction, 8.0f, false);
+	//Player->Move(direction, true);
 }
 
 void PlayerRun::Exit(CPlayer* Player)
