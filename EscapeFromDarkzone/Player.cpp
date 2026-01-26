@@ -470,26 +470,14 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		event_queue.pop();
 	}
 
-	//DWORD dwDirection = 0;
-
-	//auto& input = InputManager::Instance();
-
-	//if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
-	//if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
-	//if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
-	//if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
-	//if (dwDirection) Move(dwDirection, 8.0f, true);
-
-
 
 	state.get()->Update(this);
 
-	XMFLOAT3 direction = XMFLOAT3(0, 0, 0);
-	direction.x = m_xmf3Look.x * dir.x + m_xmf3Right.x * dir.y;
-	direction.z = m_xmf3Look.z * dir.x + m_xmf3Right.z * dir.y;
-	direction = Vector3::Normalize(direction);
-	SetMoveDir(direction);
+	//충돌에 따른 방향 전환
 
+	XMFLOAT3 direction = MoveDir;
+	direction = Vector3::ScalarProduct(direction, 8.0f, false);
+	CPlayer::Move(direction, true);
 	CPlayer::Update(fTimeElapsed);
 }
 
@@ -560,8 +548,7 @@ void PlayerRun::Update(CPlayer* Player)
 	direction.z = look.z * dir.x + right.z * dir.y;
 	direction = Vector3::Normalize(direction);
 	Player->SetMoveDir(direction);
-	direction = Vector3::ScalarProduct(direction, 8.0f, false);
-	Player->Move(direction, true);
+
 }
 
 void PlayerRun::Exit(CPlayer* Player)
