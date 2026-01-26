@@ -11,6 +11,8 @@
 #include "Object.h"
 #include "Camera.h"
 
+#include "Network.h"
+
 
 
 enum class EventType {
@@ -58,6 +60,13 @@ protected:
 	
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
 	float						speed{};
+
+	// 네트워크 테스트
+	WSADATA WSAData;
+	SOCKET c_socket;
+	SOCKADDR_IN addr;
+
+	char send_buf[BUF_SIZE];
 
 public:
 	CPlayer();
