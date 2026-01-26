@@ -341,6 +341,8 @@ class CGameObject
 private:
 	int								m_nReferences = 0;
 
+	BoundingOrientedBox				OOBBModel;
+	BoundingOrientedBox				OOBBWorld;
 public:
 	void AddRef();
 	void Release();
@@ -420,6 +422,8 @@ public:
 	CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
 
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
+	void SetOOBB();
+	void SetOOBB(BoundingOrientedBox obb);
 
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);

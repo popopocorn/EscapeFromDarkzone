@@ -471,7 +471,7 @@ void CGameFramework::ProcessInput()
 				else
 					m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 			}
-			if (dwDirection) m_pPlayer->Move(dwDirection, 8.0f, true);
+			//if (dwDirection) m_pPlayer->Move(dwDirection, 8.0f, true);
 		}
 	}
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
@@ -518,6 +518,8 @@ void CGameFramework::FrameAdvance()
 	InputManager::Instance().update();
 	ProcessInput();
 
+	//여기서 충돌처리 map - enemy
+	//m_pCscene->Update();
     AnimateObjects(fTimeElapsed);
 
 	HRESULT hResult = m_pd3dCommandAllocator->Reset();

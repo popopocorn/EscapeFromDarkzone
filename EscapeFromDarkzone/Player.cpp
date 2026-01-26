@@ -30,6 +30,7 @@ CPlayer::CPlayer()
 
 	m_pPlayerUpdatedContext = NULL;
 	m_pCameraUpdatedContext = NULL;
+	state = std::make_unique<PlayerIdle>();
 }
 
 CPlayer::~CPlayer()
@@ -55,19 +56,27 @@ void CPlayer::ReleaseShaderVariables()
 
 void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 {
-	if (dwDirection)
-	{
-		XMFLOAT3 xmf3Shift = XMFLOAT3(0, 0, 0);
-		if (dwDirection & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, fDistance);
-		if (dwDirection & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, -fDistance/1.3);
-		if (dwDirection & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, fDistance/1.1);
-		if (dwDirection & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, -fDistance/1.1);
-		if (dwDirection & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, fDistance);
-		if (dwDirection & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, -fDistance);
+	if (!dwDirection) return;
 
-		Move(xmf3Shift, bUpdateVelocity);
+	XMFLOAT3 dir = { 0, 0, 0 };
+
+	if (dwDirection & DIR_FORWARD)  dir = Vector3::Add(dir, m_xmf3Look, 1.0f);
+	if (dwDirection & DIR_BACKWARD) dir = Vector3::Add(dir, m_xmf3Look, -1.0f);
+	if (dwDirection & DIR_RIGHT)    dir = Vector3::Add(dir, m_xmf3Right, 1.0f);
+	if (dwDirection & DIR_LEFT)     dir = Vector3::Add(dir, m_xmf3Right, -1.0f);
+	if (dwDirection & DIR_UP)       dir = Vector3::Add(dir, m_xmf3Up, 1.0f);
+	if (dwDirection & DIR_DOWN)     dir = Vector3::Add(dir, m_xmf3Up, -1.0f);
+
+	float len = Vector3::Length(dir);
+	if (len > 0.0f)
+	{
+		dir = Vector3::ScalarProduct(dir, 1.0f / len, false);
 	}
+	XMFLOAT3 shift = Vector3::ScalarProduct(dir, fDistance, false);
+
+	Move(shift, bUpdateVelocity);
 }
+
 
 void CPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 {
@@ -414,7 +423,6 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-	CPlayer::Update(fTimeElapsed);
 
 	CAnimationController* pController = m_pSkinnedAnimationController;
 	if (!pController && m_pChild)
@@ -459,7 +467,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				case INPUT_KEY::A:
 				case INPUT_KEY::S:
 				case INPUT_KEY::D:
-					ChangeState(make_unique<PlayerIdle>());
+					if(! InputManager::Instance().KeyPress(INPUT_KEY::W) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::A) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::S) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::D))
+						ChangeState(make_unique<PlayerIdle>());
 				default:
 					break;
 				}
@@ -474,14 +486,22 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		}
 		event_queue.pop();
 	}
-	if(state.get())
-		state.get()->Update(this);
 
-	//// 지형 높이 보정 콜백
-	//if (m_pPlayerUpdatedContext)
-	//{
-	//	OnPlayerUpdateCallback(fTimeElapsed);
-	//}
+	DWORD dwDirection = 0;
+
+	auto& input = InputManager::Instance();
+
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
+	if (dwDirection) Move(dwDirection, 8.0f, true);
+
+	
+	state.get()->Update(this);
+
+
+	CPlayer::Update(fTimeElapsed);
 }
 
 bool PlayerIdle::Enter(CPlayer* Player)
@@ -537,6 +557,9 @@ void PlayerRun::Update(CPlayer* Player)
 	{
 		pctrl->SetTrackAnimationSet(1, nextAnim);
 	}
+
+
+
 }
 
 void PlayerRun::Exit(CPlayer* Player)
