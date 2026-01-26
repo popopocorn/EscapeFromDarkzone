@@ -1018,10 +1018,13 @@ CTexture *CGameObject::FindReplicatedTexture(_TCHAR *pstrTextureName)
 
 void CGameObject::SetOOBB()
 {
-	OOBBModel.Center = m_pMesh->GetAABBCenter();
-	OOBBModel.Extents = m_pMesh->GetAABBExtents();
-	OOBBModel.Orientation = XMFLOAT4(0, 0, 0, 1);
-	OOBBWorld = OOBBModel;
+	
+	if(m_pMesh){
+		OOBBModel.Center = m_pMesh->GetAABBCenter();
+		OOBBModel.Extents = m_pMesh->GetAABBExtents();
+		OOBBModel.Orientation = XMFLOAT4(0, 0, 0, 1);
+		OOBBWorld = OOBBModel;
+	}
 	if (m_pSibling) m_pSibling->SetOOBB();
 	if (m_pChild)m_pChild->SetOOBB();
 

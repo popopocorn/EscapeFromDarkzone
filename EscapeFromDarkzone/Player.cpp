@@ -470,15 +470,15 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		event_queue.pop();
 	}
 
-	DWORD dwDirection = 0;
+	//DWORD dwDirection = 0;
 
-	auto& input = InputManager::Instance();
+	//auto& input = InputManager::Instance();
 
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
-	if (dwDirection) Move(dwDirection, 8.0f, true);
+	//if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
+	//if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
+	//if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
+	//if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
+	//if (dwDirection) Move(dwDirection, 8.0f, true);
 
 
 
@@ -552,15 +552,16 @@ void PlayerRun::Update(CPlayer* Player)
 	{
 		pctrl->SetTrackAnimationSet(1, nextAnim);
 	}
-	//XMFLOAT3 look = Player->GetLookVector();
-	//XMFLOAT3 right = Player->GetRightVector();
+	XMFLOAT3 look = Player->GetLookVector();
+	XMFLOAT3 right = Player->GetRightVector();
 
-	//XMFLOAT3 direction;
-	//direction.x = look.x * dir.x + right.x * dir.y;
-	//direction.z = look.z * dir.x + right.z * dir.y;
-	//direction = Vector3::Normalize(direction);
-	//direction = Vector3::ScalarProduct(direction, 8.0f, false);
-	//Player->Move(direction, true);
+	XMFLOAT3 direction;
+	direction.x = look.x * dir.x + right.x * dir.y;
+	direction.z = look.z * dir.x + right.z * dir.y;
+	direction = Vector3::Normalize(direction);
+	Player->SetMoveDir(direction);
+	direction = Vector3::ScalarProduct(direction, 8.0f, false);
+	Player->Move(direction, true);
 }
 
 void PlayerRun::Exit(CPlayer* Player)

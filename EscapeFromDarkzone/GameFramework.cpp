@@ -34,6 +34,8 @@ CGameFramework::CGameFramework()
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
 
+	m_ptOldCursorPos.x = 1300;
+	m_ptOldCursorPos.y = 600;
 }
 
 CGameFramework::~CGameFramework()
@@ -442,7 +444,7 @@ void CGameFramework::ProcessInput()
 	{
 		float cxDelta = 0.0f, cyDelta = 0.0f;
 		POINT ptCursorPos;
-		if (GetCapture() == m_hWnd)
+		//if (GetCapture() == m_hWnd)
 		{
 			SetCursor(NULL);
 			GetCursorPos(&ptCursorPos);
@@ -452,15 +454,6 @@ void CGameFramework::ProcessInput()
 		}
 
 		DWORD dwDirection = 0;
-		auto& input = InputManager::Instance();
-
-		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dwDirection |= DIR_FORWARD;
-		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dwDirection |= DIR_BACKWARD;
-		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dwDirection |= DIR_LEFT;
-		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dwDirection |= DIR_RIGHT;
-
-		if (pKeysBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
-		if (pKeysBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
 
 		if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
 		{
@@ -471,7 +464,6 @@ void CGameFramework::ProcessInput()
 				else
 					m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 			}
-			//if (dwDirection) m_pPlayer->Move(dwDirection, 8.0f, true);
 		}
 	}
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
