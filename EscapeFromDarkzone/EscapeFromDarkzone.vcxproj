@@ -137,6 +137,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DDSTextureLoader12.h" />
+    <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
@@ -153,6 +154,7 @@
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DDSTextureLoader12.cpp" />
+    <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
     <ClCompile Include="GameFramework.cpp" />
     <ClCompile Include="InputManager.cpp" />

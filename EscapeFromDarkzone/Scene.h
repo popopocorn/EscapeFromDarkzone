@@ -6,6 +6,7 @@
 
 #include "Shader.h"
 #include "Player.h"
+#include "EnemyObject.h"
 
 #define MAX_LIGHTS						16 
 
@@ -64,6 +65,7 @@ public:
 	void ReleaseUploadBuffers();
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
+	CEnemyObject* m_pEnemyCursor = NULL;	//참조용 객체 관리 X, raw포인터가 맞음
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
@@ -121,4 +123,5 @@ public:
 
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
+
 };

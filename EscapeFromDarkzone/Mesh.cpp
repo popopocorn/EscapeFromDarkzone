@@ -546,6 +546,7 @@ void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCom
 				m_d3dBiTangentBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
 			}
 		}
+		
 		else if (!strcmp(pstrToken, "<SubMeshes>:"))
 		{
 			nReads = (UINT)::fread(&(m_nSubMeshes), sizeof(int), 1, pInFile);
