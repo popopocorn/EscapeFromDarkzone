@@ -330,6 +330,9 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
+		case 'M':
+			mouseMove = !mouseMove;
+			break;
 		default:
 			break;
 		}
@@ -446,6 +449,7 @@ void CGameFramework::ProcessInput()
 		float cxDelta = 0.0f, cyDelta = 0.0f;
 		POINT ptCursorPos;
 		//if (GetCapture() == m_hWnd)
+		if(not mouseMove)
 		{
 			SetCursor(NULL);
 			GetCursorPos(&ptCursorPos);

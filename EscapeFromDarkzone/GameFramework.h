@@ -73,7 +73,7 @@ private:
 	ID3D12Fence					*m_pd3dFence = NULL;
 	UINT64						m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE						m_hFenceEvent;
-
+	bool						mouseMove = false;
 
 #if defined(_DEBUG)
 	ID3D12Debug					*m_pd3dDebugController;
