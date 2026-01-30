@@ -276,7 +276,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		::rewind(pInFile);
 		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
 		map->SetPosition(0, 0, 0);
-		map.get()->SetOOBB();
+		map.get()->SetOOBB(NULL);
 		stdshader->addObjects(std::move(map));
 		::fclose(pInFile);
 	}
@@ -593,6 +593,55 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	}
 	int nRootParameters = pTexture->GetRootParameters();
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+}
+void CScene::DoCollision(const CGameObject* object, int shaderidx)
+{
+	if (shaderidx < 0 || shaderidx >= m_ppShaders.size())
+		return;
+
+	std::vector<CGameObject*> otherobj = m_ppShaders[shaderidx].get()->GetObj();
+
+	/*wchar_t buf[128];
+	swprintf(buf, 128, L"OtherObj Count = %zu\n", otherobj.size());
+	OutputDebugString(buf);*/
+
+	for (const CGameObject* other : otherobj) {
+		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+		if (CheckCollision(object, other)) {
+			OutputDebugString(L"Collision!\n");
+
+		}
+		else {
+			OutputDebugString(L"No!\n");
+		}
+	}
+}
+
+bool CScene::CheckCollision(const CGameObject* object1, const CGameObject* object2)
+{
+	//충돌 객체
+	/*
+	* 충돌 여부
+	* 충돌 평면 노멀
+	* ~~
+	*/
+	const auto& oobbs1 = object1->GetOOBB();
+	const auto& oobbs2 = object2->GetOOBB();
+
+	for (const BoundingOrientedBox* obb1 : oobbs1)
+	{
+		for (const BoundingOrientedBox* obb2 : oobbs2)
+		{
+			if (!obb1 || !obb2) continue;
+
+			if (obb1->Intersects(*obb2))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
