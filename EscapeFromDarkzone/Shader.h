@@ -52,15 +52,48 @@ protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
 
-	ID3D12PipelineState					*m_pd3dPipelineState = NULL;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC	m_d3dPipelineStateDesc;
 
 	float								m_fElapsedTime = 0.0f;
+public: 
+	ID3D12PipelineState* m_pd3dPipelineState = NULL;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
+// Bounding Box Shader¼±¾ð
+struct VS_CB_DEBUG_INFO
+{
+	XMFLOAT4X4 m_xmf4x4World;
+};
+
+class CBoundingBoxShader : public CShader
+{
+public:
+	CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	virtual ~CBoundingBoxShader();
+
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+	
+	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+
+	void RenderOBB(ID3D12GraphicsCommandList* pd3dCommandList, CGameObject* pGameObject);
+
+private:
+	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
+	CMesh* m_pBoxMesh = NULL;
+
+	/*ID3D12Resource* m_pd3dcbGameObject = NULL;
+	VS_CB_DEBUG_INFO* m_pcbMappedGameObject = NULL;*/
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 class CTerrainShader : public CShader
 {
 public:
@@ -74,7 +107,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CSkyBoxShader : public CShader
 {
 public:
@@ -89,7 +122,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CStandardShader : public CShader
 {
 public:
@@ -103,7 +136,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CStandardObjectsShader : public CStandardShader
 {
 public:
@@ -126,7 +159,7 @@ protected:
 //map, object
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CHellicopterObjectsShader : public CStandardObjectsShader
 {
 public:
@@ -137,7 +170,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CSkinnedAnimationStandardShader : public CStandardShader
 {
 public:
@@ -149,7 +182,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CSkinnedAnimationObjectsShader : public CSkinnedAnimationStandardShader
 {
 public:
@@ -169,7 +202,7 @@ protected:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CAngrybotObjectsShader : public CSkinnedAnimationObjectsShader
 {
 public:
@@ -180,7 +213,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CEthanObjectsShader : public CSkinnedAnimationObjectsShader
 {
 public:

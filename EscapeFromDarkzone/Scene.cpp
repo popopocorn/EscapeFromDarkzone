@@ -6,7 +6,7 @@
 #include "Scene.h"
 #include "Player.h"
 #include "EnemyObject.h"
-
+#include "Shader.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -247,13 +247,17 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	if (pEagleModel) delete pEagleModel;
 	
-	
+	//적 오브젝트
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 
 	m_pEnemyCursor = pEnemy;
 
+	//디버그 쉐이더
+	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	//오브젝트 쉐이더(스탠다드, 스킨드)
 	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
 
 	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -525,7 +529,6 @@ void CScene::ReleaseShaderVariables()
 		m_pd3dcbLights->Release();
 	}
 }
-
 void CScene::ReleaseUploadBuffers()
 {
 	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
@@ -708,8 +711,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		pEnemy->Animate(fTimeElapsed);
 	}*/
 }
-
-void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
+void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	if (m_pd3dCbvSrvDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvDescriptorHeap);
@@ -720,7 +722,7 @@ void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera
 	UpdateShaderVariables(pd3dCommandList);
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
-	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress); //Lights
+	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
 	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, pCamera);
 	if (m_pTerrain) m_pTerrain->Render(pd3dCommandList, pCamera);
@@ -742,9 +744,32 @@ void CScene::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera
 				m_ppHierarchicalGameObjects[i]->Animate(m_fElapsedTime);
 				m_ppHierarchicalGameObjects[i]->UpdateTransform(NULL);
 			}
-
 			m_ppHierarchicalGameObjects[i]->Render(pd3dCommandList, pCamera);
 		}
 	}
-}
 
+	if (m_pDebugShader)
+	{
+		pd3dCommandList->SetPipelineState(m_pDebugShader->m_pd3dPipelineState);
+		if (m_pDebugShader && pCamera)
+			pCamera->UpdateShaderVariables(pd3dCommandList);
+
+		for (int i = 0; i < m_nHierarchicalGameObjects; i++)
+		{
+			if (m_ppHierarchicalGameObjects[i])
+			{
+				m_pDebugShader->RenderOBB(pd3dCommandList, m_ppHierarchicalGameObjects[i]);
+			}
+		}
+
+		if (m_pEnemyCursor)
+		{
+			m_pDebugShader->RenderOBB(pd3dCommandList, m_pEnemyCursor);
+		}
+
+		if (m_pPlayer)
+		{
+			m_pDebugShader->RenderOBB(pd3dCommandList, m_pPlayer);
+		}
+	}
+}

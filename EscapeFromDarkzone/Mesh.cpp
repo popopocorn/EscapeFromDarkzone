@@ -762,3 +762,66 @@ void CSkinnedMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void 
 	D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[7] = { m_d3dPositionBufferView, m_d3dTextureCoord0BufferView, m_d3dNormalBufferView, m_d3dTangentBufferView, m_d3dBiTangentBufferView, m_d3dBoneIndexBufferView, m_d3dBoneWeightBufferView };
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 7, pVertexBufferViews);
 }
+
+CDebugMesh::CDebugMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nType = VERTEXT_POSITION;
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+
+	m_nVertices = 8;
+	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
+
+	float h = 0.5f;
+	m_pxmf3Positions[0] = XMFLOAT3(-h, +h, -h);
+	m_pxmf3Positions[1] = XMFLOAT3(+h, +h, -h);
+	m_pxmf3Positions[2] = XMFLOAT3(+h, +h, +h);
+	m_pxmf3Positions[3] = XMFLOAT3(-h, +h, +h);
+	m_pxmf3Positions[4] = XMFLOAT3(-h, -h, -h);
+	m_pxmf3Positions[5] = XMFLOAT3(+h, -h, -h);
+	m_pxmf3Positions[6] = XMFLOAT3(+h, -h, +h);
+	m_pxmf3Positions[7] = XMFLOAT3(-h, -h, +h);
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf3Positions, sizeof(XMFLOAT3) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[m_nSubMeshes];
+	m_ppnSubSetIndices = new UINT * [m_nSubMeshes];
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [m_nSubMeshes];
+	m_ppd3dSubSetIndexUploadBuffers = new ID3D12Resource * [m_nSubMeshes];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[m_nSubMeshes];
+
+	m_pnSubSetIndices[0] = 24;
+	m_ppnSubSetIndices[0] = new UINT[m_pnSubSetIndices[0]];
+
+	UINT pIndices[] = {
+		0,1, 1,2, 2,3, 3,0, 
+		4,5, 5,6, 6,7, 7,4, 
+		0,4, 1,5, 2,6, 3,7  
+	};
+	memcpy(m_ppnSubSetIndices[0], pIndices, sizeof(UINT) * 24);
+
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_ppnSubSetIndices[0], sizeof(UINT) * m_pnSubSetIndices[0], D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_ppd3dSubSetIndexUploadBuffers[0]);
+
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * m_pnSubSetIndices[0];
+}
+
+CDebugMesh::~CDebugMesh()
+{
+}
+
+void CDebugMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet)
+{
+	pd3dCommandList->IASetVertexBuffers(0, 1, &m_d3dPositionBufferView);
+
+	pd3dCommandList->IASetIndexBuffer(&m_pd3dSubSetIndexBufferViews[0]);
+
+	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+
+	pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[0], 1, 0, 0, 0);
+}

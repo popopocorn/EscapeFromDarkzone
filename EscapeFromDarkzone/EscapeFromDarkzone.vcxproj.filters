@@ -126,4 +126,7 @@
     <FxCompile Include="Light.hlsli" />
     <FxCompile Include="common.hlsli" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Debug.hlsli" />
+  </ItemGroup>
 </Project>
