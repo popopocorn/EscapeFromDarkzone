@@ -78,7 +78,7 @@ void CPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 {
 	if (bUpdateVelocity)
 	{
-		m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, xmf3Shift);
+		m_xmf3Velocity = xmf3Shift;
 	}
 	else
 	{
@@ -483,6 +483,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 
 bool PlayerIdle::Enter(CPlayer* Player)
 {
+	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return false;
 	pctrl->SetTrackAnimationSet(0, 0);
@@ -553,6 +554,7 @@ void PlayerRun::Update(CPlayer* Player)
 
 void PlayerRun::Exit(CPlayer* Player)
 {
+	
 }
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)

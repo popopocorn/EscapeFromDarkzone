@@ -6,6 +6,7 @@
 #include "Scene.h"
 #include "Player.h"
 #include "EnemyObject.h"
+#include "InputManager.h"
 
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
@@ -641,7 +642,8 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (!validKey)
 			break;
-
+		if (InputManager::Instance().KeyHold(key))
+			break;
 		KEY_STATE state =
 			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
 
