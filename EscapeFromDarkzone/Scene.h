@@ -125,4 +125,8 @@ public:
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
+
+
+	void DoCollision(const CGameObject* object, int shaderidx);
+	bool CheckCollision(const CGameObject* object1, const CGameObject* object2);
 };

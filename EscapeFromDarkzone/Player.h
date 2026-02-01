@@ -11,6 +11,8 @@
 #include "Object.h"
 #include "Camera.h"
 
+#include "Network.h"
+
 
 
 enum class EventType {
@@ -55,7 +57,17 @@ protected:
 	CCamera						*m_pCamera = NULL;
 	std::unique_ptr<PlayerState> state;
 	std::queue<GameEvent>		event_queue;
-	XMFLOAT2					dir = XMFLOAT2(0, 0);
+	
+	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
+	float						speed{};
+
+	// 네트워크 테스트
+	WSADATA WSAData;
+	SOCKET c_socket;
+	SOCKADDR_IN addr;
+
+	char send_buf[BUF_SIZE];
+
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -108,7 +120,8 @@ public:
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
-	XMFLOAT2 GetDirection() { return dir; }
+	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
+
 };
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler

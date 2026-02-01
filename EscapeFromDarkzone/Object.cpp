@@ -722,6 +722,10 @@ CGameObject::~CGameObject()
 	if (m_pSkinnedAnimationController) delete m_pSkinnedAnimationController;
 }
 
+void CGameObject::init()
+{
+}
+
 void CGameObject::AddRef() 
 { 
 	m_nReferences++; 
@@ -806,7 +810,7 @@ CGameObject *CGameObject::FindFrame(const char *pstrFrameName)
 void CGameObject::UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent)
 {
 	m_xmf4x4World = (pxmf4x4Parent) ? Matrix4x4::Multiply(m_xmf4x4ToParent, *pxmf4x4Parent) : m_xmf4x4ToParent;
-
+	OOBBModel.Transform(OOBBWorld, XMLoadFloat4x4(&m_xmf4x4World));
 	if (m_pSibling) m_pSibling->UpdateTransform(pxmf4x4Parent);
 	if (m_pChild) m_pChild->UpdateTransform(&m_xmf4x4World);
 }
@@ -1014,6 +1018,34 @@ CTexture *CGameObject::FindReplicatedTexture(_TCHAR *pstrTextureName)
 	if (m_pChild) if (pTexture = m_pChild->FindReplicatedTexture(pstrTextureName)) return(pTexture);
 
 	return(NULL);
+}
+
+void CGameObject::SetOOBB(std::vector<BoundingOrientedBox*>* container)
+{
+	std::vector<BoundingOrientedBox*>* dest;
+	if (container)
+		dest = container;
+	else
+		dest = &OOBBs;
+	if(m_pMesh){
+		OOBBModel.Center = m_pMesh->GetAABBCenter();
+		OOBBModel.Extents = m_pMesh->GetAABBExtents();
+		OOBBModel.Orientation = XMFLOAT4(0, 0, 0, 1);
+		OOBBWorld = OOBBModel;
+		HasOOBB = true;
+		dest->push_back(&OOBBWorld);
+	}
+	if (m_pSibling) m_pSibling->SetOOBB(dest);
+	if (m_pChild)m_pChild->SetOOBB(dest);
+
+}
+
+void CGameObject::SetOOBB(BoundingOrientedBox obb)
+{
+	OOBBModel = obb;
+	OOBBWorld = obb;
+	HasOOBB = true;
+	OOBBs.push_back(&OOBBModel);
 }
 
 int ReadIntegerFromFile(FILE *pInFile)

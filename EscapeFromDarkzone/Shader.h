@@ -47,7 +47,7 @@ public:
 	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL) { }
 	virtual void AnimateObjects(float fTimeElapsed) { }
 	virtual void ReleaseObjects() { }
-
+	virtual std::vector<CGameObject*> GetObj() const { return std::vector<CGameObject*>(); }
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -151,7 +151,13 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera);
-
+	std::vector<CGameObject*> GetObj() const
+	{
+		std::vector<CGameObject*> result;
+		for (auto& obj : m_ppObjects)
+			result.push_back(obj.get());
+		return result;
+	}
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };

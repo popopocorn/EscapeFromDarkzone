@@ -30,6 +30,17 @@ CPlayer::CPlayer()
 
 	m_pPlayerUpdatedContext = NULL;
 	m_pCameraUpdatedContext = NULL;
+	state = std::make_unique<PlayerIdle>();
+
+	// 네트워크 테스트
+	WSAStartup(MAKEWORD(2, 2), &WSAData);
+	c_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
+
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(SERVER_PORT);
+	inet_pton(AF_INET, SERVER_ADDR, &addr.sin_addr);
+	WSAConnect(c_socket, reinterpret_cast<sockaddr*>(&addr),
+		sizeof(SOCKADDR_IN), NULL, NULL, NULL, NULL);
 }
 
 CPlayer::~CPlayer()
@@ -55,25 +66,29 @@ void CPlayer::ReleaseShaderVariables()
 
 void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 {
-	if (dwDirection)
-	{
-		XMFLOAT3 xmf3Shift = XMFLOAT3(0, 0, 0);
-		if (dwDirection & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, fDistance);
-		if (dwDirection & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, -fDistance / 1.3);
-		if (dwDirection & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, fDistance / 1.1);
-		if (dwDirection & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, -fDistance / 1.1);
-		if (dwDirection & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, fDistance);
-		if (dwDirection & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, -fDistance);
+	if (!dwDirection) return;
 
-		Move(xmf3Shift, bUpdateVelocity);
-	}
+	XMFLOAT3 dir = { 0, 0, 0 };
+
+	if (dwDirection & DIR_FORWARD)  dir = Vector3::Add(dir, m_xmf3Look, 1.0f);
+	if (dwDirection & DIR_BACKWARD) dir = Vector3::Add(dir, m_xmf3Look, -1.0f);
+	if (dwDirection & DIR_RIGHT)    dir = Vector3::Add(dir, m_xmf3Right, 1.0f);
+	if (dwDirection & DIR_LEFT)     dir = Vector3::Add(dir, m_xmf3Right, -1.0f);
+	if (dwDirection & DIR_UP)       dir = Vector3::Add(dir, m_xmf3Up, 1.0f);
+	if (dwDirection & DIR_DOWN)     dir = Vector3::Add(dir, m_xmf3Up, -1.0f);
+
+	dir = Vector3::Normalize(dir);
+	XMFLOAT3 shift = Vector3::ScalarProduct(dir, fDistance, false);
+
+	Move(shift, bUpdateVelocity);
 }
+
 
 void CPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 {
 	if (bUpdateVelocity)
 	{
-		m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, xmf3Shift);
+		m_xmf3Velocity = xmf3Shift;
 	}
 	else
 	{
@@ -308,6 +323,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
+	SetOOBB(NULL);
 }
 
 CTerrainPlayer::~CTerrainPlayer()
@@ -346,7 +362,7 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 		break;
 	case THIRD_PERSON_CAMERA:
 		SetFriction(250.0f);
-		SetGravity(XMFLOAT3(0.0f, -250.0f, 0.0f));
+		SetGravity(XMFLOAT3(0.0f, 0.0f, 0.0f));
 		SetMaxVelocityXZ(300.0f);
 		SetMaxVelocityY(400.0f);
 		m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
@@ -410,14 +426,15 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-	CPlayer::Update(fTimeElapsed);
-
 	CAnimationController* pController = m_pSkinnedAnimationController;
 	if (!pController && m_pChild)
 	{
 		pController = m_pChild->m_pSkinnedAnimationController;
 	}
-	dir = XMFLOAT2(0, 0);
+	
+	// 네트워크 테스트용 버퍼 선언
+	size_t buf_len = 0;
+
 	while (not event_queue.empty()) {
 		const GameEvent& ev = event_queue.front();
 
@@ -429,19 +446,9 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				switch (ev.keyEvent.key)
 				{
 				case INPUT_KEY::W:
-					dir.x += 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::A:
-					dir.y -= 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::S:
-					dir.x -= 1;
-					ChangeState(make_unique<PlayerRun>());
-					break;
 				case INPUT_KEY::D:
-					dir.y += 1;
 					ChangeState(make_unique<PlayerRun>());
 					break;
 				default:
@@ -455,7 +462,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				case INPUT_KEY::A:
 				case INPUT_KEY::S:
 				case INPUT_KEY::D:
-					ChangeState(make_unique<PlayerIdle>());
+					if(! InputManager::Instance().KeyPress(INPUT_KEY::W) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::A) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::S) &&
+					   ! InputManager::Instance().KeyPress(INPUT_KEY::D))
+						ChangeState(make_unique<PlayerIdle>());
 				default:
 					break;
 				}
@@ -468,19 +479,50 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		default:
 			break;
 		}
+
+		// 네트워크 테스트용
+		memcpy(send_buf + buf_len, &ev, sizeof(GameEvent));
+		buf_len += sizeof(GameEvent);
+
 		event_queue.pop();
 	}
-	if (state.get())
-		state.get()->Update(this);
 
-	//if (m_pPlayerUpdatedContext)
-	//{
-	//	OnPlayerUpdateCallback(fTimeElapsed);
-	//}
+	// 네트워크 테스트용
+	if (0 != buf_len) {
+		// 여기서 버퍼 전송
+		WSABUF wsabuf[1];
+		wsabuf[0].buf = send_buf;
+		wsabuf[0].len = static_cast<ULONG>(buf_len);
+		WSAOVERLAPPED send_over;
+		ZeroMemory(&send_over, sizeof(send_over));
+
+		int ret = WSASend(c_socket, wsabuf, 1, NULL, 0, &send_over, NULL);
+		if (SOCKET_ERROR == ret) {
+			auto err_no = WSAGetLastError();
+			//error_display("WSASEND : ", err_no);
+		}
+	}
+
+	state.get()->Update(this);
+
+	//충돌에 따른 방향 전환
+
+	XMFLOAT3 direction = MoveDir;
+	direction = Vector3::ScalarProduct(direction, 8.0f, false);
+	CPlayer::Move(direction, true);
+
+	wchar_t buffer[128];
+	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+		direction.x, direction.y, direction.z);
+	//OutputDebugStringW(buffer);
+
+
+	CPlayer::Update(fTimeElapsed);
 }
 
 bool PlayerIdle::Enter(CPlayer* Player)
 {
+	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return false;
 	pctrl->SetTrackAnimationSet(0, 0);
@@ -510,12 +552,19 @@ bool PlayerRun::Enter(CPlayer* Player)
 
 void PlayerRun::Update(CPlayer* Player)
 {
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+
+
+	auto& input = InputManager::Instance();
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+
 	auto* pctrl = Player->GetAnimationController();
 	if (!pctrl) return;
-
-	const XMFLOAT2 dir = Player->GetDirection();
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
-
 	float angle = atan2f(dir.y, dir.x);
 	int nextAnim;
 
@@ -532,10 +581,20 @@ void PlayerRun::Update(CPlayer* Player)
 	{
 		pctrl->SetTrackAnimationSet(1, nextAnim);
 	}
+	XMFLOAT3 look = Player->GetLookVector();
+	XMFLOAT3 right = Player->GetRightVector();
+
+	XMFLOAT3 direction;
+	direction.x = look.x * dir.x + right.x * dir.y;
+	direction.z = look.z * dir.x + right.z * dir.y;
+	direction = Vector3::Normalize(direction);
+	Player->SetMoveDir(direction);
+
 }
 
 void PlayerRun::Exit(CPlayer* Player)
 {
+	
 }
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)

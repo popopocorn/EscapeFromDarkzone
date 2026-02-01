@@ -341,6 +341,11 @@ class CGameObject
 private:
 	int								m_nReferences = 0;
 
+protected:
+	BoundingOrientedBox				OOBBModel;
+	BoundingOrientedBox				OOBBWorld;
+	bool							HasOOBB = false;
+	std::vector<BoundingOrientedBox*> OOBBs;
 public:
 	void AddRef();
 	void Release();
@@ -349,6 +354,7 @@ public:
 	CGameObject();
 	CGameObject(int nMaterials);
     virtual ~CGameObject();
+	virtual void init();
 
 public:
 	char							m_pstrFrameName[64];
@@ -364,6 +370,7 @@ public:
 	CGameObject 					*m_pParent = NULL;
 	CGameObject 					*m_pChild = NULL;
 	CGameObject 					*m_pSibling = NULL;
+
 
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
 
@@ -422,6 +429,11 @@ public:
 	CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
 
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
+	void SetOOBB(std::vector<BoundingOrientedBox*>* container);
+	void SetOOBB(BoundingOrientedBox obb);
+	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
+	bool CheckOOBB() const { return HasOOBB; }
+
 
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
