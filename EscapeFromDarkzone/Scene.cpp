@@ -443,11 +443,11 @@ void CScene::DoCollision(CGameObject* object, int shaderidx)
 	for (CGameObject* other : otherobj) {
 		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
 		if (CheckCollision(object, other)) {
-			OutputDebugString(L"Collision!\n");
+			//OutputDebugString(L"Collision!\n");
 
 		}
 		else {
-			OutputDebugString(L"No!\n");
+			//OutputDebugString(L"No!\n");
 		}
 	}
 }

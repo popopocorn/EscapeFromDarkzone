@@ -1,6 +1,7 @@
 #pragma once
+#include"stdafx.h"
 
-
+class CGameObject;
 
 struct Collision_Info {
 	bool isCollide = false;
