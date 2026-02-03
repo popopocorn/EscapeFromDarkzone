@@ -263,6 +263,58 @@ void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 	state->Enter(this);
 }
 
+void CPlayer::HandleCollision(XMFLOAT3 normal)
+{
+	CollVector.push_back(normal);
+}
+
+void CPlayer::UpdateDirection()
+{
+	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
+	{
+		CollVector.clear(); // 이동 안 해도 충돌 정보는 비워줘야 함
+		return;
+	}
+
+	// DirectXMath 벡터로 변환 (연산 효율성)
+	XMVECTOR currentDirVec = XMLoadFloat3(&MoveDir);
+
+	// 2. 수집된 모든 충돌 노멀에 대해 슬라이딩 처리
+	// (구석진 곳이나 여러 벽에 동시에 닿을 수 있으므로 반복문 사용)
+	for (const auto& normal : CollVector)
+	{
+		XMVECTOR normalVec = XMLoadFloat3(&normal);
+
+		// 내적(Dot Product) 계산: 두 벡터의 방향성 확인
+		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
+		float dot = XMVectorGetX(dotVec);
+
+		// dot < 0: 플레이어가 벽을 향해 가고 있음 (충돌 발생 상황)
+		// dot >= 0: 플레이어가 벽에서 멀어지거나 평행함 (처리 불필요)
+		if (dot < 0.0f)
+		{
+			// 3. 슬라이딩 벡터 공식 적용
+			// V_new = V - (V · N) * N
+			// 벽의 수직 성분(벽을 뚫으려는 힘)을 제거
+			currentDirVec = currentDirVec - (normalVec * dot);
+		}
+	}
+
+	// 4. (선택 사항) 미세한 떨림 방지
+	// 연산 오차로 인해 0에 가까운 아주 작은 값이 남을 수 있음
+	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
+	{
+		currentDirVec = XMVectorZero();
+	}
+
+	// 5. 최종 보정된 방향 저장
+	XMStoreFloat3(&MoveDir, currentDirVec);
+
+	// *중요* : 이번 프레임의 충돌 처리가 끝났으므로 리스트 초기화
+	// 초기화하지 않으면 허공에서도 계속 미끄러지는 버그 발생
+	CollVector.clear();
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -506,15 +558,16 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	state.get()->Update(this);
 
 	//충돌에 따른 방향 전환
+	UpdateDirection();
 
 	XMFLOAT3 direction = MoveDir;
 	direction = Vector3::ScalarProduct(direction, 8.0f, false);
 	CPlayer::Move(direction, true);
 
-	wchar_t buffer[128];
+	/*wchar_t buffer[128];
 	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
 		direction.x, direction.y, direction.z);
-	//OutputDebugStringW(buffer);
+	OutputDebugStringW(buffer);*/
 
 
 	CPlayer::Update(fTimeElapsed);
