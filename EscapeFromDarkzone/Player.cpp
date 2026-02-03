@@ -277,10 +277,10 @@ void CPlayer::UpdateDirection()
 	}
 	XMVECTOR currentDirVec = XMLoadFloat3(&MoveDir);
 
-	for (const auto& normal : CollVector)
+	for (const XMFLOAT3& normal : CollVector)
 	{
 		XMVECTOR normalVec = XMLoadFloat3(&normal);
-
+		
 		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
 		float dot = XMVectorGetX(dotVec);
 
@@ -300,9 +300,12 @@ void CPlayer::UpdateDirection()
 	// 5. 최종 보정된 방향 저장
 	XMStoreFloat3(&MoveDir, currentDirVec);
 
-	// *중요* : 이번 프레임의 충돌 처리가 끝났으므로 리스트 초기화
-	// 초기화하지 않으면 허공에서도 계속 미끄러지는 버그 발생
 	CollVector.clear();
+
+	wchar_t buffer[128];
+	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+		MoveDir.x, MoveDir.y, MoveDir.z);
+	OutputDebugStringW(buffer);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
