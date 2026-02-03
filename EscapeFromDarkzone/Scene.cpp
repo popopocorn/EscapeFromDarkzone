@@ -89,7 +89,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 77); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 6); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -99,6 +99,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
+
 	m_pTerrain = new CHeightMapTerrain(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, _T("Terrain/HeightMap.raw"), 257, 257, xmf3Scale, xmf4Color);
 
 	m_nHierarchicalGameObjects = 21;
@@ -250,6 +251,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	if (pEagleModel) delete pEagleModel;
 	
 	//적 오브젝트
+	
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
@@ -303,18 +305,6 @@ void CScene::ReleaseObjects()
 
 
 	m_ppShaders.clear();
-
-
-	if (m_pTerrain) delete m_pTerrain;
-	
-
-	if (m_ppHierarchicalGameObjects)
-	{
-		for (int i = 0; i < m_nHierarchicalGameObjects; i++) 
-			if (m_ppHierarchicalGameObjects[i]) 
-				m_ppHierarchicalGameObjects[i]->Release();
-		delete[] m_ppHierarchicalGameObjects;
-	}
 
 	ReleaseShaderVariables();
 
@@ -535,7 +525,7 @@ void CScene::ReleaseShaderVariables()
 void CScene::ReleaseUploadBuffers()
 {
 	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
-	if (m_pTerrain) m_pTerrain->ReleaseUploadBuffers();
+
 
 	for (int i = 0; i < m_ppShaders.size(); i++) 
 		if (m_ppShaders[i])
@@ -543,9 +533,6 @@ void CScene::ReleaseUploadBuffers()
 	for (int i = 0; i < m_ppGameObjects.size(); i++) 
 		if (m_ppGameObjects[i]) 
 			m_ppGameObjects[i]->ReleaseUploadBuffers();
-	for (int i = 0; i < m_nHierarchicalGameObjects; i++) 
-		if (m_ppHierarchicalGameObjects[i])
-			m_ppHierarchicalGameObjects[i]->ReleaseUploadBuffers();
 }
 
 void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
@@ -598,37 +585,31 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	int nRootParameters = pTexture->GetRootParameters();
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 }
-void CScene::DoCollision(const CGameObject* object, int shaderidx)
+void CScene::DoCollision(CGameObject* object, int shaderidx)
 {
 	if (shaderidx < 0 || shaderidx >= m_ppShaders.size())
 		return;
 
-	std::vector<CGameObject*> otherobj = m_ppShaders[shaderidx].get()->GetObj();
+	auto* otherobj = m_ppShaders[shaderidx].get()->GetObj();
 
 	/*wchar_t buf[128];
 	swprintf(buf, 128, L"OtherObj Count = %zu\n", otherobj.size());
 	OutputDebugString(buf);*/
 
-	for (const CGameObject* other : otherobj) {
+	for (const auto& other : *otherobj) {
 		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		if (CheckCollision(object, other)) {
-			OutputDebugString(L"Collision!\n");
+		if (CheckCollision(object, other.get())) {
+			//OutputDebugString(L"Collision!\n");
 
 		}
 		else {
-			OutputDebugString(L"No!\n");
+			//OutputDebugString(L"No!\n");
 		}
 	}
 }
 
-bool CScene::CheckCollision(const CGameObject* object1, const CGameObject* object2)
+bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
 {
-	//충돌 객체
-	/*
-	* 충돌 여부
-	* 충돌 평면 노멀
-	* ~~
-	*/
 	const auto& oobbs1 = object1->GetOOBB();
 	const auto& oobbs2 = object2->GetOOBB();
 
@@ -640,6 +621,9 @@ bool CScene::CheckCollision(const CGameObject* object1, const CGameObject* objec
 
 			if (obb1->Intersects(*obb2))
 			{
+				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
+				object1->HandleCollision(normal);
+				object2->HandleCollision(normal);
 				return true;
 			}
 		}
@@ -747,26 +731,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 //	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
 	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, -fAngle, 0.0f);
 	XMFLOAT3 xmf3Position = Vector3::TransformCoord(XMFLOAT3(65.0f, 0.0f, 0.0f), xmf4x4Rotate);
-//	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._41 = m_xmf3RotatePosition.x + xmf3Position.x;
-//	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._42 = m_xmf3RotatePosition.y + xmf3Position.y;
-//	m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent._43 = m_xmf3RotatePosition.z + xmf3Position.z;
-	if (m_ppHierarchicalGameObjects[11])
-	{
-		m_ppHierarchicalGameObjects[11]->m_xmf4x4ToParent = Matrix4x4::AffineTransformation(XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f), XMFLOAT3(0.0f, -fAngle, 0.0f), Vector3::Add(m_xmf3RotatePosition, xmf3Position));
-		m_ppHierarchicalGameObjects[11]->Rotate(0.0f, -1.5f, 0.0f);
-	}
-
-	/*if (m_ppHierarchicalGameObjects[21])
-	{
-		CEnemyObject* pEnemy = (CEnemyObject*)m_ppHierarchicalGameObjects[21];
-
-		if (m_pPlayer) pEnemy->SetPlayer(m_pPlayer);
-
-		pEnemy->Animate(fTimeElapsed);
-	}*/
 
 	//충돌검사
 }
+
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
@@ -781,7 +749,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
 	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, pCamera);
-	if (m_pTerrain) m_pTerrain->Render(pd3dCommandList, pCamera);
+
 
 	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, pCamera);
 	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera);
@@ -803,6 +771,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 			m_ppHierarchicalGameObjects[i]->Render(pd3dCommandList, pCamera);
 		}
 	}
+
 
 	if (m_pDebugShader)
 	{

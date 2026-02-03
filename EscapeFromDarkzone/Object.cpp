@@ -1062,6 +1062,7 @@ float ReadFloatFromFile(FILE *pInFile)
 	return(fValue);
 }
 
+
 BYTE ReadStringFromFile(FILE *pInFile, char *pstrToken)
 {
 	BYTE nStrLength = 0;

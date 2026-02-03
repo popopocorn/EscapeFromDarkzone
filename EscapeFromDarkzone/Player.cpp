@@ -263,6 +263,51 @@ void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 	state->Enter(this);
 }
 
+void CPlayer::HandleCollision(XMFLOAT3 normal)
+{
+	CollVector.push_back(normal);
+}
+
+void CPlayer::UpdateDirection()
+{
+	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
+	{
+		CollVector.clear(); // 이동 안 해도 충돌 정보는 비워줘야 함
+		return;
+	}
+	XMVECTOR currentDirVec = XMLoadFloat3(&MoveDir);
+
+	for (const XMFLOAT3& normal : CollVector)
+	{
+		XMVECTOR normalVec = XMLoadFloat3(&normal);
+		
+		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
+		float dot = XMVectorGetX(dotVec);
+
+		if (dot < 0.0f)
+		{
+			currentDirVec = currentDirVec - (normalVec * dot);
+		}
+	}
+
+	// 4. (선택 사항) 미세한 떨림 방지
+	// 연산 오차로 인해 0에 가까운 아주 작은 값이 남을 수 있음
+	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
+	{
+		currentDirVec = XMVectorZero();
+	}
+
+	// 5. 최종 보정된 방향 저장
+	XMStoreFloat3(&MoveDir, currentDirVec);
+
+	CollVector.clear();
+
+	wchar_t buffer[128];
+	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+		MoveDir.x, MoveDir.y, MoveDir.z);
+	OutputDebugStringW(buffer);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -506,15 +551,16 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	state.get()->Update(this);
 
 	//충돌에 따른 방향 전환
+	UpdateDirection();
 
 	XMFLOAT3 direction = MoveDir;
 	direction = Vector3::ScalarProduct(direction, 8.0f, false);
 	CPlayer::Move(direction, true);
 
-	wchar_t buffer[128];
+	/*wchar_t buffer[128];
 	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
 		direction.x, direction.y, direction.z);
-	//OutputDebugStringW(buffer);
+	OutputDebugStringW(buffer);*/
 
 
 	CPlayer::Update(fTimeElapsed);

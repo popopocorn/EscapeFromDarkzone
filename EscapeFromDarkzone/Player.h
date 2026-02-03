@@ -10,7 +10,6 @@
 
 #include "Object.h"
 #include "Camera.h"
-
 #include "Network.h"
 
 
@@ -60,6 +59,9 @@ protected:
 	
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
 	float						speed{};
+
+	//충돌 노멀
+	std::vector<XMFLOAT3>		CollVector;
 
 	// 네트워크 테스트
 	WSADATA WSAData;
@@ -121,6 +123,8 @@ public:
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
+	virtual void HandleCollision(XMFLOAT3 normal);
+	void UpdateDirection();
 
 };
 

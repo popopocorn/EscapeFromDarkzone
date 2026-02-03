@@ -433,7 +433,7 @@ public:
 	void SetOOBB(BoundingOrientedBox obb);
 	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
 	bool CheckOOBB() const { return HasOOBB; }
-
+	virtual void HandleCollision(XMFLOAT3 normal) {};
 
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);

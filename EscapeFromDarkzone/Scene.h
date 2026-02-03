@@ -105,16 +105,11 @@ public:
 	//objectshader로 관리할거라 필요 없을거 같음
 	//아마 사용한다면 shader와 이것 모두 shared_ptr?
 
-	int									m_nHierarchicalGameObjects = 0;
-	CGameObject							**m_ppHierarchicalGameObjects = NULL;
-	//사용 안할거, 게임 제작시 삭제
-
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
 
 	std::unique_ptr<CSkyBox>								m_pSkyBox;
-	CHeightMapTerrain					*m_pTerrain = NULL;//안쓸거
 
 	std::vector<LIGHT>					m_pLights;
 	int									m_nLights = 0;
@@ -127,6 +122,6 @@ public:
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
 
-	void DoCollision(const CGameObject* object, int shaderidx);
-	bool CheckCollision(const CGameObject* object1, const CGameObject* object2);
+	void DoCollision(CGameObject* object, int shaderidx);
+	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 };

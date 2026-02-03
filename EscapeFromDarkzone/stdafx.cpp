@@ -299,3 +299,97 @@ ID3D12Resource* CreateTextureResourceFromWICFile(ID3D12Device* pd3dDevice, ID3D1
 
 	return(pd3dTexture);
 }
+
+XMFLOAT3 GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b)
+{
+	XMVECTOR centerA = XMLoadFloat3(&a.Center);
+	XMVECTOR centerB = XMLoadFloat3(&b.Center);
+	XMVECTOR extentsA = XMLoadFloat3(&a.Extents);
+	XMVECTOR extentsB = XMLoadFloat3(&b.Extents);
+	XMVECTOR quatA = XMLoadFloat4(&a.Orientation);
+	XMVECTOR quatB = XMLoadFloat4(&b.Orientation);
+
+	// 2. 각 박스의 기저 벡터(축) 추출
+	XMMATRIX matA = XMMatrixRotationQuaternion(quatA);
+	XMMATRIX matB = XMMatrixRotationQuaternion(quatB);
+
+	XMVECTOR axesA[3]; // A의 로컬 x, y, z 축
+	axesA[0] = matA.r[0];
+	axesA[1] = matA.r[1];
+	axesA[2] = matA.r[2];
+
+	XMVECTOR axesB[3]; // B의 로컬 x, y, z 축
+	axesB[0] = matB.r[0];
+	axesB[1] = matB.r[1];
+	axesB[2] = matB.r[2];
+
+	// 3. 테스트할 15개의 분리 축 후보 생성
+	// (A의 축 3개) + (B의 축 3개) + (A와 B 축들의 외적 9개)
+	std::vector<XMVECTOR> testAxes;
+	testAxes.reserve(15);
+
+	for (int i = 0; i < 3; ++i) testAxes.push_back(axesA[i]);
+	for (int i = 0; i < 3; ++i) testAxes.push_back(axesB[i]);
+
+	// 외적 축 (Edge-Edge 충돌 감지용)
+	for (int i = 0; i < 3; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			XMVECTOR cross = XMVector3Cross(axesA[i], axesB[j]);
+			// 평행한 축끼리의 외적은 0이므로, 길이가 유효할 때만 추가
+			if (XMVectorGetX(XMVector3LengthSq(cross)) > 0.001f)
+			{
+				testAxes.push_back(XMVector3Normalize(cross));
+			}
+		}
+	}
+
+	// 4. SAT 알고리즘: 최소 침투 깊이(Minimum Penetration Depth) 찾기
+	float minPenetration = std::numeric_limits<float>::max();
+	XMVECTOR bestAxis = XMVectorSet(0, 1, 0, 0); // 기본값
+
+	// 두 박스 중심 사이의 벡터
+	XMVECTOR centerDiff = centerA - centerB;
+
+	for (const auto& axis : testAxes)
+	{
+		// A의 투영 반지름 계산
+		float rA =
+			std::abs(XMVectorGetX(XMVector3Dot(axesA[0], axis))) * XMVectorGetX(extentsA) +
+			std::abs(XMVectorGetX(XMVector3Dot(axesA[1], axis))) * XMVectorGetY(extentsA) +
+			std::abs(XMVectorGetX(XMVector3Dot(axesA[2], axis))) * XMVectorGetZ(extentsA);
+
+		// B의 투영 반지름 계산
+		float rB =
+			std::abs(XMVectorGetX(XMVector3Dot(axesB[0], axis))) * XMVectorGetX(extentsB) +
+			std::abs(XMVectorGetX(XMVector3Dot(axesB[1], axis))) * XMVectorGetY(extentsB) +
+			std::abs(XMVectorGetX(XMVector3Dot(axesB[2], axis))) * XMVectorGetZ(extentsB);
+
+		// 중심 거리의 투영
+		float dist = std::abs(XMVectorGetX(XMVector3Dot(centerDiff, axis)));
+
+		// 침투 깊이 계산 (양수여야 충돌 상태)
+		float penetration = (rA + rB) - dist;
+
+		// 이미 충돌한 경우라고 가정했으므로 penetration은 양수여야 함.
+		// 가장 작은 침투 깊이를 가진 축이 충돌 노멀임.
+		if (penetration > 0 && penetration < minPenetration)
+		{
+			minPenetration = penetration;
+			bestAxis = axis;
+		}
+	}
+
+	// 5. 노멀 방향 보정
+	// 노멀은 항상 B에서 A를 밀어내는 방향(또는 반대)으로 일관되게 맞춰야 함.
+	// 여기서는 B가 A를 밀어내는 방향(B -> A)으로 설정
+	if (XMVectorGetX(XMVector3Dot(bestAxis, centerDiff)) < 0)
+	{
+		bestAxis = -bestAxis;
+	}
+
+	XMFLOAT3 result;
+	XMStoreFloat3(&result, bestAxis);
+	return result;
+}
