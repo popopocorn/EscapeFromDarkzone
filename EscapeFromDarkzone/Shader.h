@@ -6,6 +6,11 @@
 
 #include "Object.h"
 #include "Camera.h"
+#include "DebugObject.h"
+
+class CGameObject;
+class CCamera;
+class CDebugObject;
 
 class CShader
 {
@@ -79,17 +84,21 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
-	
+
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 
-	void RenderOBB(ID3D12GraphicsCommandList* pd3dCommandList, CGameObject* pGameObject);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
 
-private:
+	void AddObject(CGameObject* pGameObject) { m_ppObjects.push_back(pGameObject); }
+
+	void ClearObjects() { m_ppObjects.clear(); }
+
+protected:
 	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
-	CMesh* m_pBoxMesh = NULL;
 
-	/*ID3D12Resource* m_pd3dcbGameObject = NULL;
-	VS_CB_DEBUG_INFO* m_pcbMappedGameObject = NULL;*/
+	CDebugObject* m_pDebugObject = nullptr;
+
+	std::vector<CGameObject*> m_ppObjects;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

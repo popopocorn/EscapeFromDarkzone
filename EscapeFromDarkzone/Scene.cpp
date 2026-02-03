@@ -806,26 +806,19 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 
 	if (m_pDebugShader)
 	{
-		pd3dCommandList->SetPipelineState(m_pDebugShader->m_pd3dPipelineState);
-		if (m_pDebugShader && pCamera)
-			pCamera->UpdateShaderVariables(pd3dCommandList);
+		m_pDebugShader->ClearObjects();
 
 		for (int i = 0; i < m_nHierarchicalGameObjects; i++)
 		{
 			if (m_ppHierarchicalGameObjects[i])
 			{
-				m_pDebugShader->RenderOBB(pd3dCommandList, m_ppHierarchicalGameObjects[i]);
+				m_pDebugShader->AddObject(m_ppHierarchicalGameObjects[i]);
 			}
 		}
 
-		if (m_pEnemyCursor)
-		{
-			m_pDebugShader->RenderOBB(pd3dCommandList, m_pEnemyCursor);
-		}
+		if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
+		if (m_pEnemyCursor) m_pDebugShader->AddObject(m_pEnemyCursor);
 
-		if (m_pPlayer)
-		{
-			m_pDebugShader->RenderOBB(pd3dCommandList, m_pPlayer);
-		}
+		m_pDebugShader->Render(pd3dCommandList, pCamera);
 	}
 }

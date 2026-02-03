@@ -1,7 +1,6 @@
 //debug.hlsli
 #include "common.hlsli"
 
-
 struct VS_DEBUG_INPUT
 {
     float3 position : POSITION;
@@ -15,13 +14,9 @@ struct VS_DEBUG_OUTPUT
 VS_DEBUG_OUTPUT VSDebug(VS_DEBUG_INPUT input)
 {
     VS_DEBUG_OUTPUT output;
-
     float4 positionW = mul(float4(input.position, 1.0f), gmtxGameObject);
-
     float4 positionV = mul(positionW, gmtxView);
-
     output.position = mul(positionV, gmtxProjection);
-
     return output;
 }
 

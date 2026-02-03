@@ -259,11 +259,3 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
-class CDebugMesh : public CMesh
-{
-public:
-	CDebugMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
-	virtual ~CDebugMesh();
-
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0);
-};
