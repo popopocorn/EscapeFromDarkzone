@@ -435,11 +435,6 @@ void CScene::DoCollision(CGameObject* object, int shaderidx)
 		return;
 
 	auto* otherobj = m_ppShaders[shaderidx].get()->GetObj();
-
-	/*wchar_t buf[128];
-	swprintf(buf, 128, L"OtherObj Count = %zu\n", otherobj.size());
-	OutputDebugString(buf);*/
-
 	for (const auto& other : *otherobj) {
 		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
 		if (CheckCollision(object, other.get())) {
