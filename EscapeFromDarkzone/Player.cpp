@@ -79,7 +79,7 @@ void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 
 	dir = Vector3::Normalize(dir);
 	XMFLOAT3 shift = Vector3::ScalarProduct(dir, fDistance, false);
-
+	shift.y = 0.0f;
 	Move(shift, bUpdateVelocity);
 }
 

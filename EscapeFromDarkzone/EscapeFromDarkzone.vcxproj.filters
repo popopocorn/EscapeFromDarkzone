@@ -63,6 +63,7 @@
     <ClInclude Include="EnemyObject.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="DebugObject.h">
     <ClInclude Include="Collision.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -110,6 +111,7 @@
     <ClCompile Include="EnemyObject.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="DebugObject.cpp">
     <ClCompile Include="Collision.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -131,5 +133,8 @@
     <FxCompile Include="Shaders.hlsl" />
     <FxCompile Include="Light.hlsli" />
     <FxCompile Include="common.hlsli" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Debug.hlsli" />
   </ItemGroup>
 </Project>
