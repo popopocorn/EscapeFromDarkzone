@@ -72,7 +72,11 @@ struct VS_CB_DEBUG_INFO
 {
 	XMFLOAT4X4 m_xmf4x4World;
 };
-
+struct DebugInstance
+{
+	CGameObject* m_pTargetObject = nullptr;
+	XMFLOAT4X4   m_xmf4x4Local;			// 미리 계산된 로컬 변환 행렬
+};
 class CBoundingBoxShader : public CShader
 {
 public:
@@ -89,16 +93,16 @@ public:
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
 
-	void AddObject(CGameObject* pGameObject) { m_ppObjects.push_back(pGameObject); }
+	void AddObject(CGameObject* pGameObject);
 
-	void ClearObjects() { m_ppObjects.clear(); }
+	void ClearObjects() { m_DebugInstances.clear(); }
 
 protected:
 	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
 
 	CDebugObject* m_pDebugObject = nullptr;
 
-	std::vector<CGameObject*> m_ppObjects;
+	std::vector<DebugInstance> m_DebugInstances;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
