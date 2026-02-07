@@ -163,7 +163,18 @@ public:
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
 
 	virtual void Update(float fTimeElapsed);
+private:
+	int m_nCurTrack = 0; 
+	int m_nNextTrack = 1;
 
+	int m_nCurAnimType = -1;
+
+	float m_fBlendTime = 0.0f; 
+	float m_fBlendDuration = 0.2f;
+	bool  m_bIsBlending = false;
+
+	void UpdateAnimation(float fTimeElapsed);
+	int GetAnimationFromMovement();
 };
 
 

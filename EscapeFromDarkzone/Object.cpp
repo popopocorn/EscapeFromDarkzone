@@ -664,6 +664,17 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 			}
 		}
 
+		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
+		{
+			XMFLOAT4X4& mtx = m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent;
+
+			float fScale = mtx._11 * mtx._11 + mtx._22 * mtx._22 + mtx._33 * mtx._33;
+			if (fScale < 0.0001f)
+			{
+				mtx = Matrix4x4::Identity();
+			}
+		}
+
 		pRootGameObject->UpdateTransform(NULL);
 
 		OnRootMotion(pRootGameObject);

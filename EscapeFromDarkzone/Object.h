@@ -322,6 +322,12 @@ public:
 
 	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
 
+	float GetTrackWeight(int nAnimationTrack)
+	{
+		if (m_pAnimationTracks) return m_pAnimationTracks[nAnimationTrack].m_fWeight;
+		return 0.0f;
+	}
+
 public:
 	bool							m_bRootMotion = false;
 	CGameObject*					m_pModelRootObject = NULL;
