@@ -601,6 +601,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 
 	if (m_pDebugShader)
 	{
+		m_pDebugShader->ClearObjects();
 		if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
 		if (m_pEnemyCursor) m_pDebugShader->AddObject(m_pEnemyCursor);
 

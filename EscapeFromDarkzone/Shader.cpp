@@ -701,7 +701,7 @@ CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 CBoundingBoxShader::~CBoundingBoxShader()
 {
 	if (m_pDebugObject) delete m_pDebugObject;
-	m_ppObjects.clear();
+	m_DebugInstances.clear();
 }
 
 D3D12_INPUT_LAYOUT_DESC CBoundingBoxShader::CreateInputLayout()
@@ -779,43 +779,66 @@ void CBoundingBoxShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	if (m_pd3dPixelShaderBlob) m_pd3dPixelShaderBlob->Release();
 }
 
+void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
+{
+	if (!pGameObject) return;
+
+	CMesh* pMesh = pGameObject->GetMesh();
+
+	if (pMesh)
+	{
+		// 로컬값 가져오기
+		XMFLOAT3 extents = pMesh->GetAABBExtents();
+		XMFLOAT3 center = pMesh->GetAABBCenter();
+
+		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
+
+		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
+
+		XMFLOAT4X4 localMatrix;
+		XMStoreFloat4x4(&localMatrix, S * T);
+
+		DebugInstance instance;
+		instance.m_pTargetObject = pGameObject;
+		instance.m_xmf4x4Local = localMatrix;
+
+		m_DebugInstances.push_back(instance);
+	}
+
+	//트리 순회
+	if (pGameObject->m_pChild)
+	{
+		AddObject(pGameObject->m_pChild);
+	}
+
+	if (pGameObject->m_pSibling)
+	{
+		AddObject(pGameObject->m_pSibling);
+	}
+}
+
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-    if (m_ppObjects.empty()) return;
+	if (m_DebugInstances.empty()) return;
 
-    pd3dCommandList->SetPipelineState(m_pd3dPipelineState);
+	pd3dCommandList->SetPipelineState(m_pd3dPipelineState);
 
-    for (CGameObject* pGameObject : m_ppObjects)
-    {
-        if (!pGameObject) continue;
+	for (const auto& instance : m_DebugInstances)
+	{
+		if (!instance.m_pTargetObject) continue;
 
-        CMesh* pMesh = pGameObject->GetMesh();
-        
-        XMFLOAT3 extents;
-        XMFLOAT3 center;
+		XMMATRIX mtxLocal = XMLoadFloat4x4(&instance.m_xmf4x4Local);
 
-        if (pMesh) 
-        {
-            extents = pMesh->GetAABBExtents();
-            center = pMesh->GetAABBCenter();
-        }
-        else
-        {
-            extents = XMFLOAT3(0.5f, 1.5f, 0.5f);
-            center = XMFLOAT3(0.0f, 0.0f, 0.0f);
-        }
+		XMMATRIX mtxWorld = XMLoadFloat4x4(&instance.m_pTargetObject->m_xmf4x4World);
+		
+		//최종 변환 행렬 계산
+		XMMATRIX mtxFinal = mtxLocal * mtxWorld;
 
-        XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
-        XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
-        XMMATRIX W = XMLoadFloat4x4(&pGameObject->m_xmf4x4World);
+		XMFLOAT4X4 xmf4x4Transform;
+		XMStoreFloat4x4(&xmf4x4Transform, XMMatrixTranspose(mtxFinal));
 
-        XMMATRIX mtxTransform = S * T * W;
+		pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4Transform, 0);
 
-        XMFLOAT4X4 xmf4x4Transform;
-        XMStoreFloat4x4(&xmf4x4Transform, XMMatrixTranspose(mtxTransform));
-
-        pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4Transform, 0);
-
-        m_pDebugObject->Render(pd3dCommandList);
-    }
+		if (m_pDebugObject) m_pDebugObject->Render(pd3dCommandList);
+	}
 }
