@@ -306,6 +306,14 @@ public:
 	ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 	XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 
+private:
+	int     m_nCurTrack = 0;
+	int     m_nNextTrack = 1;
+	int     m_nCurAnimID = -1;
+
+	bool    m_bIsBlending = false;
+	float   m_fBlendTime = 0.0f;
+	float   m_fBlendDuration = 0.2f;
 public:
 	void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
 
@@ -321,6 +329,8 @@ public:
 	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler *pCallbackHandler);
 
 	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
+
+	void ChangeAnimation(int nNewAnimID, float fBlendDuration = 0.2f);
 
 	float GetTrackWeight(int nAnimationTrack)
 	{

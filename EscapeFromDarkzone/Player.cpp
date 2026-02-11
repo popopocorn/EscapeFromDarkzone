@@ -562,83 +562,19 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		direction.x, direction.y, direction.z);
 	OutputDebugStringW(buffer);*/
 
-	UpdateAnimation(fTimeElapsed);
-
 	CPlayer::Update(fTimeElapsed);
 }
 
-int CTerrainPlayer::GetAnimationFromMovement()
-{
-	if (XMVectorGetX(XMVector3Length(XMLoadFloat3(&MoveDir))) < 0.01f) return ANIM_IDLE;
-
-	float x = MoveDir.x;
-	float z = MoveDir.z;
-
-	if (abs(z) >= abs(x))
-	{
-		return (z > 0) ? ANIM_RUN_F : ANIM_RUN_B;
-	}
-	else
-	{
-		return (x < 0) ? ANIM_RUN_L : ANIM_RUN_R;
-	}
-}
-
-void CTerrainPlayer::UpdateAnimation(float fTimeElapsed)
-{
-	CAnimationController* pController = m_pSkinnedAnimationController;
-	if (!pController && m_pChild) pController = m_pChild->m_pSkinnedAnimationController;
-	if (!pController) return;
-
-	int nTargetAnimType = GetAnimationFromMovement();
-
-	if (nTargetAnimType != m_nCurAnimType && !m_bIsBlending)
-	{
-		m_bIsBlending = true;
-		m_fBlendTime = 0.0f;
-
-		pController->SetTrackAnimationSet(m_nNextTrack, nTargetAnimType);
-		pController->SetTrackPosition(m_nNextTrack, 0.0f);
-		pController->SetTrackWeight(m_nNextTrack, 0.0f);
-		pController->SetTrackEnable(m_nNextTrack, true);
-
-		m_nCurAnimType = nTargetAnimType;
-	}
-
-	// 블렌딩 처리
-	if (m_bIsBlending)
-	{
-		m_fBlendTime += fTimeElapsed;
-		float fRatio = m_fBlendTime / m_fBlendDuration;
-
-		if (fRatio >= 1.0f)
-		{
-			pController->SetTrackWeight(m_nCurTrack, 0.0f);
-			pController->SetTrackEnable(m_nCurTrack, false);
-
-			pController->SetTrackWeight(m_nNextTrack, 1.0f);
-
-			std::swap(m_nCurTrack, m_nNextTrack);
-
-			m_bIsBlending = false;
-		}
-		else
-		{
-			pController->SetTrackWeight(m_nCurTrack, 1.0f - fRatio);
-			pController->SetTrackWeight(m_nNextTrack, fRatio);
-		}
-	}
-}
 
 bool PlayerIdle::Enter(CPlayer* Player)
 {
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
-	/*auto* pctrl = Player->GetAnimationController();
-	if (!pctrl) return false;
-	pctrl->SetTrackAnimationSet(0, 0);
-	pctrl->SetTrackEnable(0, true);
-	pctrl->SetTrackEnable(1, false);*/
 
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->ChangeAnimation(ANIM_IDLE, 0.2f);
+	}
 	return true;
 }
 
@@ -652,19 +588,12 @@ void PlayerIdle::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerRun::Enter(CPlayer* Player)
 {
-	/*auto* pctrl = Player->GetAnimationController();
-	if (!pctrl) return false;
-	pctrl->SetTrackAnimationSet(1, 1);
-	pctrl->SetTrackEnable(0, false);
-	pctrl->SetTrackEnable(1, true);*/
 	return true;
 }
 
 void PlayerRun::Update(CPlayer* Player)
 {
-
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
-
 
 	auto& input = InputManager::Instance();
 	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
@@ -672,9 +601,8 @@ void PlayerRun::Update(CPlayer* Player)
 	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
 	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
 
-	/*auto* pctrl = Player->GetAnimationController();
-	if (!pctrl) return;
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
+
 	float angle = atan2f(dir.y, dir.x);
 	int nextAnim;
 
@@ -687,10 +615,11 @@ void PlayerRun::Update(CPlayer* Player)
 	else
 		nextAnim = ANIM_RUN_B;
 
-	if (pctrl->m_pAnimationTracks[1].m_nAnimationSet != nextAnim)
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
 	{
-		pctrl->SetTrackAnimationSet(1, nextAnim);
-	}*/
+		pCtrl->ChangeAnimation(nextAnim, 0.2f);
+	}
 
 	XMFLOAT3 look = Player->GetLookVector();
 	XMFLOAT3 right = Player->GetRightVector();
@@ -700,7 +629,6 @@ void PlayerRun::Update(CPlayer* Player)
 	direction.z = look.z * dir.x + right.z * dir.y;
 	direction = Vector3::Normalize(direction);
 	Player->SetMoveDir(direction);
-
 }
 
 void PlayerRun::Exit(CPlayer* Player)
@@ -710,11 +638,11 @@ void PlayerRun::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
-	auto* pctrl = Player->GetAnimationController();
-	if (!pctrl) return false;
-	pctrl->SetTrackAnimationSet(1, 4);
-	pctrl->SetTrackEnable(0, false);
-	pctrl->SetTrackEnable(1, true);
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->ChangeAnimation(4, 0.1f);
+	}
 	return true;
 }
 

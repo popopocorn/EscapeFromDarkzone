@@ -172,9 +172,6 @@ private:
 	float m_fBlendTime = 0.0f; 
 	float m_fBlendDuration = 0.2f;
 	bool  m_bIsBlending = false;
-
-	void UpdateAnimation(float fTimeElapsed);
-	int GetAnimationFromMovement();
 };
 
 
