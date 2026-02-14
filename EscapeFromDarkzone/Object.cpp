@@ -810,7 +810,8 @@ CGameObject *CGameObject::FindFrame(const char *pstrFrameName)
 void CGameObject::UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent)
 {
 	m_xmf4x4World = (pxmf4x4Parent) ? Matrix4x4::Multiply(m_xmf4x4ToParent, *pxmf4x4Parent) : m_xmf4x4ToParent;
-	OOBBModel.Transform(OOBBWorld, XMLoadFloat4x4(&m_xmf4x4World));
+	if(HasOOBB)
+		OOBBModel.Transform(OOBBWorld, XMLoadFloat4x4(&m_xmf4x4World));
 	if (m_pSibling) m_pSibling->UpdateTransform(pxmf4x4Parent);
 	if (m_pChild) m_pChild->UpdateTransform(&m_xmf4x4World);
 }
@@ -1786,3 +1787,10 @@ void CEagleObject::SetPosition(float x, float y, float z)
 	}
 }
 
+void ViewObject::Animate(float fTimeElapsed)
+{
+	if (player) {
+		SetPosition(player->GetPosition());
+		OutputDebugString(L"pa\n");
+	}
+}

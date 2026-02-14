@@ -150,7 +150,6 @@ protected:
 class ViewShader : public CStandardShader {
 public:
 
-	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 

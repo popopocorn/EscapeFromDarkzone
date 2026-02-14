@@ -98,21 +98,6 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
-	
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-
-	m_pEnemyCursor = pEnemy;
-
-	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
-
-	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
-
-	m_ppShaders.push_back(std::move(pSkinnedShader));
 
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -136,6 +121,44 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	}
 
 	m_ppShaders.push_back(std::move(stdshader));
+
+
+	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
+	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	FILE* viewFile = NULL;
+
+	::fopen_s(&viewFile, "Model/r.bin", "rb");
+	if (viewFile)
+	{
+		::rewind(viewFile);
+		CGameObject* viewmodel = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, viewFile, view.get(), 0);
+		viewmodel->SetPosition(0, 0, 0);
+		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
+		viewobj->SetPosition(0, 0, 0);
+		viewobj->SetChild(viewmodel);
+		view->addObjects(std::move(viewobj));
+		::fclose(viewFile);
+	}
+	
+	m_ppShaders.push_back(std::move(view));
+	
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+
+	m_pEnemyCursor = pEnemy;
+
+	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
+
+	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+
+	m_ppShaders.push_back(std::move(pSkinnedShader));
+
+
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
@@ -341,7 +364,6 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(), pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&pd3dGraphicsRootSignature);
 	if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 	if (pd3dErrorBlob) pd3dErrorBlob->Release();
-
 	return(pd3dGraphicsRootSignature);
 }
 void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
@@ -470,6 +492,14 @@ bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
 	}
 
 	return false;
+}
+void CScene::SetPlayer(CPlayer* p)
+{
+	m_pPlayer = p;
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[1]->GetObj();
+	CGameObject* pGameObj = (*pVector)[0].get();
+	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
+	pViewObj->setPlayer(p);
 }
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {

@@ -302,10 +302,10 @@ void CPlayer::UpdateDirection()
 
 	CollVector.clear();
 
-	wchar_t buffer[128];
-	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
-		MoveDir.x, MoveDir.y, MoveDir.z);
-	OutputDebugStringW(buffer);
+	//wchar_t buffer[128];
+	//swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+	//	MoveDir.x, MoveDir.y, MoveDir.z);
+	//OutputDebugStringW(buffer);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -410,13 +410,14 @@ void CGameFramework::BuildObjects()
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocator, NULL);
 
 	m_pScene = new CScene();
+	
 	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), NULL);
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
-
-	m_pScene->m_pPlayer = m_pPlayer = pPlayer;
+	m_pPlayer = pPlayer;
+	m_pScene->SetPlayer(m_pPlayer); 
 	m_pCamera = m_pPlayer->GetCamera();
 
 	m_pd3dCommandList->Close();
@@ -513,7 +514,7 @@ void CGameFramework::FrameAdvance()
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
 //	InputManager::Instance().update();
-	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 1);
+	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 
 	ProcessInput();
 
