@@ -435,33 +435,44 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	int nRootParameters = pTexture->GetRootParameters();
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 }
-void CScene::DoCollision(CGameObject* object, int shaderidx)
+
+bool CScene::DoCollision(CGameObject* object, int shaderidx)
 {
-	if (shaderidx < 0 || shaderidx >= m_ppShaders.size())
-		return;
+	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
+	if (m_ppShaders[shaderidx] == nullptr) return false;
 
-	auto* otherobj = m_ppShaders[shaderidx].get()->GetObj();
+	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
+	if (!otherobj) return false;
 
-	/*wchar_t buf[128];
-	swprintf(buf, 128, L"OtherObj Count = %zu\n", otherobj.size());
-	OutputDebugString(buf);*/
+	bool bCollided = false;\
 
-	for (const auto& other : *otherobj) {
-		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		if (CheckCollision(object, other.get())) {
-			//OutputDebugString(L"Collision!\n");
+	for (const auto& other : *otherobj)
+	{
+		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
+		// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+		
+		if (!other) continue;
+		CGameObject* pTarget = other.get();
 
-		}
-		else {
-			//OutputDebugString(L"No!\n");
+		if (object == pTarget) continue;
+
+		// 충돌 검사
+		if (CheckCollision(object, pTarget))
+		{
+			bCollided = true;
 		}
 	}
-}
 
-bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
+	return bCollided;
+}
+bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 {
 	const auto& oobbs1 = object1->GetOOBB();
 	const auto& oobbs2 = object2->GetOOBB();
+
+	float fMaxPenetrationDepth = -1.0f;
+	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
+	bool bIntersectFound = false;
 
 	for (const BoundingOrientedBox* obb1 : oobbs1)
 	{
@@ -472,15 +483,37 @@ bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
 			if (obb1->Intersects(*obb2))
 			{
 				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
-				object1->HandleCollision(normal);
-				object2->HandleCollision(normal);
-				return true;
+
+				XMVECTOR vNormal = XMLoadFloat3(&normal);
+
+				XMFLOAT3 curPos = object1->GetPosition();
+				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
+
+				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
+
+				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
+				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
+				float fDepth = fabs(XMVectorGetX(vDot));
+
+				if (fDepth > fMaxPenetrationDepth)
+				{
+					fMaxPenetrationDepth = fDepth;
+					xmf3BestNormal = normal;
+					bIntersectFound = true;
+				}
 			}
 		}
 	}
 
+	if (bIntersectFound)
+	{
+		object1->HandleCollision(xmf3BestNormal);
+		return true;
+	}
+
 	return false;
 }
+
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return(false);
@@ -578,11 +611,57 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 	static float fAngle = 0.0f;
 	fAngle += 1.50f;
-//	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
+	//	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
 	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, -fAngle, 0.0f);
 	XMFLOAT3 xmf3Position = Vector3::TransformCoord(XMFLOAT3(65.0f, 0.0f, 0.0f), xmf4x4Rotate);
 
 	//충돌검사
+	if (m_pPlayer)
+	{
+		// 최대 3번 반복 (모서리 처리용)
+		int nMaxIterations = 3;
+		XMFLOAT3 originalPos = m_pPlayer->GetPosition();
+		for (int iter = 0; iter < nMaxIterations; iter++)
+		{
+			// [핵심] 이번 회차에 충돌이 단 하나라도 있었는가?
+			bool bCollisionFound = false;
+
+			for (int i = 0; i < m_ppShaders.size(); i++)
+			{
+				if (m_ppShaders[i])
+				{
+					// DoCollision이 true를 반환하면(충돌했으면) 플래그를 켭니다.
+					if (DoCollision(m_pPlayer, i))
+					{
+						bCollisionFound = true;
+					}
+				}
+			}
+
+			if (!bCollisionFound) break;
+
+			// [추가된 덜덜거림 방지 코드]
+			// 만약 충돌 처리를 했는데도 위치가 거의 안 변했다면(0.1mm 이하)?
+			// 이미 꽉 끼인 상태(모서리)이므로, 더 계산하면 덜덜거리기만 합니다. 강제 종료.
+			XMFLOAT3 currentPos = m_pPlayer->GetPosition();
+			float dx = currentPos.x - originalPos.x;
+			float dy = currentPos.y - originalPos.y;
+			float dz = currentPos.z - originalPos.z;
+
+			// 변화량이 너무 작으면 loop 탈출
+			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
+			{
+				break;
+			}
+
+			// 다음 비교를 위해 현재 위치 업데이트
+			originalPos = currentPos;
+		}
+	}
+	if (m_pPlayer)
+	{
+		m_pPlayer->UpdateTransform(NULL);
+	}
 }
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

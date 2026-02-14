@@ -80,9 +80,9 @@ void CPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)
 	dir = Vector3::Normalize(dir);
 	XMFLOAT3 shift = Vector3::ScalarProduct(dir, fDistance, false);
 	shift.y = 0.0f;
+
 	Move(shift, bUpdateVelocity);
 }
-
 
 void CPlayer::Move(const XMFLOAT3& xmf3Shift, bool bUpdateVelocity)
 {
@@ -158,6 +158,7 @@ void CPlayer::Rotate(float x, float y, float z)
 
 void CPlayer::Update(float fTimeElapsed)
 {
+	SavePrevPosition();
 
 	float fLength = sqrtf(m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z);
 	float fMaxVelocityXZ = m_fMaxVelocityXZ;
@@ -172,6 +173,8 @@ void CPlayer::Update(float fTimeElapsed)
 
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
+
+	UpdateTransform(NULL);
 
 	if (m_pPlayerUpdatedContext) OnPlayerUpdateCallback(fTimeElapsed);
 
@@ -230,7 +233,6 @@ CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
 
 	return(pNewCamera);
 }
-
 void CPlayer::OnPrepareRender()
 {
 	m_xmf4x4ToParent._11 = m_xmf3Right.x; m_xmf4x4ToParent._12 = m_xmf3Right.y; m_xmf4x4ToParent._13 = m_xmf3Right.z;
@@ -240,13 +242,11 @@ void CPlayer::OnPrepareRender()
 
 	m_xmf4x4ToParent = Matrix4x4::Multiply(XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z), m_xmf4x4ToParent);
 }
-
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	DWORD nCameraMode = (pCamera) ? pCamera->GetMode() : 0x00;
 	if (nCameraMode == THIRD_PERSON_CAMERA) CGameObject::Render(pd3dCommandList, pCamera);
 }
-
 void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 {
 	if (!new_state)
@@ -265,9 +265,48 @@ void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 
 void CPlayer::HandleCollision(XMFLOAT3 normal)
 {
-	CollVector.push_back(normal);
-}
+	if (normal.y > 0.5f)
+	{
+		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
+		return;
+	}
 
+	XMVECTOR vNormal = XMLoadFloat3(&normal);
+	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
+	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
+
+	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
+
+	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
+	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
+	float fPenetrationDepth = XMVectorGetX(vDot);
+
+	if (fPenetrationDepth < 0.0f)
+	{
+		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
+
+		vCurrPos += vCorrection;
+		XMStoreFloat3(&m_xmf3Position, vCurrPos);
+
+		CGameObject::SetPosition(m_xmf3Position);
+
+		UpdateTransform(NULL);
+	}
+
+	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
+	float fVelDot = XMVectorGetX(vVelDot);
+
+	if (fVelDot < 0.0f)
+	{
+		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
+
+		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
+		{
+			vSlideVel = XMVectorZero();
+		}
+		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
+	}
+}
 void CPlayer::UpdateDirection()
 {
 	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
@@ -303,9 +342,8 @@ void CPlayer::UpdateDirection()
 	CollVector.clear();
 
 	wchar_t buffer[128];
-	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
-		MoveDir.x, MoveDir.y, MoveDir.z);
-	OutputDebugStringW(buffer);
+	//swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n", MoveDir.x, MoveDir.y, MoveDir.z);
+	//OutputDebugStringW(buffer);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -564,7 +602,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 
 	CPlayer::Update(fTimeElapsed);
 }
-
 
 bool PlayerIdle::Enter(CPlayer* Player)
 {

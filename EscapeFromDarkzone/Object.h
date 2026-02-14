@@ -384,6 +384,8 @@ public:
 	XMFLOAT4X4						m_xmf4x4ToParent;
 	XMFLOAT4X4						m_xmf4x4World;
 
+	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
 	CGameObject 					*m_pParent = NULL;
 	CGameObject 					*m_pChild = NULL;
 	CGameObject 					*m_pSibling = NULL;
@@ -452,6 +454,7 @@ public:
 	bool CheckOOBB() const { return HasOOBB; }
 	virtual void HandleCollision(XMFLOAT3 normal) {};
 
+	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 
