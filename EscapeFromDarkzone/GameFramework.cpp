@@ -261,6 +261,7 @@ void CGameFramework::CreateDepthStencilView()
 
 void CGameFramework::ChangeSwapChainState()
 {
+
 	WaitForGpuComplete();
 
 	BOOL bFullScreenState = FALSE;

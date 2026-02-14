@@ -520,7 +520,7 @@ D3D12_DEPTH_STENCIL_DESC ViewShader::CreateDepthStencilState()
 {
 	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc;
 	::ZeroMemory(&d3dDepthStencilDesc, sizeof(D3D12_DEPTH_STENCIL_DESC));
-	d3dDepthStencilDesc.DepthEnable = FALSE;
+	d3dDepthStencilDesc.DepthEnable = TRUE;
 	d3dDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 	d3dDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 	d3dDepthStencilDesc.StencilEnable = TRUE;
@@ -540,8 +540,7 @@ D3D12_DEPTH_STENCIL_DESC ViewShader::CreateDepthStencilState()
 
 void ViewShader::AnimateObjects(float fTimeElapsed)
 {
-
-
+	m_fElapsedTime = fTimeElapsed;
 }
 
 void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch)

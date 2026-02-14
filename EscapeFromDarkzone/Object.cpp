@@ -1790,7 +1790,6 @@ void CEagleObject::SetPosition(float x, float y, float z)
 void ViewObject::Animate(float fTimeElapsed)
 {
 	if (player) {
-		SetPosition(player->GetPosition());
-		OutputDebugString(L"pa\n");
+		m_xmf4x4ToParent = player->GetMatrix();
 	}
 }
