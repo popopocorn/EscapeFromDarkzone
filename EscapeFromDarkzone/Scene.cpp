@@ -441,35 +441,31 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
 	if (m_ppShaders[shaderidx] == nullptr) return false;
 
-	auto* otherobj = m_ppShaders[shaderidx].get()->GetObj();
-	for (const auto& other : *otherobj) {
-		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		if (CheckCollision(object, other.get())) {
-			//OutputDebugString(L"Collision!\n");
 	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
 	if (!otherobj) return false;
 
-	bool bCollided = false;\
+	bool bCollided = false; \
 
-	for (const auto& other : *otherobj)
-	{
-		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
-		// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		
-		if (!other) continue;
-		CGameObject* pTarget = other.get();
-
-		if (object == pTarget) continue;
-
-		// 충돌 검사
-		if (CheckCollision(object, pTarget))
+		for (const auto& other : *otherobj)
 		{
-			bCollided = true;
+			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
+			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+
+			if (!other) continue;
+			CGameObject* pTarget = other.get();
+
+			if (object == pTarget) continue;
+
+			// 충돌 검사
+			if (CheckCollision(object, pTarget))
+			{
+				bCollided = true;
+			}
 		}
-	}
 
 	return bCollided;
 }
+
 bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 {
 	const auto& oobbs1 = object1->GetOOBB();
@@ -623,19 +619,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//충돌검사
 	if (m_pPlayer)
 	{
-		// 최대 3번 반복 (모서리 처리용)
 		int nMaxIterations = 3;
 		XMFLOAT3 originalPos = m_pPlayer->GetPosition();
 		for (int iter = 0; iter < nMaxIterations; iter++)
 		{
-			// [핵심] 이번 회차에 충돌이 단 하나라도 있었는가?
 			bool bCollisionFound = false;
 
 			for (int i = 0; i < m_ppShaders.size(); i++)
 			{
 				if (m_ppShaders[i])
 				{
-					// DoCollision이 true를 반환하면(충돌했으면) 플래그를 켭니다.
 					if (DoCollision(m_pPlayer, i))
 					{
 						bCollisionFound = true;
@@ -645,21 +638,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 			if (!bCollisionFound) break;
 
-			// [추가된 덜덜거림 방지 코드]
-			// 만약 충돌 처리를 했는데도 위치가 거의 안 변했다면(0.1mm 이하)?
-			// 이미 꽉 끼인 상태(모서리)이므로, 더 계산하면 덜덜거리기만 합니다. 강제 종료.
 			XMFLOAT3 currentPos = m_pPlayer->GetPosition();
 			float dx = currentPos.x - originalPos.x;
 			float dy = currentPos.y - originalPos.y;
 			float dz = currentPos.z - originalPos.z;
 
-			// 변화량이 너무 작으면 loop 탈출
 			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
 			{
 				break;
 			}
 
-			// 다음 비교를 위해 현재 위치 업데이트
 			originalPos = currentPos;
 		}
 	}
