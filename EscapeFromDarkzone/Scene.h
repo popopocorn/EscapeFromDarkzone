@@ -122,6 +122,6 @@ public:
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
 
-	void DoCollision(CGameObject* object, int shaderidx);
+	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 };
