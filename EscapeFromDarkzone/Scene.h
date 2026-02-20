@@ -118,9 +118,11 @@ public:
 
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
+	
+	CBoundingBoxShader* m_pDebugShader = NULL;
 
 
-	void DoCollision(CGameObject* object, int shaderidx);
+	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	void SetPlayer(CPlayer* p);
 };

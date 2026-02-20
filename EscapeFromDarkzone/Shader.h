@@ -6,6 +6,11 @@
 
 #include "Object.h"
 #include "Camera.h"
+#include "DebugObject.h"
+
+class CGameObject;
+class CCamera;
+class CDebugObject;
 
 class CShader
 {
@@ -52,16 +57,57 @@ protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
 
-	ID3D12PipelineState					*m_pd3dPipelineState = NULL;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC	m_d3dPipelineStateDesc;
 
 	float								m_fElapsedTime = 0.0f;
+public: 
+	ID3D12PipelineState* m_pd3dPipelineState = NULL;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Bounding Box Shader선언
+struct VS_CB_DEBUG_INFO
+{
+	XMFLOAT4X4 m_xmf4x4World;
+};
+struct DebugInstance
+{
+	CGameObject* m_pTargetObject = nullptr;
+	XMFLOAT4X4   m_xmf4x4Local;			// 미리 계산된 로컬 변환 행렬
+};
+class CBoundingBoxShader : public CShader
+{
+public:
+	CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	virtual ~CBoundingBoxShader();
+
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+
+	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
+
+	void AddObject(CGameObject* pGameObject);
+
+	void ClearObjects() { m_DebugInstances.clear(); }
+
+protected:
+	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
+
+	CDebugObject* m_pDebugObject = nullptr;
+
+	std::vector<DebugInstance> m_DebugInstances;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CSkyBoxShader : public CShader
 {
 public:
@@ -76,7 +122,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CStandardShader : public CShader
 {
 public:
@@ -115,7 +161,7 @@ protected:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CSkinnedAnimationStandardShader : public CStandardShader
 {
 public:
@@ -187,7 +233,7 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CAngrybotObjectsShader : public CSkinnedAnimationObjectsShader
 {
 public:
@@ -198,7 +244,7 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 class CEthanObjectsShader : public CSkinnedAnimationObjectsShader
 {
 public:

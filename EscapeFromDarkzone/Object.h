@@ -298,13 +298,22 @@ public:
     CAnimationTrack 				*m_pAnimationTracks = NULL;
 
 	CAnimationSets					*m_pAnimationSets = NULL;
-
+	//cur_animation - 1
+	//next_animation - 0
 	int 							m_nSkinnedMeshes = 0;
 	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
 
 	ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 	XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 
+private:
+	int     m_nCurTrack = 0;
+	int     m_nNextTrack = 1;
+	int     m_nCurAnimID = -1;
+
+	bool    m_bIsBlending = false;
+	float   m_fBlendTime = 0.0f;
+	float   m_fBlendDuration = 0.2f;
 public:
 	void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
 
@@ -320,6 +329,14 @@ public:
 	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler *pCallbackHandler);
 
 	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
+
+	void ChangeAnimation(int nNewAnimID, float fBlendDuration = 0.2f);
+
+	float GetTrackWeight(int nAnimationTrack)
+	{
+		if (m_pAnimationTracks) return m_pAnimationTracks[nAnimationTrack].m_fWeight;
+		return 0.0f;
+	}
 
 public:
 	bool							m_bRootMotion = false;
@@ -366,6 +383,8 @@ public:
 
 	XMFLOAT4X4						m_xmf4x4ToParent;
 	XMFLOAT4X4						m_xmf4x4World;
+
+	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	CGameObject 					*m_pParent = NULL;
 	CGameObject 					*m_pChild = NULL;
@@ -422,6 +441,8 @@ public:
 	void Rotate(XMFLOAT3 *pxmf3Axis, float fAngle);
 	void Rotate(XMFLOAT4 *pxmf4Quaternion);
 
+	CMesh* GetMesh() { return m_pMesh; }
+
 	CGameObject *GetParent() { return(m_pParent); }
 	void UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent=NULL);
 	CGameObject *FindFrame(const char *pstrFrameName);
@@ -435,6 +456,7 @@ public:
 	bool CheckOOBB() const { return HasOOBB; }
 	virtual void HandleCollision(XMFLOAT3 normal) {};
 
+	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 
