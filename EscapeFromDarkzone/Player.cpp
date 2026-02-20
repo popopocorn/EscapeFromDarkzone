@@ -276,7 +276,6 @@ void CPlayer::HandleCollision(XMFLOAT3 normal)
 	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
 
 	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-
 	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
 	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
 	float fPenetrationDepth = XMVectorGetX(vDot);

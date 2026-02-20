@@ -99,27 +99,6 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
-	
-	//적 오브젝트
-	
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-
-	m_pEnemyCursor = pEnemy;
-
-	//디버그 쉐이더
-	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	//오브젝트 쉐이더(스탠다드, 스킨드)
-	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
-
-	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
-
-	m_ppShaders.push_back(std::move(pSkinnedShader));
 
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -165,12 +144,18 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	
 	m_ppShaders.push_back(std::move(view));
 	
+	//적 오브젝트
+	
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 
 	m_pEnemyCursor = pEnemy;
 
+	//디버그 쉐이더
+	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	//오브젝트 쉐이더(스탠다드, 스킨드)
 	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
 
 	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -481,6 +466,7 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
 	if (!otherobj) return false;
 
+
 	bool bCollided = false; \
 
 		for (const auto& other : *otherobj)
@@ -551,6 +537,7 @@ bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 
 	return false;
 }
+
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
@@ -559,6 +546,7 @@ void CScene::SetPlayer(CPlayer* p)
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
 }
+
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return(false);
