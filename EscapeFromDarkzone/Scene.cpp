@@ -105,12 +105,12 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	FILE* pInFile = NULL;
 
-	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
+	::fopen_s(&pInFile, "Model/map.bin", "rb");
 	if (pInFile)
 	{
 		::rewind(pInFile);
 		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
-		map->SetPosition(0, 0, 0);
+		map->SetPosition(0, -0.5, 0);
 		map.get()->SetOOBB(NULL);
 		stdshader->addObjects(std::move(map));
 		::fclose(pInFile);
