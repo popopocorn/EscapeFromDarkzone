@@ -306,6 +306,14 @@ public:
 	ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 	XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
 
+private:
+	int     m_nCurTrack = 0;
+	int     m_nNextTrack = 1;
+	int     m_nCurAnimID = -1;
+
+	bool    m_bIsBlending = false;
+	float   m_fBlendTime = 0.0f;
+	float   m_fBlendDuration = 0.2f;
 public:
 	void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
 
@@ -321,6 +329,14 @@ public:
 	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler *pCallbackHandler);
 
 	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
+
+	void ChangeAnimation(int nNewAnimID, float fBlendDuration = 0.2f);
+
+	float GetTrackWeight(int nAnimationTrack)
+	{
+		if (m_pAnimationTracks) return m_pAnimationTracks[nAnimationTrack].m_fWeight;
+		return 0.0f;
+	}
 
 public:
 	bool							m_bRootMotion = false;
@@ -368,6 +384,8 @@ public:
 	XMFLOAT4X4						m_xmf4x4ToParent;
 	XMFLOAT4X4						m_xmf4x4World;
 
+	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
 	CGameObject 					*m_pParent = NULL;
 	CGameObject 					*m_pChild = NULL;
 	CGameObject 					*m_pSibling = NULL;
@@ -388,7 +406,7 @@ public:
 	virtual void Animate(float fTimeElapsed);
 
 	virtual void OnPrepareRender() { }
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera=NULL);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera=NULL);
 
 	virtual void OnLateUpdate() { }
 
@@ -405,6 +423,8 @@ public:
 	XMFLOAT3 GetLook();
 	XMFLOAT3 GetUp();
 	XMFLOAT3 GetRight();
+
+	XMFLOAT4X4 GetMatrix() { return m_xmf4x4World; }
 
 	XMFLOAT3 GetToParentPosition();
 	void Move(XMFLOAT3 xmf3Offset);
@@ -436,6 +456,7 @@ public:
 	bool CheckOOBB() const { return HasOOBB; }
 	virtual void HandleCollision(XMFLOAT3 normal) {};
 
+	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 
@@ -490,7 +511,7 @@ public:
 	CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
 	virtual ~CSkyBox();
 
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera = NULL);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera = NULL);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -647,4 +668,10 @@ public:
 
 	XMFLOAT3				m_xmf3StartPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 };
-
+class ViewObject : public CGameObject {
+private:
+	CPlayer* player;
+public:
+	virtual void Animate(float fTimeElapsed);
+	void setPlayer(CPlayer* p) { player = p; }
+};

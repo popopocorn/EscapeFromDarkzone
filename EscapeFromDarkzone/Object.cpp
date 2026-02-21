@@ -527,6 +527,13 @@ CAnimationController::CAnimationController(ID3D12Device *pd3dDevice, ID3D12Graph
 		m_ppd3dcbSkinningBoneTransforms[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 		m_ppd3dcbSkinningBoneTransforms[i]->Map(0, NULL, (void **)&m_ppcbxmf4x4MappedSkinningBoneTransforms[i]);
 	}
+
+	m_nCurTrack = 0;
+	m_nNextTrack = 1;
+	m_nCurAnimID = -1;
+	m_bIsBlending = false;
+	m_fBlendTime = 0.0f;
+	m_fBlendDuration = 0.2f;
 }
 
 CAnimationController::~CAnimationController()
@@ -601,46 +608,38 @@ void CAnimationController::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3d
 		m_ppSkinnedMeshes[i]->m_pcbxmf4x4MappedSkinningBoneTransforms = m_ppcbxmf4x4MappedSkinningBoneTransforms[i];
 	}
 }
-/*
-void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject *pRootGameObject) 
-{
-	m_fTime += fTimeElapsed; 
-	if (m_pAnimationTracks)
-	{
-//		for (int k = 0; k < m_nAnimationTracks; k++) m_pAnimationTracks[k].m_fPosition += (fTimeElapsed * m_pAnimationTracks[k].m_fSpeed);
-		for (int k = 0; k < m_nAnimationTracks; k++) m_pAnimationSets->m_pAnimationSets[m_pAnimationTracks[k].m_nAnimationSet]->UpdatePosition(fTimeElapsed * m_pAnimationTracks[k].m_fSpeed);
 
-		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
-		{
-			XMFLOAT4X4 xmf4x4Transform = Matrix4x4::Zero();
-			for (int k = 0; k < m_nAnimationTracks; k++)
-			{
-				if (m_pAnimationTracks[k].m_bEnable)
-				{
-					CAnimationSet *pAnimationSet = m_pAnimationSets->m_pAnimationSets[m_pAnimationTracks[k].m_nAnimationSet];
-					XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j);
-					xmf4x4Transform = Matrix4x4::Add(xmf4x4Transform, Matrix4x4::Scale(xmf4x4TrackTransform, m_pAnimationTracks[k].m_fWeight));
-				}
-			}
-			m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent = xmf4x4Transform;
-		}
-
-		pRootGameObject->UpdateTransform(NULL);
-
-		for (int k = 0; k < m_nAnimationTracks; k++)
-		{
-			if (m_pAnimationTracks[k].m_bEnable) m_pAnimationSets->m_pAnimationSets[m_pAnimationTracks[k].m_nAnimationSet]->HandleCallback();
-		}
-	}
-} 
-//*/
-//*
 void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject)
 {
 	m_fTime += fTimeElapsed;
+
 	if (m_pAnimationTracks)
 	{
-		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++) 
+		if (m_bIsBlending)
+		{
+			m_fBlendTime += fTimeElapsed;
+			float fRatio = m_fBlendTime / m_fBlendDuration;
+
+			if (fRatio >= 1.0f)
+			{
+				m_pAnimationTracks[m_nCurTrack].SetWeight(0.0f);
+				m_pAnimationTracks[m_nCurTrack].SetEnable(false);
+
+				m_pAnimationTracks[m_nNextTrack].SetWeight(1.0f);
+
+				std::swap(m_nCurTrack, m_nNextTrack);
+
+				m_bIsBlending = false;
+			}
+			else
+			{
+				m_pAnimationTracks[m_nCurTrack].SetWeight(1.0f - fRatio);
+				m_pAnimationTracks[m_nNextTrack].SetWeight(fRatio);
+			}
+		}
+		// -----------------------------------------------------------------------
+
+		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 			m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent = Matrix4x4::Zero();
 
 		for (int k = 0; k < m_nAnimationTracks; k++)
@@ -653,14 +652,28 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
 
 				float fPosition = m_pAnimationTracks[k].UpdatePosition(m_pAnimationTracks[k].m_fPosition, fTimeElapsed, pAnimationSet->m_fLength);
+
 				for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 				{
 					XMFLOAT4X4 xmf4x4Transform = m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent;
 					XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, fPosition);
+
 					xmf4x4Transform = Matrix4x4::Add(xmf4x4Transform, Matrix4x4::Scale(xmf4x4TrackTransform, m_pAnimationTracks[k].m_fWeight));
+
 					m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent = xmf4x4Transform;
 				}
 				m_pAnimationTracks[k].HandleCallback();
+			}
+		}
+
+		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
+		{
+			XMFLOAT4X4& mtx = m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent;
+
+			float fScale = mtx._11 * mtx._11 + mtx._22 * mtx._22 + mtx._33 * mtx._33;
+			if (fScale < 0.0001f)
+			{
+				mtx = Matrix4x4::Identity();
 			}
 		}
 
@@ -669,6 +682,20 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 		OnRootMotion(pRootGameObject);
 		OnAnimationIK(pRootGameObject);
 	}
+}
+void CAnimationController::ChangeAnimation(int nNewAnimID, float fBlendDuration)
+{
+	if (m_nCurAnimID == nNewAnimID) return;
+
+	m_nCurAnimID = nNewAnimID;
+	m_fBlendDuration = fBlendDuration;
+	m_fBlendTime = 0.0f;
+	m_bIsBlending = true;
+
+	SetTrackAnimationSet(m_nNextTrack, nNewAnimID);
+	SetTrackPosition(m_nNextTrack, 0.0f);
+	SetTrackWeight(m_nNextTrack, 0.0f);
+	SetTrackEnable(m_nNextTrack, true);
 }
 //*/
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -810,7 +837,8 @@ CGameObject *CGameObject::FindFrame(const char *pstrFrameName)
 void CGameObject::UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent)
 {
 	m_xmf4x4World = (pxmf4x4Parent) ? Matrix4x4::Multiply(m_xmf4x4ToParent, *pxmf4x4Parent) : m_xmf4x4ToParent;
-	OOBBModel.Transform(OOBBWorld, XMLoadFloat4x4(&m_xmf4x4World));
+	if(HasOOBB)
+		OOBBModel.Transform(OOBBWorld, XMLoadFloat4x4(&m_xmf4x4World));
 	if (m_pSibling) m_pSibling->UpdateTransform(pxmf4x4Parent);
 	if (m_pChild) m_pChild->UpdateTransform(&m_xmf4x4World);
 }
@@ -831,7 +859,7 @@ void CGameObject::Animate(float fTimeElapsed)
 	if (m_pChild) m_pChild->Animate(fTimeElapsed);
 }
 
-void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
+void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera)
 {
 	if (m_pMesh)
 	{
@@ -843,7 +871,7 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pC
 			{
 				if (m_ppMaterials[i])
 				{
-					if (m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera);
+					if (not batch && m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera, false);
 					m_ppMaterials[i]->UpdateShaderVariable(pd3dCommandList);
 				}
 
@@ -852,8 +880,8 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pC
 		}
 	}
 
-	if (m_pSibling) m_pSibling->Render(pd3dCommandList, pCamera);
-	if (m_pChild) m_pChild->Render(pd3dCommandList, pCamera);
+	if (m_pSibling) m_pSibling->Render(pd3dCommandList, batch, pCamera);
+	if (m_pChild) m_pChild->Render(pd3dCommandList, batch, pCamera);
 }
 
 void CGameObject::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
@@ -1479,12 +1507,12 @@ CSkyBox::~CSkyBox()
 {
 }
 
-void CSkyBox::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera)
+void CSkyBox::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera)
 {
 	XMFLOAT3 xmf3CameraPos = pCamera->GetPosition();
 	SetPosition(xmf3CameraPos.x, xmf3CameraPos.y, xmf3CameraPos.z);
 
-	CGameObject::Render(pd3dCommandList, pCamera);
+	CGameObject::Render(pd3dCommandList, batch, pCamera);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1786,3 +1814,9 @@ void CEagleObject::SetPosition(float x, float y, float z)
 	}
 }
 
+void ViewObject::Animate(float fTimeElapsed)
+{
+	if (player) {
+		m_xmf4x4ToParent = player->GetMatrix();
+	}
+}

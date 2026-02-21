@@ -99,6 +99,50 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
+
+	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
+	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	FILE* pInFile = NULL;
+
+	::fopen_s(&pInFile, "Model/map.bin", "rb");
+	if (pInFile)
+	{
+		::rewind(pInFile);
+		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
+		map->SetPosition(0, -0.5, 0);
+		map.get()->SetOOBB(NULL);
+		stdshader->addObjects(std::move(map));
+		::fclose(pInFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: Map file not found.\n");
+	}
+
+	m_ppShaders.push_back(std::move(stdshader));
+
+
+	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
+	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	FILE* viewFile = NULL;
+
+	::fopen_s(&viewFile, "Model/r.bin", "rb");
+	if (viewFile)
+	{
+		::rewind(viewFile);
+		CGameObject* viewmodel = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, viewFile, view.get(), 0);
+		viewmodel->SetPosition(0, 0, 0);
+		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
+		viewobj->SetPosition(0, 0, 0);
+		viewobj->SetChild(viewmodel);
+		view->addObjects(std::move(viewobj));
+		::fclose(viewFile);
+	}
+	
+	m_ppShaders.push_back(std::move(view));
 	
 	//적 오브젝트
 	
@@ -121,28 +165,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
-	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
-	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	FILE* pInFile = NULL;
-
-	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
-	if (pInFile)
-	{
-		::rewind(pInFile);
-		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
-		map->SetPosition(0, 0, 0);
-		map.get()->SetOOBB(NULL);
-		stdshader->addObjects(std::move(map));
-		::fclose(pInFile);
-	}
-	else
-	{
-		OutputDebugString(L"Error: Map file not found.\n");
-	}
-
-	m_ppShaders.push_back(std::move(stdshader));
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
@@ -348,7 +371,6 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(), pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&pd3dGraphicsRootSignature);
 	if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 	if (pd3dErrorBlob) pd3dErrorBlob->Release();
-
 	return(pd3dGraphicsRootSignature);
 }
 void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
@@ -435,28 +457,46 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	int nRootParameters = pTexture->GetRootParameters();
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 }
-void CScene::DoCollision(CGameObject* object, int shaderidx)
+
+bool CScene::DoCollision(CGameObject* object, int shaderidx)
 {
-	if (shaderidx < 0 || shaderidx >= m_ppShaders.size())
-		return;
+	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
+	if (m_ppShaders[shaderidx] == nullptr) return false;
 
-	auto* otherobj = m_ppShaders[shaderidx].get()->GetObj();
-	for (const auto& other : *otherobj) {
-		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		if (CheckCollision(object, other.get())) {
-			//OutputDebugString(L"Collision!\n");
+	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
+	if (!otherobj) return false;
 
+
+	bool bCollided = false; \
+
+		for (const auto& other : *otherobj)
+		{
+			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
+			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+
+			if (!other) continue;
+			CGameObject* pTarget = other.get();
+
+			if (object == pTarget) continue;
+
+			// 충돌 검사
+			if (CheckCollision(object, pTarget))
+			{
+				bCollided = true;
+			}
 		}
-		else {
-			//OutputDebugString(L"No!\n");
-		}
-	}
+
+	return bCollided;
 }
 
-bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
+bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 {
 	const auto& oobbs1 = object1->GetOOBB();
 	const auto& oobbs2 = object2->GetOOBB();
+
+	float fMaxPenetrationDepth = -1.0f;
+	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
+	bool bIntersectFound = false;
 
 	for (const BoundingOrientedBox* obb1 : oobbs1)
 	{
@@ -467,15 +507,46 @@ bool CScene::CheckCollision( CGameObject* object1, CGameObject* object2)
 			if (obb1->Intersects(*obb2))
 			{
 				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
-				object1->HandleCollision(normal);
-				object2->HandleCollision(normal);
-				return true;
+
+				XMVECTOR vNormal = XMLoadFloat3(&normal);
+
+				XMFLOAT3 curPos = object1->GetPosition();
+				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
+
+				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
+
+				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
+				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
+				float fDepth = fabs(XMVectorGetX(vDot));
+
+				if (fDepth > fMaxPenetrationDepth)
+				{
+					fMaxPenetrationDepth = fDepth;
+					xmf3BestNormal = normal;
+					bIntersectFound = true;
+				}
 			}
 		}
 	}
 
+	if (bIntersectFound)
+	{
+		object1->HandleCollision(xmf3BestNormal);
+		return true;
+	}
+
 	return false;
 }
+
+void CScene::SetPlayer(CPlayer* p)
+{
+	m_pPlayer = p;
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[1]->GetObj();
+	CGameObject* pGameObj = (*pVector)[0].get();
+	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
+	pViewObj->setPlayer(p);
+}
+
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return(false);
@@ -573,11 +644,49 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 	static float fAngle = 0.0f;
 	fAngle += 1.50f;
-//	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
+	//	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
 	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, -fAngle, 0.0f);
 	XMFLOAT3 xmf3Position = Vector3::TransformCoord(XMFLOAT3(65.0f, 0.0f, 0.0f), xmf4x4Rotate);
 
 	//충돌검사
+	if (m_pPlayer)
+	{
+		int nMaxIterations = 3;
+		XMFLOAT3 originalPos = m_pPlayer->GetPosition();
+		for (int iter = 0; iter < nMaxIterations; iter++)
+		{
+			bool bCollisionFound = false;
+
+			for (int i = 0; i < m_ppShaders.size(); i++)
+			{
+				if (m_ppShaders[i])
+				{
+					if (DoCollision(m_pPlayer, i))
+					{
+						bCollisionFound = true;
+					}
+				}
+			}
+
+			if (!bCollisionFound) break;
+
+			XMFLOAT3 currentPos = m_pPlayer->GetPosition();
+			float dx = currentPos.x - originalPos.x;
+			float dy = currentPos.y - originalPos.y;
+			float dz = currentPos.z - originalPos.z;
+
+			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
+			{
+				break;
+			}
+
+			originalPos = currentPos;
+		}
+	}
+	if (m_pPlayer)
+	{
+		m_pPlayer->UpdateTransform(NULL);
+	}
 }
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
@@ -593,11 +702,11 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, pCamera);
+	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, pCamera);
+	pd3dCommandList->OMSetStencilRef(1);
 
-
-	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, pCamera);
-	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera);
+	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, false ,pCamera);
+	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pDebugShader)
 	{
