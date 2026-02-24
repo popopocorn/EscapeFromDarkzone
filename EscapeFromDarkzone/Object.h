@@ -406,7 +406,7 @@ public:
 	virtual void Animate(float fTimeElapsed);
 
 	virtual void OnPrepareRender() { }
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera=NULL);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera=NULL);
 
 	virtual void OnLateUpdate() { }
 
@@ -423,6 +423,8 @@ public:
 	XMFLOAT3 GetLook();
 	XMFLOAT3 GetUp();
 	XMFLOAT3 GetRight();
+
+	XMFLOAT4X4 GetMatrix() { return m_xmf4x4World; }
 
 	XMFLOAT3 GetToParentPosition();
 	void Move(XMFLOAT3 xmf3Offset);
@@ -509,7 +511,7 @@ public:
 	CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
 	virtual ~CSkyBox();
 
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera = NULL);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera = NULL);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -666,4 +668,10 @@ public:
 
 	XMFLOAT3				m_xmf3StartPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 };
-
+class ViewObject : public CGameObject {
+private:
+	CPlayer* player;
+public:
+	virtual void Animate(float fTimeElapsed);
+	void setPlayer(CPlayer* p) { player = p; }
+};

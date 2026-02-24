@@ -99,6 +99,50 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
+
+	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
+	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	FILE* pInFile = NULL;
+
+	::fopen_s(&pInFile, "Model/map_0222_dds.bin", "rb");
+	if (pInFile)
+	{
+		::rewind(pInFile);
+		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
+		map->SetPosition(-150, -0.5, -150);
+		map.get()->SetOOBB(NULL);
+		stdshader->addObjects(std::move(map));
+		::fclose(pInFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: Map file not found.\n");
+	}
+
+	m_ppShaders.push_back(std::move(stdshader));
+
+
+	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
+	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	FILE* viewFile = NULL;
+
+	::fopen_s(&viewFile, "Model/r.bin", "rb");
+	if (viewFile)
+	{
+		::rewind(viewFile);
+		CGameObject* viewmodel = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, viewFile, view.get(), 0);
+		viewmodel->SetPosition(0, 0, 0);
+		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
+		viewobj->SetPosition(0, 0, 0);
+		viewobj->SetChild(viewmodel);
+		view->addObjects(std::move(viewobj));
+		::fclose(viewFile);
+	}
+	
+	m_ppShaders.push_back(std::move(view));
 	
 	//적 오브젝트
 	
@@ -121,28 +165,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
-	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
-	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	FILE* pInFile = NULL;
-
-	::fopen_s(&pInFile, "Model/DemoMap_50x50_1231-1.bin", "rb");
-	if (pInFile)
-	{
-		::rewind(pInFile);
-		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
-		map->SetPosition(0, 0, 0);
-		map.get()->SetOOBB(NULL);
-		stdshader->addObjects(std::move(map));
-		::fclose(pInFile);
-	}
-	else
-	{
-		OutputDebugString(L"Error: Map file not found.\n");
-	}
-
-	m_ppShaders.push_back(std::move(stdshader));
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
@@ -348,7 +371,6 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(), pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&pd3dGraphicsRootSignature);
 	if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
 	if (pd3dErrorBlob) pd3dErrorBlob->Release();
-
 	return(pd3dGraphicsRootSignature);
 }
 void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
@@ -444,27 +466,29 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
 	if (!otherobj) return false;
 
-	bool bCollided = false;\
 
-	for (const auto& other : *otherobj)
-	{
-		//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
-		// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-		
-		if (!other) continue;
-		CGameObject* pTarget = other.get();
+	bool bCollided = false; \
 
-		if (object == pTarget) continue;
-
-		// 충돌 검사
-		if (CheckCollision(object, pTarget))
+		for (const auto& other : *otherobj)
 		{
-			bCollided = true;
+			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
+			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+
+			if (!other) continue;
+			CGameObject* pTarget = other.get();
+
+			if (object == pTarget) continue;
+
+			// 충돌 검사
+			if (CheckCollision(object, pTarget))
+			{
+				bCollided = true;
+			}
 		}
-	}
 
 	return bCollided;
 }
+
 bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 {
 	const auto& oobbs1 = object1->GetOOBB();
@@ -512,6 +536,15 @@ bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 	}
 
 	return false;
+}
+
+void CScene::SetPlayer(CPlayer* p)
+{
+	m_pPlayer = p;
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[1]->GetObj();
+	CGameObject* pGameObj = (*pVector)[0].get();
+	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
+	pViewObj->setPlayer(p);
 }
 
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -705,11 +738,11 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, pCamera);
+	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, pCamera);
+	pd3dCommandList->OMSetStencilRef(1);
 
-
-	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, pCamera);
-	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera);
+	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, false ,pCamera);
+	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pDebugShader)
 	{

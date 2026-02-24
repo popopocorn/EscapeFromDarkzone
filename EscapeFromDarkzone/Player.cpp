@@ -245,7 +245,7 @@ void CPlayer::OnPrepareRender()
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	DWORD nCameraMode = (pCamera) ? pCamera->GetMode() : 0x00;
-	if (nCameraMode == THIRD_PERSON_CAMERA) CGameObject::Render(pd3dCommandList, pCamera);
+	if (nCameraMode == THIRD_PERSON_CAMERA) CGameObject::Render(pd3dCommandList, false, pCamera);
 }
 void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 {
@@ -276,7 +276,6 @@ void CPlayer::HandleCollision(XMFLOAT3 normal)
 	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
 
 	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-
 	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
 	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
 	float fPenetrationDepth = XMVectorGetX(vDot);
@@ -341,8 +340,9 @@ void CPlayer::UpdateDirection()
 
 	CollVector.clear();
 
-	wchar_t buffer[128];
-	//swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n", MoveDir.x, MoveDir.y, MoveDir.z);
+	//wchar_t buffer[128];
+	//swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
+	//	MoveDir.x, MoveDir.y, MoveDir.z);
 	//OutputDebugStringW(buffer);
 }
 
@@ -449,7 +449,7 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 		SetMaxVelocityXZ(300.0f);
 		SetMaxVelocityY(400.0f);
 		m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
-		m_pCamera->SetTimeLag(0.25f);
+		m_pCamera->SetTimeLag(0.0f);
 		m_pCamera->SetOffset(XMFLOAT3(0.0f, 15, -5.0f));
 		m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
 		m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);

@@ -95,6 +95,17 @@ VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)
 	return(output);
 }
 
+float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
+{
+
+    return float4(1, 1, 0, 0.3);
+}
+
+
+
+
+
+
 
 VS_TERRAIN_OUTPUT VSTerrain(VS_TERRAIN_INPUT input)
 {
