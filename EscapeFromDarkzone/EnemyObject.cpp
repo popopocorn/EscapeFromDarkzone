@@ -22,6 +22,8 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 	if (pEnemyModel) delete pEnemyModel;
 
+	SetOOBB(NULL);
+
 	ChangeState(std::make_unique<EnemyIdle>());
 }
 
@@ -41,75 +43,88 @@ void CEnemyObject::ChangeState(std::unique_ptr<EnemyState> pNewState)
 	m_pState->Enter(this);
 }
 
-//void CEnemyObject::Animate(float fTimeElapsed)
-//{
-//	CGameObject::Animate(fTimeElapsed);
-//
-//	if (!m_pPlayer) return;
-//
-//	XMFLOAT3 xmf3MyPos = GetPosition();
-//	XMFLOAT3 xmf3PlayerPos = m_pPlayer->GetPosition();
-//
-//	XMFLOAT3 xmf3Dir = Vector3::Subtract(xmf3PlayerPos, xmf3MyPos);
-//	xmf3Dir.y = 0.0f;
-//	float fDistance = Vector3::Length(xmf3Dir);
-//
-//	CAnimationController* pController = m_pSkinnedAnimationController;
-//
-//	if (fDistance <= m_fDetectionRange && fDistance > m_fAttackRange)
-//	{
-//		XMFLOAT3 xmf3Look = Vector3::Normalize(xmf3Dir);
-//
-//		float fAngleRad = atan2(xmf3Look.x, xmf3Look.z);
-//		float fAngleDeg = XMConvertToDegrees(fAngleRad);
-//		XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
-//
-//		m_xmf4x4ToParent = xmf4x4Rotate;
-//		m_xmf4x4ToParent._41 = xmf3MyPos.x;
-//		m_xmf4x4ToParent._42 = xmf3MyPos.y;
-//		m_xmf4x4ToParent._43 = xmf3MyPos.z;
-//
-//		XMFLOAT3 xmf3Shift = Vector3::ScalarProduct(xmf3Look, m_fMoveSpeed * fTimeElapsed, false);
-//		SetPosition(Vector3::Add(xmf3MyPos, xmf3Shift));
-//
-//		if (pController && !pController->m_pAnimationTracks[1].m_bEnable)
-//		{
-//			pController->SetTrackEnable(0, false);	// Idle 끄기
-//			pController->SetTrackEnable(1, true);  // Run 켜기
-//			pController->SetTrackPosition(1, 0.0f); // Run 처음부터 재생
-//		}
-//	}
-//	else
-//	{
-//		if (pController && !pController->m_pAnimationTracks[0].m_bEnable)
-//		{
-//			pController->SetTrackEnable(1, false); // Run 끄기
-//			pController->SetTrackEnable(0, true);  // Idle 켜기
-//			pController->SetTrackPosition(0, 0.0f);
-//		}
-//	}
-//}
-
 void CEnemyObject::Animate(float fTimeElapsed)
 {
 	CGameObject::Animate(fTimeElapsed);
+
+	Update(fTimeElapsed);
+}
+
+void CEnemyObject::Update(float fTimeElapsed)
+{
+	m_xmf3PrevPos = m_xmf3Position;
 
 	if (m_pState)
 	{
 		m_pState->Update(this, fTimeElapsed);
 	}
+
+	XMFLOAT3 direction = m_xmf3MoveDir;
+	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
+
+	XMFLOAT3 shift = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
+	m_xmf3Position = Vector3::Add(m_xmf3Position, shift);
+
+	m_xmf4x4ToParent._41 = m_xmf3Position.x;
+	m_xmf4x4ToParent._42 = m_xmf3Position.y;
+	m_xmf4x4ToParent._43 = m_xmf3Position.z;
+
+	UpdateTransform(NULL);
+}
+
+void CEnemyObject::HandleCollision(XMFLOAT3 normal)
+{
+	if (normal.y > 0.5f)
+	{
+		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
+		return;
+	}
+
+	XMVECTOR vNormal = XMLoadFloat3(&normal);
+	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
+	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
+	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
+
+	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
+	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
+	float fPenetrationDepth = XMVectorGetX(vDot);
+
+	if (fPenetrationDepth < 0.0f)
+	{
+		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
+
+		vCurrPos += vCorrection;
+		XMStoreFloat3(&m_xmf3Position, vCurrPos);
+
+		CGameObject::SetPosition(m_xmf3Position);
+		UpdateTransform(NULL);
+	}
+
+	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
+	float fVelDot = XMVectorGetX(vVelDot);
+
+	if (fVelDot < 0.0f)
+	{
+		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
+
+		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
+		{
+			vSlideVel = XMVectorZero();
+		}
+		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
+	}
 }
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 {
+	pEnemy->SetMoveDir(XMFLOAT3(0, 0, 0));
+
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
-	// IDLE 켜기, RUN 끄기
 	pController->SetTrackEnable(0, true);
 	pController->SetTrackPosition(0, 0.0f);
 	pController->SetTrackEnable(1, false);
-
 	return true;
 }
 
@@ -138,11 +153,9 @@ bool EnemyRun::Enter(CEnemyObject* pEnemy)
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
-	// RUN 켜기, IDLE 끄기
 	pController->SetTrackEnable(0, false);
 	pController->SetTrackEnable(1, true);
 	pController->SetTrackPosition(1, 0.0f);
-
 	return true;
 }
 
@@ -157,33 +170,24 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	xmf3Dir.y = 0.0f;
 	float fDistance = Vector3::Length(xmf3Dir);
 
-	if (fDistance > pEnemy->m_fDetectionRange)
+	if (fDistance > pEnemy->m_fDetectionRange || fDistance <= pEnemy->m_fAttackRange)
 	{
 		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
 		return;
 	}
 
-	if (fDistance > pEnemy->m_fAttackRange)
-	{
-		XMFLOAT3 xmf3Look = Vector3::Normalize(xmf3Dir);
+	XMFLOAT3 xmf3Look = Vector3::Normalize(xmf3Dir);
 
-		float fAngleRad = atan2(xmf3Look.x, xmf3Look.z);
-		float fAngleDeg = XMConvertToDegrees(fAngleRad);
+	float fAngleRad = atan2(xmf3Look.x, xmf3Look.z);
+	float fAngleDeg = XMConvertToDegrees(fAngleRad);
+	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
 
-		XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
-		pEnemy->m_xmf4x4ToParent = xmf4x4Rotate;
+	pEnemy->m_xmf4x4ToParent = xmf4x4Rotate;
+	pEnemy->m_xmf4x4ToParent._41 = xmf3MyPos.x;
+	pEnemy->m_xmf4x4ToParent._42 = xmf3MyPos.y;
+	pEnemy->m_xmf4x4ToParent._43 = xmf3MyPos.z;
 
-		pEnemy->m_xmf4x4ToParent._41 = xmf3MyPos.x;
-		pEnemy->m_xmf4x4ToParent._42 = xmf3MyPos.y;
-		pEnemy->m_xmf4x4ToParent._43 = xmf3MyPos.z;
-
-		XMFLOAT3 xmf3Shift = Vector3::ScalarProduct(xmf3Look, pEnemy->m_fMoveSpeed * fTimeElapsed, false);
-		pEnemy->SetPosition(Vector3::Add(xmf3MyPos, xmf3Shift));
-	}
-	else
-	{
-		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
-	}
+	pEnemy->SetMoveDir(xmf3Look);
 }
 
 void EnemyRun::Exit(CEnemyObject* pEnemy)

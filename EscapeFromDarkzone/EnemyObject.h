@@ -19,11 +19,17 @@ public:
 	virtual ~CEnemyObject();
 
 	virtual void Animate(float fTimeElapsed) override;
+	virtual void Update(float fTimeElapsed);
+	virtual void HandleCollision(XMFLOAT3 normal);
 
 	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
 	void SetTerrain(CHeightMapTerrain* pTerrain) { m_pTerrain = pTerrain; }
 
 	void ChangeState(std::unique_ptr<EnemyState> pNewState);
+
+	void SetMoveDir(const XMFLOAT3& dir) { m_xmf3MoveDir = dir; }
+	XMFLOAT3 GetMoveDir() const { return m_xmf3MoveDir; }
+
 
 	std::unique_ptr<EnemyState> m_pState;
 
@@ -35,6 +41,9 @@ public:
 	float				m_fDetectionRange = 10.0f;
 	float				m_fAttackRange = 3.0f;
 
+	XMFLOAT3 m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 10.0f);
+	XMFLOAT3 m_xmf3MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMFLOAT3 m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 };
 
 class EnemyState

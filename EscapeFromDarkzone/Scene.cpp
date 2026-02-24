@@ -103,7 +103,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	//적 오브젝트
 	
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
+	pEnemy->SetPosition(0.0f, 0.07125f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 
 	m_pEnemyCursor = pEnemy;
@@ -585,7 +585,6 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-
 	m_fElapsedTime = fTimeElapsed;
 
 	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Animate(fTimeElapsed);
@@ -606,7 +605,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	if (m_pEnemyCursor)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
-		m_pEnemyCursor->Animate(fTimeElapsed);
 	}
 
 	static float fAngle = 0.0f;
@@ -618,19 +616,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//충돌검사
 	if (m_pPlayer)
 	{
-		// 최대 3번 반복 (모서리 처리용)
 		int nMaxIterations = 3;
 		XMFLOAT3 originalPos = m_pPlayer->GetPosition();
 		for (int iter = 0; iter < nMaxIterations; iter++)
 		{
-			// [핵심] 이번 회차에 충돌이 단 하나라도 있었는가?
 			bool bCollisionFound = false;
 
 			for (int i = 0; i < m_ppShaders.size(); i++)
 			{
 				if (m_ppShaders[i])
 				{
-					// DoCollision이 true를 반환하면(충돌했으면) 플래그를 켭니다.
 					if (DoCollision(m_pPlayer, i))
 					{
 						bCollisionFound = true;
@@ -640,27 +635,60 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 			if (!bCollisionFound) break;
 
-			// [추가된 덜덜거림 방지 코드]
-			// 만약 충돌 처리를 했는데도 위치가 거의 안 변했다면(0.1mm 이하)?
-			// 이미 꽉 끼인 상태(모서리)이므로, 더 계산하면 덜덜거리기만 합니다. 강제 종료.
 			XMFLOAT3 currentPos = m_pPlayer->GetPosition();
 			float dx = currentPos.x - originalPos.x;
 			float dy = currentPos.y - originalPos.y;
 			float dz = currentPos.z - originalPos.z;
 
-			// 변화량이 너무 작으면 loop 탈출
 			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
 			{
 				break;
 			}
 
-			// 다음 비교를 위해 현재 위치 업데이트
 			originalPos = currentPos;
 		}
 	}
 	if (m_pPlayer)
 	{
 		m_pPlayer->UpdateTransform(NULL);
+	}
+
+	if (m_pEnemyCursor)
+	{
+		int nMaxIterations = 3;
+		XMFLOAT3 originalPos = m_pEnemyCursor->GetPosition();
+
+		for (int iter = 0; iter < nMaxIterations; iter++)
+		{
+			bool bCollisionFound = false;
+
+			for (int i = 0; i < m_ppShaders.size(); i++)
+			{
+				if (m_ppShaders[i])
+				{
+					if (DoCollision(m_pEnemyCursor, i))
+					{
+						bCollisionFound = true;
+					}
+				}
+			}
+
+			if (!bCollisionFound) break;
+
+			XMFLOAT3 currentPos = m_pEnemyCursor->GetPosition();
+			float dx = currentPos.x - originalPos.x;
+			float dy = currentPos.y - originalPos.y;
+			float dz = currentPos.z - originalPos.z;
+
+			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
+			{
+				break;
+			}
+
+			originalPos = currentPos;
+		}
+
+		m_pEnemyCursor->UpdateTransform(NULL);
 	}
 }
 
