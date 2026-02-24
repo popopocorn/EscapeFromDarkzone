@@ -184,6 +184,7 @@ public:
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void ReleaseObjects();
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
+	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 	virtual void ReleaseUploadBuffers();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch);

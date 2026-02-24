@@ -32,64 +32,25 @@ CScene::~CScene()
 
 void CScene::BuildDefaultLightsAndMaterials()
 {
-	m_nLights = 5;
-	m_pLights.resize(5);
-
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
-	m_pLights[0].m_bEnable = true;
-	m_pLights[0].m_nType = POINT_LIGHT;
-	m_pLights[0].m_fRange = 300.0f;
-	m_pLights[0].m_xmf4Ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	m_pLights[0].m_xmf4Diffuse = XMFLOAT4(0.4f, 0.3f, 0.8f, 1.0f);
-	m_pLights[0].m_xmf4Specular = XMFLOAT4(0.5f, 0.5f, 0.5f, 0.0f);
-	m_pLights[0].m_xmf3Position = XMFLOAT3(230.0f, 330.0f, 480.0f);
-	m_pLights[0].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.001f, 0.0001f);
-	m_pLights[1].m_bEnable = true;
-	m_pLights[1].m_nType = SPOT_LIGHT;
-	m_pLights[1].m_fRange = 500.0f;
-	m_pLights[1].m_xmf4Ambient = XMFLOAT4(0.1f, 0.1f, 0.1f, 1.0f);
-	m_pLights[1].m_xmf4Diffuse = XMFLOAT4(0.4f, 0.4f, 0.4f, 1.0f);
-	m_pLights[1].m_xmf4Specular = XMFLOAT4(0.3f, 0.3f, 0.3f, 0.0f);
-	m_pLights[1].m_xmf3Position = XMFLOAT3(-50.0f, 20.0f, -5.0f);
-	m_pLights[1].m_xmf3Direction = XMFLOAT3(0.0f, -1.0f, 1.0f);
-	m_pLights[1].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.01f, 0.0001f);
-	m_pLights[1].m_fFalloff = 8.0f;
-	m_pLights[1].m_fPhi = (float)cos(XMConvertToRadians(40.0f));
-	m_pLights[1].m_fTheta = (float)cos(XMConvertToRadians(20.0f));
-	m_pLights[2].m_bEnable = true;
-	m_pLights[2].m_nType = DIRECTIONAL_LIGHT;
-	m_pLights[2].m_xmf4Ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-	m_pLights[2].m_xmf4Diffuse = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
-	m_pLights[2].m_xmf4Specular = XMFLOAT4(0.4f, 0.4f, 0.4f, 0.0f);
-	m_pLights[2].m_xmf3Direction = XMFLOAT3(1.0f, -1.0f, 0.0f);
-	m_pLights[3].m_bEnable = true;
-	m_pLights[3].m_nType = SPOT_LIGHT;
-	m_pLights[3].m_fRange = 600.0f;
-	m_pLights[3].m_xmf4Ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
-	m_pLights[3].m_xmf4Diffuse = XMFLOAT4(0.3f, 0.7f, 0.0f, 1.0f);
-	m_pLights[3].m_xmf4Specular = XMFLOAT4(0.3f, 0.3f, 0.3f, 0.0f);
-	m_pLights[3].m_xmf3Position = XMFLOAT3(550.0f, 330.0f, 530.0f);
-	m_pLights[3].m_xmf3Direction = XMFLOAT3(0.0f, -1.0f, 1.0f);
-	m_pLights[3].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.01f, 0.0001f);
-	m_pLights[3].m_fFalloff = 8.0f;
-	m_pLights[3].m_fPhi = (float)cos(XMConvertToRadians(90.0f));
-	m_pLights[3].m_fTheta = (float)cos(XMConvertToRadians(30.0f));
-	m_pLights[4].m_bEnable = true;
-	m_pLights[4].m_nType = POINT_LIGHT;
-	m_pLights[4].m_fRange = 200.0f;
-	m_pLights[4].m_xmf4Ambient = XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f);
-	m_pLights[4].m_xmf4Diffuse = XMFLOAT4(0.8f, 0.3f, 0.3f, 1.0f);
-	m_pLights[4].m_xmf4Specular = XMFLOAT4(0.5f, 0.5f, 0.5f, 0.0f);
-	m_pLights[4].m_xmf3Position = XMFLOAT3(600.0f, 250.0f, 700.0f);
-	m_pLights[4].m_xmf3Attenuation = XMFLOAT3(1.0f, 0.001f, 0.0001f);
+	LIGHT directional;
+	directional.m_bEnable = true;
+	directional.m_nType = DIRECTIONAL_LIGHT;
+	directional.m_xmf4Ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
+	directional.m_xmf4Diffuse = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
+	directional.m_xmf4Specular = XMFLOAT4(0.4f, 0.4f, 0.4f, 0.0f);
+	directional.m_xmf3Direction = XMFLOAT3(1.0f, -1.0f, 0.0f);
+	m_pLights.push_back(directional);
+
+	m_nLights = m_pLights.size();
 }
 
 void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 6); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -161,10 +122,21 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+	pSkinnedShader->addObjects(std::move(std::unique_ptr<CGameObject>(pEnemy)));
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
+
+	
+	//if (m_pEnemyCursor) m_pDebugShader->AddObject(m_pEnemyCursor);
+	for (const auto& shader : m_ppShaders) {
+		auto* objs = shader->GetObj();
+		if (objs != nullptr && !objs->empty()) {
+			for (auto& obj : *objs) {
+				m_pDebugShader->AddObject(obj.get());
+			}
+		}
+	}
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
@@ -545,6 +517,7 @@ void CScene::SetPlayer(CPlayer* p)
 	CGameObject* pGameObj = (*pVector)[0].get();
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
+	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
 }
 
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -710,10 +683,6 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 
 	if (m_pDebugShader)
 	{
-		m_pDebugShader->ClearObjects();
-		if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
-		if (m_pEnemyCursor) m_pDebugShader->AddObject(m_pEnemyCursor);
-
 		m_pDebugShader->Render(pd3dCommandList, pCamera);
 	}
 }
