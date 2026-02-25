@@ -211,9 +211,9 @@ void CShader::OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nP
 	if (m_pd3dPipelineState) pd3dCommandList->SetPipelineState(m_pd3dPipelineState);
 }
 
-void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch)
+void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
 {
-	OnPrepareRender(pd3dCommandList);
+	OnPrepareRender(pd3dCommandList, nPipelineState);
 }
 
 
@@ -374,9 +374,9 @@ void CStandardObjectsShader::ReleaseUploadBuffers()
 	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
-void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch)
+void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
 {
-	CStandardShader::Render(pd3dCommandList, pCamera, batch);
+	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
@@ -384,7 +384,7 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, 
 		{
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->UpdateTransform(NULL);
-			m_ppObjects[j]->Render(pd3dCommandList, batch, pCamera);
+			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}
 }
@@ -477,9 +477,9 @@ D3D12_DEPTH_STENCIL_DESC CSkinnedAnimationObjectsShader::CreateDepthStencilState
 	return(d3dDepthStencilDesc);
 }
 
-void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch)
+void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
 {
-	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera, batch);
+	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
 	/*for (int j = 0; j < m_ppObjects.size(); j++)
 	{
@@ -506,7 +506,7 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 		}
 
 		// °´Ã¼ ±×¸®±â
-		pObject->Render(pd3dCommandList, batch, pCamera);
+		pObject->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 	}
 }
 
@@ -545,9 +545,9 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 	m_fElapsedTime = fTimeElapsed;
 }
 
-void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch)
+void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
-	CStandardShader::Render(pd3dCommandList, pCamera, batch);
+	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
@@ -555,7 +555,7 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 		{
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->UpdateTransform(NULL);
-			m_ppObjects[j]->Render(pd3dCommandList, batch, pCamera);
+			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}
 }
@@ -877,7 +877,7 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 	}
 }
 
-void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)
 {
 	if (m_DebugInstances.empty()) return;
 

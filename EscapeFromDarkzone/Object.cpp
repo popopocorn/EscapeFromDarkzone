@@ -859,7 +859,7 @@ void CGameObject::Animate(float fTimeElapsed)
 	if (m_pChild) m_pChild->Animate(fTimeElapsed);
 }
 
-void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera)
+void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int nPipelineState, CCamera *pCamera)
 {
 	if (m_pMesh)
 	{
@@ -871,7 +871,7 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch,
 			{
 				if (m_ppMaterials[i])
 				{
-					if (not batch && m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera, false);
+					if (not batch && m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 					m_ppMaterials[i]->UpdateShaderVariable(pd3dCommandList);
 				}
 
@@ -880,8 +880,8 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch,
 		}
 	}
 
-	if (m_pSibling) m_pSibling->Render(pd3dCommandList, batch, pCamera);
-	if (m_pChild) m_pChild->Render(pd3dCommandList, batch, pCamera);
+	if (m_pSibling) m_pSibling->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+	if (m_pChild) m_pChild->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
 void CGameObject::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
@@ -1507,12 +1507,12 @@ CSkyBox::~CSkyBox()
 {
 }
 
-void CSkyBox::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, CCamera *pCamera)
+void CSkyBox::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int nPipelineState, CCamera *pCamera)
 {
 	XMFLOAT3 xmf3CameraPos = pCamera->GetPosition();
 	SetPosition(xmf3CameraPos.x, xmf3CameraPos.y, xmf3CameraPos.z);
 
-	CGameObject::Render(pd3dCommandList, batch, pCamera);
+	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
