@@ -336,12 +336,15 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			mouseMove = !mouseMove;
 			if (mouseMove) {
 				::ClipCursor(NULL);
+				::ShowCursor(TRUE);
 			}
 			else {
 				RECT rect;
 				::GetWindowRect(m_hWnd, &rect);
-				::ClipCursor(&rect);	// 마우스 위치 제한
-			}
+				::ClipCursor(&rect);
+
+				::GetCursorPos(&m_ptOldCursorPos);
+			}	
 			break;
 		default:
 			break;
