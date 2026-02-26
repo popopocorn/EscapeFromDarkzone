@@ -9,7 +9,6 @@
 #include "Shader.h"
 #include "InputManager.h"
 
-
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorStartHandle;
@@ -149,6 +148,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pEnemy->SetPosition(0.0f, 0.07125f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	pEnemy->HasOOBB = true;
 
 	m_pEnemyCursor = pEnemy;
 
@@ -467,7 +467,7 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 	if (!otherobj) return false;
 
 
-	bool bCollided = false; \
+	bool bCollided = false;
 
 		for (const auto& other : *otherobj)
 		{
@@ -547,9 +547,29 @@ void CScene::SetPlayer(CPlayer* p)
 	pViewObj->setPlayer(p);
 }
 
-bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	return(false);
+	if (nMessageID == WM_LBUTTONDOWN)
+	{
+		int mouseX = LOWORD(lParam);
+		int mouseY = HIWORD(lParam);
+
+		XMVECTOR rayOrigin, rayDir;
+		CalculateRayFromMouse(mouseX, mouseY, m_pCamera, rayOrigin, rayDir);
+
+		if (m_pEnemyCursor && m_pEnemyCursor->HasOOBB)	//나중에 모든 적 순회로 변경
+		{
+			float fDist = 0.0f;
+			for (BoundingOrientedBox* pOOBB : m_pEnemyCursor->OOBBs)
+			{
+				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+				{
+					OutputDebugString(L"==== HIT ====\n");
+					break;
+				}
+			}
+		}
+	}
 }
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
@@ -616,6 +636,31 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 	return(false);
 }
 
+void CScene::CalculateRayFromMouse(int mouseX, int mouseY, CCamera* pCamera, XMVECTOR& outRayOrigin, XMVECTOR& outRayDir)
+{
+	if (!pCamera) return;
+
+	//정보 가져오기
+	D3D12_VIEWPORT viewport = pCamera->GetViewport();
+
+	XMFLOAT4X4 xmf4x4View = pCamera->GetViewMatrix();
+	XMFLOAT4X4 xmf4x4Proj = pCamera->GetProjectionMatrix();
+
+	XMMATRIX matView = XMLoadFloat4x4(&xmf4x4View);
+	XMMATRIX matProj = XMLoadFloat4x4(&xmf4x4Proj);
+	XMMATRIX matWorld = XMMatrixIdentity();
+
+	//좌표 설정
+	XMVECTOR vScreenNear = XMVectorSet((float)mouseX, (float)mouseY, 0.0f, 1.0f);
+	XMVECTOR vScreenFar = XMVectorSet((float)mouseX, (float)mouseY, 1.0f, 1.0f);
+
+	//좌표 계산
+	XMVECTOR vWorldNear = XMVector3Unproject(vScreenNear, viewport.TopLeftX, viewport.TopLeftY, viewport.Width, viewport.Height, viewport.MinDepth, viewport.MaxDepth, matProj, matView, matWorld);
+	XMVECTOR vWorldFar = XMVector3Unproject(vScreenFar, viewport.TopLeftX, viewport.TopLeftY, viewport.Width, viewport.Height, viewport.MinDepth, viewport.MaxDepth, matProj, matView, matWorld);
+
+	outRayOrigin = vWorldNear;
+	outRayDir = XMVector3Normalize(XMVectorSubtract(vWorldFar, vWorldNear));
+}
 void CScene::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;

@@ -291,6 +291,7 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+
 	if (m_pScene) m_pScene->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
@@ -333,6 +334,14 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 		case 'M':
 			mouseMove = !mouseMove;
+			if (mouseMove) {
+				::ClipCursor(NULL);
+			}
+			else {
+				RECT rect;
+				::GetWindowRect(m_hWnd, &rect);
+				::ClipCursor(&rect);	// 마우스 위치 제한
+			}
 			break;
 		default:
 			break;
@@ -418,8 +427,11 @@ void CGameFramework::BuildObjects()
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), NULL);
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
 	m_pPlayer = pPlayer;
-	m_pScene->SetPlayer(m_pPlayer); 
+	m_pScene->SetPlayer(m_pPlayer);
+
 	m_pCamera = m_pPlayer->GetCamera();
+
+	if (m_pScene) m_pScene->SetCamera(m_pCamera);
 
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
@@ -451,13 +463,20 @@ void CGameFramework::ProcessInput()
 		float cxDelta = 0.0f, cyDelta = 0.0f;
 		POINT ptCursorPos;
 		//if (GetCapture() == m_hWnd)
-		if(not mouseMove)
+		
+		if (!mouseMove)
 		{
-			SetCursor(NULL);
-			GetCursorPos(&ptCursorPos);
+			::GetCursorPos(&ptCursorPos);
+
 			cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
 			cyDelta = (float)(ptCursorPos.y - m_ptOldCursorPos.y) / 3.0f;
-			SetCursorPos(m_ptOldCursorPos.x, m_ptOldCursorPos.y);
+
+			if (cxDelta != 0.0f || cyDelta != 0.0f)
+			{
+				m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
+
+				m_ptOldCursorPos = ptCursorPos;
+			}
 		}
 
 		DWORD dwDirection = 0;

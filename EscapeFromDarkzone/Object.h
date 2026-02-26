@@ -361,6 +361,7 @@ private:
 protected:
 	BoundingOrientedBox				OOBBModel;
 	BoundingOrientedBox				OOBBWorld;
+public:
 	bool							HasOOBB = false;
 	std::vector<BoundingOrientedBox*> OOBBs;
 public:
