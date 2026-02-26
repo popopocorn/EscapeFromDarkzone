@@ -82,6 +82,8 @@ protected:
 	static D3D12_CPU_DESCRIPTOR_HANDLE	m_d3dSrvCPUDescriptorNextHandle;
 	static D3D12_GPU_DESCRIPTOR_HANDLE	m_d3dSrvGPUDescriptorNextHandle;
 
+	LightCameraManager ShadowCameraManager;
+
 public:
 	static void CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews);
 
@@ -100,10 +102,6 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-	
-	std::vector<CGameObject*>			m_ppGameObjects;
-	//objectshader로 관리할거라 필요 없을거 같음
-	//아마 사용한다면 shader와 이것 모두 shared_ptr?
 
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 

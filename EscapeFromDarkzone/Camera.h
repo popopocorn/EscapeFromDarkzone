@@ -44,6 +44,11 @@ protected:
 	ID3D12Resource					*m_pd3dcbCamera = NULL;
 	VS_CB_CAMERA_INFO				*m_pcbMappedCamera = NULL;
 
+	float							m_fNear;
+	float							m_fFar;
+	float							m_fAspect;
+	float							m_fFOVAngle;
+
 public:
 	CCamera();
 	CCamera(CCamera *pCamera);
@@ -71,7 +76,7 @@ public:
 	DWORD GetMode() { return(m_nMode); }
 
 	void SetPosition(XMFLOAT3 xmf3Position) { m_xmf3Position = xmf3Position; }
-	XMFLOAT3& GetPosition() { return(m_xmf3Position); }
+	const XMFLOAT3& GetPosition() const { return(m_xmf3Position); }
 
 	void SetLookAtPosition(XMFLOAT3 xmf3LookAtWorld) { m_xmf3LookAtWorld = xmf3LookAtWorld; }
 	XMFLOAT3& GetLookAtPosition() { return(m_xmf3LookAtWorld); }
@@ -91,8 +96,8 @@ public:
 	void SetTimeLag(float fTimeLag) { m_fTimeLag = fTimeLag; }
 	float GetTimeLag() { return(m_fTimeLag); }
 
-	XMFLOAT4X4 GetViewMatrix() { return(m_xmf4x4View); }
-	XMFLOAT4X4 GetProjectionMatrix() { return(m_xmf4x4Projection); }
+	const XMFLOAT4X4& GetViewMatrix() const { return(m_xmf4x4View); }
+	XMFLOAT4X4 GetProjectionMatrix() const { return(m_xmf4x4Projection); }
 	D3D12_VIEWPORT GetViewport() { return(m_d3dViewport); }
 	D3D12_RECT GetScissorRect() { return(m_d3dScissorRect); }
 
@@ -100,6 +105,11 @@ public:
 	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) { }
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed) { }
 	virtual void SetLookAt(XMFLOAT3& xmf3LookAt) { }
+
+	float GetNear()     const { return m_fNear; }
+	float GetFar()      const { return m_fFar; }
+	float GetAspect()   const { return m_fAspect; }
+	float GetFOVAngle() const { return m_fFOVAngle; }
 };
 
 class CSpaceShipCamera : public CCamera
@@ -130,3 +140,37 @@ public:
 	virtual void SetLookAt(const XMFLOAT3& vLookAt);
 };
 
+
+class LightCamera : public CCamera {
+private:
+	float lightNear;
+	float lightFar;
+
+	void ComputeFrustumCorners(const CCamera* pPlayerCamera, float fNear, float fFar, XMFLOAT3 outCorners[8]);
+	void BuildLightMatrices(const XMFLOAT3 corners[8], const XMFLOAT3& lightDir);
+
+public:
+	void SetRange(float n, float f) { lightNear = n; lightFar = f; }
+	float GetNear() { return lightNear; }
+	float GetFar() { return lightFar; }
+
+	void update(const CCamera* playerCamera, const XMFLOAT3& lightDir);
+};
+
+
+
+
+class LightCameraManager {
+public:
+	void SetPlayer(CCamera* p) { player = p; }
+	void SetDir(const XMFLOAT3& dir) { lightDir = dir; }
+	void Update();
+	std::array<LightCamera, CASCADE_COUNT>& GetCameras() { return cameras; }
+private:
+	std::array<LightCamera, CASCADE_COUNT> cameras;
+	CCamera* player;
+	XMFLOAT3 lightDir;
+	static void ComputeCascadeSplits(float fNear, float fFar, float outSplits[CASCADE_COUNT + 1]);
+
+	
+};

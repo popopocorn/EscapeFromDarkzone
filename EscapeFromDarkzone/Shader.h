@@ -20,7 +20,7 @@ public:
 
 private:
 	int									m_nReferences = 0;
-
+	bool								do_shadow = false;
 public:
 	void AddRef() { m_nReferences++; }
 	void Release() { if (--m_nReferences <= 0) delete this; }
@@ -37,6 +37,7 @@ public:
 	D3D12_SHADER_BYTECODE ReadCompiledShaderFromFile(const WCHAR *pszFileName, ID3DBlob **ppd3dShaderBlob=NULL);
 
 	virtual void CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
+	virtual void CreateShadowShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) { }
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList) { }
@@ -53,6 +54,7 @@ public:
 	virtual void AnimateObjects(float fTimeElapsed) { }
 	virtual void ReleaseObjects() { }
 	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return NULL; }
+	bool DoShadow() { return do_shadow; }
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -62,7 +64,7 @@ protected:
 
 	float								m_fElapsedTime = 0.0f;
 public: 
-	ID3D12PipelineState* m_pd3dPipelineState = NULL;
+	std::vector<ID3D12PipelineState*> m_pd3dPipelineState;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

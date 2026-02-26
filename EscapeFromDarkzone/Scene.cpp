@@ -50,7 +50,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -64,7 +64,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
+	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	FILE* pInFile = NULL;
 
 	::fopen_s(&pInFile, "Model/map_0222_dds.bin", "rb");
@@ -121,14 +121,14 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	pSkinnedShader->addObjects(std::move(std::unique_ptr<CGameObject>(pEnemy)));
+	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
 
 	
-	//if (m_pEnemyCursor) m_pDebugShader->AddObject(m_pEnemyCursor);
+	
 	for (const auto& shader : m_ppShaders) {
 		auto* objs = shader->GetObj();
 		if (objs != nullptr && !objs->empty()) {
@@ -145,9 +145,6 @@ void CScene::ReleaseObjects()
 {
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
-
-	m_ppGameObjects.clear();
-
 
 	m_ppShaders.clear();
 
@@ -374,9 +371,6 @@ void CScene::ReleaseUploadBuffers()
 	for (int i = 0; i < m_ppShaders.size(); i++) 
 		if (m_ppShaders[i])
 			m_ppShaders[i]->ReleaseUploadBuffers();
-	for (int i = 0; i < m_ppGameObjects.size(); i++) 
-		if (m_ppGameObjects[i]) 
-			m_ppGameObjects[i]->ReleaseUploadBuffers();
 }
 
 void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
@@ -439,7 +433,7 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 	if (!otherobj) return false;
 
 
-	bool bCollided = false; \
+	bool bCollided = false;
 
 		for (const auto& other : *otherobj)
 		{
@@ -518,6 +512,9 @@ void CScene::SetPlayer(CPlayer* p)
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
 	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
+
+	ShadowCameraManager.SetPlayer(p->GetCamera());
+	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
 }
 
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -593,8 +590,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 {
 
 	m_fElapsedTime = fTimeElapsed;
-
-	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Animate(fTimeElapsed);
 	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 
 	if (not m_pLights.empty())
@@ -603,24 +598,17 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 
 	}
-	if (m_pLights.size() > 1)
-	{
-		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
-		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
-	}
+	//if (m_pLights.size() > 1)
+	//{
+	//	m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	//}
 
 	if (m_pEnemyCursor)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
 		m_pEnemyCursor->Animate(fTimeElapsed);
 	}
-
-	static float fAngle = 0.0f;
-	fAngle += 1.50f;
-	//	XMFLOAT3 xmf3Position = XMFLOAT3(50.0f, 0.0f, 0.0f);
-	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, -fAngle, 0.0f);
-	XMFLOAT3 xmf3Position = Vector3::TransformCoord(XMFLOAT3(65.0f, 0.0f, 0.0f), xmf4x4Rotate);
-
 	//충돌검사
 	if (m_pPlayer)
 	{
@@ -674,15 +662,16 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-
-	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 	pd3dCommandList->OMSetStencilRef(1);
-
-	for (int i = 0; i < m_ppGameObjects.size(); i++) if (m_ppGameObjects[i]) m_ppGameObjects[i]->Render(pd3dCommandList, false, nPipelineState,pCamera);
-	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-
-	if (m_pDebugShader)
-	{
+	
+	if(nPipelineState == SHADOW){
+		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i] && m_ppShaders[i]->DoShadow()) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+	else {
+		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
+
+
 }

@@ -514,7 +514,6 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-//	InputManager::Instance().update();
 	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 
 	ProcessInput();
@@ -537,6 +536,12 @@ void CGameFramework::FrameAdvance()
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
+	//shadow rendering pass
+
+
+
+
+	//main rendering pass
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor/*Colors::Azure*/, 0, NULL);
 
@@ -566,6 +571,13 @@ void CGameFramework::FrameAdvance()
 
 	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, 0, m_pCamera);
 
+
+
+	//compute pipline
+	
+
+
+	//rendering end
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;

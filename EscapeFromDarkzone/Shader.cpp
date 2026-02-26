@@ -9,13 +9,17 @@
 
 CShader::CShader()
 {
+	m_pd3dPipelineState.resize(1);
 }
 
 CShader::~CShader()
 {
 	ReleaseShaderVariables();
 
-	if (m_pd3dPipelineState) m_pd3dPipelineState->Release();
+	for (auto ps : m_pd3dPipelineState) {
+		ps->Release();
+	}
+	m_pd3dPipelineState.clear();
 }
 
 D3D12_SHADER_BYTECODE CShader::CreateVertexShader()
@@ -198,7 +202,7 @@ void CShader::CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *
 	m_d3dPipelineStateDesc.SampleDesc.Count = 1;
 	m_d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
-	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void **)&m_pd3dPipelineState);
+	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void **)&m_pd3dPipelineState[0]);
 
 	if (m_pd3dVertexShaderBlob) m_pd3dVertexShaderBlob->Release();
 	if (m_pd3dPixelShaderBlob) m_pd3dPixelShaderBlob->Release();
@@ -206,9 +210,39 @@ void CShader::CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *
 	if (m_d3dPipelineStateDesc.InputLayout.pInputElementDescs) delete[] m_d3dPipelineStateDesc.InputLayout.pInputElementDescs;
 }
 
+void CShader::CreateShadowShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+{
+	m_pd3dPipelineState.push_back(nullptr);
+	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
+	m_d3dPipelineStateDesc.pRootSignature = pd3dGraphicsRootSignature;
+	m_d3dPipelineStateDesc.VS = CreateVertexShader();
+	m_d3dPipelineStateDesc.PS = {nullptr, 0};
+	m_d3dPipelineStateDesc.RasterizerState = CShader::CreateRasterizerState();
+	m_d3dPipelineStateDesc.BlendState = CShader::CreateBlendState();
+	m_d3dPipelineStateDesc.DepthStencilState = CShader::CreateDepthStencilState();
+	m_d3dPipelineStateDesc.InputLayout = CreateInputLayout();
+	m_d3dPipelineStateDesc.SampleMask = UINT_MAX;
+	m_d3dPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	m_d3dPipelineStateDesc.NumRenderTargets = 0;
+	m_d3dPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	m_d3dPipelineStateDesc.SampleDesc.Count = 1;
+	m_d3dPipelineStateDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dPipelineState[1]);
+	if (FAILED(hResult)) {
+		char buf[256];
+		sprintf_s(buf, "PSO 생성 실패: 0x%08X\n", hResult);
+		OutputDebugStringA(buf);
+	}
+	if (m_pd3dVertexShaderBlob) m_pd3dVertexShaderBlob->Release();
+
+	if (m_d3dPipelineStateDesc.InputLayout.pInputElementDescs) delete[] m_d3dPipelineStateDesc.InputLayout.pInputElementDescs;
+	do_shadow = true;
+}
+
 void CShader::OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState)
 {
-	if (m_pd3dPipelineState) pd3dCommandList->SetPipelineState(m_pd3dPipelineState);
+	if (m_pd3dPipelineState.size() - 1 >= nPipelineState) pd3dCommandList->SetPipelineState(m_pd3dPipelineState[nPipelineState]);
 }
 
 void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
@@ -829,7 +863,7 @@ void CBoundingBoxShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	m_d3dPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	m_d3dPipelineStateDesc.SampleDesc.Count = 1;
 
-	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dPipelineState);
+	HRESULT hResult = pd3dDevice->CreateGraphicsPipelineState(&m_d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dPipelineState[0]);
 	if (FAILED(hResult))
 	{
 		OutputDebugStringA("Failed to create Debug PSO!\n");
@@ -881,7 +915,7 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 {
 	if (m_DebugInstances.empty()) return;
 
-	pd3dCommandList->SetPipelineState(m_pd3dPipelineState);
+	pd3dCommandList->SetPipelineState(m_pd3dPipelineState[0]);
 
 	for (const auto& instance : m_DebugInstances)
 	{
