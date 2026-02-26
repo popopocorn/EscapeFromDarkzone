@@ -10,7 +10,7 @@ private:
     D3D12_RESOURCE_STATES                                       ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     std::array<D3D12_CPU_DESCRIPTOR_HANDLE, CASCADE_COUNT>      DsvHandles;
 public:
-    bool Create(ID3D12Device* pd3dDevice);
+    void Create(ID3D12Device* pd3dDevice);
     void CreateSRV(ID3D12Device* pd3dDevice,
         D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
         D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle);

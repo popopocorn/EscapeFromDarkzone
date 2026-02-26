@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ShadowMap.h"
 
-bool ShadowMap::Create(ID3D12Device* pd3dDevice)
+void ShadowMap::Create(ID3D12Device* pd3dDevice)
 {
 	//쉐도우맵 리소스 생성
 	D3D12_RESOURCE_DESC d3dResourceDesc;
@@ -60,6 +60,8 @@ bool ShadowMap::Create(ID3D12Device* pd3dDevice)
 	d3dShadowDsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
 	d3dShadowDsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 	d3dShadowDsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+	d3dShadowDsvDesc.Texture2DArray.MipSlice = 0;  // 추가
+	d3dShadowDsvDesc.Texture2DArray.ArraySize = 1;  // 추가 - 슬라이스 1개씩
 
 	UINT dsvIncrementSize = pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
@@ -97,18 +99,57 @@ void ShadowMap::CreateSRV(ID3D12Device* pd3dDevice,
 }
 void ShadowMap::Release()
 {
-
+	if (ShadowMapResource)
+	{
+		ShadowMapResource->Release();
+		ShadowMapResource = NULL;
+	}
+	if (DsvHeap)
+	{
+		DsvHeap->Release();
+		DsvHeap = NULL;
+	}
 }
 
 void ShadowMap::BindAsDepthTarget(ID3D12GraphicsCommandList* pd3dCommandList, int cascadeIndex)
 {
-
+	pd3dCommandList->OMSetRenderTargets(0, nullptr, FALSE, &DsvHandles[cascadeIndex]);
+	pd3dCommandList->ClearDepthStencilView(
+		DsvHandles[cascadeIndex],
+		D3D12_CLEAR_FLAG_DEPTH,
+		1.0f, 0, 0, nullptr);
 }
 
 void ShadowMap::TransitionToSRV(ID3D12GraphicsCommandList* pd3dCommandList)
 {
+	if (ResourceState == D3D12_RESOURCE_STATE_DEPTH_WRITE)
+	{
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Transition.pResource = ShadowMapResource;
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		barrier.Transition.Subresource =
+			D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+		pd3dCommandList->ResourceBarrier(1, &barrier);
+		ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	}
 }
 
 void ShadowMap::TransitionToDSV(ID3D12GraphicsCommandList* pd3dCommandList)
 {
+	if (ResourceState == D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	{
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Transition.pResource = ShadowMapResource;
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		barrier.Transition.Subresource =
+			D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+		pd3dCommandList->ResourceBarrier(1, &barrier);
+		ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	}
 }
