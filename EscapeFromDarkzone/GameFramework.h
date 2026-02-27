@@ -6,7 +6,7 @@
 #include "Timer.h"
 #include "Player.h"
 #include "Scene.h"
-
+#include "ShadowMap.h"
 
 class CGameFramework
 {
@@ -84,6 +84,8 @@ private:
 	CScene						*m_pScene = NULL;
 	CPlayer						*m_pPlayer = NULL;
 	CCamera						*m_pCamera = NULL;
+	std::unique_ptr<ShadowMap>	shadowmap;
+
 
 	POINT						m_ptOldCursorPos;
 

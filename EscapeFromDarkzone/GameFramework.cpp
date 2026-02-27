@@ -56,8 +56,13 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	CoInitialize(NULL);
 
+
+	shadowmap = std::make_unique<ShadowMap>();
+	shadowmap->Create(m_pd3dDevice);
+
 	BuildObjects();
 
+	m_pScene->CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
 	return(true);
 }
 
@@ -537,10 +542,18 @@ void CGameFramework::FrameAdvance()
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
 	//shadow rendering pass
-
-
-
-
+	shadowmap->TransitionToDSV(m_pd3dCommandList);
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
+		m_pScene->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
+		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
+	}
+	shadowmap->TransitionToSRV(m_pd3dCommandList);
+	m_pScene->GetLightCameraManager().UpdateShaderVariables(m_pd3dCommandList);
+	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
+	
+	
 	//main rendering pass
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor/*Colors::Azure*/, 0, NULL);
@@ -550,7 +563,7 @@ void CGameFramework::FrameAdvance()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	if (m_pScene) m_pScene->Render(m_pd3dCommandList, 0, m_pCamera);
+	if (m_pScene) m_pScene->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
@@ -569,7 +582,7 @@ void CGameFramework::FrameAdvance()
 		m_pPlayer->UpdateTransform(NULL);
 	}
 
-	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, 0, m_pCamera);
+	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 
 

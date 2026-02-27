@@ -1,7 +1,4 @@
 #pragma once
-
-
-#pragma once
 class ShadowMap{
 private:
     ID3D12Resource*                                             ShadowMapResource = NULL;
@@ -26,6 +23,6 @@ public:
     // 씬 힙에 SRV 등록 후 핸들 저장
     void SetSrvGpuHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { SrvGpuHandle = handle; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetSrvGpuHandle() const { return SrvGpuHandle; }
-
+    void SetTextureOnParameter(ID3D12GraphicsCommandList* pd3dCommandlist);
     ID3D12Resource* GetResource() const { return ShadowMapResource; }
 };

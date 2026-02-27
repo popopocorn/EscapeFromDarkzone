@@ -97,7 +97,7 @@ public:
 	float GetTimeLag() { return(m_fTimeLag); }
 
 	const XMFLOAT4X4& GetViewMatrix() const { return(m_xmf4x4View); }
-	XMFLOAT4X4 GetProjectionMatrix() const { return(m_xmf4x4Projection); }
+	const XMFLOAT4X4& GetProjectionMatrix() const { return(m_xmf4x4Projection); }
 	D3D12_VIEWPORT GetViewport() { return(m_d3dViewport); }
 	D3D12_RECT GetScissorRect() { return(m_d3dScissorRect); }
 
@@ -150,15 +150,21 @@ private:
 	void BuildLightMatrices(const XMFLOAT3 corners[8], const XMFLOAT3& lightDir);
 
 public:
+	LightCamera();
 	void SetRange(float n, float f) { lightNear = n; lightFar = f; }
-	float GetNear() { return lightNear; }
-	float GetFar() { return lightFar; }
+	float GetLightNear() { return lightNear; }
+	float GetLightFar() { return lightFar; }
 
 	void update(const CCamera* playerCamera, const XMFLOAT3& lightDir);
 };
 
 
-
+struct VS_CB_SHADOW_INFO
+{
+	XMFLOAT4X4 gmtxLightView[CASCADE_COUNT];
+	XMFLOAT4X4 gmtxLightProjection[CASCADE_COUNT];
+	XMFLOAT4   gfCascadeSplits;
+};
 
 class LightCameraManager {
 public:
@@ -166,7 +172,15 @@ public:
 	void SetDir(const XMFLOAT3& dir) { lightDir = dir; }
 	void Update();
 	std::array<LightCamera, CASCADE_COUNT>& GetCameras() { return cameras; }
+
+	void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
+	void ReleaseShaderVariables();
 private:
+
+	ID3D12Resource* m_pd3dcbShadowInfo = nullptr;
+	VS_CB_SHADOW_INFO* m_pcbMappedShadowInfo = nullptr;
+
 	std::array<LightCamera, CASCADE_COUNT> cameras;
 	CCamera* player;
 	XMFLOAT3 lightDir;

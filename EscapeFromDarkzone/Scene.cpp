@@ -8,7 +8,7 @@
 #include "EnemyObject.h"
 #include "Shader.h"
 #include "InputManager.h"
-
+#include"ShadowMap.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -138,6 +138,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		}
 	}
 
+	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
@@ -157,7 +159,7 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 {
 	ID3D12RootSignature *pd3dGraphicsRootSignature = NULL;
 
-	D3D12_DESCRIPTOR_RANGE pd3dDescriptorRanges[10];
+	D3D12_DESCRIPTOR_RANGE pd3dDescriptorRanges[11];
 
 	pd3dDescriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	pd3dDescriptorRanges[0].NumDescriptors = 1;
@@ -219,7 +221,14 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dDescriptorRanges[9].RegisterSpace = 0;
 	pd3dDescriptorRanges[9].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER pd3dRootParameters[15];
+	pd3dDescriptorRanges[10].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	pd3dDescriptorRanges[10].NumDescriptors = 1;
+	pd3dDescriptorRanges[10].BaseShaderRegister = 14; //t2: gtxtTerrainDetailTexture
+	pd3dDescriptorRanges[10].RegisterSpace = 0;
+	pd3dDescriptorRanges[10].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+
+	D3D12_ROOT_PARAMETER pd3dRootParameters[17];
 
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	pd3dRootParameters[0].Descriptor.ShaderRegister = 1; //Camera
@@ -297,7 +306,18 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dRootParameters[14].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[9]);
 	pd3dRootParameters[14].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_STATIC_SAMPLER_DESC pd3dSamplerDescs[2];
+	pd3dRootParameters[15].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	pd3dRootParameters[15].DescriptorTable.NumDescriptorRanges = 1;
+	pd3dRootParameters[15].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[10]);
+	pd3dRootParameters[15].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	pd3dRootParameters[16].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	pd3dRootParameters[16].Descriptor.ShaderRegister = 9; // b5
+	pd3dRootParameters[16].Descriptor.RegisterSpace = 0;
+	pd3dRootParameters[16].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+
+	D3D12_STATIC_SAMPLER_DESC pd3dSamplerDescs[3];
 
 	pd3dSamplerDescs[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	pd3dSamplerDescs[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -324,6 +344,20 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dSamplerDescs[1].ShaderRegister = 1;
 	pd3dSamplerDescs[1].RegisterSpace = 0;
 	pd3dSamplerDescs[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	pd3dSamplerDescs[2].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+	pd3dSamplerDescs[2].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	pd3dSamplerDescs[2].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	pd3dSamplerDescs[2].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	pd3dSamplerDescs[2].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE; // 경계 밖은 그림자 없음
+	pd3dSamplerDescs[2].MipLODBias = 0;
+	pd3dSamplerDescs[2].MaxAnisotropy = 1;
+	pd3dSamplerDescs[2].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 깊이 비교
+	pd3dSamplerDescs[2].MinLOD = 0;
+	pd3dSamplerDescs[2].MaxLOD = D3D12_FLOAT32_MAX;
+	pd3dSamplerDescs[2].ShaderRegister = 2; // s2
+	pd3dSamplerDescs[2].RegisterSpace = 0;
+	pd3dSamplerDescs[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 	D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
@@ -424,6 +458,17 @@ void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pText
 	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
 }
 
+void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+{
+	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
+	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
+
+	shadowmap->CreateSRV(pd3dDevice, m_d3dSrvCPUDescriptorNextHandle, m_d3dSrvGPUDescriptorNextHandle);
+
+	m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+}
+
 bool CScene::DoCollision(CGameObject* object, int shaderidx)
 {
 	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
@@ -515,6 +560,12 @@ void CScene::SetPlayer(CPlayer* p)
 
 	ShadowCameraManager.SetPlayer(p->GetCamera());
 	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
+	
+}
+
+CCamera* CScene::GetLightCamera(int idx)
+{
+	return &ShadowCameraManager.GetCameras()[idx];
 }
 
 bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -648,6 +699,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pPlayer->UpdateTransform(NULL);
 	}
+	ShadowCameraManager.Update();
 }
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -657,7 +709,6 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
 	pCamera->UpdateShaderVariables(pd3dCommandList);
-
 	UpdateShaderVariables(pd3dCommandList);
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
@@ -665,9 +716,14 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	pd3dCommandList->OMSetStencilRef(1);
 	
 	if(nPipelineState == SHADOW){
-		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i] && m_ppShaders[i]->DoShadow()) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+		for (int i = 0; i < m_ppShaders.size(); i++) 
+		{
+			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow()) 
+				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+		}
 	}
 	else {
+		
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);

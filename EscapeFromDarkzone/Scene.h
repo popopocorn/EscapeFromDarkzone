@@ -38,6 +38,8 @@ struct LIGHTS
 	int									m_nLights;
 };
 
+class ShadowMap;
+
 class CScene
 {
 public:
@@ -89,7 +91,7 @@ public:
 
 	static D3D12_GPU_DESCRIPTOR_HANDLE CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride);
 	static void CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex);
-
+	void CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex);
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUCbvDescriptorStartHandle() { return(m_d3dCbvCPUDescriptorStartHandle); }
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUCbvDescriptorStartHandle() { return(m_d3dCbvGPUDescriptorStartHandle); }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUSrvDescriptorStartHandle() { return(m_d3dSrvCPUDescriptorStartHandle); }
@@ -123,4 +125,8 @@ public:
 	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	void SetPlayer(CPlayer* p);
+
+	CCamera* GetLightCamera(int idx);
+
+	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 };

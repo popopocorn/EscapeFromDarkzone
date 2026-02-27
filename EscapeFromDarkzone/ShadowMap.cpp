@@ -74,10 +74,9 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 		DsvHandles[i] = handle;
 		handle.ptr += dsvIncrementSize; // 다음 슬롯으로 이동
 	}
-
-
 }
-// ShadowMap.cpp
+
+
 void ShadowMap::CreateSRV(ID3D12Device* pd3dDevice,
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
@@ -153,3 +152,10 @@ void ShadowMap::TransitionToDSV(ID3D12GraphicsCommandList* pd3dCommandList)
 		ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	}
 }
+
+void ShadowMap::SetTextureOnParameter(ID3D12GraphicsCommandList* pd3dCommandlist)
+{
+	pd3dCommandlist->SetGraphicsRootDescriptorTable(15, SrvGpuHandle);
+}
+
+ 

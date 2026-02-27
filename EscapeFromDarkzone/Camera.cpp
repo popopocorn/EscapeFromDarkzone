@@ -395,11 +395,26 @@ void LightCamera::BuildLightMatrices(
 	XMStoreFloat4x4(&m_xmf4x4Projection, ortho);
 }
 
+LightCamera::LightCamera()
+{
+	m_d3dViewport.TopLeftX = 0;
+	m_d3dViewport.TopLeftY = 0;
+	m_d3dViewport.Width = SHADOW_MAP_SIZE;
+	m_d3dViewport.Height = SHADOW_MAP_SIZE;
+	m_d3dViewport.MinDepth = 0.0f;
+	m_d3dViewport.MaxDepth = 1.0f;
+
+	m_d3dScissorRect.left = 0;
+	m_d3dScissorRect.top = 0;
+	m_d3dScissorRect.right = SHADOW_MAP_SIZE;
+	m_d3dScissorRect.bottom = SHADOW_MAP_SIZE;
+}
+
 void LightCameraManager::ComputeCascadeSplits(
 	float fNear, float fFar,
 	float outSplits[CASCADE_COUNT + 1])
 {
-	constexpr float lambda = 0.5f;
+	constexpr float lambda = 1.0f;
 
 	outSplits[0] = fNear;
 	outSplits[CASCADE_COUNT] = fFar;
@@ -426,5 +441,52 @@ void LightCameraManager::Update()
 	{
 		cameras[i].SetRange(splits[i], splits[i + 1]);
 		cameras[i].update(player, lightDir);
+	}
+}
+// LightCameraManager.cpp
+void LightCameraManager::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	UINT ncbElementBytes = ((sizeof(VS_CB_SHADOW_INFO) + 255) & ~255);
+	m_pd3dcbShadowInfo = ::CreateBufferResource(pd3dDevice, nullptr, NULL,
+		ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+
+	m_pd3dcbShadowInfo->Map(0, NULL, (void**)&m_pcbMappedShadowInfo);
+	for (auto& camera : cameras) {
+		camera.CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	}
+}
+
+void LightCameraManager::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	// 각 Cascade 행렬 복사
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		XMFLOAT4X4 view, proj;
+		XMStoreFloat4x4(&view, XMMatrixTranspose(XMLoadFloat4x4(&cameras[i].GetViewMatrix())));
+		XMStoreFloat4x4(&proj, XMMatrixTranspose(XMLoadFloat4x4(&cameras[i].GetProjectionMatrix())));
+		m_pcbMappedShadowInfo->gmtxLightView[i] = view;
+		m_pcbMappedShadowInfo->gmtxLightProjection[i] = proj;
+	}
+
+	// Cascade 분할 거리 복사
+	m_pcbMappedShadowInfo->gfCascadeSplits = XMFLOAT4(
+		cameras[0].GetLightFar(),
+		cameras[1].GetLightFar(),
+		cameras[2].GetLightFar(),
+		cameras[3].GetLightFar());
+
+	// 루트 파라미터 16번에 바인딩
+	D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = m_pd3dcbShadowInfo->GetGPUVirtualAddress();
+	pd3dCommandList->SetGraphicsRootConstantBufferView(16, gpuAddress);
+}
+
+void LightCameraManager::ReleaseShaderVariables()
+{
+	if (m_pd3dcbShadowInfo)
+	{
+		m_pd3dcbShadowInfo->Unmap(0, NULL);
+		m_pd3dcbShadowInfo->Release();
+		m_pd3dcbShadowInfo = nullptr;
 	}
 }
