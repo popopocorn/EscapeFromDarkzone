@@ -122,11 +122,15 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
+private:
+	CGameObject* m_pLaserObject = NULL;
 
+public:
 	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
+	void ResolveCollision(CGameObject* object);
+
 	void SetPlayer(CPlayer* p);
 
-	void CalculateRayFromMouse(int mouseX, int mouseY, CCamera* pCamera, XMVECTOR& outRayOrigin, XMVECTOR& outRayDir);
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 };
