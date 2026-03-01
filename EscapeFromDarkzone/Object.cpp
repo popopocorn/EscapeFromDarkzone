@@ -184,11 +184,13 @@ CMaterial::CMaterial(int nTextures)
 	m_ppstrTextureNames = new _TCHAR[m_nTextures][64];
 	for (int i = 0; i < m_nTextures; i++) m_ppTextures[i] = NULL;
 	for (int i = 0; i < m_nTextures; i++) m_ppstrTextureNames[i][0] = '\0';
+
+	m_pShader = nullptr;
 }
 
 CMaterial::~CMaterial()
 {
-	if (m_pShader) m_pShader->Release();
+	//if (m_pShader) m_pShader->Release();
 
 	if (m_nTextures > 0)
 	{
@@ -201,9 +203,9 @@ CMaterial::~CMaterial()
 
 void CMaterial::SetShader(CShader *pShader)
 {
-	if (m_pShader) m_pShader->Release();
+	//if (m_pShader) m_pShader->Release();
 	m_pShader = pShader;
-	if (m_pShader) m_pShader->AddRef();
+	//if (m_pShader) m_pShader->AddRef();
 }
 
 void CMaterial::SetTexture(CTexture *pTexture, UINT nTexture) 
@@ -472,23 +474,20 @@ void CAnimationTrack::HandleCallback()
 float CAnimationTrack::UpdatePosition(float fTrackPosition, float fElapsedTime, float fAnimationLength)
 {
 	float fTrackElapsedTime = fElapsedTime * m_fSpeed;
+
 	switch (m_nType)
 	{
 	case ANIMATION_TYPE_LOOP:
 	{
-		if (m_fPosition < 0.0f) m_fPosition = 0.0f;
-		else
+		m_fPosition = fTrackPosition + fTrackElapsedTime;
+
+		if (m_fPosition >= fAnimationLength)
 		{
-			m_fPosition = fTrackPosition + fTrackElapsedTime;
-			if (m_fPosition > fAnimationLength)
-			{
-				m_fPosition = -ANIMATION_CALLBACK_EPSILON;
-				return(fAnimationLength);
-			}
+			if (fAnimationLength > 0.0f)
+				m_fPosition = fmod(m_fPosition, fAnimationLength);
+			else
+				m_fPosition = 0.0f;
 		}
-		//			m_fPosition = fmod(fTrackPosition, m_pfKeyFrameTimes[m_nKeyFrames-1]); // m_fPosition = fTrackPosition - int(fTrackPosition / m_pfKeyFrameTimes[m_nKeyFrames-1]) * m_pfKeyFrameTimes[m_nKeyFrames-1];
-		//			m_fPosition = fmod(fTrackPosition, m_fLength); //if (m_fPosition < 0) m_fPosition += m_fLength;
-		//			m_fPosition = fTrackPosition - int(fTrackPosition / m_fLength) * m_fLength;
 		break;
 	}
 	case ANIMATION_TYPE_ONCE:
