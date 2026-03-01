@@ -98,7 +98,7 @@ VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)
 float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
 
-    return float4(0, 0, 0, 0.3);
+    return float4(1, 1, 0, 0.3);
 }
 
 
