@@ -126,6 +126,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
+
+	
 	
 	for (const auto& shader : m_ppShaders) {
 		auto* objs = shader->GetObj();

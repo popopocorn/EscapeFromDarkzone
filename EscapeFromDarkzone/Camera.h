@@ -44,9 +44,6 @@ protected:
 	ID3D12Resource					*m_pd3dcbCamera = NULL;
 	VS_CB_CAMERA_INFO				*m_pcbMappedCamera = NULL;
 
-	BoundingFrustum					cameraFrustum;
-	BoundingFrustum					cameraFrustumLocal;
-
 	float							m_fNear;
 	float							m_fFar;
 	float							m_fAspect;
@@ -66,11 +63,7 @@ public:
 	void RegenerateViewMatrix();
 
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
-	void GenerateProjectionMatrix(XMFLOAT4X4 mat) { 
-		m_xmf4x4Projection = mat; 
-		BoundingFrustum::CreateFromMatrix(cameraFrustumLocal, XMLoadFloat4x4(&m_xmf4x4Projection));
-		cameraFrustum = cameraFrustumLocal;
-	}
+	void GenerateProjectionMatrix(XMFLOAT4X4 mat) { m_xmf4x4Projection = mat; }
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ = 0.0f, float fMaxZ = 1.0f);
 	void SetScissorRect(LONG xLeft, LONG yTop, LONG xRight, LONG yBottom);
@@ -110,7 +103,6 @@ public:
 	const XMFLOAT4X4& GetProjectionMatrix() const { return(m_xmf4x4Projection); }
 	D3D12_VIEWPORT GetViewport() { return(m_d3dViewport); }
 	D3D12_RECT GetScissorRect() { return(m_d3dScissorRect); }
-	BoundingFrustum GetFrustum() { return cameraFrustum; }
 
 	virtual void Move(const XMFLOAT3& xmf3Shift) { m_xmf3Position.x += xmf3Shift.x; m_xmf3Position.y += xmf3Shift.y; m_xmf3Position.z += xmf3Shift.z; }
 	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) { }
