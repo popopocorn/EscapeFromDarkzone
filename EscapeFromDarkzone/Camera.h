@@ -44,6 +44,11 @@ protected:
 	ID3D12Resource					*m_pd3dcbCamera = NULL;
 	VS_CB_CAMERA_INFO				*m_pcbMappedCamera = NULL;
 
+	float							m_fNear;
+	float							m_fFar;
+	float							m_fAspect;
+	float							m_fFOVAngle;
+
 public:
 	CCamera();
 	CCamera(CCamera *pCamera);
@@ -58,9 +63,12 @@ public:
 	void RegenerateViewMatrix();
 
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
+	void GenerateProjectionMatrix(XMFLOAT4X4 mat) { m_xmf4x4Projection = mat; }
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ = 0.0f, float fMaxZ = 1.0f);
 	void SetScissorRect(LONG xLeft, LONG yTop, LONG xRight, LONG yBottom);
+	void SetViewport(D3D12_VIEWPORT view) { m_d3dViewport = view; }
+	void SetScissorRect(D3D12_RECT rect) { m_d3dScissorRect = rect; }
 
 	virtual void SetViewportsAndScissorRects(ID3D12GraphicsCommandList *pd3dCommandList);
 
@@ -71,7 +79,7 @@ public:
 	DWORD GetMode() { return(m_nMode); }
 
 	void SetPosition(XMFLOAT3 xmf3Position) { m_xmf3Position = xmf3Position; }
-	XMFLOAT3& GetPosition() { return(m_xmf3Position); }
+	const XMFLOAT3& GetPosition() const { return(m_xmf3Position); }
 
 	void SetLookAtPosition(XMFLOAT3 xmf3LookAtWorld) { m_xmf3LookAtWorld = xmf3LookAtWorld; }
 	XMFLOAT3& GetLookAtPosition() { return(m_xmf3LookAtWorld); }
@@ -91,8 +99,8 @@ public:
 	void SetTimeLag(float fTimeLag) { m_fTimeLag = fTimeLag; }
 	float GetTimeLag() { return(m_fTimeLag); }
 
-	XMFLOAT4X4 GetViewMatrix() { return(m_xmf4x4View); }
-	XMFLOAT4X4 GetProjectionMatrix() { return(m_xmf4x4Projection); }
+	const XMFLOAT4X4& GetViewMatrix() const { return(m_xmf4x4View); }
+	const XMFLOAT4X4& GetProjectionMatrix() const { return(m_xmf4x4Projection); }
 	D3D12_VIEWPORT GetViewport() { return(m_d3dViewport); }
 	D3D12_RECT GetScissorRect() { return(m_d3dScissorRect); }
 
@@ -100,6 +108,11 @@ public:
 	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) { }
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed) { }
 	virtual void SetLookAt(XMFLOAT3& xmf3LookAt) { }
+
+	float GetNear()     const { return m_fNear; }
+	float GetFar()      const { return m_fFar; }
+	float GetAspect()   const { return m_fAspect; }
+	float GetFOVAngle() const { return m_fFOVAngle; }
 };
 
 class CSpaceShipCamera : public CCamera
@@ -130,3 +143,51 @@ public:
 	virtual void SetLookAt(const XMFLOAT3& vLookAt);
 };
 
+
+class LightCamera : public CCamera {
+private:
+	float lightNear;
+	float lightFar;
+
+	void ComputeFrustumCorners(const CCamera* pPlayerCamera, float fNear, float fFar, XMFLOAT3 outCorners[8]);
+	void BuildLightMatrices(const XMFLOAT3 corners[8], const XMFLOAT3& lightDir);
+
+public:
+	LightCamera();
+	void SetRange(float n, float f) { lightNear = n; lightFar = f; }
+	float GetLightNear() { return lightNear; }
+	float GetLightFar() { return lightFar; }
+
+	void update(const CCamera* playerCamera, const XMFLOAT3& lightDir);
+};
+
+
+struct VS_CB_SHADOW_INFO
+{
+	XMFLOAT4X4 gmtxLightView[CASCADE_COUNT];
+	XMFLOAT4X4 gmtxLightProjection[CASCADE_COUNT];
+	XMFLOAT4   gfCascadeSplits;
+};
+
+class LightCameraManager {
+public:
+	void SetPlayer(CCamera* p) { player = p; }
+	void SetDir(const XMFLOAT3& dir) { lightDir = dir; }
+	void Update();
+	std::array<LightCamera, CASCADE_COUNT>& GetCameras() { return cameras; }
+
+	void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
+	void ReleaseShaderVariables();
+private:
+
+	ID3D12Resource* m_pd3dcbShadowInfo = nullptr;
+	VS_CB_SHADOW_INFO* m_pcbMappedShadowInfo = nullptr;
+
+	std::array<LightCamera, CASCADE_COUNT> cameras;
+	CCamera* player;
+	XMFLOAT3 lightDir;
+	static void ComputeCascadeSplits(float fNear, float fFar, float outSplits[CASCADE_COUNT + 1]);
+
+	
+};

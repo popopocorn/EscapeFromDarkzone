@@ -20,7 +20,7 @@ public:
 
 private:
 	int									m_nReferences = 0;
-
+	bool								do_shadow = false;
 public:
 	void AddRef() { m_nReferences++; }
 	void Release() { if (--m_nReferences <= 0) delete this; }
@@ -37,6 +37,7 @@ public:
 	D3D12_SHADER_BYTECODE ReadCompiledShaderFromFile(const WCHAR *pszFileName, ID3DBlob **ppd3dShaderBlob=NULL);
 
 	virtual void CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
+	virtual void CreateShadowShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) { }
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList) { }
@@ -44,8 +45,8 @@ public:
 
 	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList *pd3dCommandList, XMFLOAT4X4 *pxmf4x4World) { }
 
-	virtual void OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState=0);
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch);
+	virtual void OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
 
 	virtual void ReleaseUploadBuffers() { }
 
@@ -53,6 +54,7 @@ public:
 	virtual void AnimateObjects(float fTimeElapsed) { }
 	virtual void ReleaseObjects() { }
 	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return NULL; }
+	bool DoShadow() { return do_shadow; }
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -62,7 +64,7 @@ protected:
 
 	float								m_fElapsedTime = 0.0f;
 public: 
-	ID3D12PipelineState* m_pd3dPipelineState = NULL;
+	std::vector<ID3D12PipelineState*> m_pd3dPipelineState;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,7 +93,7 @@ public:
 
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
 
 	void AddObject(CGameObject* pGameObject);
 
@@ -151,7 +153,7 @@ public:
 
 	virtual void ReleaseUploadBuffers();
 
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
 	std::vector<std::unique_ptr<CGameObject>>* GetObj(){ return &m_ppObjects; }
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
@@ -184,9 +186,10 @@ public:
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void ReleaseObjects();
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
+	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 	virtual void ReleaseUploadBuffers();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch);
+	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
 
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
@@ -201,7 +204,7 @@ public:
 
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 	
 	
 	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }

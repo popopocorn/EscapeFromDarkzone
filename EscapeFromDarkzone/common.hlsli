@@ -171,5 +171,54 @@ struct VS_SKYBOX_CUBEMAP_OUTPUT
 TextureCube gtxtSkyCubeTexture : register(t13);
 SamplerState gssClamp : register(s1);
 
+Texture2DArray shadowMap : register(t14);
+SamplerComparisonState shadowSampler : register(s2);
+
+cbuffer cbShadowInfo : register(b9)
+{
+    matrix gmtxLightView[4];
+    matrix gmtxLightProjection[4];
+    float4 gfCascadeSplits; // x,y,z,w = cascade 0~3 far
+};
+
+int GetCascadeIndex(float depth)
+{
+    if (depth < gfCascadeSplits.x)
+        return 0;
+    if (depth < gfCascadeSplits.y)
+        return 1;
+    if (depth < gfCascadeSplits.z)
+        return 2;
+    return 3;
+}
+
+float CalcShadowFactor(float3 positionW, float viewDepth)
+{
+    int cascadeIndex = GetCascadeIndex(viewDepth);
+
+    // 조명 공간으로 변환
+    float4 posLight = mul(float4(positionW, 1.0f), gmtxLightView[cascadeIndex]);
+    posLight = mul(posLight, gmtxLightProjection[cascadeIndex]);
+
+    // NDC → UV
+    float2 shadowUV;
+    shadowUV.x = posLight.x / posLight.w * 0.5f + 0.5f;
+    shadowUV.y = -posLight.y / posLight.w * 0.5f + 0.5f;
+
+    float currentDepth = posLight.z / posLight.w;
+
+    // UV 범위 벗어나면 그림자 없음
+    if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
+        shadowUV.y < 0.0f || shadowUV.y > 1.0f)
+        return 1.0f;
+
+    // PCF 샘플링
+    float shadow = shadowMap.SampleCmpLevelZero(
+        shadowSampler,
+        float3(shadowUV, cascadeIndex),
+        currentDepth - 0.0015f); // bias
+
+    return shadow;
+}
 
 #endif // COMMON_HLSLI

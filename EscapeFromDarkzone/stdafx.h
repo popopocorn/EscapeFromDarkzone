@@ -37,7 +37,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-//#define _DEBUG
+#define _DEBUG
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -53,6 +53,11 @@ extern HINSTANCE						ghAppInstance;
 
 #define FRAME_BUFFER_WIDTH				1392
 #define FRAME_BUFFER_HEIGHT				738
+const int CASCADE_COUNT = 4;
+static const UINT SHADOW_MAP_SIZE = 2048;
+
+
+
 //#define _WITH_ANIMATION_SRT
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "d3d12.lib")
@@ -97,6 +102,7 @@ inline void Swap(float *pfS, float *pfT) { float fTemp = *pfS; *pfS = *pfT; *pfT
 #define ANIMATION_TYPE_PINGPONG			2
 
 #define ANIMATION_CALLBACK_EPSILON		0.00165f
+
 
 namespace Vector3
 {
@@ -411,4 +417,9 @@ enum class KEY_STATE
 	HOLD,
 	DOWN,
 	UP
+};
+
+enum RENDERINGPASS : int {
+	MAIN = 0,
+	SHADOW = 1,
 };

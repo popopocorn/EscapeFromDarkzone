@@ -56,8 +56,20 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	CoInitialize(NULL);
 
+
+	shadowmap = std::make_unique<ShadowMap>();
+	shadowmap->Create(m_pd3dDevice);
+
 	BuildObjects();
 
+	m_pScene->CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
+
+	observer = make_unique<CCamera>();
+	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
+	observer->GenerateViewMatrix(XMFLOAT3(0.0f, 100.0f, 0.0f), XMFLOAT3(0, -1, 0), XMFLOAT3(0, 0, 1));
+	observer->GenerateProjectionMatrix(m_pPlayer->GetCamera()->GetProjectionMatrix());
+	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
+	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 	return(true);
 }
 
@@ -321,18 +333,27 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
-		case VK_RETURN:
-			break;
-		case VK_F1:
-		case VK_F2:
-		case VK_F3:
-			//m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
-			break;
+		//case VK_RETURN:
+		//	break;
+		//case VK_F1:
+		//case VK_F2:
+		//case VK_F3:
+		//	m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
+		//	break;
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
 		case 'M':
 			mouseMove = !mouseMove;
+			break;
+		case'O':
+			observing = !observing;
+			if (observing) {
+				m_pCamera = observer.get();
+			}
+			else {
+				m_pCamera = m_pPlayer->GetCamera();
+			}
 			break;
 		default:
 			break;
@@ -514,7 +535,6 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-//	InputManager::Instance().update();
 	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 
 	ProcessInput();
@@ -537,6 +557,20 @@ void CGameFramework::FrameAdvance()
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
+	//shadow rendering pass
+	shadowmap->TransitionToDSV(m_pd3dCommandList);
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
+		m_pScene->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
+		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
+	}
+	shadowmap->TransitionToSRV(m_pd3dCommandList);
+	m_pScene->GetLightCameraManager().UpdateShaderVariables(m_pd3dCommandList);
+	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
+	
+	
+	//main rendering pass
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor/*Colors::Azure*/, 0, NULL);
 
@@ -545,7 +579,7 @@ void CGameFramework::FrameAdvance()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	if (m_pScene) m_pScene->Render(m_pd3dCommandList, m_pCamera);
+	if (m_pScene) m_pScene->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
@@ -564,8 +598,15 @@ void CGameFramework::FrameAdvance()
 		m_pPlayer->UpdateTransform(NULL);
 	}
 
-	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, m_pCamera);
+	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
+
+
+	//compute pipline
+	
+
+
+	//rendering end
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;

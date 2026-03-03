@@ -76,6 +76,10 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 	m_xmf4x4Projection = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(fFOVAngle), fAspectRatio, fNearPlaneDistance, fFarPlaneDistance);
 //	XMMATRIX xmmtxProjection = XMMatrixPerspectiveFovLH(XMConvertToRadians(fFOVAngle), fAspectRatio, fNearPlaneDistance, fFarPlaneDistance);
 //	XMStoreFloat4x4(&m_xmf4x4Projection, xmmtxProjection);
+	m_fNear = fNearPlaneDistance;
+	m_fFar = fFarPlaneDistance;
+	m_fAspect = fAspectRatio;
+	m_fFOVAngle = fFOVAngle;
 }
 
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
@@ -293,4 +297,196 @@ void CThirdPersonCamera::SetLookAt(const XMFLOAT3& xmf3LookAt)
 	m_xmf3Right = XMFLOAT3(mtxLookAt._11, mtxLookAt._21, mtxLookAt._31);
 	m_xmf3Up = XMFLOAT3(mtxLookAt._12, mtxLookAt._22, mtxLookAt._32);
 	m_xmf3Look = XMFLOAT3(mtxLookAt._13, mtxLookAt._23, mtxLookAt._33);
+}
+
+void LightCamera::update(const CCamera* playerCamera, const XMFLOAT3& lightDir)
+{
+	XMFLOAT3 corners[8];
+	ComputeFrustumCorners(playerCamera, lightNear, lightFar, corners);
+	BuildLightMatrices(corners, lightDir);
+}
+
+void LightCamera::ComputeFrustumCorners(
+	const CCamera* pPlayerCamera,
+	float fNear, float fFar,
+	XMFLOAT3 outCorners[8])
+{
+	float fFovY = XMConvertToRadians(pPlayerCamera->GetFOVAngle());
+	float fAspect = pPlayerCamera->GetAspect();
+
+	float tanHalfFovY = tanf(fFovY * 0.5f);
+	float tanHalfFovX = tanHalfFovY * fAspect;
+
+	XMMATRIX invView = XMMatrixInverse(
+		nullptr, XMLoadFloat4x4(&pPlayerCamera->GetViewMatrix()));
+
+	XMFLOAT3 camPos = pPlayerCamera->GetPosition();
+	XMVECTOR vRight = invView.r[0];
+	XMVECTOR vUp = invView.r[1];
+	XMVECTOR vForward = invView.r[2];
+
+	XMVECTOR nearCenter = XMLoadFloat3(&camPos) + vForward * fNear;
+	XMVECTOR farCenter = XMLoadFloat3(&camPos) + vForward * fFar;
+
+	XMVECTOR nearRight = vRight * (fNear * tanHalfFovX);
+	XMVECTOR nearUp = vUp * (fNear * tanHalfFovY);
+	XMVECTOR farRight = vRight * (fFar * tanHalfFovX);
+	XMVECTOR farUp = vUp * (fFar * tanHalfFovY);
+
+	XMStoreFloat3(&outCorners[0], nearCenter - nearRight - nearUp);
+	XMStoreFloat3(&outCorners[1], nearCenter + nearRight - nearUp);
+	XMStoreFloat3(&outCorners[2], nearCenter + nearRight + nearUp);
+	XMStoreFloat3(&outCorners[3], nearCenter - nearRight + nearUp);
+	XMStoreFloat3(&outCorners[4], farCenter - farRight - farUp);
+	XMStoreFloat3(&outCorners[5], farCenter + farRight - farUp);
+	XMStoreFloat3(&outCorners[6], farCenter + farRight + farUp);
+	XMStoreFloat3(&outCorners[7], farCenter - farRight + farUp);
+}
+
+void LightCamera::BuildLightMatrices(
+	const XMFLOAT3 corners[8],
+	const XMFLOAT3& lightDir)
+{
+	// 1. Frustum 중심 계산
+	XMVECTOR center = XMVectorZero();
+	for (int i = 0; i < 8; i++)
+		center += XMLoadFloat3(&corners[i]);
+	center /= 8.0f;
+
+	// 2. 조명 View 행렬 생성
+	XMVECTOR lightDirV = XMVector3Normalize(XMLoadFloat3(&lightDir));
+	XMVECTOR eye = center - lightDirV * 200.0f;
+
+	XMVECTOR up = fabsf(XMVectorGetY(lightDirV)) < 0.99f
+		? XMVectorSet(0, 1, 0, 0)
+		: XMVectorSet(1, 0, 0, 0);
+
+	XMFLOAT3 eyePos, centerPos, upVec;
+	XMStoreFloat3(&eyePos, eye);
+	XMStoreFloat3(&centerPos, center);
+	XMStoreFloat3(&upVec, up);
+
+	GenerateViewMatrix(eyePos, centerPos, upVec);
+
+	// 3. 코너 8점을 조명 View 공간으로 변환 → AABB
+	XMMATRIX lightView = XMLoadFloat4x4(&m_xmf4x4View);
+
+	float minX = FLT_MAX, maxX = -FLT_MAX;
+	float minY = FLT_MAX, maxY = -FLT_MAX;
+	float minZ = FLT_MAX, maxZ = -FLT_MAX;
+
+	for (int i = 0; i < 8; i++)
+	{
+		XMVECTOR v = XMVector3TransformCoord(XMLoadFloat3(&corners[i]), lightView);
+		XMFLOAT3 lv;
+		XMStoreFloat3(&lv, v);
+
+		minX = min(minX, lv.x); maxX = max(maxX, lv.x);
+		minY = min(minY, lv.y); maxY = max(maxY, lv.y);
+		minZ = min(minZ, lv.z); maxZ = max(maxZ, lv.z);
+	}
+
+	// 4. Z 앞쪽 확장 (Frustum 밖 그림자 캐스터 포함)
+	minZ -= 100.0f;
+
+	// 5. 직교 투영 행렬 생성
+	XMMATRIX ortho = XMMatrixOrthographicOffCenterLH(
+		minX, maxX, minY, maxY, minZ, maxZ);
+	XMStoreFloat4x4(&m_xmf4x4Projection, ortho);
+}
+
+LightCamera::LightCamera()
+{
+	m_d3dViewport.TopLeftX = 0;
+	m_d3dViewport.TopLeftY = 0;
+	m_d3dViewport.Width = SHADOW_MAP_SIZE;
+	m_d3dViewport.Height = SHADOW_MAP_SIZE;
+	m_d3dViewport.MinDepth = 0.0f;
+	m_d3dViewport.MaxDepth = 1.0f;
+
+	m_d3dScissorRect.left = 0;
+	m_d3dScissorRect.top = 0;
+	m_d3dScissorRect.right = SHADOW_MAP_SIZE;
+	m_d3dScissorRect.bottom = SHADOW_MAP_SIZE;
+}
+
+void LightCameraManager::ComputeCascadeSplits(
+	float fNear, float fFar,
+	float outSplits[CASCADE_COUNT + 1])
+{
+	constexpr float lambda = 1.0f;
+
+	outSplits[0] = fNear;
+	outSplits[CASCADE_COUNT] = fFar;
+
+	for (int i = 1; i < CASCADE_COUNT; i++)
+	{
+		float fUniform = fNear + (fFar - fNear) * (float)i / CASCADE_COUNT;
+		float fLog = fNear * powf(fFar / fNear, (float)i / CASCADE_COUNT);
+		outSplits[i] = lambda * fLog + (1.0f - lambda) * fUniform;
+	}
+}
+
+void LightCameraManager::Update()
+{
+	if (!player) return;
+
+	float fNear = player->GetNear();
+	float fFar = player->GetFar();
+
+	float splits[CASCADE_COUNT + 1];
+	ComputeCascadeSplits(fNear, fFar, splits);
+
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		cameras[i].SetRange(splits[i], splits[i + 1]);
+		cameras[i].update(player, lightDir);
+	}
+}
+// LightCameraManager.cpp
+void LightCameraManager::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	UINT ncbElementBytes = ((sizeof(VS_CB_SHADOW_INFO) + 255) & ~255);
+	m_pd3dcbShadowInfo = ::CreateBufferResource(pd3dDevice, nullptr, NULL,
+		ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+
+	m_pd3dcbShadowInfo->Map(0, NULL, (void**)&m_pcbMappedShadowInfo);
+	for (auto& camera : cameras) {
+		camera.CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	}
+}
+
+void LightCameraManager::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	// 각 Cascade 행렬 복사
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		XMFLOAT4X4 view, proj;
+		XMStoreFloat4x4(&view, XMMatrixTranspose(XMLoadFloat4x4(&cameras[i].GetViewMatrix())));
+		XMStoreFloat4x4(&proj, XMMatrixTranspose(XMLoadFloat4x4(&cameras[i].GetProjectionMatrix())));
+		m_pcbMappedShadowInfo->gmtxLightView[i] = view;
+		m_pcbMappedShadowInfo->gmtxLightProjection[i] = proj;
+	}
+
+	// Cascade 분할 거리 복사
+	m_pcbMappedShadowInfo->gfCascadeSplits = XMFLOAT4(
+		cameras[0].GetLightFar(),
+		cameras[1].GetLightFar(),
+		cameras[2].GetLightFar(),
+		cameras[3].GetLightFar());
+
+	// 루트 파라미터 16번에 바인딩
+	D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = m_pd3dcbShadowInfo->GetGPUVirtualAddress();
+	pd3dCommandList->SetGraphicsRootConstantBufferView(16, gpuAddress);
+}
+
+void LightCameraManager::ReleaseShaderVariables()
+{
+	if (m_pd3dcbShadowInfo)
+	{
+		m_pd3dcbShadowInfo->Unmap(0, NULL);
+		m_pd3dcbShadowInfo->Release();
+		m_pd3dcbShadowInfo = nullptr;
+	}
 }
