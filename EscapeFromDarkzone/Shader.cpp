@@ -416,9 +416,19 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, 
 	{
 		if (m_ppObjects[j])
 		{
-			m_ppObjects[j]->Animate(m_fElapsedTime);
-			m_ppObjects[j]->UpdateTransform(NULL);
-			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+			bool inCamera = false;
+			for (auto& obb : m_ppObjects[j]->GetOOBB()) {
+				if (pCamera->GetFrustum().Intersects(*obb)) {
+					inCamera = true;
+					break;
+				}
+			}
+			if(inCamera)
+			{
+				m_ppObjects[j]->Animate(m_fElapsedTime);
+				m_ppObjects[j]->UpdateTransform(NULL);
+				m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+			}
 		}
 	}
 }
