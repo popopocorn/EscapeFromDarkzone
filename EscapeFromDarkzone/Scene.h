@@ -46,7 +46,7 @@ public:
     CScene();
     ~CScene();
 
-	bool OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
@@ -71,7 +71,8 @@ public:
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
-
+	CCamera* m_pCamera = nullptr;	
+	
 	static ID3D12DescriptorHeap			*m_pd3dCbvSrvDescriptorHeap;
 
 	static D3D12_CPU_DESCRIPTOR_HANDLE	m_d3dCbvCPUDescriptorStartHandle;
@@ -121,12 +122,18 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
+private:
+	CGameObject* m_pLaserObject = NULL;
 
+public:
 	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
+	void ResolveCollision(CGameObject* object);
+
 	void SetPlayer(CPlayer* p);
 
 	CCamera* GetLightCamera(int idx);
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
+	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 };

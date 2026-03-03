@@ -259,3 +259,9 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
+class CLaserMesh : public CMesh
+{
+public:
+	CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual ~CLaserMesh() {}
+};

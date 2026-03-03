@@ -159,6 +159,14 @@ protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };
 
+class CLaserShader : public CStandardObjectsShader
+{
+public:
+	CLaserShader() {}
+	virtual ~CLaserShader() {}
+
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader() override;
+};
 //map, object
 
 

@@ -459,6 +459,10 @@ XMFLOAT3 RandomPositionInSphere(XMFLOAT3 xmf3Center, float fRadius, int nColumn,
 	return(xmf3Position);
 }
 
+D3D12_SHADER_BYTECODE CLaserShader::CreatePixelShader()
+{
+	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSLaser", "ps_5_1", &m_pd3dPixelShaderBlob));
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 CSkinnedAnimationObjectsShader::CSkinnedAnimationObjectsShader()
