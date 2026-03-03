@@ -81,11 +81,13 @@ private:
 
 	CGameTimer					m_GameTimer;
 
-	CScene						*m_pScene = NULL;
-	CPlayer						*m_pPlayer = NULL;
-	CCamera						*m_pCamera = NULL;
+	CScene						*m_pScene = NULL;	//소유용
+	CPlayer						*m_pPlayer = NULL;	//소유용
+	CCamera						*m_pCamera = NULL;	// 참조용
+	std::unique_ptr<CCamera>	observer;
 	std::unique_ptr<ShadowMap>	shadowmap;
 
+	bool						observing = false;
 
 	POINT						m_ptOldCursorPos;
 

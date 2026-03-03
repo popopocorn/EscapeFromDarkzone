@@ -63,6 +63,13 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	BuildObjects();
 
 	m_pScene->CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
+
+	observer = make_unique<CCamera>();
+	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
+	observer->GenerateViewMatrix(XMFLOAT3(0.0f, 100.0f, 0.0f), XMFLOAT3(0, -1, 0), XMFLOAT3(0, 0, 1));
+	observer->GenerateProjectionMatrix(m_pPlayer->GetCamera()->GetProjectionMatrix());
+	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
+	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 	return(true);
 }
 
@@ -326,18 +333,27 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
-		case VK_RETURN:
-			break;
-		case VK_F1:
-		case VK_F2:
-		case VK_F3:
-			//m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
-			break;
+		//case VK_RETURN:
+		//	break;
+		//case VK_F1:
+		//case VK_F2:
+		//case VK_F3:
+		//	m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
+		//	break;
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
 		case 'M':
 			mouseMove = !mouseMove;
+			break;
+		case'O':
+			observing = !observing;
+			if (observing) {
+				m_pCamera = observer.get();
+			}
+			else {
+				m_pCamera = m_pPlayer->GetCamera();
+			}
 			break;
 		default:
 			break;

@@ -63,9 +63,12 @@ public:
 	void RegenerateViewMatrix();
 
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
+	void GenerateProjectionMatrix(XMFLOAT4X4 mat) { m_xmf4x4Projection = mat; }
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ = 0.0f, float fMaxZ = 1.0f);
 	void SetScissorRect(LONG xLeft, LONG yTop, LONG xRight, LONG yBottom);
+	void SetViewport(D3D12_VIEWPORT view) { m_d3dViewport = view; }
+	void SetScissorRect(D3D12_RECT rect) { m_d3dScissorRect = rect; }
 
 	virtual void SetViewportsAndScissorRects(ID3D12GraphicsCommandList *pd3dCommandList);
 

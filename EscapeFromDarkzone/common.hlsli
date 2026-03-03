@@ -216,7 +216,7 @@ float CalcShadowFactor(float3 positionW, float viewDepth)
     float shadow = shadowMap.SampleCmpLevelZero(
         shadowSampler,
         float3(shadowUV, cascadeIndex),
-        currentDepth - 0.001f); // bias
+        currentDepth - 0.0015f); // bias
 
     return shadow;
 }
