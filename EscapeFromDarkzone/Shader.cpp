@@ -459,6 +459,21 @@ XMFLOAT3 RandomPositionInSphere(XMFLOAT3 xmf3Center, float fRadius, int nColumn,
 	return(xmf3Position);
 }
 
+void CLaserShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
+{
+	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
+
+	for (int j = 0; j < m_ppObjects.size(); j++)
+	{
+		if (m_ppObjects[j])
+		{
+			m_ppObjects[j]->Animate(m_fElapsedTime);
+			m_ppObjects[j]->UpdateTransform(NULL);
+			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+		}
+	}
+}
+
 D3D12_SHADER_BYTECODE CLaserShader::CreatePixelShader()
 {
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSLaser", "ps_5_1", &m_pd3dPixelShaderBlob));
