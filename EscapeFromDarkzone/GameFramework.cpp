@@ -480,8 +480,24 @@ void CGameFramework::ProcessInput()
 			cyDelta = (float)(ptCursorPos.y - m_ptOldCursorPos.y) / 3.0f;
 			SetCursorPos(m_ptOldCursorPos.x, m_ptOldCursorPos.y);
 		}
+		
 
 		DWORD dwDirection = 0;
+		if (pKeysBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
+		if (pKeysBuffer[VK_LEFT] & 0xF0)  dwDirection |= DIR_LEFT;
+		if (pKeysBuffer[VK_UP] & 0xF0)    dwDirection |= DIR_FORWARD;
+		if (pKeysBuffer[VK_DOWN] & 0xF0)  dwDirection |= DIR_BACKWARD;
+
+		if (dwDirection && observing)
+		{
+			XMFLOAT3 move = XMFLOAT3(0, 0, 0);
+			if (dwDirection & DIR_RIGHT)    move.x += 1.0f;
+			if (dwDirection & DIR_LEFT)     move.x -= 1.0f;
+			if (dwDirection & DIR_FORWARD)  move.z += 1.0f;
+			if (dwDirection & DIR_BACKWARD) move.z -= 1.0f;
+			observer->Move(move);
+			observer->RegenerateViewMatrix();
+		}
 
 		if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
 		{

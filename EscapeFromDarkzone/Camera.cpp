@@ -85,7 +85,7 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
 {
 	m_xmf3Position = xmf3Position;
-	m_xmf3LookAtWorld = xmf3LookAt;
+	m_xmf3Look =  m_xmf3LookAtWorld = xmf3LookAt;
 	m_xmf3Up = xmf3Up;
 
 	GenerateViewMatrix();
