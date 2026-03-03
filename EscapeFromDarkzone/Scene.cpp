@@ -110,8 +110,26 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	pEnemy->HasOOBB = true;
 
 	m_pEnemyCursor = pEnemy;
+
+	// 레이저 오브젝트
+	auto pLaserShader = std::make_unique<CLaserShader>();
+
+	pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pLaserShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	m_pLaserObject = new CGameObject();
+	m_pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
+	m_pLaserObject->SetShader(pLaserShader.get());
+
+	pLaserShader->addObjects(std::unique_ptr<CGameObject>(m_pLaserObject));
+
+	XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
+	m_pLaserObject->UpdateTransform(NULL);
+
+	m_ppShaders.push_back(std::move(pLaserShader));
 
 	//디버그 쉐이더
 	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -499,7 +517,6 @@ bool CScene::DoCollision(CGameObject* object, int shaderidx)
 
 	return bCollided;
 }
-
 bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 {
 	const auto& oobbs1 = object1->GetOOBB();
@@ -548,6 +565,36 @@ bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
 
 	return false;
 }
+void CScene::ResolveCollision(CGameObject* object)
+{
+	if (!object) return;
+
+	const int nMaxIterations = 3;
+	XMFLOAT3 originalPos = object->GetPosition();
+
+	for (int iter = 0; iter < nMaxIterations; ++iter)
+	{
+		bool collided = false;
+
+		for (size_t i = 0; i < m_ppShaders.size(); ++i)
+			if (m_ppShaders[i] && DoCollision(object, (int)i))
+				collided = true;
+
+		if (!collided) break;
+
+		XMFLOAT3 cur = object->GetPosition();
+		float dx = cur.x - originalPos.x;
+		float dy = cur.y - originalPos.y;
+		float dz = cur.z - originalPos.z;
+
+		if (sqrtf(dx * dx + dy * dy + dz * dz) < 0.0001f)
+			break;
+
+		originalPos = cur;
+	}
+
+	object->UpdateTransform(NULL);
+}
 
 void CScene::SetPlayer(CPlayer* p)
 {
@@ -568,10 +615,34 @@ CCamera* CScene::GetLightCamera(int idx)
 	return &ShadowCameraManager.GetCameras()[idx];
 }
 
-bool CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	return(false);
+	if (nMessageID == WM_LBUTTONDOWN)
+	{
+		if (!m_pPlayer || !m_pEnemyCursor) return;
+
+		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+		XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+
+		XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+		const auto& oobbs = m_pEnemyCursor->GetOOBB();
+
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			float fDist = 0.0f;
+
+			if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+			{
+				wchar_t szDebug[256];
+				swprintf_s(szDebug, L"==== [TARGET HIT] Distance: %f ====\n", fDist);
+				OutputDebugString(szDebug);
+				break;
+			}
+		}
+	}
 }
+
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_pPlayer) return false;
@@ -639,65 +710,82 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-
 	m_fElapsedTime = fTimeElapsed;
-	for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
+	for (int i = 0; i < m_ppShaders.size(); i++) 
+		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 
-	if (not m_pLights.empty())
-	{
-		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
-		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	/*for (int i = 0; i < m_ppGameObjects.size(); i++)
+		if (m_ppGameObjects[i]) m_ppGameObjects[i]->Animate(fTimeElapsed);*/
 
-	}
 	//if (m_pLights.size() > 1)
 	//{
 	//	m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	//}
+	if (m_pPlayer && m_pLights.size() > 1)
+	{
+		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	}
 
 	if (m_pEnemyCursor)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
-		m_pEnemyCursor->Animate(fTimeElapsed);
 	}
 	//충돌검사
 	if (m_pPlayer)
-	{
-		int nMaxIterations = 3;
-		XMFLOAT3 originalPos = m_pPlayer->GetPosition();
-		for (int iter = 0; iter < nMaxIterations; iter++)
-		{
-			bool bCollisionFound = false;
+	ResolveCollision(m_pPlayer);
+	ResolveCollision(m_pEnemyCursor);
 
-			for (int i = 0; i < m_ppShaders.size(); i++)
+	//레이저 충돌 처리
+	if (m_pPlayer && m_pLaserObject)
+	{
+		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+		XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
+		XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+		XMVECTOR vUp = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
+		XMVECTOR vRight = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
+		vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
+
+		XMVECTOR rayOrigin = vPos + vUp * 1.2f + vRight * 0.3f + vLook * 0.5f;
+
+		XMVECTOR rayDir = vLook;
+
+		float fLaserLength = 15.0f;
+
+		//레	이저와 적 충돌 처리(나중에 벽도 추가하기)
+		if (m_pEnemyCursor)
+		{
+			const auto& oobbs = m_pEnemyCursor->GetOOBB();
+
+			for (BoundingOrientedBox* pOOBB : oobbs)
 			{
-				if (m_ppShaders[i])
+				float fDist = 0.0f;
+
+				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 				{
-					if (DoCollision(m_pPlayer, i))
+					if (fDist > 0.01f && fDist < fLaserLength)
 					{
-						bCollisionFound = true;
+						fLaserLength = fDist;
 					}
 				}
 			}
-
-			if (!bCollisionFound) break;
-
-			XMFLOAT3 currentPos = m_pPlayer->GetPosition();
-			float dx = currentPos.x - originalPos.x;
-			float dy = currentPos.y - originalPos.y;
-			float dz = currentPos.z - originalPos.z;
-
-			if (sqrt(dx * dx + dy * dy + dz * dz) < 0.0001f)
-			{
-				break;
-			}
-
-			originalPos = currentPos;
 		}
-	}
-	if (m_pPlayer)
-	{
-		m_pPlayer->UpdateTransform(NULL);
+
+		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
+
+		XMMATRIX matRotation = XMMatrixIdentity();
+		matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
+		matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
+		matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
+		matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
+
+		XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
+
+		XMMATRIX matWorld = matScale * matRotation * matTranslation;
+
+		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
+		m_pLaserObject->UpdateTransform(NULL);
 	}
 	ShadowCameraManager.Update();
 }

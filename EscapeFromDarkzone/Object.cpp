@@ -184,11 +184,13 @@ CMaterial::CMaterial(int nTextures)
 	m_ppstrTextureNames = new _TCHAR[m_nTextures][64];
 	for (int i = 0; i < m_nTextures; i++) m_ppTextures[i] = NULL;
 	for (int i = 0; i < m_nTextures; i++) m_ppstrTextureNames[i][0] = '\0';
+
+	m_pShader = nullptr;
 }
 
 CMaterial::~CMaterial()
 {
-	if (m_pShader) m_pShader->Release();
+	//if (m_pShader) m_pShader->Release();
 
 	if (m_nTextures > 0)
 	{
@@ -201,9 +203,9 @@ CMaterial::~CMaterial()
 
 void CMaterial::SetShader(CShader *pShader)
 {
-	if (m_pShader) m_pShader->Release();
+	//if (m_pShader) m_pShader->Release();
 	m_pShader = pShader;
-	if (m_pShader) m_pShader->AddRef();
+	//if (m_pShader) m_pShader->AddRef();
 }
 
 void CMaterial::SetTexture(CTexture *pTexture, UINT nTexture) 
@@ -472,23 +474,20 @@ void CAnimationTrack::HandleCallback()
 float CAnimationTrack::UpdatePosition(float fTrackPosition, float fElapsedTime, float fAnimationLength)
 {
 	float fTrackElapsedTime = fElapsedTime * m_fSpeed;
+
 	switch (m_nType)
 	{
 	case ANIMATION_TYPE_LOOP:
 	{
-		if (m_fPosition < 0.0f) m_fPosition = 0.0f;
-		else
+		m_fPosition = fTrackPosition + fTrackElapsedTime;
+
+		if (m_fPosition >= fAnimationLength)
 		{
-			m_fPosition = fTrackPosition + fTrackElapsedTime;
-			if (m_fPosition > fAnimationLength)
-			{
-				m_fPosition = -ANIMATION_CALLBACK_EPSILON;
-				return(fAnimationLength);
-			}
+			if (fAnimationLength > 0.0f)
+				m_fPosition = fmod(m_fPosition, fAnimationLength);
+			else
+				m_fPosition = 0.0f;
 		}
-		//			m_fPosition = fmod(fTrackPosition, m_pfKeyFrameTimes[m_nKeyFrames-1]); // m_fPosition = fTrackPosition - int(fTrackPosition / m_pfKeyFrameTimes[m_nKeyFrames-1]) * m_pfKeyFrameTimes[m_nKeyFrames-1];
-		//			m_fPosition = fmod(fTrackPosition, m_fLength); //if (m_fPosition < 0) m_fPosition += m_fLength;
-		//			m_fPosition = fTrackPosition - int(fTrackPosition / m_fLength) * m_fLength;
 		break;
 	}
 	case ANIMATION_TYPE_ONCE:
@@ -637,10 +636,6 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 				m_pAnimationTracks[m_nNextTrack].SetWeight(fRatio);
 			}
 		}
-		// -----------------------------------------------------------------------
-
-		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
-			m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent = Matrix4x4::Zero();
 
 		for (int k = 0; k < m_nAnimationTracks; k++)
 		{
@@ -651,31 +646,62 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 
 				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
 
-				float fPosition = m_pAnimationTracks[k].UpdatePosition(m_pAnimationTracks[k].m_fPosition, fTimeElapsed, pAnimationSet->m_fLength);
-
-				for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
-				{
-					XMFLOAT4X4 xmf4x4Transform = m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent;
-					XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, fPosition);
-
-					xmf4x4Transform = Matrix4x4::Add(xmf4x4Transform, Matrix4x4::Scale(xmf4x4TrackTransform, m_pAnimationTracks[k].m_fWeight));
-
-					m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent = xmf4x4Transform;
-				}
+				m_pAnimationTracks[k].m_fPosition = m_pAnimationTracks[k].UpdatePosition(m_pAnimationTracks[k].m_fPosition, fTimeElapsed, pAnimationSet->m_fLength);
 				m_pAnimationTracks[k].HandleCallback();
 			}
 		}
 
 		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 		{
-			XMFLOAT4X4& mtx = m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent;
+			XMVECTOR vFinalScale = XMVectorZero();
+			XMVECTOR vFinalRot = XMVectorSet(0, 0, 0, 1); // 항등 쿼터니언
+			XMVECTOR vFinalTrans = XMVectorZero();
+			bool bFirstTrack = true;
 
-			float fScale = mtx._11 * mtx._11 + mtx._22 * mtx._22 + mtx._33 * mtx._33;
-			if (fScale < 0.0001f)
+			for (int k = 0; k < m_nAnimationTracks; k++)
 			{
-				mtx = Matrix4x4::Identity();
+				if (m_pAnimationTracks[k].m_bEnable)
+				{
+					int nSetIndex = m_pAnimationTracks[k].m_nAnimationSet;
+					if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size()) continue;
+
+					CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
+
+					XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[k].m_fPosition);
+					XMMATRIX matTrack = XMLoadFloat4x4(&xmf4x4TrackTransform);
+
+					XMVECTOR S, R, T;
+					XMMatrixDecompose(&S, &R, &T, matTrack);
+
+					float fWeight = m_pAnimationTracks[k].m_fWeight;
+
+					if (bFirstTrack)
+					{
+						vFinalScale = S;
+						vFinalRot = R;
+						vFinalTrans = T;
+						bFirstTrack = false;
+					}
+					else
+					{
+						vFinalScale = XMVectorLerp(vFinalScale, S, fWeight);
+						vFinalRot = XMQuaternionSlerp(vFinalRot, R, fWeight);
+						vFinalTrans = XMVectorLerp(vFinalTrans, T, fWeight);
+					}
+				}
+			}
+
+			if (!bFirstTrack)
+			{
+				XMMATRIX matFinal = XMMatrixAffineTransformation(vFinalScale, XMVectorZero(), vFinalRot, vFinalTrans);
+				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, matFinal);
+			}
+			else
+			{
+				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
 			}
 		}
+
 
 		pRootGameObject->UpdateTransform(NULL);
 

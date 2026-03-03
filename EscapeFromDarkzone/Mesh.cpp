@@ -763,3 +763,35 @@ void CSkinnedMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void 
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 7, pVertexBufferViews);
 }
 
+CLaserMesh::CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nVertices = 8;
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
+	m_pxmf3Positions[0] = XMFLOAT3(-0.5f, +0.5f, 0.0f); m_pxmf3Positions[1] = XMFLOAT3(+0.5f, +0.5f, 0.0f);
+	m_pxmf3Positions[2] = XMFLOAT3(+0.5f, +0.5f, 1.0f); m_pxmf3Positions[3] = XMFLOAT3(-0.5f, +0.5f, 1.0f);
+	m_pxmf3Positions[4] = XMFLOAT3(-0.5f, -0.5f, 0.0f); m_pxmf3Positions[5] = XMFLOAT3(+0.5f, -0.5f, 0.0f);
+	m_pxmf3Positions[6] = XMFLOAT3(+0.5f, -0.5f, 1.0f); m_pxmf3Positions[7] = XMFLOAT3(-0.5f, -0.5f, 1.0f);
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf3Positions, sizeof(XMFLOAT3) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1];
+	m_pnSubSetIndices[0] = 36;
+
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[36]{ 3,1,0, 2,1,3, 0,5,4, 1,5,0, 3,4,7, 0,4,3, 1,6,5, 2,6,1, 2,7,6, 3,7,2, 6,4,5, 7,4,6 };
+
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_ppd3dSubSetIndexUploadBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_ppnSubSetIndices[0], sizeof(UINT) * 36, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_ppd3dSubSetIndexUploadBuffers[0]);
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 36;
+}
