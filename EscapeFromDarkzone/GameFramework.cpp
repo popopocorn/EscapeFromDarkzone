@@ -491,16 +491,16 @@ void CGameFramework::ProcessInput()
 		if (!mouseMove)
 		{
 			::GetCursorPos(&ptCursorPos);
-
+			::SetCursorPos(m_ptOldCursorPos.x, m_ptOldCursorPos.y);
 			cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
 			cyDelta = (float)(ptCursorPos.y - m_ptOldCursorPos.y) / 3.0f;
 
-			if (cxDelta != 0.0f || cyDelta != 0.0f)
+			/*if (cxDelta != 0.0f || cyDelta != 0.0f)
 			{
 				m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 
 				m_ptOldCursorPos = ptCursorPos;
-			}
+			}*/
 		}
 		
 

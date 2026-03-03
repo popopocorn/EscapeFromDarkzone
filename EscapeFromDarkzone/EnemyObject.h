@@ -37,7 +37,7 @@ public:
 	CHeightMapTerrain* m_pTerrain = nullptr;
 
 public:
-	float				m_fMoveSpeed = 2.0f;
+	float				m_fMoveSpeed = 7.0f;
 	float				m_fDetectionRange = 10.0f;
 	float				m_fAttackRange = 3.0f;
 
