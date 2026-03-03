@@ -420,7 +420,7 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, 
 			for (auto& oob : m_ppObjects[j]->GetOOBB())
 			{
 				if (pCamera->GetFrustum().Intersects(*oob))
-					//inCamera = true;
+					inCamera = true;
 					;
 			}
 			if(inCamera)
