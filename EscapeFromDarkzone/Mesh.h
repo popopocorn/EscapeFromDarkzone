@@ -259,9 +259,31 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
 class CLaserMesh : public CMesh
 {
 public:
 	CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual ~CLaserMesh() {}
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+class CParticleMesh : public CMesh
+{
+public:
+	CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth = 10.0f, float fHeight = 10.0f);
+	virtual ~CParticleMesh();
+
+protected:
+	XMFLOAT2* m_pxmf2Sizes = NULL;
+
+	ID3D12Resource* m_pd3dSizeBuffer = NULL;
+	ID3D12Resource* m_pd3dSizeUploadBuffer = NULL;
+	D3D12_VERTEX_BUFFER_VIEW        m_d3dSizeBufferView;
+
+public:
+	virtual void ReleaseUploadBuffers() override;
+	virtual void OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext) override;
 };

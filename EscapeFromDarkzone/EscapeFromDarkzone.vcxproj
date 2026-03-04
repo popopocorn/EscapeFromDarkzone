@@ -139,6 +139,8 @@
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DDSTextureLoader12.h" />
     <ClInclude Include="DebugObject.h" />
+    <ClInclude Include="Effect.h" />
+    <ClInclude Include="EffectShader.h" />
     <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
     <ClInclude Include="GameFramework.h" />
@@ -159,6 +161,8 @@
     <ClCompile Include="Collision.cpp" />
     <ClCompile Include="DDSTextureLoader12.cpp" />
     <ClCompile Include="DebugObject.cpp" />
+    <ClCompile Include="Effect.cpp" />
+    <ClCompile Include="EffectShader.cpp" />
     <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
     <ClCompile Include="GameFramework.cpp" />
@@ -207,6 +211,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </None>
+    <None Include="EffectShader.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
