@@ -467,40 +467,12 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 
 void CTerrainPlayer::OnPlayerUpdateCallback(float fTimeElapsed)
 {
-	CHeightMapTerrain* pTerrain = (CHeightMapTerrain*)m_pPlayerUpdatedContext;
-	XMFLOAT3 xmf3Scale = pTerrain->GetScale();
-	XMFLOAT3 xmf3PlayerPosition = GetPosition();
-	int z = (int)(xmf3PlayerPosition.z / xmf3Scale.z);
-	bool bReverseQuad = ((z % 2) != 0);
-	float fHeight = pTerrain->GetHeight(xmf3PlayerPosition.x, xmf3PlayerPosition.z, bReverseQuad) + 0.0f;
-	if (xmf3PlayerPosition.y < fHeight)
-	{
-		XMFLOAT3 xmf3PlayerVelocity = GetVelocity();
-		xmf3PlayerVelocity.y = 0.0f;
-		SetVelocity(xmf3PlayerVelocity);
-		xmf3PlayerPosition.y = fHeight;
-		SetPosition(xmf3PlayerPosition);
-	}
+
 }
 
 void CTerrainPlayer::OnCameraUpdateCallback(float fTimeElapsed)
 {
-	CHeightMapTerrain* pTerrain = (CHeightMapTerrain*)m_pCameraUpdatedContext;
-	XMFLOAT3 xmf3Scale = pTerrain->GetScale();
-	XMFLOAT3 xmf3CameraPosition = m_pCamera->GetPosition();
-	int z = (int)(xmf3CameraPosition.z / xmf3Scale.z);
-	bool bReverseQuad = ((z % 2) != 0);
-	float fHeight = pTerrain->GetHeight(xmf3CameraPosition.x, xmf3CameraPosition.z, bReverseQuad) + 5.0f;
-	if (xmf3CameraPosition.y <= fHeight)
-	{
-		xmf3CameraPosition.y = fHeight;
-		m_pCamera->SetPosition(xmf3CameraPosition);
-		if (m_pCamera->GetMode() == THIRD_PERSON_CAMERA)
-		{
-			CThirdPersonCamera* p3rdPersonCamera = (CThirdPersonCamera*)m_pCamera;
-			p3rdPersonCamera->SetLookAt(GetPosition());
-		}
-	}
+	
 }
 
 void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVelocity)

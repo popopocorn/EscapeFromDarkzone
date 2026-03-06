@@ -397,13 +397,13 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dSamplerDescs[2].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	pd3dSamplerDescs[2].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	pd3dSamplerDescs[2].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	pd3dSamplerDescs[2].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE; // 경계 밖은 그림자 없음
+	pd3dSamplerDescs[2].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE; 
 	pd3dSamplerDescs[2].MipLODBias = 0;
 	pd3dSamplerDescs[2].MaxAnisotropy = 1;
-	pd3dSamplerDescs[2].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // 깊이 비교
+	pd3dSamplerDescs[2].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; 
 	pd3dSamplerDescs[2].MinLOD = 0;
 	pd3dSamplerDescs[2].MaxLOD = D3D12_FLOAT32_MAX;
-	pd3dSamplerDescs[2].ShaderRegister = 2; // s2
+	pd3dSamplerDescs[2].ShaderRegister = 2; 
 	pd3dSamplerDescs[2].RegisterSpace = 0;
 	pd3dSamplerDescs[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
