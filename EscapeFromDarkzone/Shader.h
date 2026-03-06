@@ -164,7 +164,7 @@ class CLaserShader : public CStandardObjectsShader
 public:
 	CLaserShader() {}
 	virtual ~CLaserShader() {}
-
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader() override;
 };
 //map, object
