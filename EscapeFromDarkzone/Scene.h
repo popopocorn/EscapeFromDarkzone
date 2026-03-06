@@ -7,6 +7,7 @@
 #include "Shader.h"
 #include "Player.h"
 #include "EnemyObject.h"
+#include "Effect.h"
 
 #define MAX_LIGHTS						16 
 
@@ -124,6 +125,7 @@ public:
 
 private:
 	CGameObject* m_pLaserObject = NULL;
+	CEffect* m_pTestBombEffect = NULL;
 
 public:
 	bool DoCollision(CGameObject* object, int shaderidx);

@@ -40,17 +40,32 @@ D3D12_SHADER_BYTECODE CShader::CreatePixelShader()
 	return(d3dShaderByteCode);
 }
 
-D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR *pszFileName, LPCSTR pszShaderName, LPCSTR pszShaderProfile, ID3DBlob **ppd3dShaderBlob)
+D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, LPCSTR pszShaderName, LPCSTR pszShaderProfile, ID3DBlob** ppd3dShaderBlob)
 {
 	UINT nCompileFlags = 0;
 #if defined(_DEBUG)
 	nCompileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-	ID3DBlob *pd3dErrorBlob = NULL;
+	ID3DBlob* pd3dErrorBlob = NULL;
 	HRESULT hResult = ::D3DCompileFromFile(pszFileName, NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, pszShaderName, pszShaderProfile, nCompileFlags, 0, ppd3dShaderBlob, &pd3dErrorBlob);
-	char *pErrorString = NULL;
-	if (pd3dErrorBlob) pErrorString = (char *)pd3dErrorBlob->GetBufferPointer();
+
+	if (FAILED(hResult))
+	{
+		if (pd3dErrorBlob)
+		{
+			char* pErrorString = (char*)pd3dErrorBlob->GetBufferPointer();
+			OutputDebugStringA(pErrorString);
+			MessageBoxA(NULL, pErrorString, "쉐이더 컴파일 에러", MB_OK | MB_ICONERROR);
+			pd3dErrorBlob->Release();
+		}
+		else
+		{
+			MessageBoxW(NULL, pszFileName, L"쉐이더를 찾을 수 없습니다.", MB_OK | MB_ICONERROR);
+		}
+
+		return D3D12_SHADER_BYTECODE{ NULL, 0 };
+	}
 
 	D3D12_SHADER_BYTECODE d3dShaderByteCode;
 	d3dShaderByteCode.BytecodeLength = (*ppd3dShaderBlob)->GetBufferSize();
@@ -242,7 +257,17 @@ void CShader::CreateShadowShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 
 void CShader::OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState)
 {
-	if (m_pd3dPipelineState.size() - 1 >= nPipelineState) pd3dCommandList->SetPipelineState(m_pd3dPipelineState[nPipelineState]);
+	if (!m_pd3dPipelineState.empty() && nPipelineState < m_pd3dPipelineState.size())
+	{
+		if (m_pd3dPipelineState[nPipelineState] != NULL)
+		{
+			pd3dCommandList->SetPipelineState(m_pd3dPipelineState[nPipelineState]);
+		}
+		else
+		{
+			OutputDebugString(L"PSO 생성 실패,\n");
+		}
+	}
 }
 
 void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
@@ -622,26 +647,6 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 		}
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //

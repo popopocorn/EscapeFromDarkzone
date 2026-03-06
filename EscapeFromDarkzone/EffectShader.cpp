@@ -1,3 +1,4 @@
+//EffectShader.cpp
 #include "stdafx.h"
 #include "EffectShader.h"
 
@@ -47,17 +48,17 @@ D3D12_DEPTH_STENCIL_DESC CEffectShader::CreateDepthStencilState()
 
 D3D12_SHADER_BYTECODE CEffectShader::CreateVertexShader(ID3DBlob** ppd3dShaderBlob)
 {
-    return(CShader::CompileShaderFromFile(L"Effect.hlsl", "VSEffect", "vs_5_1", ppd3dShaderBlob));
+    return(CShader::CompileShaderFromFile(L"Effect.hlsli", "VSEffect", "vs_5_1", ppd3dShaderBlob));
 }
 
 D3D12_SHADER_BYTECODE CEffectShader::CreateGeometryShader(ID3DBlob** ppd3dShaderBlob)
 {
-    return(CShader::CompileShaderFromFile(L"Effect.hlsl", "GSEffect", "gs_5_1", ppd3dShaderBlob));
+    return(CShader::CompileShaderFromFile(L"Effect.hlsli", "GSEffect", "gs_5_1", ppd3dShaderBlob));
 }
 
 D3D12_SHADER_BYTECODE CEffectShader::CreatePixelShader(ID3DBlob** ppd3dShaderBlob)
 {
-    return(CShader::CompileShaderFromFile(L"Effect.hlsl", "PSEffect", "ps_5_1", ppd3dShaderBlob));
+    return(CShader::CompileShaderFromFile(L"Effect.hlsli", "PSEffect", "ps_5_1", ppd3dShaderBlob));
 }
 
 void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature, int nRootParameterStartIndex)
@@ -88,7 +89,17 @@ void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12
     d3dPipelineStateDesc.SampleDesc.Count = 1;
     d3dPipelineStateDesc.SampleMask = UINT_MAX;
 
-    pd3dDevice->CreateGraphicsPipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)&m_pd3dPipelineState);
+    ID3D12PipelineState* pPipelineState = NULL;
+    HRESULT hr = pd3dDevice->CreateGraphicsPipelineState(&d3dPipelineStateDesc, __uuidof(ID3D12PipelineState), (void**)&pPipelineState);
+
+    if (FAILED(hr))
+    {
+        OutputDebugString(L"ÀÌÆåÆ® ½¦ÀÌ´õ ·Îµå ½ÇÆÐ\n");
+    }
+    else
+    {
+        m_pd3dPipelineState.push_back(pPipelineState);
+    }
 
     if (pd3dVertexShaderBlob) pd3dVertexShaderBlob->Release();
     if (pd3dGeometryShaderBlob) pd3dGeometryShaderBlob->Release();

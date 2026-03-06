@@ -9,6 +9,7 @@
 #include "Shader.h"
 #include "InputManager.h"
 #include"ShadowMap.h"
+#include "EffectShader.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -144,7 +145,32 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
+	//이펙트	쉐이더
+	CEffectShader* pEffectShader = new CEffectShader();
+	pEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
+	pEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
+	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, 10.0f, 10.0f);
+
+	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+
+	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion.dds", RESOURCE_TEXTURE2D, 0);
+
+	if (pBombTexture->GetResource(0) == NULL)
+	{
+		OutputDebugString(L"폭발 텍스처 로드 실패\n");
+		__debugbreak();
+	}
+	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
+
+	CMaterial* pBombMaterial = new CMaterial(1);
+	pBombMaterial->SetTexture(pBombTexture);
+
+	m_pTestBombEffect = new CEffect(2.0f);
+	m_pTestBombEffect->SetPosition(0.0f, 10.0f, 0.0f);
+	m_pTestBombEffect->SetMesh(pBombMesh);
+	m_pTestBombEffect->SetMaterial(0, pBombMaterial);
+	m_pTestBombEffect->SetEffectShader(pEffectShader);
 	
 	
 	for (const auto& shader : m_ppShaders) {
@@ -737,6 +763,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
 	}
+	if (m_pTestBombEffect && !m_pTestBombEffect->IsDead())
+	{
+		m_pTestBombEffect->Animate(fTimeElapsed);
+	}
 	//충돌검사
 	if (m_pPlayer)
 	ResolveCollision(m_pPlayer);
@@ -776,6 +806,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				}
 			}
 		}
+	
 
 		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
 
@@ -821,6 +852,9 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
-
+	if (m_pTestBombEffect && !m_pTestBombEffect->IsDead())
+	{
+		m_pTestBombEffect->Render(pd3dCommandList, nPipelineState);
+	}
 
 }
