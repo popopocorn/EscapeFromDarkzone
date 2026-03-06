@@ -408,6 +408,7 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
+	WaitForGpuComplete();
 	ReleaseObjects();
 
 	::CloseHandle(m_hFenceEvent);
@@ -415,19 +416,25 @@ void CGameFramework::OnDestroy()
 	if (m_pd3dDepthStencilBuffer) m_pd3dDepthStencilBuffer->Release();
 	if (m_pd3dDsvDescriptorHeap) m_pd3dDsvDescriptorHeap->Release();
 
+	if (m_pd3dCommandList) m_pd3dCommandList->Release();
+	if (m_pd3dCommandQueue) m_pd3dCommandQueue->Release();
+	if (m_pd3dCommandAllocator) m_pd3dCommandAllocator->Release();
+	
+
 	for (int i = 0; i < m_nSwapChainBuffers; i++) if (m_ppd3dSwapChainBackBuffers[i]) m_ppd3dSwapChainBackBuffers[i]->Release();
 	if (m_pd3dRtvDescriptorHeap) m_pd3dRtvDescriptorHeap->Release();
 
-	if (m_pd3dCommandAllocator) m_pd3dCommandAllocator->Release();
-	if (m_pd3dCommandQueue) m_pd3dCommandQueue->Release();
-	if (m_pd3dCommandList) m_pd3dCommandList->Release();
+	if (m_pdxgiSwapChain) 
+	{
+		m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
+		m_pdxgiSwapChain->Release();
+	}
 
-	if (m_pd3dFence) m_pd3dFence->Release();
-
-	m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
-	if (m_pdxgiSwapChain) m_pdxgiSwapChain->Release();
+	
 	if (m_pd3dDevice) m_pd3dDevice->Release();
 	if (m_pdxgiFactory) m_pdxgiFactory->Release();
+
+	if (m_pd3dFence) m_pd3dFence->Release();
 
 #if defined(_DEBUG)
 	IDXGIDebug1* pdxgiDebug = NULL;
