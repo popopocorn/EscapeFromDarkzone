@@ -12,7 +12,7 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 	d3dResourceDesc.Height = SHADOW_MAP_SIZE;
 	d3dResourceDesc.DepthOrArraySize = CASCADE_COUNT;
 	d3dResourceDesc.MipLevels = 1;
-	d3dResourceDesc.Format = DXGI_FORMAT_R32_TYPELESS; // 중요
+	d3dResourceDesc.Format = DXGI_FORMAT_R32_TYPELESS; 
 	d3dResourceDesc.SampleDesc.Count = 1;
 	d3dResourceDesc.SampleDesc.Quality = 0;
 	d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -60,8 +60,8 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 	d3dShadowDsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
 	d3dShadowDsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 	d3dShadowDsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-	d3dShadowDsvDesc.Texture2DArray.MipSlice = 0;  // 추가
-	d3dShadowDsvDesc.Texture2DArray.ArraySize = 1;  // 추가 - 슬라이스 1개씩
+	d3dShadowDsvDesc.Texture2DArray.MipSlice = 0;  
+	d3dShadowDsvDesc.Texture2DArray.ArraySize = 1;  
 
 	UINT dsvIncrementSize = pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
@@ -69,10 +69,10 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 
 	for (int i = 0; i < CASCADE_COUNT; i++)
 	{
-		d3dShadowDsvDesc.Texture2DArray.FirstArraySlice = i; // i번째 슬라이스
+		d3dShadowDsvDesc.Texture2DArray.FirstArraySlice = i; 
 		pd3dDevice->CreateDepthStencilView(ShadowMapResource, &d3dShadowDsvDesc, handle);
 		DsvHandles[i] = handle;
-		handle.ptr += dsvIncrementSize; // 다음 슬롯으로 이동
+		handle.ptr += dsvIncrementSize; 
 	}
 }
 
@@ -93,7 +93,6 @@ void ShadowMap::CreateSRV(ID3D12Device* pd3dDevice,
 
 	pd3dDevice->CreateShaderResourceView(ShadowMapResource, &srvDesc, cpuHandle);
 
-	// GPU 핸들 저장 (메인 패스 렌더링 시 사용)
 	SrvGpuHandle = gpuHandle;
 }
 void ShadowMap::Release()
