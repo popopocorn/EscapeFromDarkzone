@@ -150,11 +150,11 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	pEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
 	pEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, 10.0f, 10.0f);
+	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, 2.0f, 2.0f);
 
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 
-	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion.dds", RESOURCE_TEXTURE2D, 0);
+	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 
 	if (pBombTexture->GetResource(0) == NULL)
 	{
@@ -167,7 +167,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	pBombMaterial->SetTexture(pBombTexture);
 
 	m_pTestBombEffect = new CEffect(2.0f);
-	m_pTestBombEffect->SetPosition(0.0f, 10.0f, 0.0f);
+	m_pTestBombEffect->SetPosition(0.0f, 3.0f, 0.0f);
 	m_pTestBombEffect->SetMesh(pBombMesh);
 	m_pTestBombEffect->SetMaterial(0, pBombMaterial);
 	m_pTestBombEffect->SetEffectShader(pEffectShader);
@@ -625,6 +625,14 @@ void CScene::ResolveCollision(CGameObject* object)
 	}
 
 	object->UpdateTransform(NULL);
+}
+
+void CScene::PlayBombEffect(XMFLOAT3 pos)
+{
+	if (m_pTestBombEffect)
+	{
+		m_pTestBombEffect->Play(pos);
+	}
 }
 
 void CScene::SetPlayer(CPlayer* p)

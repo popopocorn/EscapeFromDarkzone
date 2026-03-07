@@ -25,8 +25,10 @@ D3D12_BLEND_DESC CEffectShader::CreateBlendState()
     d3dBlendDesc.AlphaToCoverageEnable = FALSE;
     d3dBlendDesc.IndependentBlendEnable = FALSE;
     d3dBlendDesc.RenderTarget[0].BlendEnable = TRUE;
+
     d3dBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE; // Additive
+    d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+
     d3dBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     d3dBlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
     d3dBlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
@@ -71,6 +73,12 @@ void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12
     ::ZeroMemory(&d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 
     d3dPipelineStateDesc.BlendState = CreateBlendState();
+
+    d3dPipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
+    d3dPipelineStateDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    d3dPipelineStateDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+    d3dPipelineStateDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+
     d3dPipelineStateDesc.DepthStencilState = CreateDepthStencilState();
     d3dPipelineStateDesc.RasterizerState = CreateRasterizerState();
 
@@ -94,11 +102,21 @@ void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12
 
     if (FAILED(hr))
     {
-        OutputDebugString(L"ÀÌÆåÆ® ½¦ÀÌ´õ ·Îµå ½ÇÆÐ\n");
+        char buf[256];
+        sprintf_s(buf, "Effect PSO create fail: 0x%08X\n", hr);
+        OutputDebugStringA(buf);
+        __debugbreak();
     }
     else
     {
-        m_pd3dPipelineState.push_back(pPipelineState);
+        if (m_pd3dPipelineState.size() == 0)
+        {
+            m_pd3dPipelineState.push_back(pPipelineState);
+        }
+        else
+        {
+            m_pd3dPipelineState[0] = pPipelineState;
+        }
     }
 
     if (pd3dVertexShaderBlob) pd3dVertexShaderBlob->Release();

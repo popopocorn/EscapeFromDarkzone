@@ -255,19 +255,19 @@ void CShader::CreateShadowShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	do_shadow = true;
 }
 
-void CShader::OnPrepareRender(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState)
+void CShader::OnPrepareRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState)
 {
-	if (!m_pd3dPipelineState.empty() && nPipelineState < m_pd3dPipelineState.size())
-	{
-		if (m_pd3dPipelineState[nPipelineState] != NULL)
-		{
-			pd3dCommandList->SetPipelineState(m_pd3dPipelineState[nPipelineState]);
-		}
-		else
-		{
-			OutputDebugString(L"PSO 생성 실패,\n");
-		}
-	}
+	if (m_pd3dPipelineState.empty()) return;
+
+	int index = nPipelineState;
+
+	if (index >= m_pd3dPipelineState.size())
+		index = 0;
+
+	ID3D12PipelineState* pso = m_pd3dPipelineState[index];
+	if (!pso) return;
+
+	pd3dCommandList->SetPipelineState(pso);
 }
 
 void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)

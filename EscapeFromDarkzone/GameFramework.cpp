@@ -367,6 +367,21 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				m_pCamera = m_pPlayer->GetCamera();
 			}
 			break;
+		case VK_SPACE:
+		{
+			if (m_pPlayer && m_pScene)
+			{
+				XMFLOAT3 pos = m_pPlayer->GetPosition();
+				XMFLOAT3 look = m_pPlayer->GetLookVector();
+
+				XMFLOAT3 bombPos = Vector3::Add(pos, Vector3::ScalarProduct(look, 3.0f, false));
+
+				bombPos.y += 5.0f;
+
+				m_pScene->PlayBombEffect(bombPos);
+			}
+			break;
+		}
 		default:
 			break;
 		}

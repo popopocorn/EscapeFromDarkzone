@@ -21,5 +21,7 @@ public:
 
     bool IsDead() const { return m_bIsDead; }
     float GetProgress() const { return (m_fLifeTime > 0.0f) ? (m_fAge / m_fLifeTime) : 1.0f; }
+    
+    void Play(XMFLOAT3 pos);
 };
 

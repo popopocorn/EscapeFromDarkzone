@@ -139,7 +139,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Debug.hlsli" />
-    <None Include="EffectShader.hlsli" />
+    <None Include="Effect.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="소스파일">

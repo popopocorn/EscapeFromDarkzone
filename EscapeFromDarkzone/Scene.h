@@ -132,10 +132,13 @@ public:
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	void ResolveCollision(CGameObject* object);
 
+	void PlayBombEffect(XMFLOAT3 pos);
+
 	void SetPlayer(CPlayer* p);
 
 	CCamera* GetLightCamera(int idx);
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
+
 };

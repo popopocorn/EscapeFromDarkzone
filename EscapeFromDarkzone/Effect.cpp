@@ -6,12 +6,18 @@ CEffect::CEffect(float fLifeTime) : CGameObject(1)
 {
     m_fLifeTime = fLifeTime;
     m_fAge = 0.0f;
-    m_bIsDead = false;
+    m_bIsDead = true;
     m_pEffectShader = nullptr;
 }
 
 CEffect::~CEffect()
 {
+}
+void CEffect::Play(XMFLOAT3 pos)
+{
+    SetPosition(pos);      
+    m_fAge = 0.0f;
+    m_bIsDead = false;
 }
 
 void CEffect::Animate(float fTimeElapsed)

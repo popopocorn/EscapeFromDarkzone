@@ -1,3 +1,4 @@
+//Effect.hlsli
 #include "common.hlsli"
 
 cbuffer cbEffectInfo : register(b10)
@@ -31,7 +32,7 @@ VS_EFFECT_OUTPUT VSEffect(VS_EFFECT_INPUT input)
     return output;
 }
 
-//Geometry Shader
+// Geometry Shader
 struct GS_EFFECT_OUTPUT
 {
     float4 position : SV_POSITION;
@@ -43,7 +44,6 @@ void GSEffect(point VS_EFFECT_OUTPUT input[1], inout TriangleStream<GS_EFFECT_OU
 {
     GS_EFFECT_OUTPUT output;
     
-    //billboard
     float3 vLook = normalize(gvCameraPosition - input[0].positionW);
     float3 vUp = float3(0.0f, 1.0f, 0.0f);
     float3 vRight = normalize(cross(vUp, vLook));
@@ -53,15 +53,38 @@ void GSEffect(point VS_EFFECT_OUTPUT input[1], inout TriangleStream<GS_EFFECT_OU
     float halfHeight = input[0].size.y * 0.5f;
 
     float4 v[4];
-    v[0] = float4(input[0].positionW + halfWidth * vRight - halfHeight * vUp, 1.0f); // Bottom-Right
-    v[1] = float4(input[0].positionW + halfWidth * vRight + halfHeight * vUp, 1.0f); // Top-Right
-    v[2] = float4(input[0].positionW - halfWidth * vRight - halfHeight * vUp, 1.0f); // Bottom-Left
-    v[3] = float4(input[0].positionW - halfWidth * vRight + halfHeight * vUp, 1.0f); // Top-Left
+    v[0] = float4(input[0].positionW + halfWidth * vRight - halfHeight * vUp, 1.0f);
+    v[1] = float4(input[0].positionW + halfWidth * vRight + halfHeight * vUp, 1.0f);
+    v[2] = float4(input[0].positionW - halfWidth * vRight - halfHeight * vUp, 1.0f);
+    v[3] = float4(input[0].positionW - halfWidth * vRight + halfHeight * vUp, 1.0f);
 
-    float2 texCoord[4] = { float2(1.0f, 1.0f), float2(1.0f, 0.0f), float2(0.0f, 1.0f), float2(0.0f, 0.0f) };
+    int numCols = 8;
+    int numRows = 4;
+    int totalFrames = numCols * numRows;
+
+    int currentFrame = (int) (g_fProgress * (totalFrames - 1));
+
+    int col = currentFrame % numCols;
+    int row = currentFrame / numCols;
+
+    float uvWidth = 1.0f / numCols;
+    float uvHeight = 1.0f / numRows;
+
+    float startU = col * uvWidth;
+    float startV = row * uvHeight;
+    
+    float epsilon = 0.002f;
+    
+    float2 texCoord[4] =
+    {
+        float2(startU + uvWidth - epsilon, startV + uvHeight - epsilon),
+        float2(startU + uvWidth - epsilon, startV + epsilon),
+        float2(startU + epsilon, startV + uvHeight - epsilon),
+        float2(startU + epsilon, startV + epsilon)
+    };
 
     matrix mtxViewProj = mul(gmtxView, gmtxProjection);
-
+    
     [unroll]
     for (int i = 0; i < 4; ++i)
     {
@@ -76,9 +99,10 @@ float4 PSEffect(GS_EFFECT_OUTPUT input) : SV_TARGET
 {
     float4 cColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
     
-    cColor.a *= (1.0f - g_fProgress);
+    float brightness = max(cColor.r, max(cColor.g, cColor.b));
+    cColor.a = brightness;
 
-    clip(cColor.a - 0.05f);
+    cColor.a *= (1.0f - g_fProgress);
 
     return cColor;
 }
