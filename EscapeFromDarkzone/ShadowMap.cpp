@@ -12,7 +12,7 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 	d3dResourceDesc.Height = SHADOW_MAP_SIZE;
 	d3dResourceDesc.DepthOrArraySize = CASCADE_COUNT;
 	d3dResourceDesc.MipLevels = 1;
-	d3dResourceDesc.Format = DXGI_FORMAT_R32_TYPELESS; 
+	d3dResourceDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	d3dResourceDesc.SampleDesc.Count = 1;
 	d3dResourceDesc.SampleDesc.Quality = 0;
 	d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -27,7 +27,7 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 	d3dHeapProperties.VisibleNodeMask = 1;
 
 	D3D12_CLEAR_VALUE d3dClearValue;
-	d3dClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+	d3dClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	d3dClearValue.DepthStencil.Depth = 1.0f;
 	d3dClearValue.DepthStencil.Stencil = 0;
 
@@ -57,7 +57,7 @@ void ShadowMap::Create(ID3D12Device* pd3dDevice)
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC d3dShadowDsvDesc;
 	::ZeroMemory(&d3dShadowDsvDesc, sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC));
-	d3dShadowDsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	d3dShadowDsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	d3dShadowDsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 	d3dShadowDsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 	d3dShadowDsvDesc.Texture2DArray.MipSlice = 0;  
@@ -83,7 +83,7 @@ void ShadowMap::CreateSRV(ID3D12Device* pd3dDevice,
 {
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 	::ZeroMemory(&srvDesc, sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC));
-	srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+	srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Texture2DArray.MostDetailedMip = 0;
