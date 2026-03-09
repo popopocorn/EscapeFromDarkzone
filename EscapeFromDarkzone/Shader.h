@@ -232,5 +232,6 @@ public:
 	PlayerShader();
 	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 };
 
