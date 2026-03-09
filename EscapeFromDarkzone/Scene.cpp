@@ -88,6 +88,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
 	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	FILE* viewFile = NULL;
 
 	::fopen_s(&viewFile, "Model/r.bin", "rb");
@@ -801,7 +802,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	pd3dCommandList->OMSetStencilRef(1);
+	pd3dCommandList->OMSetStencilRef(0xff);
 	
 	if(nPipelineState == SHADOW){
 		for (int i = 0; i < m_ppShaders.size(); i++) 
@@ -816,6 +817,14 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
+
+
+}
+
+void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+{
+
+	if (m_ppShaders[1]) m_ppShaders[1]->Render(pd3dCommandList, pCamera, true, THROUGH);
 
 
 }

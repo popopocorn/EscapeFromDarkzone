@@ -454,9 +454,15 @@ void CGameFramework::BuildObjects()
 	
 	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
+	PlayerShader* pshader = new PlayerShader();
+	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
+	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
 
-	CTerrainPlayer* pPlayer = new CTerrainPlayer(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), NULL);
+	CTerrainPlayer* pPlayer = new CTerrainPlayer(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), pshader);
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
+
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
 
@@ -602,6 +608,20 @@ void CGameFramework::FrameAdvance()
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
 
+	m_pPlayer->OnPrepareRender();
+
+	if (m_pPlayer->m_pSkinnedAnimationController)
+	{
+		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
+		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
+	}
+	else
+	{
+		m_pPlayer->Animate(fTimeElapsed);
+		m_pPlayer->UpdateTransform(NULL);
+	}
+
+
 	//shadow rendering pass
 	shadowmap->TransitionToDSV(m_pd3dCommandList);
 	for (int i = 0; i < CASCADE_COUNT; i++)
@@ -617,7 +637,7 @@ void CGameFramework::FrameAdvance()
 	
 	//main rendering pass
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
-	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor/*Colors::Azure*/, 0, NULL);
+	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
@@ -630,21 +650,13 @@ void CGameFramework::FrameAdvance()
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 #endif
 
-	m_pPlayer->OnPrepareRender();
 
-	if (m_pPlayer->m_pSkinnedAnimationController)
+	if (m_pPlayer) 
 	{
-		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
-		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
+		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
+		m_pPlayer->Render(m_pd3dCommandList, THROUGH, m_pCamera);
 	}
-	else
-	{
-		m_pPlayer->Animate(fTimeElapsed);
-		m_pPlayer->UpdateTransform(NULL);
-	}
-
-	if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-
+	m_pScene->ThroughRender(m_pd3dCommandList, m_pCamera);
 
 
 	//compute pipline

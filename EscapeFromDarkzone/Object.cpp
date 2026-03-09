@@ -1152,19 +1152,23 @@ void CGameObject::LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12Graphics
 
 			pMaterial = new CMaterial(7); //0:Albedo, 1:Specular, 2:Metallic, 3:Normal, 4:Emission, 5:DetailAlbedo, 6:DetailNormal
 
-			if (!pShader)
+			UINT nMeshType = GetMeshType();
+
+			if (nMeshType & VERTEXT_NORMAL_TANGENT_TEXTURE)
 			{
-				UINT nMeshType = GetMeshType();
-				if (nMeshType & VERTEXT_NORMAL_TANGENT_TEXTURE)
+				// 1. 뼈대가 있는 스키닝 메쉬 (캐릭터 몸통 등)
+				if (nMeshType & VERTEXT_BONE_INDEX_WEIGHT)
 				{
-					if (nMeshType & VERTEXT_BONE_INDEX_WEIGHT)
-					{
-						pMaterial->SetSkinnedAnimationShader();
-					}
+					if (pShader)
+						pMaterial->SetShader(pShader); // 인자로 받은 PlayerShader를 적용!
 					else
-					{
-						pMaterial->SetStandardShader();
-					}
+						pMaterial->SetSkinnedAnimationShader(); // 인자가 없으면 부모의 기본 스키닝 셰이더
+				}
+				// 2. 뼈대가 없는 일반 메쉬 (무기, 악세사리 등)
+				else
+				{
+					// 🚨 주의: 여기에 PlayerShader를 넣으면 Input Layout이 달라서 터집니다!
+					pMaterial->SetStandardShader();
 				}
 			}
 			SetMaterial(nMaterial, pMaterial);

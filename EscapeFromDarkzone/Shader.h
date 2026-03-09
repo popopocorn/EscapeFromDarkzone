@@ -206,9 +206,14 @@ protected:
 
 class ViewShader : public CStandardShader {
 public:
+	ViewShader();
 
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+
+	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
+
 
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
@@ -222,7 +227,10 @@ private:
 };
 
 class PlayerShader : public CSkinnedAnimationStandardShader {
+
 public:
-	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+	PlayerShader();
+	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
 };
 
