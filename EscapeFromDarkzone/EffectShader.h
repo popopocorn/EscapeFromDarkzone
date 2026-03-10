@@ -2,13 +2,6 @@
 #pragma once
 #include "Shader.h"
 
-struct EFFECT_INFO
-{
-    float fAge;
-    float fLifeTime;
-    float fProgress;
-    float padding;
-};
 
 class CEffectShader : public CShader
 {
@@ -26,10 +19,6 @@ public:
 
     virtual void CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature, int nRootParameterStartIndex);
 
-    virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) override;
-    virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList) override;
-    virtual void ReleaseShaderVariables() override;
-
     /*virtual void CreateShadowShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature) override
     {
         m_pd3dPipelineState.push_back(nullptr);
@@ -37,10 +26,6 @@ public:
 
 protected:
     int m_nRootParameterStartIndex = 0;
-
-    ID3D12Resource* m_pd3dcbEffectInfo = NULL;
-    EFFECT_INFO* m_pcbMappedEffectInfo = NULL;
-
 public:
     float m_fAge = 0.0f;
     float m_fLifeTime = 1.0f;

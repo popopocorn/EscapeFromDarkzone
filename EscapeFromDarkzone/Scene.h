@@ -15,6 +15,7 @@
 #define SPOT_LIGHT						2
 #define DIRECTIONAL_LIGHT				3
 
+#define MAX_BOMB_EFFECTS 20				//ÆøÅº È¿°ú ÃÖ´ë °³¼ö
 struct LIGHT
 {
 	XMFLOAT4							m_xmf4Ambient;
@@ -123,9 +124,10 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
+	std::vector<CEffect*> m_vBombEffects;
+
 private:
 	CGameObject* m_pLaserObject = NULL;
-	CEffect* m_pTestBombEffect = NULL;
 
 public:
 	bool DoCollision(CGameObject* object, int shaderidx);
@@ -140,5 +142,4 @@ public:
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
-
 };

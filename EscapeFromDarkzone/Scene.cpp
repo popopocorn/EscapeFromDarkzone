@@ -166,12 +166,18 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	CMaterial* pBombMaterial = new CMaterial(1);
 	pBombMaterial->SetTexture(pBombTexture);
 
-	m_pTestBombEffect = new CEffect(2.0f);
-	m_pTestBombEffect->SetPosition(0.0f, 3.0f, 0.0f);
-	m_pTestBombEffect->SetMesh(pBombMesh);
-	m_pTestBombEffect->SetMaterial(0, pBombMaterial);
-	m_pTestBombEffect->SetEffectShader(pEffectShader);
-	
+	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
+	{
+		CEffect* pBomb = new CEffect(2.0f);
+		pBomb->SetPosition(0.0f, -1000.0f, 0.0f);
+		pBomb->SetMesh(pBombMesh);
+		pBomb->SetMaterial(0, pBombMaterial);
+		pBomb->SetEffectShader(pEffectShader);
+
+		pBomb->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+		m_vBombEffects.push_back(pBomb);
+	}
 	
 	for (const auto& shader : m_ppShaders) {
 		auto* objs = shader->GetObj();
@@ -629,9 +635,13 @@ void CScene::ResolveCollision(CGameObject* object)
 
 void CScene::PlayBombEffect(XMFLOAT3 pos)
 {
-	if (m_pTestBombEffect)
+	for (CEffect* pEffect : m_vBombEffects)
 	{
-		m_pTestBombEffect->Play(pos);
+		if (pEffect->IsDead())
+		{
+			pEffect->Play(pos);
+			break;
+		}
 	}
 }
 
@@ -771,9 +781,12 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
 	}
-	if (m_pTestBombEffect && !m_pTestBombEffect->IsDead())
+	for (CEffect* pEffect : m_vBombEffects) 
 	{
-		m_pTestBombEffect->Animate(fTimeElapsed);
+		if (!pEffect->IsDead()) 
+		{
+			pEffect->Animate(fTimeElapsed);
+		}
 	}
 	//충돌검사
 	if (m_pPlayer)
@@ -860,9 +873,9 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
-	if (m_pTestBombEffect && !m_pTestBombEffect->IsDead())
+	for (CEffect* pEffect : m_vBombEffects) 
 	{
-		m_pTestBombEffect->Render(pd3dCommandList, nPipelineState);
+		pEffect->Render(pd3dCommandList, false, nPipelineState, pCamera);
 	}
 
 }

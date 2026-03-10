@@ -1,6 +1,7 @@
 //EffectShader.cpp
 #include "stdafx.h"
 #include "EffectShader.h"
+#include "Effect.h"
 
 CEffectShader::CEffectShader() {}
 CEffectShader::~CEffectShader() {}
@@ -123,35 +124,4 @@ void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* pd3dDevice, ID3D12
     if (pd3dGeometryShaderBlob) pd3dGeometryShaderBlob->Release();
     if (pd3dPixelShaderBlob) pd3dPixelShaderBlob->Release();
     if (d3dPipelineStateDesc.InputLayout.pInputElementDescs) delete[] d3dPipelineStateDesc.InputLayout.pInputElementDescs;
-}
-
-void CEffectShader::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-    UINT ncbElementBytes = ((sizeof(EFFECT_INFO) + 255) & ~255);
-    m_pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-    m_pd3dcbEffectInfo->Map(0, NULL, (void**)&m_pcbMappedEffectInfo);
-}
-
-void CEffectShader::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
-{
-    if (m_pcbMappedEffectInfo)
-    {
-        float fProgress = m_fAge / m_fLifeTime;
-        if (fProgress > 1.0f) fProgress = 1.0f;
-
-        m_pcbMappedEffectInfo->fAge = m_fAge;
-        m_pcbMappedEffectInfo->fLifeTime = m_fLifeTime;
-        m_pcbMappedEffectInfo->fProgress = fProgress;
-
-        pd3dCommandList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
-    }
-}
-
-void CEffectShader::ReleaseShaderVariables()
-{
-    if (m_pd3dcbEffectInfo)
-    {
-        m_pd3dcbEffectInfo->Unmap(0, NULL);
-        m_pd3dcbEffectInfo->Release();
-    }
 }
