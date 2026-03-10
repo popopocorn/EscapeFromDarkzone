@@ -799,47 +799,46 @@ CLaserMesh::CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3d
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //
-CParticleMesh::CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight)
-	: CMesh(pd3dDevice, pd3dCommandList)
+CParticleMesh::CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight) : CMesh(pd3dDevice, pd3dCommandList)
 {
-	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
-	m_nVertices = 1;
-	m_nType = VERTEXT_POSITION;
+	m_nVertices = 4;
 
-	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
-	m_pxmf3Positions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	UINT nStride = sizeof(XMFLOAT3) + sizeof(XMFLOAT2);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf3Positions, sizeof(XMFLOAT3) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+	struct VERTEX { XMFLOAT3 p; XMFLOAT2 uv; };
+	VERTEX pVertices[4];
+	float halfW = fWidth * 0.5f;
+
+	pVertices[0] = { XMFLOAT3(-halfW, 0.0f, 0.0f),    XMFLOAT2(0.0f, 1.0f) };
+	pVertices[1] = { XMFLOAT3(-halfW, fHeight, 0.0f), XMFLOAT2(0.0f, 0.0f) };
+	pVertices[2] = { XMFLOAT3(halfW, 0.0f, 0.0f),     XMFLOAT2(1.0f, 1.0f) };
+	pVertices[3] = { XMFLOAT3(halfW, fHeight, 0.0f),  XMFLOAT2(1.0f, 0.0f) };
+
+	ID3D12Resource* pd3dUploadBuffer = NULL;
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pVertices, nStride * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &pd3dUploadBuffer);
+
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
-	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
-	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+	m_d3dPositionBufferView.StrideInBytes = nStride;
+	m_d3dPositionBufferView.SizeInBytes = nStride * m_nVertices;
 
-	m_pxmf2Sizes = new XMFLOAT2[m_nVertices];
-	m_pxmf2Sizes[0] = XMFLOAT2(fWidth, fHeight);
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1] { 6 };
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[6]{ 0, 1, 2, 2, 1, 3 };
 
-	m_pd3dSizeBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf2Sizes, sizeof(XMFLOAT2) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dSizeUploadBuffer);
-	m_d3dSizeBufferView.BufferLocation = m_pd3dSizeBuffer->GetGPUVirtualAddress();
-	m_d3dSizeBufferView.StrideInBytes = sizeof(XMFLOAT2);
-	m_d3dSizeBufferView.SizeInBytes = sizeof(XMFLOAT2) * m_nVertices;
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	ID3D12Resource* pd3dIndexUploadBuffer = NULL;
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_ppnSubSetIndices[0], sizeof(UINT) * 6, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &pd3dIndexUploadBuffer);
+
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 6;
 }
 
 CParticleMesh::~CParticleMesh()
 {
-	if (m_pxmf2Sizes) delete[] m_pxmf2Sizes;
-	if (m_pd3dSizeBuffer) m_pd3dSizeBuffer->Release();
-}
-
-void CParticleMesh::ReleaseUploadBuffers()
-{
-	CMesh::ReleaseUploadBuffers();
-	if (m_pd3dSizeUploadBuffer) m_pd3dSizeUploadBuffer->Release();
-	m_pd3dSizeUploadBuffer = NULL;
-}
-
-void CParticleMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)
-{
-	CMesh::OnPreRender(pd3dCommandList, pContext);
-
-	D3D12_VERTEX_BUFFER_VIEW pVertexBufferViews[] = { m_d3dPositionBufferView, m_d3dSizeBufferView };
-	pd3dCommandList->IASetVertexBuffers(0, 2, pVertexBufferViews);
 }

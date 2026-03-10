@@ -1,7 +1,7 @@
-//Effect.h
+// Effect.h
 #pragma once
+
 #include "Object.h"
-#include "Shader.h"
 
 class CEffectShader;
 
@@ -16,29 +16,35 @@ struct EFFECT_INFO
 class CEffect : public CGameObject
 {
 protected:
-    float m_fAge;
-    float m_fLifeTime;
-    bool  m_bIsDead;
+    float m_fAge = 0.0f;
+    float m_fLifeTime = 1.0f;
+    bool m_bIsDead = true;
 
-    CEffectShader* m_pEffectShader;
+    CEffectShader* m_pEffectShader = nullptr;
 
 public:
     ID3D12Resource* m_pd3dcbEffectInfo = nullptr;
     EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
 
 public:
-    CEffect(float fLifeTime = 1.0f);
+    CEffect(float lifeTime = 1.0f);
     virtual ~CEffect();
 
     virtual void Animate(float fTimeElapsed) override;
-    virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch = false, int nPipelineState = 0, CCamera* pCamera = NULL) override;
-    
-    void SetEffectShader(CEffectShader* pShader) { m_pEffectShader = pShader; }
+
+    virtual void Render(
+        ID3D12GraphicsCommandList* cmdList,
+        bool batch = false,
+        int nPipelineState = 0,
+        CCamera* camera = NULL) override;
+
+    void SetEffectShader(CEffectShader* shader)
+    {
+        m_pEffectShader = shader;
+    }
+
     void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 
     bool IsDead() const { return m_bIsDead; }
-    float GetProgress() const { return (m_fLifeTime > 0.0f) ? (m_fAge / m_fLifeTime) : 1.0f; }
-    
     void Play(XMFLOAT3 pos);
 };
-

@@ -146,15 +146,18 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
 	//이펙트	쉐이더
-	CEffectShader* pEffectShader = new CEffectShader();
-	pEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
-	pEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	auto pEffectShader = std::make_unique<CEffectShader>();
+
+	CEffectShader* pRawEffectShader = pEffectShader.get();
+
+	pRawEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pRawEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
+
+	m_ppShaders.push_back(std::move(pEffectShader));
 
 	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, 2.0f, 2.0f);
-
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-
-	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion.dds", RESOURCE_TEXTURE2D, 0);
 
 	if (pBombTexture->GetResource(0) == NULL)
 	{
@@ -169,10 +172,11 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
 	{
 		CEffect* pBomb = new CEffect(2.0f);
-		pBomb->SetPosition(0.0f, -1000.0f, 0.0f);
+		pBomb->SetPosition(0, -1000, 0);
 		pBomb->SetMesh(pBombMesh);
 		pBomb->SetMaterial(0, pBombMaterial);
-		pBomb->SetEffectShader(pEffectShader);
+
+		pBomb->SetEffectShader(pRawEffectShader);
 
 		pBomb->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 

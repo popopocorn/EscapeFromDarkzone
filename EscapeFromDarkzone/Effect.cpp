@@ -1,11 +1,11 @@
-//Effect.cpp
+// Effect.cpp
 #include "stdafx.h"
 #include "Effect.h"
 #include "EffectShader.h"
 
-CEffect::CEffect(float fLifeTime) : CGameObject(1)
+CEffect::CEffect(float lifeTime) : CGameObject(1)
 {
-    m_fLifeTime = fLifeTime;
+    m_fLifeTime = lifeTime;
     m_fAge = 0.0f;
     m_bIsDead = true;
     m_pEffectShader = nullptr;
@@ -29,25 +29,25 @@ void CEffect::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 
 void CEffect::Play(XMFLOAT3 pos)
 {
-    pos.y -= 5.0f;
-
-    SetPosition(pos);      
+    SetPosition(pos.x, pos.y + 0.5f, pos.z);
     m_fAge = 0.0f;
     m_bIsDead = false;
+
+    UpdateTransform(NULL);
 }
 
-void CEffect::Animate(float fTimeElapsed)
+void CEffect::Animate(float dt)
 {
-    CGameObject::Animate(fTimeElapsed);
+    if (m_bIsDead) return;
 
-    m_fAge += fTimeElapsed;
+    CGameObject::Animate(dt);
+
+    m_fAge += dt;
     if (m_fAge >= m_fLifeTime)
-    {
         m_bIsDead = true;
-    }
 }
 
-void CEffect::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
+void CEffect::Render(ID3D12GraphicsCommandList* cmdList, bool batch, int nPipelineState, CCamera* camera)
 {
     if (m_bIsDead) return;
     if (nPipelineState != 0) return;
@@ -56,15 +56,14 @@ void CEffect::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int
     {
         m_pcbMappedEffectInfo->fAge = m_fAge;
         m_pcbMappedEffectInfo->fLifeTime = m_fLifeTime;
-        m_pcbMappedEffectInfo->fProgress = GetProgress();
+        m_pcbMappedEffectInfo->fProgress = m_fAge / m_fLifeTime;
     }
 
     if (m_pEffectShader)
     {
-        m_pEffectShader->Render(pd3dCommandList, pCamera, batch, nPipelineState);
-
-        pd3dCommandList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
+        m_pEffectShader->Render(cmdList, camera, batch, nPipelineState);
+        cmdList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
     }
 
-    CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
+    CGameObject::Render(cmdList, batch, nPipelineState, camera);
 }
