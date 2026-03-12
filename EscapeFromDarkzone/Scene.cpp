@@ -894,9 +894,22 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
-	for (CEffect* pEffect : m_vBombEffects) 
+
+	bool bFirstEffect = true;
+	for (CEffect* pEffect : m_vBombEffects)
 	{
-		pEffect->Render(pd3dCommandList, false, nPipelineState, pCamera);
+		if (!pEffect->IsDead())
+		{
+			if (bFirstEffect)
+			{
+				pEffect->Render(pd3dCommandList, false, nPipelineState, pCamera);
+				bFirstEffect = false;
+			}
+			else
+			{
+				pEffect->Render(pd3dCommandList, true, nPipelineState, pCamera);
+			}
+		}
 	}
 
 }

@@ -52,6 +52,11 @@ void CEffect::Render(ID3D12GraphicsCommandList* cmdList, bool batch, int nPipeli
         m_pEffectShader->Render(cmdList, camera, false, nPipelineState);
     }
 
+    if (!batch && m_pEffectShader)
+    {
+        m_pEffectShader->Render(cmdList, camera, false, nPipelineState);
+    }
+
     cmdList->SetGraphicsRootConstantBufferView(17, m_d3dGpuBufferAddress);
 
     CGameObject::Render(cmdList, batch, nPipelineState, camera);
