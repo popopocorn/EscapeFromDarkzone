@@ -15,7 +15,7 @@ CGameFramework::CGameFramework()
 	for (int i = 0; i < m_nSwapChainBuffers; i++) m_ppd3dSwapChainBackBuffers[i] = NULL;
 	m_nSwapChainBufferIndex = 0;
 
-	m_pd3dCommandAllocator = NULL;
+	for (int i = 0; i < m_nSwapChainBuffers; i++) m_pd3dCommandAllocators[i] = NULL;
 	m_pd3dCommandQueue = NULL;
 	m_pd3dCommandList = NULL;
 
@@ -189,7 +189,7 @@ void CGameFramework::CreateDirect3DDevice()
 
 void CGameFramework::CreateCommandQueueAndList()
 {
-	HRESULT hResult;
+	/*HRESULT hResult;
 
 	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
 	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
@@ -200,6 +200,20 @@ void CGameFramework::CreateCommandQueueAndList()
 	hResult = m_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_pd3dCommandAllocator);
 
 	hResult = m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), (void**)&m_pd3dCommandList);
+	hResult = m_pd3dCommandList->Close();*/
+	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
+	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
+	d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	d3dCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	HRESULT hResult = m_pd3dDevice->CreateCommandQueue(&d3dCommandQueueDesc, __uuidof(ID3D12CommandQueue), (void**)&m_pd3dCommandQueue);
+
+	for (int i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		hResult = m_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_pd3dCommandAllocators[i]);
+	}
+
+	hResult = m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocators[0], NULL, __uuidof(ID3D12GraphicsCommandList), (void**)&m_pd3dCommandList);
+
 	hResult = m_pd3dCommandList->Close();
 }
 
@@ -433,7 +447,10 @@ void CGameFramework::OnDestroy()
 
 	if (m_pd3dCommandList) m_pd3dCommandList->Release();
 	if (m_pd3dCommandQueue) m_pd3dCommandQueue->Release();
-	if (m_pd3dCommandAllocator) m_pd3dCommandAllocator->Release();
+	for (int i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		if (m_pd3dCommandAllocators[i]) m_pd3dCommandAllocators[i]->Release();
+	}
 	
 
 	for (int i = 0; i < m_nSwapChainBuffers; i++) if (m_ppd3dSwapChainBackBuffers[i]) m_ppd3dSwapChainBackBuffers[i]->Release();
@@ -463,7 +480,7 @@ void CGameFramework::OnDestroy()
 
 void CGameFramework::BuildObjects()
 {
-	m_pd3dCommandList->Reset(m_pd3dCommandAllocator, NULL);
+	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
 	m_pScene = new CScene();
 	
@@ -564,7 +581,14 @@ void CGameFramework::AnimateObjects(float fTimeElapsed)
 
 void CGameFramework::WaitForGpuComplete()
 {
-	const UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+	UINT64 nFenceValue = 0;
+	for (int i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		if (m_nFenceValues[i] > nFenceValue) nFenceValue = m_nFenceValues[i];
+	}
+	nFenceValue++;
+
+	m_nFenceValues[m_nSwapChainBufferIndex] = nFenceValue;
 	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence, nFenceValue);
 
 	if (m_pd3dFence->GetCompletedValue() < nFenceValue)
@@ -576,14 +600,22 @@ void CGameFramework::WaitForGpuComplete()
 
 void CGameFramework::MoveToNextFrame()
 {
-	m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
+	UINT64 nFenceValue = 0;
+	for (int i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		if (m_nFenceValues[i] > nFenceValue) nFenceValue = m_nFenceValues[i];
+	}
+	nFenceValue++;
 
-	UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+	m_nFenceValues[m_nSwapChainBufferIndex] = nFenceValue;
 	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence, nFenceValue);
 
-	if (m_pd3dFence->GetCompletedValue() < nFenceValue)
+	m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
+
+	UINT64 fenceValueToWaitFor = m_nFenceValues[m_nSwapChainBufferIndex];
+	if (fenceValueToWaitFor != 0 && m_pd3dFence->GetCompletedValue() < fenceValueToWaitFor)
 	{
-		hResult = m_pd3dFence->SetEventOnCompletion(nFenceValue, m_hFenceEvent);
+		hResult = m_pd3dFence->SetEventOnCompletion(fenceValueToWaitFor, m_hFenceEvent);
 		::WaitForSingleObject(m_hFenceEvent, INFINITE);
 	}
 }
@@ -601,8 +633,8 @@ void CGameFramework::FrameAdvance()
 
 	AnimateObjects(fTimeElapsed);
 
-	HRESULT hResult = m_pd3dCommandAllocator->Reset();
-	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocator, NULL);
+	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
+	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
@@ -677,7 +709,6 @@ void CGameFramework::FrameAdvance()
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
-	WaitForGpuComplete();
 
 #ifdef _WITH_PRESENT_PARAMETERS
 	DXGI_PRESENT_PARAMETERS dxgiPresentParameters;
