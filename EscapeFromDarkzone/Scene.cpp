@@ -172,16 +172,30 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	CMaterial* pBombMaterial = new CMaterial(1);
 	pBombMaterial->SetTexture(pBombTexture);
 
+	pBombMaterial->SetShader(pRawEffectShader);
+
+	UINT ncbElementBytes = ((sizeof(EFFECT_INFO) + 255) & ~255);
+
+	ID3D12Resource* pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
+		ncbElementBytes * MAX_BOMB_EFFECTS, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+
+	UINT8* pcbMappedEffectInfo = nullptr;
+	pd3dcbEffectInfo->Map(0, NULL, (void**)&pcbMappedEffectInfo);
+
+	D3D12_GPU_VIRTUAL_ADDRESS gpuStartAddress = pd3dcbEffectInfo->GetGPUVirtualAddress();
+
 	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
 	{
 		CEffect* pBomb = new CEffect(2.0f);
-		pBomb->SetPosition(0, 0, 0);
+		pBomb->SetPosition(0, -1000, 0);
 		pBomb->SetMesh(pBombMesh);
 		pBomb->SetMaterial(0, pBombMaterial);
-
 		pBomb->SetEffectShader(pRawEffectShader);
 
-		pBomb->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+		D3D12_GPU_VIRTUAL_ADDRESS myGpuAddr = gpuStartAddress + (i * ncbElementBytes);
+		EFFECT_INFO* myCpuAddr = (EFFECT_INFO*)(pcbMappedEffectInfo + (i * ncbElementBytes));
+
+		pBomb->SetConstantBufferInfo(myGpuAddr, myCpuAddr);
 
 		m_vBombEffects.push_back(pBomb);
 	}

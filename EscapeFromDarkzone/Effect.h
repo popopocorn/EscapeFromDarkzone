@@ -23,7 +23,7 @@ protected:
     CEffectShader* m_pEffectShader = nullptr;
 
 public:
-    ID3D12Resource* m_pd3dcbEffectInfo = nullptr;
+    D3D12_GPU_VIRTUAL_ADDRESS m_d3dGpuBufferAddress = 0;
     EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
 
 public:
@@ -43,7 +43,11 @@ public:
         m_pEffectShader = shader;
     }
 
-    void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+    void SetConstantBufferInfo(D3D12_GPU_VIRTUAL_ADDRESS gpuAddress, EFFECT_INFO* mappedPointer)
+    {
+        m_d3dGpuBufferAddress = gpuAddress;
+        m_pcbMappedEffectInfo = mappedPointer;
+    }
 
     bool IsDead() const { return m_bIsDead; }
     void Play(XMFLOAT3 pos);

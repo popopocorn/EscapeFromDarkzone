@@ -13,19 +13,8 @@ CEffect::CEffect(float lifeTime) : CGameObject(1)
 
 CEffect::~CEffect()
 {
-    if (m_pd3dcbEffectInfo)
-    {
-        m_pd3dcbEffectInfo->Unmap(0, NULL);
-        m_pd3dcbEffectInfo->Release();
-    }
 }
 
-void CEffect::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-    UINT ncbElementBytes = ((sizeof(EFFECT_INFO) + 255) & ~255);
-    m_pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-    m_pd3dcbEffectInfo->Map(0, NULL, (void**)&m_pcbMappedEffectInfo);
-}
 
 void CEffect::Play(XMFLOAT3 pos)
 {
@@ -50,7 +39,6 @@ void CEffect::Animate(float dt)
 void CEffect::Render(ID3D12GraphicsCommandList* cmdList, bool batch, int nPipelineState, CCamera* camera)
 {
     if (m_bIsDead) return;
-    if (nPipelineState != 0) return;
 
     if (m_pcbMappedEffectInfo)
     {
@@ -61,9 +49,10 @@ void CEffect::Render(ID3D12GraphicsCommandList* cmdList, bool batch, int nPipeli
 
     if (m_pEffectShader)
     {
-        m_pEffectShader->Render(cmdList, camera, batch, nPipelineState);
-        cmdList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
+        m_pEffectShader->Render(cmdList, camera, false, nPipelineState);
     }
+
+    cmdList->SetGraphicsRootConstantBufferView(17, m_d3dGpuBufferAddress);
 
     CGameObject::Render(cmdList, batch, nPipelineState, camera);
 }
