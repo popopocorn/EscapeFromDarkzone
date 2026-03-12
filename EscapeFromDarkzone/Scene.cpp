@@ -174,15 +174,13 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	pBombMaterial->SetShader(pRawEffectShader);
 
-	UINT ncbElementBytes = ((sizeof(EFFECT_INFO) + 255) & ~255);
+	UINT ncbBufferSize = ((sizeof(EFFECT_INFO) * MAX_BOMB_EFFECTS + 255) & ~255);
 
-	ID3D12Resource* pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
-		ncbElementBytes * MAX_BOMB_EFFECTS, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+	m_pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
+		ncbBufferSize, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+	m_pd3dcbEffectInfo->Map(0, NULL, (void**)&m_pcbMappedEffectInfo);
 
-	UINT8* pcbMappedEffectInfo = nullptr;
-	pd3dcbEffectInfo->Map(0, NULL, (void**)&pcbMappedEffectInfo);
-
-	D3D12_GPU_VIRTUAL_ADDRESS gpuStartAddress = pd3dcbEffectInfo->GetGPUVirtualAddress();
+	D3D12_GPU_VIRTUAL_ADDRESS gpuStartAddress = m_pd3dcbEffectInfo->GetGPUVirtualAddress();
 
 	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
 	{
@@ -192,10 +190,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		pBomb->SetMaterial(0, pBombMaterial);
 		pBomb->SetEffectShader(pRawEffectShader);
 
-		D3D12_GPU_VIRTUAL_ADDRESS myGpuAddr = gpuStartAddress + (i * ncbElementBytes);
-		EFFECT_INFO* myCpuAddr = (EFFECT_INFO*)(pcbMappedEffectInfo + (i * ncbElementBytes));
-
-		pBomb->SetConstantBufferInfo(myGpuAddr, myCpuAddr);
+		D3D12_GPU_VIRTUAL_ADDRESS myGpuAddr = gpuStartAddress + (i * ncbBufferSize);
+		EFFECT_INFO* myCpuAddr = (EFFECT_INFO*)(m_pcbMappedEffectInfo + (i * ncbBufferSize));
 
 		m_vBombEffects.push_back(pBomb);
 	}
@@ -896,20 +892,27 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	}
 
 	bool bFirstEffect = true;
+	int activeCount = 0;
+	CEffect* pFirstActiveEffect = nullptr;
 	for (CEffect* pEffect : m_vBombEffects)
 	{
 		if (!pEffect->IsDead())
 		{
-			if (bFirstEffect)
-			{
-				pEffect->Render(pd3dCommandList, false, nPipelineState, pCamera);
-				bFirstEffect = false;
-			}
-			else
-			{
-				pEffect->Render(pd3dCommandList, true, nPipelineState, pCamera);
-			}
+			if (activeCount == 0) pFirstActiveEffect = pEffect;
+
+			m_pcbMappedEffectInfo[activeCount].vPosition = pEffect->GetPosition();
+			m_pcbMappedEffectInfo[activeCount].fProgress = pEffect->GetProgress();
+			activeCount++;
 		}
 	}
+	if (activeCount > 0 && pFirstActiveEffect != nullptr)
+	{
+		pFirstActiveEffect->m_ppMaterials[0]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 
+		pd3dCommandList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
+
+		pFirstActiveEffect->m_ppMaterials[0]->UpdateShaderVariable(pd3dCommandList);
+
+		pFirstActiveEffect->m_pMesh->Render(pd3dCommandList, 0, activeCount);
+	}
 }

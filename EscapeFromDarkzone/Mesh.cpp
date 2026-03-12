@@ -52,7 +52,7 @@ void CMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pConte
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dPositionBufferView);
 }
 
-void CMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
+void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet, int nInstances)
 {
 	UpdateShaderVariables(pd3dCommandList);
 
@@ -60,14 +60,14 @@ void CMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
 
 	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
 
-	if((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
+	if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
 	{
 		pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
-		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], 1, 0, 0, 0);
+		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], nInstances, 0, 0, 0);
 	}
 	else
 	{
-		pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
+		pd3dCommandList->DrawInstanced(m_nVertices, nInstances, m_nOffset, 0);
 	}
 }
 

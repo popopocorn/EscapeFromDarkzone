@@ -107,7 +107,6 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
@@ -125,6 +124,9 @@ public:
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
 	std::vector<CEffect*> m_vBombEffects;
+	ID3D12Resource* m_pd3dcbEffectInfo = nullptr;
+	EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
+
 
 private:
 	CGameObject* m_pLaserObject = NULL;

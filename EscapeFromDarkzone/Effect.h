@@ -7,12 +7,9 @@ class CEffectShader;
 
 struct EFFECT_INFO
 {
-    float fAge;
-    float fLifeTime;
+    XMFLOAT3 vPosition;
     float fProgress;
-    float padding;
 };
-
 class CEffect : public CGameObject
 {
 protected:
@@ -23,8 +20,6 @@ protected:
     CEffectShader* m_pEffectShader = nullptr;
 
 public:
-    D3D12_GPU_VIRTUAL_ADDRESS m_d3dGpuBufferAddress = 0;
-    EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
 
 public:
     CEffect(float lifeTime = 1.0f);
@@ -32,22 +27,10 @@ public:
 
     virtual void Animate(float fTimeElapsed) override;
 
-    virtual void Render(
-        ID3D12GraphicsCommandList* cmdList,
-        bool batch = false,
-        int nPipelineState = 0,
-        CCamera* camera = NULL) override;
+    void SetEffectShader(CEffectShader* shader){ m_pEffectShader = shader; }
 
-    void SetEffectShader(CEffectShader* shader)
-    {
-        m_pEffectShader = shader;
-    }
-
-    void SetConstantBufferInfo(D3D12_GPU_VIRTUAL_ADDRESS gpuAddress, EFFECT_INFO* mappedPointer)
-    {
-        m_d3dGpuBufferAddress = gpuAddress;
-        m_pcbMappedEffectInfo = mappedPointer;
-    }
+    float GetProgress() const { return m_fAge / m_fLifeTime; }
+    XMFLOAT3 GetPosition() const { return XMFLOAT3(m_xmf4x4World._41, m_xmf4x4World._42, m_xmf4x4World._43); }
 
     bool IsDead() const { return m_bIsDead; }
     void Play(XMFLOAT3 pos);

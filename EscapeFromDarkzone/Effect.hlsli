@@ -3,18 +3,22 @@
 
 #include "common.hlsli"
 
+struct EffectData
+{
+    float3 position;
+    float progress;
+};
+
 cbuffer cbEffectInfo : register(b10)
 {
-    float g_fAge;
-    float g_fLifeTime;
-    float g_fProgress;
-    float padding;
+    EffectData g_EffectInfos[100];
 };
 
 struct VS_PARTICLE_INPUT
 {
     float3 position : POSITION;
     float2 uv : TEXCOORD0;
+    uint instID : SV_InstanceID;
 };
 
 struct VS_PARTICLE_OUTPUT
@@ -22,13 +26,15 @@ struct VS_PARTICLE_OUTPUT
     float4 position : SV_POSITION;
     float2 uv : TEXCOORD0;
     float2 localUV : TEXCOORD1;
+    float progress : TEXCOORD2;
 };
 
 VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
 {
     VS_PARTICLE_OUTPUT output;
 
-    float3 centerW = float3(gmtxGameObject._41, gmtxGameObject._42, gmtxGameObject._43);
+    float3 centerW = g_EffectInfos[input.instID].position;
+    float progress = g_EffectInfos[input.instID].progress;
 
     centerW.y -= 6.0f;
 
@@ -47,7 +53,7 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     int numRows = 4;
     int totalFrames = numCols * numRows;
 
-    int currentFrame = clamp((int) (g_fProgress * totalFrames), 0, totalFrames - 1);
+    int currentFrame = clamp((int) (progress * totalFrames), 0, totalFrames - 1);
 
     int col = currentFrame % numCols;
     int row = currentFrame / numCols;
@@ -65,10 +71,12 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     float maxV = ((row + 1) * uvHeight) - cropY;
 
     output.uv = float2(
-lerp(minU, maxU, input.uv.x),
-lerp(minV, maxV, input.uv.y)
-);
+    lerp(minU, maxU, input.uv.x),
+    lerp(minV, maxV, input.uv.y)
+    );
     output.localUV = input.uv;
+    
+    output.progress = progress;
     
     return output;
 }
@@ -85,7 +93,8 @@ float4 PSParticle(VS_PARTICLE_OUTPUT input) : SV_TARGET
     float dist = distance(input.localUV, float2(0.5f, 0.5f));
     float edgeFade = smoothstep(0.5f, 0.35f, dist);
     color.a *= edgeFade;
-    color.a *= smoothstep(1.0f, 0.0f, g_fProgress);
+    
+    color.a *= smoothstep(1.0f, 0.0f, input.progress);
 
     return color;
 }
