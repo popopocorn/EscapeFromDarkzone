@@ -812,8 +812,8 @@ CParticleMesh::CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	pVertices[0] = { XMFLOAT3(-halfW, 0.0f, 0.0f),    XMFLOAT2(0.0f, 1.0f) };
 	pVertices[1] = { XMFLOAT3(-halfW, fHeight, 0.0f), XMFLOAT2(0.0f, 0.0f) };
-	pVertices[2] = { XMFLOAT3(halfW, 0.0f, 0.0f),     XMFLOAT2(1.0f, 1.0f) };
-	pVertices[3] = { XMFLOAT3(halfW, fHeight, 0.0f),  XMFLOAT2(1.0f, 0.0f) };
+	pVertices[2] = { XMFLOAT3(halfW, 0.0f, 0.0f),    XMFLOAT2(1.0f, 1.0f) };
+	pVertices[3] = { XMFLOAT3(halfW, fHeight, 0.0f), XMFLOAT2(1.0f, 0.0f) };
 
 	ID3D12Resource* pd3dUploadBuffer = NULL;
 

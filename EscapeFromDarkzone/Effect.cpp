@@ -29,7 +29,7 @@ void CEffect::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 
 void CEffect::Play(XMFLOAT3 pos)
 {
-    SetPosition(pos.x, pos.y + 0.5f, pos.z);
+    SetPosition(pos.x, pos.y, pos.z);
     m_fAge = 0.0f;
     m_bIsDead = false;
 

@@ -155,9 +155,12 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pEffectShader));
 
-	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, 2.0f, 2.0f);
+	float effectWidth = 5.0f;
+	float effectHeight = 5.0f * (180.0f / 182.0f);
+
+	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion.dds", RESOURCE_TEXTURE2D, 0);
+	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 
 	if (pBombTexture->GetResource(0) == NULL)
 	{
@@ -172,7 +175,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
 	{
 		CEffect* pBomb = new CEffect(2.0f);
-		pBomb->SetPosition(0, -1000, 0);
+		pBomb->SetPosition(0, 0, 0);
 		pBomb->SetMesh(pBombMesh);
 		pBomb->SetMaterial(0, pBombMaterial);
 
