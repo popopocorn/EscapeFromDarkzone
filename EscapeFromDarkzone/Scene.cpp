@@ -67,7 +67,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	FILE* pInFile = NULL;
 
-	::fopen_s(&pInFile, "Model/map_0222_dds.bin", "rb");
+	::fopen_s(&pInFile, "Model/map0310_dds.bin", "rb");
 	if (pInFile)
 	{
 		::rewind(pInFile);
@@ -730,7 +730,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	}
 
 	if (m_pEnemyCursor)
-	{
+	{ 
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
 	}
 	//충돌검사
@@ -754,24 +754,24 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 		float fLaserLength = 15.0f;
 
-		//레	이저와 적 충돌 처리(나중에 벽도 추가하기)
-		if (m_pEnemyCursor)
-		{
-			const auto& oobbs = m_pEnemyCursor->GetOOBB();
+		////레이저와 적 충돌 처리(나중에 벽도 추가하기)
+		//if (m_pEnemyCursor)
+		//{
+		//	const auto& oobbs = m_pEnemyCursor->GetOOBB();
 
-			for (BoundingOrientedBox* pOOBB : oobbs)
-			{
-				float fDist = 0.0f;
+		//	for (BoundingOrientedBox* pOOBB : oobbs)
+		//	{
+		//		float fDist = 0.0f;
 
-				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-				{
-					if (fDist > 0.01f && fDist < fLaserLength)
-					{
-						fLaserLength = fDist;
-					}
-				}
-			}
-		}
+		//		if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+		//		{
+		//			if (fDist > 0.01f && fDist < fLaserLength)
+		//			{
+		//				fLaserLength = fDist;
+		//			}
+		//		}
+		//	}
+		//}
 
 		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
 
