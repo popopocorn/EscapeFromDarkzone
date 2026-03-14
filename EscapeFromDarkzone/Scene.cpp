@@ -159,6 +159,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	float effectWidth = 5.0f;
 	float effectHeight = 5.0f * (180.0f / 182.0f);
 
+	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
 
 	//bomb effect
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
