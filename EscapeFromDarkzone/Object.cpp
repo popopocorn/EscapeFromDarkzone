@@ -238,7 +238,7 @@ void CMaterial::PrepareShaders(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandLi
 	m_pSkinnedAnimationShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
-void CMaterial::UpdateShaderVariable(ID3D12GraphicsCommandList *pd3dCommandList)
+void CMaterial::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_xmf4AmbientColor, 16);
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_xmf4AlbedoColor, 20);
@@ -899,7 +899,7 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch,
 				if (m_ppMaterials[i])
 				{
 					if (not batch && m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
-					m_ppMaterials[i]->UpdateShaderVariable(pd3dCommandList);
+					m_ppMaterials[i]->UpdateShaderVariables(pd3dCommandList);
 				}
 
 				m_pMesh->Render(pd3dCommandList, i);

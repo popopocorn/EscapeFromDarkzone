@@ -123,11 +123,16 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
-	std::vector<CEffect*> m_vBombEffects;
-	ID3D12Resource* m_pd3dcbEffectInfo = nullptr;
-	EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
+	std::vector<CEffect*> m_vEffectPools[EFFECT_MAX];
 
+	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
+	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
+	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
 
+	CMaterial* m_pEffectMaterials[EFFECT_MAX];
+	CParticleMesh* m_pEffectMesh = NULL;
+
+	class CEffectShader* m_pEffectShader = NULL;
 private:
 	CGameObject* m_pLaserObject = NULL;
 
@@ -136,7 +141,7 @@ public:
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	void ResolveCollision(CGameObject* object);
 
-	void PlayBombEffect(XMFLOAT3 pos);
+	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
 
 	void SetPlayer(CPlayer* p);
 
