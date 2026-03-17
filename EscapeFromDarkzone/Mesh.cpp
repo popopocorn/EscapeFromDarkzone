@@ -836,9 +836,20 @@ CParticleMesh::CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
 	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+
 	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 6;
 }
 
 CParticleMesh::~CParticleMesh()
 {
+}
+
+void CParticleMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nInstances)
+{
+	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
+	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dPositionBufferView);
+
+	pd3dCommandList->IASetIndexBuffer(&m_pd3dSubSetIndexBufferViews[0]);
+
+	pd3dCommandList->DrawIndexedInstanced(6, nInstances, 0, 0, 0);
 }

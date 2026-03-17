@@ -150,8 +150,9 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	//이펙트	쉐이더
 	auto pEffectShader = std::make_unique<CEffectShader>();
-
 	CEffectShader* pRawEffectShader = pEffectShader.get();
+
+	m_pEffectShader = pRawEffectShader;
 
 	pRawEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	pRawEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
@@ -161,42 +162,56 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	float effectWidth = 5.0f;
 	float effectHeight = 5.0f * (180.0f / 182.0f);
 
-	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
+	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
+
+	//bomb effect
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-
-	if (pBombTexture->GetResource(0) == NULL)
-	{
-		OutputDebugString(L"폭발 텍스처 로드 실패\n");
-		__debugbreak();
-	}
 	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
 
-	CMaterial* pBombMaterial = new CMaterial(1);
-	pBombMaterial->SetTexture(pBombTexture);
+	m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
+	m_pEffectMaterials[EFFECT_BOMB]->SetShader(pRawEffectShader);
 
-	pBombMaterial->SetShader(pRawEffectShader);
+	//spark effect
+	CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
 
-	UINT ncbBufferSize = ((sizeof(EFFECT_INFO) * MAX_BOMB_EFFECTS + 255) & ~255);
+	m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
+	m_pEffectMaterials[EFFECT_SPARK]->SetShader(pRawEffectShader);
 
-	m_pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
-		ncbBufferSize, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-	m_pd3dcbEffectInfo->Map(0, NULL, (void**)&m_pcbMappedEffectInfo);
+	//blood effect
+	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	CScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
 
-	D3D12_GPU_VIRTUAL_ADDRESS gpuStartAddress = m_pd3dcbEffectInfo->GetGPUVirtualAddress();
+	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
+	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(pRawEffectShader);
 
-	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
+	for (int i = 0; i < EFFECT_MAX; i++)
 	{
-		CEffect* pBomb = new CEffect(2.0f);
-		pBomb->SetPosition(0, -1000, 0);
-		pBomb->SetMesh(pBombMesh);
-		pBomb->SetMaterial(0, pBombMaterial);
-		pBomb->SetEffectShader(pRawEffectShader);
+		// 인스턴스 버퍼	크기
+		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
 
-		D3D12_GPU_VIRTUAL_ADDRESS myGpuAddr = gpuStartAddress + (i * ncbBufferSize);
-		EFFECT_INFO* myCpuAddr = (EFFECT_INFO*)(m_pcbMappedEffectInfo + (i * ncbBufferSize));
+		// 버퍼	생성
+		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
+			nBufferSize, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+		m_pd3dInstBufferEffect[i]->Map(0, NULL, (void**)&m_pMappedInstBufferEffect[i]);
 
-		m_vBombEffects.push_back(pBomb);
+		// 인스턴 버퍼 뷰 생성
+		m_d3dInstBufferViewEffect[i].BufferLocation = m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
+		m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
+		m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
+	}
+
+	for (int i = 0; i < MAX_BOMB_EFFECTS; i++)
+	{
+		m_vEffectPools[EFFECT_BOMB].push_back(new CEffect(EFFECT_BOMB, 1.0f));
+		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.5f));
+		m_vEffectPools[EFFECT_BLOOD].push_back(new CEffect(EFFECT_BLOOD, 0.8f));
 	}
 	
 	for (const auto& shader : m_ppShaders) {
@@ -653,16 +668,21 @@ void CScene::ResolveCollision(CGameObject* object)
 	object->UpdateTransform(NULL);
 }
 
-void CScene::PlayBombEffect(XMFLOAT3 pos)
+void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 {
-	for (CEffect* pEffect : m_vBombEffects)
+	for (CEffect* pEffect : m_vEffectPools[type])
 	{
 		if (pEffect->IsDead())
 		{
 			pEffect->Play(pos);
-			break;
+			return;
 		}
 	}
+
+	float lifeTime = (type == EFFECT_BOMB) ? 1.0f : 0.5f;
+	CEffect* pNewEffect = new CEffect(type, lifeTime);
+	pNewEffect->Play(pos);
+	m_vEffectPools[type].push_back(pNewEffect);
 }
 
 void CScene::SetPlayer(CPlayer* p)
@@ -827,11 +847,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//}
 
 
-	for (CEffect* pEffect : m_vBombEffects) 
+
+	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
+	for (int type = 0; type < EFFECT_MAX; type++)
 	{
-		if (!pEffect->IsDead()) 
+		for (CEffect* pEffect : m_vEffectPools[type])
 		{
-			pEffect->Animate(fTimeElapsed);
+			if (!pEffect->IsDead())
+			{
+				pEffect->Animate(fTimeElapsed);
+			}
 		}
 	}
 	//충돌검사
@@ -899,40 +924,42 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	if(nPipelineState == SHADOW){
 		for (int i = 0; i < m_ppShaders.size(); i++) 
 		{
-			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow()) 
+			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		}
 	}
 	else {
-		
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 
-	bool bFirstEffect = true;
-	int activeCount = 0;
-	CEffect* pFirstActiveEffect = nullptr;
-	for (CEffect* pEffect : m_vBombEffects)
+	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+
+	for (int type = 0; type < EFFECT_MAX; type++)
 	{
-		if (!pEffect->IsDead())
+		int activeCount = 0;
+
+		for (CEffect* pEffect : m_vEffectPools[type])
 		{
-			if (activeCount == 0) pFirstActiveEffect = pEffect;
+			if (!pEffect->IsDead())
+			{
+				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
+				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
 
-			m_pcbMappedEffectInfo[activeCount].vPosition = pEffect->GetPosition();
-			m_pcbMappedEffectInfo[activeCount].fProgress = pEffect->GetProgress();
-			activeCount++;
+				activeCount++;
+				if (activeCount >= 100) break;
+			}
 		}
-	}
-	if (activeCount > 0 && pFirstActiveEffect != nullptr)
-	{
-		pFirstActiveEffect->m_ppMaterials[0]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 
-		pd3dCommandList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
+		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+		{
+			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
 
-		pFirstActiveEffect->m_ppMaterials[0]->UpdateShaderVariable(pd3dCommandList);
+			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
 
-		pFirstActiveEffect->m_pMesh->Render(pd3dCommandList, 0, activeCount);
+			m_pEffectMesh->Render(pd3dCommandList, activeCount);
+		}
 	}
 }
 

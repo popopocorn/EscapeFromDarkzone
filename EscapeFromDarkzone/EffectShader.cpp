@@ -7,12 +7,16 @@ CEffectShader::~CEffectShader() {}
 
 D3D12_INPUT_LAYOUT_DESC CEffectShader::CreateInputLayout()
 {
-    UINT nInputElementDescs = 2;
+    UINT nInputElementDescs = 4;
     D3D12_INPUT_ELEMENT_DESC* pDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 
+	// ½¦ÀÌ´õ 0¹ø ½½·Ô: Á¤Á¡ µ¥ÀÌÅÍ (PER_VERTEX_DATA)
     pDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-
     pDescs[1] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+
+	// ½¦ÀÌ´õ 1¹ø ½½·Ô: ÀÎ½ºÅÏ½º µ¥ÀÌÅÍ (PER_INSTANCE_DATA)
+    pDescs[2] = { "INST_POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 };
+    pDescs[3] = { "INST_PROGRESS", 0, DXGI_FORMAT_R32_FLOAT, 1, 12, D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1 };
 
     D3D12_INPUT_LAYOUT_DESC layout;
     layout.pInputElementDescs = pDescs;

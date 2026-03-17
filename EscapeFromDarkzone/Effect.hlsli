@@ -1,24 +1,18 @@
+// Effect.hlsli
 #ifndef EFFECT_HLSLI
 #define EFFECT_HLSLI
 
 #include "common.hlsli"
 
-struct EffectData
-{
-    float3 position;
-    float progress;
-};
-
-cbuffer cbEffectInfo : register(b10)
-{
-    EffectData g_EffectInfos[100];
-};
-
 struct VS_PARTICLE_INPUT
 {
+    // 정점 데이터
     float3 position : POSITION;
     float2 uv : TEXCOORD0;
-    uint instID : SV_InstanceID;
+    
+    // 인스턴스 데이터
+    float3 instPosition : INST_POSITION;
+    float instProgress : INST_PROGRESS;
 };
 
 struct VS_PARTICLE_OUTPUT
@@ -33,8 +27,8 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
 {
     VS_PARTICLE_OUTPUT output;
 
-    float3 centerW = g_EffectInfos[input.instID].position;
-    float progress = g_EffectInfos[input.instID].progress;
+    float3 centerW = input.instPosition;
+    float progress = input.instProgress;
 
     centerW.y -= 6.0f;
 
@@ -71,13 +65,13 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     float maxV = ((row + 1) * uvHeight) - cropY;
 
     output.uv = float2(
-    lerp(minU, maxU, input.uv.x),
-    lerp(minV, maxV, input.uv.y)
+        lerp(minU, maxU, input.uv.x),
+        lerp(minV, maxV, input.uv.y)
     );
+
     output.localUV = input.uv;
-    
     output.progress = progress;
-    
+
     return output;
 }
 

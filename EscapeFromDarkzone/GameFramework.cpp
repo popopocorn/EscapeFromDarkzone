@@ -389,10 +389,11 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				XMFLOAT3 look = m_pPlayer->GetLookVector();
 
 				XMFLOAT3 bombPos = Vector3::Add(pos, Vector3::ScalarProduct(look, 3.0f, false));
-
 				bombPos.y += 5.0f;
 
-				m_pScene->PlayBombEffect(bombPos);
+				//m_pScene->PlayEffect(EFFECT_BOMB, bombPos);
+
+				m_pScene->PlayEffect(EFFECT_SPARK, bombPos); 
 			}
 			break;
 		}

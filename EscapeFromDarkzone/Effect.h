@@ -5,6 +5,13 @@
 
 class CEffectShader;
 
+enum EFFECT_TYPE
+{
+    EFFECT_BOMB = 0,
+    EFFECT_SPARK,
+    EFFECT_BLOOD,
+    EFFECT_MAX //ÃÑ °³¼ö
+};
 struct EFFECT_INFO
 {
     XMFLOAT3 vPosition;
@@ -13,6 +20,8 @@ struct EFFECT_INFO
 class CEffect : public CGameObject
 {
 protected:
+    EFFECT_TYPE m_eEffectType;
+
     float m_fAge = 0.0f;
     float m_fLifeTime = 1.0f;
     bool m_bIsDead = true;
@@ -22,7 +31,7 @@ protected:
 public:
 
 public:
-    CEffect(float lifeTime = 1.0f);
+    CEffect(EFFECT_TYPE type, float lifeTime = 1.0f);
     virtual ~CEffect();
 
     virtual void Animate(float fTimeElapsed) override;

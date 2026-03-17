@@ -3,8 +3,9 @@
 #include "Effect.h"
 #include "EffectShader.h"
 
-CEffect::CEffect(float lifeTime) : CGameObject(1)
+CEffect::CEffect(EFFECT_TYPE type, float lifeTime) : CGameObject(1)
 {
+    m_eEffectType = type;
     m_fLifeTime = lifeTime;
     m_fAge = 0.0f;
     m_bIsDead = true;
