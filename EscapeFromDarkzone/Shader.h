@@ -12,11 +12,6 @@ class CGameObject;
 class CCamera;
 class CDebugObject;
 
-struct Trash {
-	CGameObject* obj;
-	UINT64 FenceValue;
-};
-
 class CShader
 {
 public:
@@ -60,8 +55,6 @@ public:
 	virtual void ReleaseObjects() { }
 	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return NULL; }
 	bool DoShadow() { return do_shadow; }
-	virtual void DeleteObject(UINT64 fence ) {};
-	virtual void ProcessingGarbageQueue(UINT64 completed) {};
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -70,7 +63,6 @@ protected:
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC	m_d3dPipelineStateDesc;
 
 	float								m_fElapsedTime = 0.0f;
-	std::queue<Trash>					GarbageQueue;
 public: 
 	std::vector<ID3D12PipelineState*> m_pd3dPipelineState;
 };
@@ -206,8 +198,7 @@ public:
 	virtual void ReleaseUploadBuffers();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
-	virtual void DeleteObject(UINT64 fence);
-	virtual void ProcessingGarbageQueue(UINT64 completed);
+
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };
@@ -215,14 +206,9 @@ protected:
 
 class ViewShader : public CStandardShader {
 public:
-	ViewShader();
 
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
-
-	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
-	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
-
 
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
@@ -236,11 +222,7 @@ private:
 };
 
 class PlayerShader : public CSkinnedAnimationStandardShader {
-
 public:
-	PlayerShader();
-	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
-	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 };
 

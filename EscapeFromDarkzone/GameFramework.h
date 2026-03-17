@@ -87,7 +87,7 @@ private:
 	CCamera						*m_pCamera = NULL;	// 참조용
 	std::unique_ptr<CCamera>	observer;
 	std::unique_ptr<ShadowMap>	shadowmap;
-	
+
 	bool						observing = false;
 
 	POINT						m_ptOldCursorPos;
