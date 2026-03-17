@@ -357,11 +357,12 @@ class CGameObject
 {
 private:
 	int								m_nReferences = 0;
-
+	
 protected:
 	BoundingOrientedBox				OOBBModel;
 	BoundingOrientedBox				OOBBWorld;
-public:
+
+	bool							Alive = true;
 	bool							HasOOBB = false;
 	std::vector<BoundingOrientedBox*> OOBBs;
 public:
@@ -458,6 +459,8 @@ public:
 	virtual void HandleCollision(XMFLOAT3 normal) {};
 
 	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
+
+	bool IsAlive() { return Alive; }
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 
