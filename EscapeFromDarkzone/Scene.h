@@ -7,6 +7,7 @@
 #include "Shader.h"
 #include "Player.h"
 #include "EnemyObject.h"
+#include "Effect.h"
 
 #define MAX_LIGHTS						16 
 
@@ -14,6 +15,7 @@
 #define SPOT_LIGHT						2
 #define DIRECTIONAL_LIGHT				3
 
+#define MAX_BOMB_EFFECTS 20				//ÆøÅº È¿°ú ÃÖ´ë °³¼ö
 struct LIGHT
 {
 	XMFLOAT4							m_xmf4Ambient;
@@ -113,7 +115,6 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
@@ -130,6 +131,11 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
+	std::vector<CEffect*> m_vBombEffects;
+	ID3D12Resource* m_pd3dcbEffectInfo = nullptr;
+	EFFECT_INFO* m_pcbMappedEffectInfo = nullptr;
+
+
 private:
 	CGameObject* m_pLaserObject = NULL;
 
@@ -137,6 +143,8 @@ public:
 	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	void ResolveCollision(CGameObject* object);
+
+	void PlayBombEffect(XMFLOAT3 pos);
 
 	void SetPlayer(CPlayer* p);
 

@@ -9,6 +9,7 @@
 #include "Shader.h"
 #include "InputManager.h"
 #include"ShadowMap.h"
+#include "EffectShader.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -147,8 +148,56 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
+	//이펙트	쉐이더
+	auto pEffectShader = std::make_unique<CEffectShader>();
 
-	
+	CEffectShader* pRawEffectShader = pEffectShader.get();
+
+	pRawEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pRawEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
+
+	m_ppShaders.push_back(std::move(pEffectShader));
+
+	float effectWidth = 5.0f;
+	float effectHeight = 5.0f * (180.0f / 182.0f);
+
+	CParticleMesh* pBombMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
+	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+
+	if (pBombTexture->GetResource(0) == NULL)
+	{
+		OutputDebugString(L"폭발 텍스처 로드 실패\n");
+		__debugbreak();
+	}
+	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
+
+	CMaterial* pBombMaterial = new CMaterial(1);
+	pBombMaterial->SetTexture(pBombTexture);
+
+	pBombMaterial->SetShader(pRawEffectShader);
+
+	UINT ncbBufferSize = ((sizeof(EFFECT_INFO) * MAX_BOMB_EFFECTS + 255) & ~255);
+
+	m_pd3dcbEffectInfo = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
+		ncbBufferSize, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+	m_pd3dcbEffectInfo->Map(0, NULL, (void**)&m_pcbMappedEffectInfo);
+
+	D3D12_GPU_VIRTUAL_ADDRESS gpuStartAddress = m_pd3dcbEffectInfo->GetGPUVirtualAddress();
+
+	for (int i = 0; i < MAX_BOMB_EFFECTS; ++i)
+	{
+		CEffect* pBomb = new CEffect(2.0f);
+		pBomb->SetPosition(0, -1000, 0);
+		pBomb->SetMesh(pBombMesh);
+		pBomb->SetMaterial(0, pBombMaterial);
+		pBomb->SetEffectShader(pRawEffectShader);
+
+		D3D12_GPU_VIRTUAL_ADDRESS myGpuAddr = gpuStartAddress + (i * ncbBufferSize);
+		EFFECT_INFO* myCpuAddr = (EFFECT_INFO*)(m_pcbMappedEffectInfo + (i * ncbBufferSize));
+
+		m_vBombEffects.push_back(pBomb);
+	}
 	
 	for (const auto& shader : m_ppShaders) {
 		auto* objs = shader->GetObj();
@@ -249,7 +298,7 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dDescriptorRanges[10].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 
-	D3D12_ROOT_PARAMETER pd3dRootParameters[17];
+	D3D12_ROOT_PARAMETER pd3dRootParameters[17 + 1];
 
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	pd3dRootParameters[0].Descriptor.ShaderRegister = 1; //Camera
@@ -337,6 +386,10 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dRootParameters[16].Descriptor.RegisterSpace = 0;
 	pd3dRootParameters[16].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	pd3dRootParameters[17].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	pd3dRootParameters[17].Descriptor.ShaderRegister = 10; // b10
+	pd3dRootParameters[17].Descriptor.RegisterSpace = 0;
+	pd3dRootParameters[17].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	D3D12_STATIC_SAMPLER_DESC pd3dSamplerDescs[3];
 
@@ -380,7 +433,7 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	pd3dSamplerDescs[2].RegisterSpace = 0;
 	pd3dSamplerDescs[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
 	D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
 	::ZeroMemory(&d3dRootSignatureDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
 	d3dRootSignatureDesc.NumParameters = _countof(pd3dRootParameters);
@@ -397,6 +450,7 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	if (pd3dErrorBlob) pd3dErrorBlob->Release();
 	return(pd3dGraphicsRootSignature);
 }
+
 void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
@@ -599,6 +653,18 @@ void CScene::ResolveCollision(CGameObject* object)
 	object->UpdateTransform(NULL);
 }
 
+void CScene::PlayBombEffect(XMFLOAT3 pos)
+{
+	for (CEffect* pEffect : m_vBombEffects)
+	{
+		if (pEffect->IsDead())
+		{
+			pEffect->Play(pos);
+			break;
+		}
+	}
+}
+
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
@@ -753,6 +819,14 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	//}
 
+
+	for (CEffect* pEffect : m_vBombEffects) 
+	{
+		if (!pEffect->IsDead()) 
+		{
+			pEffect->Animate(fTimeElapsed);
+		}
+	}
 	//충돌검사
 	if (m_pPlayer)
 	{
@@ -848,7 +922,30 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 
+	bool bFirstEffect = true;
+	int activeCount = 0;
+	CEffect* pFirstActiveEffect = nullptr;
+	for (CEffect* pEffect : m_vBombEffects)
+	{
+		if (!pEffect->IsDead())
+		{
+			if (activeCount == 0) pFirstActiveEffect = pEffect;
 
+			m_pcbMappedEffectInfo[activeCount].vPosition = pEffect->GetPosition();
+			m_pcbMappedEffectInfo[activeCount].fProgress = pEffect->GetProgress();
+			activeCount++;
+		}
+	}
+	if (activeCount > 0 && pFirstActiveEffect != nullptr)
+	{
+		pFirstActiveEffect->m_ppMaterials[0]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+
+		pd3dCommandList->SetGraphicsRootConstantBufferView(17, m_pd3dcbEffectInfo->GetGPUVirtualAddress());
+
+		pFirstActiveEffect->m_ppMaterials[0]->UpdateShaderVariable(pd3dCommandList);
+
+		pFirstActiveEffect->m_pMesh->Render(pd3dCommandList, 0, activeCount);
+	}
 }
 
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

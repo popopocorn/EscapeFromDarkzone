@@ -66,7 +66,8 @@ private:
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
 	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
 
-	ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
+	//ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
+	ID3D12CommandAllocator* m_pd3dCommandAllocators[m_nSwapChainBuffers];
 	ID3D12CommandQueue			*m_pd3dCommandQueue = NULL;
 	ID3D12GraphicsCommandList	*m_pd3dCommandList = NULL;
 
