@@ -55,6 +55,7 @@ public:
 	virtual void ReleaseObjects() { }
 	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return NULL; }
 	bool DoShadow() { return do_shadow; }
+	virtual void DeleteObject() {};
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -198,7 +199,7 @@ public:
 	virtual void ReleaseUploadBuffers();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
-
+	virtual void DeleteObject();
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };

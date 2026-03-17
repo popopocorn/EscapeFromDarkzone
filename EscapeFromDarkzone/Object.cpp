@@ -901,7 +901,6 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch,
 					if (not batch && m_ppMaterials[i]->m_pShader) m_ppMaterials[i]->m_pShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 					m_ppMaterials[i]->UpdateShaderVariable(pd3dCommandList);
 				}
-
 				m_pMesh->Render(pd3dCommandList, i);
 			}
 		}

@@ -690,6 +690,7 @@ void CGameFramework::FrameAdvance()
 	m_pdxgiSwapChain->Present(0, 0);
 #endif
 #endif
+	m_pScene->DeleteDeadObject();
 
 	MoveToNextFrame();
 

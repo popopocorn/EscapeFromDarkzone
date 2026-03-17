@@ -46,6 +46,8 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
+
+
 void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
@@ -73,7 +75,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		::rewind(pInFile);
 		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
 		map->SetPosition(-150, -0.5, -150);
-		map.get()->SetOOBB(NULL);
+		map->SetOOBB(NULL);
 		stdshader->addObjects(std::move(map));
 		::fclose(pInFile);
 	}
@@ -106,14 +108,6 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	
 	m_ppShaders.push_back(std::move(view));
 	
-	//적 오브젝트
-	
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->HasOOBB = true;
-
-	m_pEnemyCursor = pEnemy;
 
 	// 레이저 오브젝트
 	auto pLaserShader = std::make_unique<CLaserShader>();
@@ -134,6 +128,14 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	//디버그 쉐이더
 	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+
+
+	//적 오브젝트
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	pEnemy->SetOOBB(NULL);
 
 	//오브젝트 쉐이더(스탠다드, 스킨드)
 	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
@@ -608,7 +610,16 @@ void CScene::SetPlayer(CPlayer* p)
 
 	ShadowCameraManager.SetPlayer(p->GetCamera());
 	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
-	
+	if (m_ppShaders[SHADERIDX::ENEMY]) {
+		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+		for (auto& obj : *objs) {
+			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+			if (pEnemy) {
+				pEnemy->SetPlayer(m_pPlayer);
+			}
+		}
+	}
+
 }
 
 CCamera* CScene::GetLightCamera(int idx)
@@ -616,31 +627,49 @@ CCamera* CScene::GetLightCamera(int idx)
 	return &ShadowCameraManager.GetCameras()[idx];
 }
 
+void CScene::DeleteDeadObject()
+{
+	for (auto& shader : m_ppShaders) {
+		shader->DeleteObject();
+	}
+}
+
 void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	//handlehp, handlecollision 함수 통일해야함
 	if (nMessageID == WM_LBUTTONDOWN)
 	{
-		if (!m_pPlayer || !m_pEnemyCursor) return;
+		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
 		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 		XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
 
 		XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+		if (m_ppShaders[SHADERIDX::ENEMY]) {
+			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+			for (auto& obj : *objs) {
+				const auto& oobbs = obj->GetOOBB();
 
-		const auto& oobbs = m_pEnemyCursor->GetOOBB();
+				for (BoundingOrientedBox* pOOBB : oobbs)
+				{
+					float fDist = 0.0f;
 
-		for (BoundingOrientedBox* pOOBB : oobbs)
-		{
-			float fDist = 0.0f;
-
-			if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-			{
-				wchar_t szDebug[256];
-				swprintf_s(szDebug, L"==== [TARGET HIT] Distance: %f ====\n", fDist);
-				OutputDebugString(szDebug);
-				break;
+					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					{
+						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+						if (pEnemy) {
+							pEnemy->HandleHP(10.0f);
+							/*wchar_t szDebug[256];
+							swprintf_s(szDebug, L"==== [TARGET HIT] Distance: %f ====\n", fDist);
+							OutputDebugString(szDebug);*/
+						}
+						
+						break;
+					}
+				}
 			}
 		}
+		
 	}
 }
 
@@ -723,21 +752,22 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//	m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	//}
-	if (m_pPlayer && m_pLights.size() > 1)
-	{
-		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
-		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
-	}
 
-	if (m_pEnemyCursor)
-	{ 
-		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
-	}
 	//충돌검사
 	if (m_pPlayer)
-	ResolveCollision(m_pPlayer);
-	ResolveCollision(m_pEnemyCursor);
-
+	{
+		ResolveCollision(m_pPlayer);
+	}
+	if (m_ppShaders[SHADERIDX::ENEMY]) {
+		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+		for (auto& obj : *objs) {
+			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+			if (pEnemy) {
+				ResolveCollision(pEnemy);
+			}
+		}
+	}
+	
 	//레이저 충돌 처리
 	if (m_pPlayer && m_pLaserObject)
 	{

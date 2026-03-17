@@ -22,7 +22,7 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 	if (pEnemyModel) delete pEnemyModel;
 
-	SetOOBB(NULL);
+	//SetOOBB(NULL);
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
@@ -43,6 +43,17 @@ void CEnemyObject::ChangeState(std::unique_ptr<EnemyState> pNewState)
 	m_pState->Enter(this);
 }
 
+void CEnemyObject::HandleHP(float value)
+{
+	if(hp>0) hp -= value;
+	else {
+		Alive = false;
+		ChangeState(std::make_unique<EnemyDie>());
+		OutputDebugString(L"Dead\n");
+	}
+	
+}
+
 void CEnemyObject::Animate(float fTimeElapsed)
 {
 	CGameObject::Animate(fTimeElapsed);
@@ -54,11 +65,11 @@ void CEnemyObject::Update(float fTimeElapsed)
 {
 	m_xmf3PrevPos = m_xmf3Position;
 
-	if (m_pState)
+	if ( m_pState)
 	{
 		m_pState->Update(this, fTimeElapsed);
 	}
-
+	if (not Alive)return;
 	XMFLOAT3 direction = m_xmf3MoveDir;
 	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
 
@@ -191,5 +202,25 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 }
 
 void EnemyRun::Exit(CEnemyObject* pEnemy)
+{
+}
+
+bool EnemyDie::Enter(CEnemyObject* pEnemy)
+{
+	auto* pController = pEnemy->m_pSkinnedAnimationController;
+	if (!pController) return false;
+
+	pController->SetTrackEnable(0, false);
+	pController->SetTrackEnable(1, true);
+	pController->SetTrackAnimationSet(1, 0);
+	pController->SetTrackPosition(1, 0.0f);
+	return true;
+}
+
+void EnemyDie::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+}
+
+void EnemyDie::Exit(CEnemyObject* pEnemy)
 {
 }

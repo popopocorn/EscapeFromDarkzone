@@ -576,6 +576,19 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 	}
 }
 
+void CSkinnedAnimationObjectsShader::DeleteObject()
+{
+	std::erase_if(m_ppObjects, [](std::unique_ptr<CGameObject>& obj) {
+			if (not obj->IsAlive())
+			{
+				CGameObject* pRawObj = obj.release();
+				pRawObj->Release();
+				return true;
+			}
+			return false;
+		});
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 

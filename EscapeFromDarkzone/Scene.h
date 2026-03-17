@@ -40,6 +40,14 @@ struct LIGHTS
 
 class ShadowMap;
 
+enum SHADERIDX : size_t{
+	MAP = 0,
+	VIEW = 1,
+	LASER = 2,
+	ENEMY = 3,
+
+};
+
 class CScene
 {
 public:
@@ -68,7 +76,6 @@ public:
 	void ReleaseUploadBuffers();
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
-	CEnemyObject* m_pEnemyCursor = NULL;	//참조용 객체 관리 X, raw포인터가 맞음
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
@@ -137,4 +144,5 @@ public:
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
+	void DeleteDeadObject();
 };
