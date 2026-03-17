@@ -688,7 +688,7 @@ void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
-	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[1]->GetObj();
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 	CGameObject* pGameObj = (*pVector)[0].get();
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
@@ -966,7 +966,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 
-	if (m_ppShaders[1]) m_ppShaders[1]->Render(pd3dCommandList, pCamera, true, THROUGH);
+	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
 
 
 }
