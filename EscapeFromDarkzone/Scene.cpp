@@ -693,10 +693,17 @@ CCamera* CScene::GetLightCamera(int idx)
 	return &ShadowCameraManager.GetCameras()[idx];
 }
 
-void CScene::DeleteDeadObject()
+void CScene::DeleteDeadObject(UINT64 Fence)
 {
 	for (auto& shader : m_ppShaders) {
-		shader->DeleteObject();
+		shader->DeleteObject(Fence);
+	}
+}
+
+void CScene::DeleteTrash(UINT64 Fence)
+{
+	for (auto& shader : m_ppShaders) {
+		shader->ProcessingGarbageQueue(Fence);
 	}
 }
 
@@ -857,25 +864,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		XMVECTOR rayDir = vLook;
 
 		float fLaserLength = 15.0f;
-
-		////레이저와 적 충돌 처리(나중에 벽도 추가하기)
-		//if (m_pEnemyCursor)
-		//{
-		//	const auto& oobbs = m_pEnemyCursor->GetOOBB();
-
-		//	for (BoundingOrientedBox* pOOBB : oobbs)
-		//	{
-		//		float fDist = 0.0f;
-
-		//		if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-		//		{
-		//			if (fDist > 0.01f && fDist < fLaserLength)
-		//			{
-		//				fLaserLength = fDist;
-		//			}
-		//		}
-		//	}
-		//}
 
 		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
 

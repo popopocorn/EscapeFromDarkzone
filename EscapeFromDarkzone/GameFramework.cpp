@@ -736,9 +736,21 @@ void CGameFramework::FrameAdvance()
 	m_pdxgiSwapChain->Present(0, 0);
 #endif
 #endif
-	m_pScene->DeleteDeadObject();
+	UINT64 targetFence = 0;
+	for (int i = 0; i < m_nSwapChainBuffers; i++)
+	{
+		if (m_nFenceValues[i] > targetFence) targetFence = m_nFenceValues[i];
+	}
+	targetFence++; 
+	if (m_pScene) m_pScene->DeleteDeadObject(targetFence);
 
+	
 	MoveToNextFrame();
+
+	UINT64 done = m_pd3dFence->GetCompletedValue();
+	if (m_pScene) m_pScene->DeleteTrash(done);
+
+
 
 	m_GameTimer.GetFrameRate(m_pszFrameRate + 12, 37);
 	size_t nLength = _tcslen(m_pszFrameRate);

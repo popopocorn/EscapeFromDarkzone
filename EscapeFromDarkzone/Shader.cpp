@@ -600,17 +600,34 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dComma
 	}
 }
 
-void CSkinnedAnimationObjectsShader::DeleteObject()
+void CSkinnedAnimationObjectsShader::DeleteObject(UINT64 fence)
 {
-	std::erase_if(m_ppObjects, [](std::unique_ptr<CGameObject>& obj) {
+	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
 			if (not obj->IsAlive())
 			{
 				CGameObject* pRawObj = obj.release();
-				pRawObj->Release();
+				GarbageQueue.push({ pRawObj, fence });
 				return true;
 			}
 			return false;
 		});
+}
+
+void CSkinnedAnimationObjectsShader::ProcessingGarbageQueue(UINT64 completed)
+{
+	while (!GarbageQueue.empty()) 
+	{
+		auto& garbage = GarbageQueue.front();
+		if (completed >= garbage.FenceValue)
+		{
+			garbage.obj->Release();
+			GarbageQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

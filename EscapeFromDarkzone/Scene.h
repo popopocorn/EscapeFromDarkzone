@@ -152,5 +152,6 @@ public:
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
-	void DeleteDeadObject();
+	void DeleteDeadObject(UINT64 Fence);
+	void DeleteTrash(UINT64 Fence);
 };

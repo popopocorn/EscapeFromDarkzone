@@ -22,7 +22,7 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 	if (pEnemyModel) delete pEnemyModel;
 
-	//SetOOBB(NULL);
+	
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
