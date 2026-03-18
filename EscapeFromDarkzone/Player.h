@@ -71,6 +71,7 @@ protected:
 
 	char send_buf[BUF_SIZE];
 
+	CGameObject* m_pWeapon = nullptr;
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -127,6 +128,8 @@ public:
 	virtual void HandleCollision(XMFLOAT3 normal);
 	void UpdateDirection();
 
+	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
+	CGameObject* GetWeapon() { return m_pWeapon; }
 };
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler

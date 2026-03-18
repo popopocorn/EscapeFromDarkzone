@@ -71,6 +71,8 @@ public:
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
 	CEnemyObject* m_pEnemyCursor = NULL;	//참조용 객체 관리 X, raw포인터가 맞음
 
+	CGameObject* m_pWeaponObject = nullptr;
+	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera* m_pCamera = nullptr;	

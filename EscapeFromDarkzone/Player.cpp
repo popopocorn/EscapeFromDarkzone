@@ -347,6 +347,30 @@ void CPlayer::UpdateDirection()
 	//OutputDebugStringW(buffer);
 }
 
+void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
+{
+	if (!pWeapon || !pstrSocketName) return;
+
+	// 플레이어의 계층 구조에서 무기를 부착할 뼈대(소켓) 프레임을 찾습니다.
+	CGameObject* pWeaponSocket = FindFrame(pstrSocketName);
+
+	if (pWeaponSocket)
+	{
+		m_pWeapon = pWeapon;
+
+		// 무기 객체를 소켓(뼈대)의 자식으로 등록합니다 (참조 카운트 증가)
+		pWeaponSocket->SetChild(m_pWeapon, true);
+
+		// 무기의 로컬 위치 및 회전 초기화 (필요시 손에 맞게 오프셋 수정)
+		m_pWeapon->SetPosition(0.0f, 0.0f, 0.0f);
+
+		OutputDebugString(L"성공: 무기가 플레이어 소켓에 장착되었습니다.\n");
+	}
+	else
+	{
+		OutputDebugString(L"경고: 소켓(뼈대) 프레임을 찾을 수 없습니다!\n");
+	}
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 

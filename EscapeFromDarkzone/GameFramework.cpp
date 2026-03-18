@@ -493,6 +493,14 @@ void CGameFramework::BuildObjects()
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
 
+	CGameObject* pLoadedWeapon = m_pScene->GetWeaponObject();
+	if (pLoadedWeapon)
+	{
+		// TODO: 실제 플레이어 캐릭터의 오른손 뼈대 이름으로 문자열을 변경하세요!
+		// 예: "Bip001 R Hand", "mixamorig:RightHand" 등
+		m_pPlayer->EquipWeapon(pLoadedWeapon, "mixamorig:RightHand");
+	}
+
 	m_pCamera = m_pPlayer->GetCamera();
 
 	if (m_pScene) m_pScene->SetCamera(m_pCamera);

@@ -51,7 +51,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 5); //SuperCobra(17), Gunship(2), Player:Mi24(1), Angrybot()
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -83,6 +83,23 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		OutputDebugString(L"Error: Map file not found.\n");
 	}
 
+	FILE* pWeaponFile = NULL;
+	::fopen_s(&pWeaponFile, "Model/Classic_M4.bin", "rb"); // TODO: 실제 무기 bin 파일 이름으로 변경
+	if (pWeaponFile)
+	{
+		::rewind(pWeaponFile);
+		// 무기 로드 및 포인터 보관 (추후 프레임워크에서 이 포인터를 가져가 장착)
+		m_pWeaponObject = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pWeaponFile, stdshader.get(), 0);
+		m_pWeaponObject->SetOOBB(NULL); // 무기는 기본적으로 OOBB 끄기 (필요 시 수정)
+
+		// 무기 역시 맵과 동일한 Standard 쉐이더로 렌더링되게 등록
+		//stdshader->addObjects(std::unique_ptr<CGameObject>(m_pWeaponObject));
+		::fclose(pWeaponFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: Weapon file not found.\n");
+	}
 	m_ppShaders.push_back(std::move(stdshader));
 
 

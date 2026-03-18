@@ -1316,15 +1316,33 @@ CGameObject *CGameObject::LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, I
 	return(pGameObject);
 }
 
-void CGameObject::PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent)
+void CGameObject::PrintFrameInfo(CGameObject* pGameObject, CGameObject* pParent)
 {
+	if (!pGameObject) return;
+
 	TCHAR pstrDebug[256] = { 0 };
 
-	_stprintf_s(pstrDebug, 256, _T("(Frame: %p) (Parent: %p)\n"), pGameObject, pParent);
+#ifdef UNICODE
+	_stprintf_s(pstrDebug, 256,
+		_T("(Frame: %p) Name: %S (Parent: %p)\n"),
+		pGameObject,
+		pGameObject->m_pstrFrameName,
+		pParent);
+#else
+	_stprintf_s(pstrDebug, 256,
+		"(Frame: %p) Name: %s (Parent: %p)\n",
+		pGameObject,
+		pGameObject->m_pstrFrameName,
+		pParent);
+#endif
+
 	OutputDebugString(pstrDebug);
 
-	if (pGameObject->m_pSibling) CGameObject::PrintFrameInfo(pGameObject->m_pSibling, pParent);
-	if (pGameObject->m_pChild) CGameObject::PrintFrameInfo(pGameObject->m_pChild, pGameObject);
+	if (pGameObject->m_pChild)
+		PrintFrameInfo(pGameObject->m_pChild, pGameObject);
+
+	if (pGameObject->m_pSibling)
+		PrintFrameInfo(pGameObject->m_pSibling, pParent);
 }
 
 void CGameObject::LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel)
