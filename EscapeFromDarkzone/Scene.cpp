@@ -685,7 +685,7 @@ void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
-	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[1]->GetObj();
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 	CGameObject* pGameObj = (*pVector)[0].get();
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
@@ -818,6 +818,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
 	}
+
+
 	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
 	for (int type = 0; type < EFFECT_MAX; type++)
 	{
@@ -902,42 +904,51 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	if (nPipelineState == SHADOW) {
 		for (int i = 0; i < m_ppShaders.size(); i++)
-		{
-			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
-				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		}
-	}
-	else {
-		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}
+			pd3dCommandList->OMSetStencilRef(0xff);
 
-	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
-
-	for (int type = 0; type < EFFECT_MAX; type++)
-	{
-		int activeCount = 0;
-
-		for (CEffect* pEffect : m_vEffectPools[type])
-		{
-			if (!pEffect->IsDead())
+		if (nPipelineState == SHADOW) {
+			for (int i = 0; i < m_ppShaders.size(); i++)
 			{
-				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
-
-				activeCount++;
-				if (activeCount >= 100) break;
+				if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
+					m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 			}
 		}
+		else {
+			if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+			for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+			m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+		}
 
-		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+		if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+
+		for (int type = 0; type < EFFECT_MAX; type++)
 		{
-			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+			int activeCount = 0;
 
-			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+			for (CEffect* pEffect : m_vEffectPools[type])
+			{
+				if (!pEffect->IsDead())
+				{
+					m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
+					m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
 
-			m_pEffectMesh->Render(pd3dCommandList, activeCount);
+					activeCount++;
+					if (activeCount >= 100) break;
+				}
+			}
+
+			if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+			{
+				m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+
+				pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+
+				m_pEffectMesh->Render(pd3dCommandList, activeCount);
+			}
 		}
 	}
 }
+//void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+//{
+//	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
+//}
