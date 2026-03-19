@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "Shader.h"
 #include "InputManager.h"
+#include "Collision.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CPlayer
@@ -264,46 +265,39 @@ void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 	state->Enter(this);
 }
 
-void CPlayer::HandleCollision(XMFLOAT3 normal)
+void CPlayer::HandleCollision(const ColResult& result)
 {
-	if (normal.y > 0.5f)
-	{
-		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
-		return;
-	}
+	if (!result.isCollide) return;
 
-	XMVECTOR vNormal = XMLoadFloat3(&normal);
+	
+	CollVector.push_back(result.normal);
+
+	
+	XMFLOAT3 curPos = GetPosition();
+	curPos.x += result.mtv.x;
+	curPos.z += result.mtv.z;
+
+	
+	SetPosition(curPos);
+	UpdateTransform(NULL);
+
+	
+	XMVECTOR vNormal = XMLoadFloat3(&result.normal);
 	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
-	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
 
-	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-	float fPenetrationDepth = XMVectorGetX(vDot);
-
-	if (fPenetrationDepth < 0.0f)
-	{
-		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
-
-		vCurrPos += vCorrection;
-		XMStoreFloat3(&m_xmf3Position, vCurrPos);
-
-		CGameObject::SetPosition(m_xmf3Position);
-
-		UpdateTransform(NULL);
-	}
-
+	
 	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
 	float fVelDot = XMVectorGetX(vVelDot);
 
+	
 	if (fVelDot < 0.0f)
 	{
-		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
-
-		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
+		XMVECTOR vSlideVel = vVelocity - XMVectorScale(vNormal, fVelDot);
+		if (XMVectorGetX(XMVector3LengthSq(vSlideVel)) < 0.0001f)
 		{
 			vSlideVel = XMVectorZero();
 		}
+
 		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
 	}
 }
@@ -311,7 +305,7 @@ void CPlayer::UpdateDirection()
 {
 	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
 	{
-		CollVector.clear(); // 이동 안 해도 충돌 정보는 비워줘야 함
+		CollVector.clear(); 
 		return;
 	}
 	XMVECTOR currentDirVec = XMLoadFloat3(&MoveDir);
@@ -328,9 +322,6 @@ void CPlayer::UpdateDirection()
 			currentDirVec = currentDirVec - (normalVec * dot);
 		}
 	}
-
-	// 4. (선택 사항) 미세한 떨림 방지
-	// 연산 오차로 인해 0에 가까운 아주 작은 값이 남을 수 있음
 	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
 	{
 		currentDirVec = XMVectorZero();

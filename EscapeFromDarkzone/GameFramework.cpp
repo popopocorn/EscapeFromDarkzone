@@ -634,7 +634,7 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
+	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 
 	ProcessInput();
 

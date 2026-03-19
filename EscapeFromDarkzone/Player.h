@@ -124,7 +124,7 @@ public:
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
-	virtual void HandleCollision(XMFLOAT3 normal);
+	virtual void HandleCollision(const ColResult& normal);
 	void UpdateDirection();
 
 };

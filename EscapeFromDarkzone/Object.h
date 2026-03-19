@@ -19,6 +19,7 @@
 class CShader;
 class CStandardShader;
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 #define RESOURCE_TEXTURE2D			0x01
@@ -353,6 +354,9 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
+
+struct ColResult;
+
 class CGameObject
 {
 private:
@@ -456,7 +460,7 @@ public:
 	void SetOOBB(BoundingOrientedBox obb);
 	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
 	bool CheckOOBB() const { return HasOOBB; }
-	virtual void HandleCollision(XMFLOAT3 normal) {};
+	virtual void HandleCollision(const ColResult& normal) {};
 
 	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 

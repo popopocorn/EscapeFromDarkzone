@@ -3,14 +3,25 @@
 
 class CGameObject;
 
-struct Collision_Info {
-	bool isCollide = false;
-	CGameObject* other = nullptr;
-	XMFLOAT3 normal = { 0, 0, 0 };
-	float depth = 0.0f;
+struct ColResult {
+	bool isCollide;
+	XMFLOAT3 normal;
+	XMFLOAT3 mtv; //pushvector
 };
 
-class Collision_Manager{
-
+class CollisionManager{
+public:
+	void DoCollision(
+		CGameObject* main, 
+		std::vector<std::unique_ptr<CGameObject>>* target
+	);
+	void CheckCollision(
+		CGameObject* main, 
+		CGameObject* target);
+	//void ResolveCollision(CGameObject* object);
+	ColResult CalcCollision(
+		const BoundingOrientedBox& main, 
+		const BoundingOrientedBox& target
+	);
 };
 
