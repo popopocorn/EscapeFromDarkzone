@@ -189,6 +189,16 @@ void CPlayer::Update(float fTimeElapsed)
 	float fDeceleration = (m_fFriction * fTimeElapsed);
 	if (fDeceleration > fLength) fDeceleration = fLength;
 	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true));
+
+	if (m_xmf3Velocity.x != 0.0f || m_xmf3Velocity.z != 0.0f)
+	{
+		float fSpeedXZSq = m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z;
+		if (fSpeedXZSq < 0.0001f * 0.0001f)
+		{
+			m_xmf3Velocity.x = 0.0f;
+			m_xmf3Velocity.z = 0.0f;
+		}
+	}
 }
 
 CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
@@ -274,32 +284,21 @@ void CPlayer::HandleCollision(const ColResult& result)
 
 	
 	XMFLOAT3 curPos = GetPosition();
-	curPos.x += result.mtv.x;
-	curPos.z += result.mtv.z;
 
-	
-	SetPosition(curPos);
-	UpdateTransform(NULL);
-
-	
+	// MTV(backPos)만큼 밀어내되, 벽 방향(노멀의 반대)으로 0.001f 만큼 덜 밀어냄
+	XMVECTOR vBackPos = XMLoadFloat3(&result.mtv);
 	XMVECTOR vNormal = XMLoadFloat3(&result.normal);
-	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
 
-	
-	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
-	float fVelDot = XMVectorGetX(vVelDot);
+	// 0.001f 만큼 벽에 파묻힌 상태를 유지시킴 (Skin Width)
+	vBackPos -= vNormal * 0.001f;
 
-	
-	if (fVelDot < 0.0f)
-	{
-		XMVECTOR vSlideVel = vVelocity - XMVectorScale(vNormal, fVelDot);
-		if (XMVectorGetX(XMVector3LengthSq(vSlideVel)) < 0.0001f)
-		{
-			vSlideVel = XMVectorZero();
-		}
+	XMFLOAT3 finalBackPos;
+	XMStoreFloat3(&finalBackPos, vBackPos);
 
-		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
-	}
+	curPos.x += finalBackPos.x;
+	curPos.z += finalBackPos.z;
+
+	SetPosition(curPos);
 }
 void CPlayer::UpdateDirection()
 {

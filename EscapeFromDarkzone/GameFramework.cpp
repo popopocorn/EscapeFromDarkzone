@@ -578,12 +578,12 @@ void CGameFramework::ProcessInput()
 			}
 		}
 	}
-	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 }
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
 	if (m_pScene) m_pScene->AnimateObjects(fTimeElapsed);
+	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 }
 
 void CGameFramework::WaitForGpuComplete()
@@ -635,7 +635,7 @@ void CGameFramework::FrameAdvance()
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
 	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
-
+	
 	ProcessInput();
 
 	AnimateObjects(fTimeElapsed);
