@@ -4,9 +4,10 @@
 class CGameObject;
 
 struct ColResult {
-	bool isCollide;
-	XMFLOAT3 normal;
-	XMFLOAT3 mtv; //pushvector
+	bool isCollide;	//충돌 여부
+	XMFLOAT3 normal; //충돌 평면 노멀벡터
+	XMFLOAT3 mtv; //침범 후 밀어낼 위치
+	//태그
 };
 
 class CollisionManager{
