@@ -6,6 +6,53 @@
 #include "Shader.h"
 #include "InputManager.h"
 
+static XMVECTOR SafeNormalize3(XMVECTOR v)
+{
+	XMVECTOR lenSq = XMVector3LengthSq(v);
+	if (XMVectorGetX(lenSq) < 0.000001f) return XMVectorZero();
+	return XMVector3Normalize(v);
+}
+
+static float ClampFloat(float v, float vmin, float vmax)
+{
+	if (v < vmin) return vmin;
+	if (v > vmax) return vmax;
+	return v;
+}
+
+static XMVECTOR QuaternionFromTo(XMVECTOR vFrom, XMVECTOR vTo)
+{
+	vFrom = SafeNormalize3(vFrom);
+	vTo = SafeNormalize3(vTo);
+
+	float dot = XMVectorGetX(XMVector3Dot(vFrom, vTo));
+
+	if (dot > 0.9999f)
+	{
+		return XMQuaternionIdentity();
+	}
+
+	if (dot < -0.9999f)
+	{
+		XMVECTOR axis = XMVector3Cross(vFrom, XMVectorSet(1, 0, 0, 0));
+		if (XMVectorGetX(XMVector3LengthSq(axis)) < 0.000001f)
+		{
+			axis = XMVector3Cross(vFrom, XMVectorSet(0, 1, 0, 0));
+		}
+		axis = SafeNormalize3(axis);
+		return XMQuaternionRotationAxis(axis, XM_PI);
+	}
+
+	XMVECTOR axis = XMVector3Cross(vFrom, vTo);
+	XMVECTOR q = XMVectorSet(
+		XMVectorGetX(axis),
+		XMVectorGetY(axis),
+		XMVectorGetZ(axis),
+		1.0f + dot
+	);
+
+	return XMQuaternionNormalize(q);
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CPlayer
 
@@ -173,6 +220,8 @@ void CPlayer::Update(float fTimeElapsed)
 
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
+
+	UpdateWeaponPose();
 
 	UpdateTransform(NULL);
 
@@ -347,6 +396,424 @@ void CPlayer::UpdateDirection()
 	//OutputDebugStringW(buffer);
 }
 
+void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
+{
+	if (!pWeapon) return;
+	if (!pstrSocketName) return;
+
+	CGameObject* pWeaponSocket = FindFrame(pstrSocketName);
+	if (!pWeaponSocket)
+	{
+		OutputDebugString(L"경고: 소켓(뼈대) 프레임을 찾을 수 없습니다!\n");
+		return;
+	}
+
+	m_pWeapon = pWeapon;
+
+	// 오른손 소켓에 무기 부착
+	pWeaponSocket->SetChild(m_pWeapon, true);
+
+	// 기본 장착 위치/회전
+	m_pWeapon->SetPosition(0.0f, 0.0f, 0.0f);
+	m_pWeapon->SetScale(
+		m_xmf3WeaponScale.x,
+		m_xmf3WeaponScale.y,
+		m_xmf3WeaponScale.z
+	);
+	m_pWeapon->Rotate(
+		m_xmf3WeaponIdleRot.x,
+		m_xmf3WeaponIdleRot.y,
+		m_xmf3WeaponIdleRot.z
+	);
+
+	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
+	m_bWeaponBaseLocalSaved = true;
+
+	// 무기 안에 넣어둔 LeftHandGrip 프레임 찾기
+	m_pLeftHandGrip = m_pWeapon->FindFrame("LeftHandGrip");
+	if (m_pLeftHandGrip)
+	{
+		OutputDebugString(L"[IK] 성공: 무기에서 LeftHandGrip 프레임을 찾았습니다.\n");
+	}
+	else
+	{
+		OutputDebugString(L"[IK] 경고: 무기에서 LeftHandGrip 프레임을 찾지 못했습니다.\n");
+	}
+
+	ApplyWeaponPose(WEAPON_POSE::IDLE);
+
+	OutputDebugString(L"성공: 무기가 플레이어 오른손 소켓에 장착되었습니다.\n");
+}
+
+void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
+{
+	if (!m_pWeapon) return;
+	if (!m_bWeaponBaseLocalSaved) return;
+
+	m_eWeaponPose = ePose;
+
+	XMFLOAT3 posOffset;
+	XMFLOAT3 rotOffset;
+
+	if (ePose == WEAPON_POSE::IDLE)
+	{
+		posOffset = m_xmf3WeaponIdlePos;
+		rotOffset = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	}
+	else
+	{
+		posOffset = m_xmf3WeaponRunPos;
+		rotOffset = m_xmf3WeaponRunRot;
+	}
+
+	XMMATRIX mBase = XMLoadFloat4x4(&m_xmf4x4WeaponBaseLocal);
+
+	XMVECTOR vScaleBase, vRotBase, vTransBase;
+	XMMatrixDecompose(&vScaleBase, &vRotBase, &vTransBase, mBase);
+
+	XMVECTOR vPosOffset = XMVectorSet(
+		posOffset.x,
+		posOffset.y,
+		posOffset.z,
+		0.0f
+	);
+
+	XMVECTOR vFinalTrans = vTransBase + vPosOffset;
+
+	XMVECTOR vRotOffsetQuat = XMQuaternionRotationRollPitchYaw(
+		XMConvertToRadians(rotOffset.x),
+		XMConvertToRadians(rotOffset.y),
+		XMConvertToRadians(rotOffset.z)
+	);
+
+	XMVECTOR vFinalRot = XMQuaternionMultiply(vRotOffsetQuat, vRotBase);
+
+	XMMATRIX mFinal = XMMatrixAffineTransformation(
+		vScaleBase,
+		XMVectorZero(),
+		vFinalRot,
+		vFinalTrans
+	);
+
+	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
+
+	m_pWeapon->UpdateTransform(NULL);
+}
+
+void CPlayer::UpdateWeaponPose()
+{
+	if (!m_pWeapon) return;
+
+	float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
+
+	if (moveLenSq > 0.0001f)
+	{
+		if (m_eWeaponPose != WEAPON_POSE::RUN)
+		{
+			ApplyWeaponPose(WEAPON_POSE::RUN);
+		}
+	}
+	else
+	{
+		if (m_eWeaponPose != WEAPON_POSE::IDLE)
+		{
+			ApplyWeaponPose(WEAPON_POSE::IDLE);
+		}
+	}
+}
+
+CGameObject* CPlayer::FindFirstFrameByNames(const char* const* ppNames, int nCount)
+{
+	for (int i = 0; i < nCount; ++i)
+	{
+		CGameObject* pFound = FindFrame(ppNames[i]);
+		if (pFound) return pFound;
+	}
+	return nullptr;
+}
+
+bool CPlayer::InitializeLeftHandIK()
+{
+	static const char* s_ppUpperArmNames[] =
+	{
+		"mixamorig:LeftArm"
+	};
+
+	static const char* s_ppForeArmNames[] =
+	{
+		"mixamorig:LeftForeArm"
+	};
+
+	static const char* s_ppHandNames[] =
+	{
+		"mixamorig:LeftHand"
+	};
+
+	m_pLeftUpperArm = FindFirstFrameByNames(s_ppUpperArmNames, _countof(s_ppUpperArmNames));
+	m_pLeftForeArm = FindFirstFrameByNames(s_ppForeArmNames, _countof(s_ppForeArmNames));
+	m_pLeftHand = FindFirstFrameByNames(s_ppHandNames, _countof(s_ppHandNames));
+
+	if (!m_pLeftUpperArm || !m_pLeftForeArm || !m_pLeftHand)
+	{
+		OutputDebugString(L"[IK] 경고: 왼팔 본을 전부 찾지 못했습니다.\n");
+		return false;
+	}
+
+	OutputDebugString(L"[IK] 성공: 왼팔 IK 본 캐싱 완료\n");
+	return true;
+}
+
+//왼손 하박 안정화
+XMVECTOR CPlayer::GetStableLeftElbowBendDir(FXMVECTOR vShoulder, FXMVECTOR vElbow, FXMVECTOR vTargetDir)
+{
+	XMVECTOR vPlayerLeft = -SafeNormalize3(XMLoadFloat3(&m_xmf3Right));
+	XMVECTOR vPlayerUp = SafeNormalize3(XMLoadFloat3(&m_xmf3Up));
+
+	XMVECTOR vLeftProjected = vPlayerLeft - vTargetDir * XMVectorGetX(XMVector3Dot(vPlayerLeft, vTargetDir));
+	XMVECTOR vUpProjected = vPlayerUp - vTargetDir * XMVectorGetX(XMVector3Dot(vPlayerUp, vTargetDir));
+
+	XMVECTOR vPreferred = vLeftProjected;
+	if (XMVectorGetX(XMVector3LengthSq(vPreferred)) < 0.000001f)
+	{
+		vPreferred = vUpProjected;
+	}
+	if (XMVectorGetX(XMVector3LengthSq(vPreferred)) < 0.000001f)
+	{
+		vPreferred = XMVectorSet(-1, 0, 0, 0);
+	}
+	vPreferred = SafeNormalize3(vPreferred);
+
+	XMVECTOR vCurrentElbowDir = vElbow - vShoulder;
+	XMVECTOR vCurrentProjected = vCurrentElbowDir - vTargetDir * XMVectorGetX(XMVector3Dot(vCurrentElbowDir, vTargetDir));
+
+	if (XMVectorGetX(XMVector3LengthSq(vCurrentProjected)) < 0.000001f)
+	{
+		vCurrentProjected = vPreferred;
+	}
+	vCurrentProjected = SafeNormalize3(vCurrentProjected);
+
+	XMVECTOR vCandidate = SafeNormalize3(vCurrentProjected * 0.35f + vPreferred * 0.65f);
+
+	if (m_bLeftElbowDirCached)
+	{
+		XMVECTOR vCached = SafeNormalize3(XMLoadFloat3(&m_xmf3CachedLeftElbowDir));
+		if (XMVectorGetX(XMVector3Dot(vCandidate, vCached)) < 0.0f)
+		{
+			vCandidate = -vCandidate;
+		}
+	}
+
+	if (XMVectorGetX(XMVector3Dot(vCandidate, vPreferred)) < 0.0f)
+	{
+		vCandidate = -vCandidate;
+	}
+
+	vCandidate = SafeNormalize3(vCandidate);
+
+	XMStoreFloat3(&m_xmf3CachedLeftElbowDir, vCandidate);
+	m_bLeftElbowDirCached = true;
+
+	return vCandidate;
+}
+
+float CPlayer::GetLeftHandIKWeight() const
+{
+	if (!m_bUseLeftHandIK) return 0.0f;
+	if (!m_pWeapon) return 0.0f;
+	if (!m_pLeftHandGrip) return 0.0f;
+	if (!m_pLeftUpperArm || !m_pLeftForeArm || !m_pLeftHand) return 0.0f;
+
+	return m_fLeftHandIKWeight;
+}
+
+void CPlayer::RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight)
+{
+	if (!pBone) return;
+	if (fWeight <= 0.0f) return;
+
+	XMFLOAT3 xmf3BoneWorldPos = pBone->GetPosition();
+
+	XMVECTOR vBonePos = XMLoadFloat3(&xmf3BoneWorldPos);
+	XMVECTOR vCurrentChildPos = XMLoadFloat3(&xmf3CurrentChildWorldPos);
+	XMVECTOR vTargetChildPos = XMLoadFloat3(&xmf3TargetChildWorldPos);
+
+	XMVECTOR vCurrentDir = SafeNormalize3(vCurrentChildPos - vBonePos);
+	XMVECTOR vTargetDir = SafeNormalize3(vTargetChildPos - vBonePos);
+
+	if (XMVectorGetX(XMVector3LengthSq(vCurrentDir)) < 0.000001f) return;
+	if (XMVectorGetX(XMVector3LengthSq(vTargetDir)) < 0.000001f) return;
+
+	XMVECTOR vDeltaRot = QuaternionFromTo(vCurrentDir, vTargetDir);
+
+	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pBone->m_xmf4x4World);
+
+	XMVECTOR vWorldScale, vWorldRot, vWorldTrans;
+	XMMatrixDecompose(&vWorldScale, &vWorldRot, &vWorldTrans, mBoneWorld);
+
+	XMVECTOR vTargetWorldRot = XMQuaternionMultiply(vDeltaRot, vWorldRot);
+	vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
+
+	// 즉시 적용 대신 스무딩
+	float fSmoothing = 0.18f;
+	float fApply = ClampFloat(fWeight * fSmoothing, 0.0f, 1.0f);
+
+	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vWorldRot, vTargetWorldRot, fApply);
+	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
+
+	XMMATRIX mParentWorld = XMMatrixIdentity();
+	if (pBone->m_pParent)
+	{
+		mParentWorld = XMLoadFloat4x4(&pBone->m_pParent->m_xmf4x4World);
+	}
+
+	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
+		vWorldScale,
+		XMVectorZero(),
+		vNewWorldRot,
+		vWorldTrans
+	);
+
+	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
+	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
+
+	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
+	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
+
+	XMMATRIX mOldLocal = XMLoadFloat4x4(&pBone->m_xmf4x4ToParent);
+	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
+	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
+
+	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
+		vOldLocalScale,
+		XMVectorZero(),
+		vLocalRot,
+		vOldLocalTrans
+	);
+
+	XMStoreFloat4x4(&pBone->m_xmf4x4ToParent, mFinalLocal);
+}
+
+void CPlayer::MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight)
+{
+	if (!pBone || !pTarget) return;
+	if (fWeight <= 0.0f) return;
+
+	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pBone->m_xmf4x4World);
+	XMMATRIX mTargetWorld = XMLoadFloat4x4(&pTarget->m_xmf4x4World);
+
+	XMVECTOR vBoneScale, vBoneRot, vBoneTrans;
+	XMVECTOR vTargetScale, vTargetRot, vTargetTrans;
+
+	XMMatrixDecompose(&vBoneScale, &vBoneRot, &vBoneTrans, mBoneWorld);
+	XMMatrixDecompose(&vTargetScale, &vTargetRot, &vTargetTrans, mTargetWorld);
+
+	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vBoneRot, vTargetRot, fWeight);
+	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
+
+	XMMATRIX mParentWorld = XMMatrixIdentity();
+	if (pBone->m_pParent)
+	{
+		mParentWorld = XMLoadFloat4x4(&pBone->m_pParent->m_xmf4x4World);
+	}
+
+	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
+		vBoneScale,
+		XMVectorZero(),
+		vNewWorldRot,
+		vBoneTrans
+	);
+
+	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
+	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
+
+	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
+	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
+
+	XMMATRIX mOldLocal = XMLoadFloat4x4(&pBone->m_xmf4x4ToParent);
+	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
+	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
+
+	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
+		vOldLocalScale,
+		XMVectorZero(),
+		vLocalRot,
+		vOldLocalTrans
+	);
+
+	XMStoreFloat4x4(&pBone->m_xmf4x4ToParent, mFinalLocal);
+}
+
+void CPlayer::SolveLeftHandIK()
+{
+	float fWeight = GetLeftHandIKWeight();
+	if (fWeight <= 0.0f) return;
+
+	XMFLOAT3 xmf3Shoulder = m_pLeftUpperArm->GetPosition();
+	XMFLOAT3 xmf3Elbow = m_pLeftForeArm->GetPosition();
+	XMFLOAT3 xmf3Hand = m_pLeftHand->GetPosition();
+	XMFLOAT3 xmf3Target = m_pLeftHandGrip->GetPosition();
+
+	XMVECTOR vShoulder = XMLoadFloat3(&xmf3Shoulder);
+	XMVECTOR vElbow = XMLoadFloat3(&xmf3Elbow);
+	XMVECTOR vHand = XMLoadFloat3(&xmf3Hand);
+	XMVECTOR vTarget = XMLoadFloat3(&xmf3Target);
+
+	float fUpperLen = XMVectorGetX(XMVector3Length(vElbow - vShoulder));
+	float fLowerLen = XMVectorGetX(XMVector3Length(vHand - vElbow));
+
+	if (fUpperLen < 0.0001f || fLowerLen < 0.0001f) return;
+
+	XMVECTOR vToTarget = vTarget - vShoulder;
+	float fDistToTarget = XMVectorGetX(XMVector3Length(vToTarget));
+	if (fDistToTarget < 0.0001f) return;
+
+	float fClampedDist = ClampFloat(fDistToTarget, 0.0001f, (fUpperLen + fLowerLen) - 0.001f);
+	XMVECTOR vDir = SafeNormalize3(vToTarget);
+
+	XMVECTOR vBendDir = GetStableLeftElbowBendDir(vShoulder, vElbow, vDir);
+
+	float fCosShoulder = ClampFloat(
+		((fUpperLen * fUpperLen) + (fClampedDist * fClampedDist) - (fLowerLen * fLowerLen)) / (2.0f * fUpperLen * fClampedDist),
+		-1.0f,
+		1.0f
+	);
+
+	float fShoulderAngle = acosf(fCosShoulder);
+	float fProjLen = cosf(fShoulderAngle) * fUpperLen;
+	float fBendLen = sinf(fShoulderAngle) * fUpperLen;
+
+	XMVECTOR vElbowTarget = vShoulder + (vDir * fProjLen) + (vBendDir * fBendLen);
+
+	XMFLOAT3 xmf3ElbowTarget;
+	XMStoreFloat3(&xmf3ElbowTarget, vElbowTarget);
+
+	RotateBoneTowardTarget(m_pLeftUpperArm, xmf3Elbow, xmf3ElbowTarget, fWeight);
+	UpdateTransform(NULL);
+
+	xmf3Elbow = m_pLeftForeArm->GetPosition();
+	xmf3Hand = m_pLeftHand->GetPosition();
+
+	RotateBoneTowardTarget(m_pLeftForeArm, xmf3Hand, xmf3Target, fWeight);
+	UpdateTransform(NULL);
+
+	xmf3Hand = m_pLeftHand->GetPosition();
+	RotateBoneTowardTarget(m_pLeftUpperArm, xmf3Hand, xmf3Target, fWeight * 0.12f);
+	UpdateTransform(NULL);
+
+	xmf3Hand = m_pLeftHand->GetPosition();
+	RotateBoneTowardTarget(m_pLeftForeArm, xmf3Hand, xmf3Target, fWeight * 0.18f);
+	UpdateTransform(NULL);
+
+	MatchBoneWorldRotation(m_pLeftHand, m_pLeftHandGrip, fWeight * 0.02f);
+	UpdateTransform(NULL);
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 
+void CPlayerAnimationController::OnAnimationIK(CGameObject* pRootGameObject)
+{
+	if (!m_pOwner) return;
+	m_pOwner->SolveLeftHandIK();
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 
@@ -371,40 +838,22 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
-
 	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", shader);
 	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
-		//m_pSkinnedAnimationController->SetCallbackKeys(1, 2);
+	// 왼팔 IK용 본 찾기
+	InitializeLeftHandIK();
 
-	//#ifdef _WITH_SOUND_RESOURCE
-	//	m_pSkinnedAnimationController->SetCallbackKey(0, 0.1f, _T("Footstep01"));
-	//	m_pSkinnedAnimationController->SetCallbackKey(1, 0.5f, _T("Footstep02"));
-	//	m_pSkinnedAnimationController->SetCallbackKey(2, 0.9f, _T("Footstep03"));
-	//#else
-	//	m_pSkinnedAnimationController->SetCallbackKey(1, 0, 0.2f, (void*)_T("Sound/Footstep01.wav"));
-	//	m_pSkinnedAnimationController->SetCallbackKey(1, 1, 0.5f, (void*)_T("Sound/Footstep02.wav"));
-	////	m_pSkinnedAnimationController->SetCallbackKey(1, 2, 0.39f, _T("Sound/Footstep03.wav"));
-	//#endif
-	//	CAnimationCallbackHandler *pAnimationCallbackHandler = new CSoundCallbackHandler();
-	//	m_pSkinnedAnimationController->SetAnimationCallbackHandler(1, pAnimationCallbackHandler);
-
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
+	// 기본 컨트롤러 대신 플레이어 전용 컨트롤러 사용
+	m_pSkinnedAnimationController = new CPlayerAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel, this);
 
 	m_pSkinnedAnimationController->SetTrackAnimationSet(0, ANIM_IDLE);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
-	//SetPlayerUpdatedContext(pContext);
-	//SetCameraUpdatedContext(pContext);
-
-	//CHeightMapTerrain *pTerrain = (CHeightMapTerrain *)pContext;
-	//SetPosition(XMFLOAT3(310.0f, pTerrain->GetHeight(310.0f, 590.0f), 590.0f));
-	//SetScale(XMFLOAT3(10.0f, 10.0f, 10.0f));
 
 	if (pPlayerModel) delete pPlayerModel;
 	SetOOBB(NULL);

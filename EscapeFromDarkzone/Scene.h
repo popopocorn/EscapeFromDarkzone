@@ -141,6 +141,8 @@ public:
 	CParticleMesh* m_pEffectMesh = NULL;
 
 	class CEffectShader* m_pEffectShader = NULL;
+
+	CGameObject* m_pWeaponObject = nullptr;
 private:
 	CGameObject* m_pLaserObject = NULL;
 
@@ -159,4 +161,7 @@ public:
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence);
 	void DeleteTrash(UINT64 Fence);
+
+	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
+	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
 };

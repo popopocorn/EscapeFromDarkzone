@@ -707,7 +707,10 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 		pRootGameObject->UpdateTransform(NULL);
 
 		OnRootMotion(pRootGameObject);
+
 		OnAnimationIK(pRootGameObject);
+
+		pRootGameObject->UpdateTransform(NULL);
 	}
 }
 void CAnimationController::ChangeAnimation(int nNewAnimID, float fBlendDuration)
