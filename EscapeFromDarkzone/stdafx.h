@@ -406,6 +406,7 @@ enum class INPUT_KEY {
 	KEY_4 = '4',
 
 	SHIFT = VK_SHIFT,
+	SPACE = VK_SPACE,
 
 	LBUTTON = VK_LBUTTON,
 	RBUTTON = VK_RBUTTON,
@@ -422,4 +423,5 @@ enum class KEY_STATE
 enum RENDERINGPASS : int {
 	MAIN = 0,
 	SHADOW = 1,
+	THROUGH =2,
 };

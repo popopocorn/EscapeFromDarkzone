@@ -89,6 +89,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	gGameFramework.OnCreate(hInstance, hMainWnd);
 
+	::ShowCursor(TRUE);		//임시로 커서 보임
 	::ShowWindow(hMainWnd, nCmdShow);
 	::UpdateWindow(hMainWnd);
 

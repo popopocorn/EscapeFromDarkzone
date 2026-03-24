@@ -52,7 +52,7 @@ void CMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pConte
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dPositionBufferView);
 }
 
-void CMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
+void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet, int nInstances)
 {
 	UpdateShaderVariables(pd3dCommandList);
 
@@ -60,14 +60,14 @@ void CMesh::Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet)
 
 	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
 
-	if((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
+	if ((m_nSubMeshes > 0) && (nSubSet < m_nSubMeshes))
 	{
 		pd3dCommandList->IASetIndexBuffer(&(m_pd3dSubSetIndexBufferViews[nSubSet]));
-		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], 1, 0, 0, 0);
+		pd3dCommandList->DrawIndexedInstanced(m_pnSubSetIndices[nSubSet], nInstances, 0, 0, 0);
 	}
 	else
 	{
-		pd3dCommandList->DrawInstanced(m_nVertices, 1, m_nOffset, 0);
+		pd3dCommandList->DrawInstanced(m_nVertices, nInstances, m_nOffset, 0);
 	}
 }
 
@@ -286,7 +286,6 @@ void CHeightMapGridMesh::ReleaseUploadBuffers()
 	if (m_pd3dTextureCoord1UploadBuffer) m_pd3dTextureCoord1UploadBuffer->Release();
 	m_pd3dTextureCoord1UploadBuffer = NULL;
 }
-
 
 float CHeightMapGridMesh::OnGetHeight(int x, int z, void *pContext)
 {
@@ -763,3 +762,94 @@ void CSkinnedMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void 
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 7, pVertexBufferViews);
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//
+CLaserMesh::CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nVertices = 8;
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
+	m_pxmf3Positions[0] = XMFLOAT3(-0.5f, +0.5f, 0.0f); m_pxmf3Positions[1] = XMFLOAT3(+0.5f, +0.5f, 0.0f);
+	m_pxmf3Positions[2] = XMFLOAT3(+0.5f, +0.5f, 1.0f); m_pxmf3Positions[3] = XMFLOAT3(-0.5f, +0.5f, 1.0f);
+	m_pxmf3Positions[4] = XMFLOAT3(-0.5f, -0.5f, 0.0f); m_pxmf3Positions[5] = XMFLOAT3(+0.5f, -0.5f, 0.0f);
+	m_pxmf3Positions[6] = XMFLOAT3(+0.5f, -0.5f, 1.0f); m_pxmf3Positions[7] = XMFLOAT3(-0.5f, -0.5f, 1.0f);
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_pxmf3Positions, sizeof(XMFLOAT3) * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1];
+	m_pnSubSetIndices[0] = 36;
+
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[36]{ 3,1,0, 2,1,3, 0,5,4, 1,5,0, 3,4,7, 0,4,3, 1,6,5, 2,6,1, 2,7,6, 3,7,2, 6,4,5, 7,4,6 };
+
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_ppd3dSubSetIndexUploadBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_ppnSubSetIndices[0], sizeof(UINT) * 36, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_ppd3dSubSetIndexUploadBuffers[0]);
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 36;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//
+CParticleMesh::CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth, float fHeight) : CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nVertices = 4;
+
+	UINT nStride = sizeof(XMFLOAT3) + sizeof(XMFLOAT2);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	struct VERTEX { XMFLOAT3 p; XMFLOAT2 uv; };
+	VERTEX pVertices[4];
+	float halfW = fWidth * 0.5f;
+
+	pVertices[0] = { XMFLOAT3(-halfW, 0.0f, 0.0f),    XMFLOAT2(0.0f, 1.0f) };
+	pVertices[1] = { XMFLOAT3(-halfW, fHeight, 0.0f), XMFLOAT2(0.0f, 0.0f) };
+	pVertices[2] = { XMFLOAT3(halfW, 0.0f, 0.0f),    XMFLOAT2(1.0f, 1.0f) };
+	pVertices[3] = { XMFLOAT3(halfW, fHeight, 0.0f), XMFLOAT2(1.0f, 0.0f) };
+
+	ID3D12Resource* pd3dUploadBuffer = NULL;
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pVertices, nStride * m_nVertices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &pd3dUploadBuffer);
+
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = nStride;
+	m_d3dPositionBufferView.SizeInBytes = nStride * m_nVertices;
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1] { 6 };
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[6]{ 0, 1, 2, 2, 1, 3 };
+
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	ID3D12Resource* pd3dIndexUploadBuffer = NULL;
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, m_ppnSubSetIndices[0], sizeof(UINT) * 6, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &pd3dIndexUploadBuffer);
+
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 6;
+}
+
+CParticleMesh::~CParticleMesh()
+{
+}
+
+void CParticleMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nInstances)
+{
+	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
+	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dPositionBufferView);
+
+	pd3dCommandList->IASetIndexBuffer(&m_pd3dSubSetIndexBufferViews[0]);
+
+	pd3dCommandList->DrawIndexedInstanced(6, nInstances, 0, 0, 0);
+}

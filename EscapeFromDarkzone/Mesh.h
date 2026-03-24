@@ -58,6 +58,7 @@ protected:
 
 protected:
 	int								m_nVertices = 0;
+	XMFLOAT3						m_nStrides = {};
 
 	XMFLOAT3						*m_pxmf3Positions = NULL;
 
@@ -83,7 +84,7 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, int nSubSet);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0, int nInstances = 1);
 	virtual void OnPostRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 	XMFLOAT3 GetAABBCenter() { return m_xmf3AABBCenter; }
 	XMFLOAT3 GetAABBExtents() { return m_xmf3AABBExtents; }
@@ -259,3 +260,22 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+class CLaserMesh : public CMesh
+{
+public:
+	CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual ~CLaserMesh() {}
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+class CParticleMesh : public CMesh
+{
+public:
+	CParticleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fWidth = 10.0f, float fHeight = 10.0f);
+	virtual ~CParticleMesh();
+
+	void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nInstances);
+};

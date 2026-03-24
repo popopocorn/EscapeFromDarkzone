@@ -75,10 +75,10 @@ public:
 	CPlayer();
 	virtual ~CPlayer();
 
-	XMFLOAT3 GetPosition() { return(m_xmf3Position); }
-	XMFLOAT3 GetLookVector() { return(m_xmf3Look); }
-	XMFLOAT3 GetUpVector() { return(m_xmf3Up); }
-	XMFLOAT3 GetRightVector() { return(m_xmf3Right); }
+	const XMFLOAT3& GetPosition() const { return m_xmf3Position; }
+	const XMFLOAT3& GetLookVector() const { return m_xmf3Look; }
+	const XMFLOAT3& GetUpVector() const { return m_xmf3Up; }
+	const XMFLOAT3& GetRightVector() const { return m_xmf3Right; }
 
 	void SetFriction(float fFriction) { m_fFriction = fFriction; }
 	void SetGravity(const XMFLOAT3& xmf3Gravity) { m_xmf3Gravity = xmf3Gravity; }
@@ -152,7 +152,7 @@ enum PLAYER_ANIM {
 class CTerrainPlayer : public CPlayer
 {
 public:
-	CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, void *pContext=NULL);
+	CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CShader* shader);
 	virtual ~CTerrainPlayer();
 
 public:

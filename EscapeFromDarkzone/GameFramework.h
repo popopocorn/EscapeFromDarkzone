@@ -66,7 +66,8 @@ private:
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
 	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
 
-	ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
+	//ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
+	ID3D12CommandAllocator* m_pd3dCommandAllocators[m_nSwapChainBuffers];
 	ID3D12CommandQueue			*m_pd3dCommandQueue = NULL;
 	ID3D12GraphicsCommandList	*m_pd3dCommandList = NULL;
 
@@ -86,7 +87,7 @@ private:
 	CCamera						*m_pCamera = NULL;	// 참조용
 	std::unique_ptr<CCamera>	observer;
 	std::unique_ptr<ShadowMap>	shadowmap;
-
+	
 	bool						observing = false;
 
 	POINT						m_ptOldCursorPos;

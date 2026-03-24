@@ -7,6 +7,7 @@
 #include "Shader.h"
 #include "Player.h"
 #include "EnemyObject.h"
+#include "Effect.h"
 
 #define MAX_LIGHTS						16 
 
@@ -14,6 +15,7 @@
 #define SPOT_LIGHT						2
 #define DIRECTIONAL_LIGHT				3
 
+#define MAX_BOMB_EFFECTS 20				//폭탄 효과 최대 개수
 struct LIGHT
 {
 	XMFLOAT4							m_xmf4Ambient;
@@ -40,13 +42,21 @@ struct LIGHTS
 
 class ShadowMap;
 
+enum SHADERIDX : size_t{
+	MAP = 0,
+	VIEW = 1,
+	LASER = 2,
+	ENEMY = 3,
+
+};
+
 class CScene
 {
 public:
     CScene();
     ~CScene();
 
-	bool OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
@@ -63,15 +73,16 @@ public:
 	bool ProcessInput(UCHAR *pKeysBuffer);
     void AnimateObjects(float fTimeElapsed);
     void Render(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState, CCamera *pCamera=NULL);
+    void ThroughRender(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera=NULL);
 
 	void ReleaseUploadBuffers();
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
-	CEnemyObject* m_pEnemyCursor = NULL;	//참조용 객체 관리 X, raw포인터가 맞음
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
-
+	CCamera* m_pCamera = nullptr;	
+	
 	static ID3D12DescriptorHeap			*m_pd3dCbvSrvDescriptorHeap;
 
 	static D3D12_CPU_DESCRIPTOR_HANDLE	m_d3dCbvCPUDescriptorStartHandle;
@@ -104,7 +115,6 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
@@ -121,12 +131,32 @@ public:
 	
 	CBoundingBoxShader* m_pDebugShader = NULL;
 
+	std::vector<CEffect*> m_vEffectPools[EFFECT_MAX];
 
+	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
+	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
+	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
+
+	CMaterial* m_pEffectMaterials[EFFECT_MAX];
+	CParticleMesh* m_pEffectMesh = NULL;
+
+	class CEffectShader* m_pEffectShader = NULL;
+private:
+	CGameObject* m_pLaserObject = NULL;
+
+public:
 	bool DoCollision(CGameObject* object, int shaderidx);
 	bool CheckCollision(CGameObject* object1, CGameObject* object2);
+	void ResolveCollision(CGameObject* object);
+
+	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
+
 	void SetPlayer(CPlayer* p);
 
 	CCamera* GetLightCamera(int idx);
 
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
+	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
+	void DeleteDeadObject(UINT64 Fence);
+	void DeleteTrash(UINT64 Fence);
 };
