@@ -259,7 +259,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSt
 	//if (nCameraMode == THIRD_PERSON_CAMERA) 
 		CGameObject::Render(pd3dCommandList, false, nPipelineState, pCamera);
 }
-void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
+void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 {
 	if (!new_state)
 		return;
@@ -548,8 +548,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			//error_display("WSASEND : ", err_no);
 		}
 	}
+	//
 
-	state.get()->Update(this);
+
+
+	state.get()->Update(this, fTimeElapsed);
 
 	//충돌에 따른 방향 전환
 	UpdateDirection();
@@ -578,7 +581,7 @@ bool PlayerIdle::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerIdle::Update(CPlayer* Player)
+void PlayerIdle::Update(CPlayer* Player, float fTimeElapsed)
 {
 }
 
@@ -591,7 +594,7 @@ bool PlayerRun::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerRun::Update(CPlayer* Player)
+void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
 
@@ -646,7 +649,7 @@ bool PlayerDie::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerDie::Update(CPlayer* Player)
+void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
 {
 }
 

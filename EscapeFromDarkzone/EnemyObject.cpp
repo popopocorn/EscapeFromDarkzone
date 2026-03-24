@@ -31,7 +31,7 @@ CEnemyObject::~CEnemyObject()
 {
 }
 
-void CEnemyObject::ChangeState(std::unique_ptr<EnemyState> pNewState)
+void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
 {
 	if (!pNewState) return;
 

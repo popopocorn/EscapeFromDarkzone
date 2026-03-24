@@ -378,6 +378,7 @@ public:
 	CGameObject(int nMaterials);
     virtual ~CGameObject();
 	virtual void init();
+	virtual void initWithObj(CGameObject* child) {};
 
 public:
 	char							m_pstrFrameName[64];
