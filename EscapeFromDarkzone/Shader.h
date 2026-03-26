@@ -244,3 +244,11 @@ public:
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 };
 
+
+class UIObjectShader : public CShader {
+private:
+	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
+public:
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+};
