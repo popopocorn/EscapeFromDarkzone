@@ -963,3 +963,13 @@ D3D12_DEPTH_STENCIL_DESC PlayerShader::CreateDepthStencilState()
 
 	return(d3dDepthStencilDesc);
 }
+
+D3D12_SHADER_BYTECODE UIObjectShader::CreateVertexShader()
+{
+	return D3D12_SHADER_BYTECODE();
+}
+
+D3D12_DEPTH_STENCIL_DESC UIObjectShader::CreateDepthStencilState()
+{
+	return D3D12_DEPTH_STENCIL_DESC();
+}
