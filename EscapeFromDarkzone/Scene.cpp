@@ -877,6 +877,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	//}
 
+	if (m_pPlayer && m_pLights.size() > 1)
+	{
+		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	}
+
+	if (m_pEnemyCursor)
+	{
+		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
+	}
 
 
 	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
@@ -921,6 +931,25 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 		float fLaserLength = 15.0f;
 
+		//레	이저와 적 충돌 처리(나중에 벽도 추가하기)
+		if (m_pEnemyCursor)
+		{
+			const auto& oobbs = m_pEnemyCursor->GetOOBB();
+
+			for (BoundingOrientedBox* pOOBB : oobbs)
+			{
+				float fDist = 0.0f;
+
+				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+				{
+					if (fDist > 0.01f && fDist < fLaserLength)
+					{
+						fLaserLength = fDist;
+					}
+				}
+			}
+		}
+
 		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
 
 		XMMATRIX matRotation = XMMatrixIdentity();
@@ -950,54 +979,58 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	pd3dCommandList->OMSetStencilRef(0xff);
-	
-	if(nPipelineState == SHADOW){
-		for (int i = 0; i < m_ppShaders.size(); i++) 
-		{
-			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
-				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		}
-	}
-	else {
-		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}
 
-	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+	pd3dCommandList->OMSetStencilRef(1);
 
-	for (int type = 0; type < EFFECT_MAX; type++)
-	{
-		int activeCount = 0;
+	if (nPipelineState == SHADOW) {
+		for (int i = 0; i < m_ppShaders.size(); i++)
+			pd3dCommandList->OMSetStencilRef(0xff);
 
-		for (CEffect* pEffect : m_vEffectPools[type])
-		{
-			if (!pEffect->IsDead())
+		if (nPipelineState == SHADOW) {
+			for (int i = 0; i < m_ppShaders.size(); i++)
 			{
-				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
-
-				activeCount++;
-				if (activeCount >= 100) break;
+				if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
+					m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 			}
 		}
+		else {
+			if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+			for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+			m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+		}
 
-		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+		if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+
+		for (int type = 0; type < EFFECT_MAX; type++)
 		{
-			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+			int activeCount = 0;
 
-			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+			for (CEffect* pEffect : m_vEffectPools[type])
+			{
+				if (!pEffect->IsDead())
+				{
+					m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
+					m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
 
-			m_pEffectMesh->Render(pd3dCommandList, activeCount);
+					activeCount++;
+					if (activeCount >= 100) break;
+				}
+			}
+
+			if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+			{
+				m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+
+				pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+
+				m_pEffectMesh->Render(pd3dCommandList, activeCount);
+			}
 		}
 	}
 }
 
-void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
-{
+//void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+//{
+//	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
+//}
 
-	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
-
-
-}
