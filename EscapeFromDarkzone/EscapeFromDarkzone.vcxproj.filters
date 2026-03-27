@@ -63,6 +63,12 @@
     <ClCompile Include="EffectShader.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
+    <ClCompile Include="OtherPlayer.cpp">
+      <Filter>소스파일</Filter>
+    </ClCompile>
+    <ClCompile Include="State.cpp">
+      <Filter>소스파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -126,6 +132,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="EffectShader.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="OtherPlayer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="State.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

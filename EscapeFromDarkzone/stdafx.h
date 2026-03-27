@@ -84,7 +84,8 @@ extern BYTE ReadStringFromFile(FILE *pInFile, char *pstrToken);
 extern int ReadIntegerFromFile(FILE *pInFile);
 extern float ReadFloatFromFile(FILE *pInFile);
 
-extern XMFLOAT3 GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b);
+
+//extern ColResult GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b);
 
 #define RANDOM_COLOR			XMFLOAT4(rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX))
 
@@ -425,3 +426,4 @@ enum RENDERINGPASS : int {
 	SHADOW = 1,
 	THROUGH =2,
 };
+

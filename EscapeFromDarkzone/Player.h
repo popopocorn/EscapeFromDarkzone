@@ -8,9 +8,11 @@
 #define DIR_UP					0x10
 #define DIR_DOWN				0x20
 
+#include"stdafx.h"
 #include "Object.h"
 #include "Camera.h"
 #include "Network.h"
+#include "State.h"
 
 
 
@@ -61,7 +63,7 @@ protected:
 	LPVOID						m_pCameraUpdatedContext = NULL;
 
 	CCamera						*m_pCamera = NULL;
-	std::unique_ptr<PlayerState> state;
+	std::unique_ptr<State<CPlayer>> state;
 	std::queue<GameEvent>		event_queue;
 	
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
@@ -163,10 +165,9 @@ public:
 
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
-	void ChangeState(std::unique_ptr<PlayerState> new_state);
-
+	void ChangeState(std::unique_ptr<State<CPlayer>> new_state);
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
-	virtual void HandleCollision(XMFLOAT3 normal);
+	virtual void HandleCollision(const ColResult& normal);
 	void UpdateDirection();
 	bool IsGrenadeState() const;
 	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
@@ -255,37 +256,27 @@ private:
 	bool  m_bIsBlending = false;
 };
 
-
-class PlayerState {
-public:
-	virtual ~PlayerState() {};
-	virtual bool Enter(CPlayer* Player) { return false; }
-	virtual void Update(CPlayer* Player) {}
-	virtual void Exit(CPlayer* Player) {}
-};
-
-
-class PlayerIdle : public PlayerState {
+class PlayerIdle : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player);
+	virtual void Update(CPlayer* Player, float fTimeElapsed);
 	virtual void Exit(CPlayer* Player);
 };
 
-class PlayerRun : public PlayerState {
+class PlayerRun : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player);
+	virtual void Update(CPlayer* Player, float fTimeElapsed);
 	virtual void Exit(CPlayer* Player);
 };
 
-class PlayerGrenade : public PlayerState {
+class PlayerGrenade : public State<CPlayer> {
 public:
 	virtual bool Enter(CPlayer* Player);
 	virtual void Update(CPlayer* Player);
 	virtual void Exit(CPlayer* Player);
 };
 
-class PlayerDie : public PlayerState {
+class PlayerDie : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player);
+	virtual void Update(CPlayer* Player, float fTimeElapsed);
 	virtual void Exit(CPlayer* Player);
 };

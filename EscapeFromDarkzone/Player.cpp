@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "Shader.h"
 #include "InputManager.h"
+#include "Collision.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -223,7 +224,7 @@ void CPlayer::Update(float fTimeElapsed)
 	UpdateWeaponPose();
 
 	UpdateTransform(NULL);
-
+	
 	if (m_pPlayerUpdatedContext) OnPlayerUpdateCallback(fTimeElapsed);
 
 	DWORD nCurrentCameraMode = m_pCamera->GetMode();
@@ -236,6 +237,16 @@ void CPlayer::Update(float fTimeElapsed)
 	float fDeceleration = (m_fFriction * fTimeElapsed);
 	if (fDeceleration > fLength) fDeceleration = fLength;
 	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true));
+
+	if (m_xmf3Velocity.x != 0.0f || m_xmf3Velocity.z != 0.0f)
+	{
+		float fSpeedXZSq = m_xmf3Velocity.x * m_xmf3Velocity.x + m_xmf3Velocity.z * m_xmf3Velocity.z;
+		if (fSpeedXZSq < 0.0001f * 0.0001f)
+		{
+			m_xmf3Velocity.x = 0.0f;
+			m_xmf3Velocity.z = 0.0f;
+		}
+	}
 }
 
 CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
@@ -297,7 +308,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSt
 		CGameObject::Render(pd3dCommandList, false, nPipelineState, pCamera);
 }
 
-void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
+void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 {
 	if (!new_state)
 		return;
@@ -318,55 +329,37 @@ bool CPlayer::IsGrenadeState() const
 	return (dynamic_cast<const PlayerGrenade*>(state.get()) != nullptr);
 }
 
-void CPlayer::HandleCollision(XMFLOAT3 normal)
+void CPlayer::HandleCollision(const ColResult& result)
 {
-	if (normal.y > 0.5f)
-	{
-		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
-		return;
-	}
+	if (!result.isCollide) return;
 
-	XMVECTOR vNormal = XMLoadFloat3(&normal);
-	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
-	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
+	
+	CollVector.push_back(result.normal);
 
-	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-	float fPenetrationDepth = XMVectorGetX(vDot);
+	
+	XMFLOAT3 curPos = GetPosition();
 
-	if (fPenetrationDepth < 0.0f)
-	{
-		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
+	// MTV(backPos)만큼 밀어내되, 벽 방향(노멀의 반대)으로 0.001f 만큼 덜 밀어냄
+	XMVECTOR vBackPos = XMLoadFloat3(&result.mtv);
+	XMVECTOR vNormal = XMLoadFloat3(&result.normal);
 
-		vCurrPos += vCorrection;
-		XMStoreFloat3(&m_xmf3Position, vCurrPos);
+	// 0.001f 만큼 벽에 파묻힌 상태를 유지시킴 (Skin Width)
+	vBackPos -= vNormal * 0.001f;
 
-		CGameObject::SetPosition(m_xmf3Position);
+	XMFLOAT3 finalBackPos;
+	XMStoreFloat3(&finalBackPos, vBackPos);
 
-		UpdateTransform(NULL);
-	}
+	curPos.x += finalBackPos.x;
+	curPos.z += finalBackPos.z;
 
-	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
-	float fVelDot = XMVectorGetX(vVelDot);
-
-	if (fVelDot < 0.0f)
-	{
-		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
-
-		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
-		{
-			vSlideVel = XMVectorZero();
-		}
-		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
-	}
+	SetPosition(curPos);
 }
 
 void CPlayer::UpdateDirection()
 {
 	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
 	{
-		CollVector.clear(); // 이동 안 해도 충돌 정보는 비워줘야 함
+		CollVector.clear(); 
 		return;
 	}
 	XMVECTOR currentDirVec = XMLoadFloat3(&MoveDir);
@@ -383,9 +376,6 @@ void CPlayer::UpdateDirection()
 			currentDirVec = currentDirVec - (normalVec * dot);
 		}
 	}
-
-	// 4. (선택 사항) 미세한 떨림 방지
-	// 연산 오차로 인해 0에 가까운 아주 작은 값이 남을 수 있음
 	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
 	{
 		currentDirVec = XMVectorZero();
@@ -1058,8 +1048,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		}
 	}
 
-	if (state)
-		state->Update(this);
+	state.get()->Update(this, fTimeElapsed);
 
 	// 충돌에 따른 방향 전환
 	UpdateDirection();
@@ -1096,7 +1085,7 @@ bool PlayerIdle::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerIdle::Update(CPlayer* Player)
+void PlayerIdle::Update(CPlayer* Player, float fTimeElapsed)
 {
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 }
@@ -1151,7 +1140,7 @@ bool PlayerRun::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerRun::Update(CPlayer* Player)
+void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
 
@@ -1355,7 +1344,7 @@ bool PlayerDie::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerDie::Update(CPlayer* Player)
+void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
 {
 }
 

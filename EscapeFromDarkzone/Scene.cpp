@@ -10,6 +10,7 @@
 #include "InputManager.h"
 #include"ShadowMap.h"
 #include "EffectShader.h"
+#include"Collision.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -25,6 +26,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorNextHandle;
 
 CScene::CScene()
 {
+	colManager = std::make_unique<CollisionManager>();
 }
 
 CScene::~CScene()
@@ -157,6 +159,12 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	//디버그 쉐이더
 	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	//오브젝트 쉐이더(스탠다드, 스킨드)
+	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
+
+	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 
 	//적 오브젝트
@@ -164,14 +172,10 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->SetOOBB(NULL);
-
-	//오브젝트 쉐이더(스탠다드, 스킨드)
-	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
-
-	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+
+	//여기에 otherplayer 생성하고 위처럼 집어 넣으면 됨
+
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
@@ -586,114 +590,114 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-bool CScene::DoCollision(CGameObject* object, int shaderidx)
-{
-	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
-	if (m_ppShaders[shaderidx] == nullptr) return false;
-
-	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
-	if (!otherobj) return false;
-
-
-	bool bCollided = false;
-
-		for (const auto& other : *otherobj)
-		{
-			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
-			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-
-			if (!other) continue;
-			CGameObject* pTarget = other.get();
-
-			if (object == pTarget) continue;
-
-			// 충돌 검사
-			if (CheckCollision(object, pTarget))
-			{
-				bCollided = true;
-			}
-		}
-
-	return bCollided;
-}
-bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
-{
-	const auto& oobbs1 = object1->GetOOBB();
-	const auto& oobbs2 = object2->GetOOBB();
-
-	float fMaxPenetrationDepth = -1.0f;
-	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
-	bool bIntersectFound = false;
-
-	for (const BoundingOrientedBox* obb1 : oobbs1)
-	{
-		for (const BoundingOrientedBox* obb2 : oobbs2)
-		{
-			if (!obb1 || !obb2) continue;
-
-			if (obb1->Intersects(*obb2))
-			{
-				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
-
-				XMVECTOR vNormal = XMLoadFloat3(&normal);
-
-				XMFLOAT3 curPos = object1->GetPosition();
-				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
-
-				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
-
-				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-				float fDepth = fabs(XMVectorGetX(vDot));
-
-				if (fDepth > fMaxPenetrationDepth)
-				{
-					fMaxPenetrationDepth = fDepth;
-					xmf3BestNormal = normal;
-					bIntersectFound = true;
-				}
-			}
-		}
-	}
-
-	if (bIntersectFound)
-	{
-		object1->HandleCollision(xmf3BestNormal);
-		return true;
-	}
-
-	return false;
-}
-void CScene::ResolveCollision(CGameObject* object)
-{
-	if (!object) return;
-
-	const int nMaxIterations = 3;
-	XMFLOAT3 originalPos = object->GetPosition();
-
-	for (int iter = 0; iter < nMaxIterations; ++iter)
-	{
-		bool collided = false;
-
-		for (size_t i = 0; i < m_ppShaders.size(); ++i)
-			if (m_ppShaders[i] && DoCollision(object, (int)i))
-				collided = true;
-
-		if (!collided) break;
-
-		XMFLOAT3 cur = object->GetPosition();
-		float dx = cur.x - originalPos.x;
-		float dy = cur.y - originalPos.y;
-		float dz = cur.z - originalPos.z;
-
-		if (sqrtf(dx * dx + dy * dy + dz * dz) < 0.0001f)
-			break;
-
-		originalPos = cur;
-	}
-
-	object->UpdateTransform(NULL);
-}
+//bool CScene::DoCollision(CGameObject* object, int shaderidx)
+//{
+//	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
+//	if (m_ppShaders[shaderidx] == nullptr) return false;
+//
+//	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
+//	if (!otherobj) return false;
+//
+//
+//	bool bCollided = false;
+//
+//		for (const auto& other : *otherobj)
+//		{
+//			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
+//			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
+//
+//			if (!other) continue;
+//			CGameObject* pTarget = other.get();
+//
+//			if (object == pTarget) continue;
+//
+//			// 충돌 검사
+//			if (CheckCollision(object, pTarget))
+//			{
+//				bCollided = true;
+//			}
+//		}
+//
+//	return bCollided;
+//}
+//bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
+//{
+//	const auto& oobbs1 = object1->GetOOBB();
+//	const auto& oobbs2 = object2->GetOOBB();
+//
+//	float fMaxPenetrationDepth = -1.0f;
+//	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
+//	bool bIntersectFound = false;
+//
+//	for (const BoundingOrientedBox* obb1 : oobbs1)
+//	{
+//		for (const BoundingOrientedBox* obb2 : oobbs2)
+//		{
+//			if (!obb1 || !obb2) continue;
+//
+//			if (obb1->Intersects(*obb2))
+//			{
+//				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
+//
+//				XMVECTOR vNormal = XMLoadFloat3(&normal);
+//
+//				XMFLOAT3 curPos = object1->GetPosition();
+//				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
+//
+//				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
+//
+//				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
+//				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
+//				float fDepth = fabs(XMVectorGetX(vDot));
+//
+//				if (fDepth > fMaxPenetrationDepth)
+//				{
+//					fMaxPenetrationDepth = fDepth;
+//					xmf3BestNormal = normal;
+//					bIntersectFound = true;
+//				}
+//			}
+//		}
+//	}
+//
+//	if (bIntersectFound)
+//	{
+//		object1->HandleCollision(xmf3BestNormal);
+//		return true;
+//	}
+//
+//	return false;
+//}
+//void CScene::ResolveCollision(CGameObject* object)
+//{
+//	if (!object) return;
+//
+//	const int nMaxIterations = 3;
+//	XMFLOAT3 originalPos = object->GetPosition();
+//
+//	for (int iter = 0; iter < nMaxIterations; ++iter)
+//	{
+//		bool collided = false;
+//
+//		for (size_t i = 0; i < m_ppShaders.size(); ++i)
+//			if (m_ppShaders[i] && DoCollision(object, (int)i))
+//				collided = true;
+//
+//		if (!collided) break;
+//
+//		XMFLOAT3 cur = object->GetPosition();
+//		float dx = cur.x - originalPos.x;
+//		float dy = cur.y - originalPos.y;
+//		float dz = cur.z - originalPos.z;
+//
+//		if (sqrtf(dx * dx + dy * dy + dz * dz) < 0.0001f)
+//			break;
+//
+//		originalPos = cur;
+//	}
+//
+//	object->UpdateTransform(NULL);
+//}
 
 void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 {
@@ -864,6 +868,7 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
+
 	m_fElapsedTime = fTimeElapsed;
 	for (int i = 0; i < m_ppShaders.size(); i++) 
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
@@ -901,7 +906,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		}
 	}
 	//충돌검사
-	if (m_pPlayer)
+	/*if (m_pPlayer)
 	{
 		ResolveCollision(m_pPlayer);
 	}
@@ -913,7 +918,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				ResolveCollision(pEnemy);
 			}
 		}
-	}
+	}*/
 	
 	//레이저 충돌 처리
 	if (m_pPlayer && m_pLaserObject)
@@ -966,6 +971,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLaserObject->UpdateTransform(NULL);
 	}
 	ShadowCameraManager.Update();
+
+	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)

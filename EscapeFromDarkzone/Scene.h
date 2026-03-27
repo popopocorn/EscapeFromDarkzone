@@ -9,6 +9,7 @@
 #include "EnemyObject.h"
 #include "Effect.h"
 
+
 #define MAX_LIGHTS						16 
 
 #define POINT_LIGHT						1
@@ -49,6 +50,9 @@ enum SHADERIDX : size_t{
 	ENEMY = 3,
 
 };
+
+struct ColResult;
+class CollisionManager;
 
 class CScene
 {
@@ -145,11 +149,12 @@ public:
 	CGameObject* m_pWeaponObject = nullptr;
 private:
 	CGameObject* m_pLaserObject = NULL;
+	std::unique_ptr<CollisionManager> colManager;
 
 public:
-	bool DoCollision(CGameObject* object, int shaderidx);
-	bool CheckCollision(CGameObject* object1, CGameObject* object2);
-	void ResolveCollision(CGameObject* object);
+	//bool DoCollision(CGameObject* object, int shaderidx);
+	//bool CheckCollision(CGameObject* object1, CGameObject* object2);
+	//void ResolveCollision(CGameObject* object);
 
 	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
 

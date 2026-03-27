@@ -3,14 +3,26 @@
 
 class CGameObject;
 
-struct Collision_Info {
-	bool isCollide = false;
-	CGameObject* other = nullptr;
-	XMFLOAT3 normal = { 0, 0, 0 };
-	float depth = 0.0f;
+struct ColResult {
+	bool isCollide;	//충돌 여부
+	XMFLOAT3 normal; //충돌 평면 노멀벡터
+	XMFLOAT3 mtv; //침범 후 밀어낼 위치
+	//태그
 };
 
-class Collision_Manager{
-
+class CollisionManager{
+public:
+	void DoCollision(
+		CGameObject* main, 
+		std::vector<std::unique_ptr<CGameObject>>* target
+	);
+	void CheckCollision(
+		CGameObject* main, 
+		CGameObject* target);
+	//void ResolveCollision(CGameObject* object);
+	ColResult CalcCollision(
+		const BoundingOrientedBox& main, 
+		const BoundingOrientedBox& target
+	);
 };
 
