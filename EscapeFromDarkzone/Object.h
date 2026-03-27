@@ -512,3 +512,10 @@ public:
 	virtual void Animate(float fTimeElapsed);
 	void setPlayer(CPlayer* p) { player = p; }
 };
+
+
+class UIObject : public CGameObject {
+
+public:
+		void HandleClick();
+};

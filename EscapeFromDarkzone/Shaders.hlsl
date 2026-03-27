@@ -118,33 +118,28 @@ float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
     return float4(1, 1, 0, 0.3);
 }
 
-
-
-
-
-
-
-VS_TERRAIN_OUTPUT VSTerrain(VS_TERRAIN_INPUT input)
+VS_UI_OUTPUT VSUI(VS_UI_INPUT input)
 {
-	VS_TERRAIN_OUTPUT output;
-
-	output.position = mul(mul(mul(float4(input.position, 1.0f), gmtxGameObject), gmtxView), gmtxProjection);
-	output.color = input.color;
-	output.uv0 = input.uv0;
-	output.uv1 = input.uv1;
-
-	return(output);
+    VS_UI_OUTPUT output;
+    output.position = mul(float4(input.position, 1.0f), gmtxGameObject).xyz;
+    output.uv = input.uv;
+    
+    return output;
 }
 
-float4 PSTerrain(VS_TERRAIN_OUTPUT input) : SV_TARGET
+float4 PSUI(VS_UI_OUTPUT input) :SV_Target
 {
-	float4 cBaseTexColor = gtxtTerrainBaseTexture.Sample(gssWrap, input.uv0);
-	float4 cDetailTexColor = gtxtTerrainDetailTexture.Sample(gssWrap, input.uv1);
-//	float4 cColor = saturate((cBaseTexColor * 0.5f) + (cDetailTexColor * 0.5f));
-	float4 cColor = input.color * saturate((cBaseTexColor * 0.5f) + (cDetailTexColor * 0.5f));
-
-	return(cColor);
+    float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
+        cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
+    
+    return cAlbedoColor;
 }
+
+
+
+
+
 
 
 VS_SKYBOX_CUBEMAP_OUTPUT VSSkyBox(VS_SKYBOX_CUBEMAP_INPUT input)

@@ -3,6 +3,7 @@ class CGameObject;
 
 template<class T>
 class State {
+
 public:
 	virtual ~State() = default;
 	virtual bool Enter(T* Object) { return false; }

@@ -60,6 +60,17 @@ struct VS_STANDARD_INPUT
     float3 bitangent : BITANGENT;
 };
 
+struct VS_UI_INPUT
+{
+    float3 position : POSITIONT;
+    float2 uv : TEXCOORD;
+};
+struct VS_UI_OUTPUT
+{
+    float3 position : POSITIONT;
+    float2 uv : TEXCOORD;
+};
+
 struct VS_STANDARD_OUTPUT
 {
     float4 position : SV_POSITION;
