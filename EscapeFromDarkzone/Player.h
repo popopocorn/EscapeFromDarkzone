@@ -90,7 +90,7 @@ protected:
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
 	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-50.0f, 30.0f, 0.0f);
 
-	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.4f, 1.4f, 1.4f);
+	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
@@ -164,10 +164,11 @@ public:
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<PlayerState> new_state);
+
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
 	virtual void HandleCollision(XMFLOAT3 normal);
 	void UpdateDirection();
-
+	bool IsGrenadeState() const;
 	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
 	CGameObject* GetWeapon() { return m_pWeapon; }
 	void UpdateWeaponPose();
@@ -224,6 +225,7 @@ enum PLAYER_ANIM {
 	ANIM_RUN_L,
 	ANIM_RUN_R,
 	ANIM_RUN_B,
+	ANIM_GRENADE
 };
 
 
@@ -270,6 +272,13 @@ class PlayerIdle : public PlayerState {
 };
 
 class PlayerRun : public PlayerState {
+	virtual bool Enter(CPlayer* Player);
+	virtual void Update(CPlayer* Player);
+	virtual void Exit(CPlayer* Player);
+};
+
+class PlayerGrenade : public PlayerState {
+public:
 	virtual bool Enter(CPlayer* Player);
 	virtual void Update(CPlayer* Player);
 	virtual void Exit(CPlayer* Player);

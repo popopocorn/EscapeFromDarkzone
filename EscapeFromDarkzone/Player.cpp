@@ -54,7 +54,6 @@ static XMVECTOR QuaternionFromTo(XMVECTOR vFrom, XMVECTOR vTo)
 	return XMQuaternionNormalize(q);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// CPlayer
 
 CPlayer::CPlayer()
 {
@@ -297,6 +296,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSt
 	//if (nCameraMode == THIRD_PERSON_CAMERA) 
 		CGameObject::Render(pd3dCommandList, false, nPipelineState, pCamera);
 }
+
 void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 {
 	if (!new_state)
@@ -311,6 +311,11 @@ void CPlayer::ChangeState(std::unique_ptr<PlayerState> new_state)
 	state = std::move(new_state);
 
 	state->Enter(this);
+}
+
+bool CPlayer::IsGrenadeState() const
+{
+	return (dynamic_cast<const PlayerGrenade*>(state.get()) != nullptr);
 }
 
 void CPlayer::HandleCollision(XMFLOAT3 normal)
@@ -356,6 +361,7 @@ void CPlayer::HandleCollision(XMFLOAT3 normal)
 		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
 	}
 }
+
 void CPlayer::UpdateDirection()
 {
 	if (MoveDir.x == 0.0f && MoveDir.y == 0.0f && MoveDir.z == 0.0f)
@@ -503,6 +509,9 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 void CPlayer::UpdateWeaponPose()
 {
 	if (!m_pWeapon) return;
+
+	// grenade 중에는 무기 포즈를 idle/run으로 덮어쓰지 않음
+	if (IsGrenadeState()) return;
 
 	float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
 
@@ -812,6 +821,10 @@ void CPlayer::SolveLeftHandIK()
 void CPlayerAnimationController::OnAnimationIK(CGameObject* pRootGameObject)
 {
 	if (!m_pOwner) return;
+
+	// grenade 중에는 왼손 IK가 상체 throw 동작을 덮어쓰지 않게 막음
+	if (m_pOwner->IsGrenadeState()) return;
+
 	m_pOwner->SolveLeftHandIK();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -843,15 +856,33 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
+	OutputDebugStringA("========== MIXAMO FRAME NAMES BEGIN ==========\n");
+	DebugPrintMixamoFrameNames();
+	OutputDebugStringA("========== MIXAMO FRAME NAMES END ==========\n");
+
 	// 왼팔 IK용 본 찾기
 	InitializeLeftHandIK();
 
 	// 기본 컨트롤러 대신 플레이어 전용 컨트롤러 사용
 	m_pSkinnedAnimationController = new CPlayerAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel, this);
+	
+	m_pSkinnedAnimationController->DebugPrintAnimationSetNames();
+	
+	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
+	m_pSkinnedAnimationController->DebugPrintUpperBodyMask();
 
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, ANIM_IDLE);
+	// Track 0 = lower body, Track 1 = upper body
+	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
+
+	// 시작은 둘 다 idle
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-	m_pSkinnedAnimationController->SetTrackEnable(1, false);
+	m_pSkinnedAnimationController->SetTrackEnable(1, true);
+
+	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
+	m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -931,56 +962,73 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-	CAnimationController* pController = m_pSkinnedAnimationController;
-	if (!pController && m_pChild)
-	{
-		pController = m_pChild->m_pSkinnedAnimationController;
-	}
-	
 	// 네트워크 테스트용 버퍼 선언
 	size_t buf_len = 0;
 
-	while (not event_queue.empty()) {
+	while (!event_queue.empty())
+	{
 		const GameEvent& ev = event_queue.front();
 
 		switch (ev.type)
 		{
 		case EventType::Input:
 		{
-			if (ev.keyEvent.state == KEY_STATE::DOWN) {
+			const bool bGrenadeState = IsGrenadeState();
+
+			if (ev.keyEvent.state == KEY_STATE::DOWN)
+			{
 				switch (ev.keyEvent.key)
 				{
+				case INPUT_KEY::SPACE:
+					// grenade 상태가 아닐 때만 진입
+					if (!bGrenadeState)
+						ChangeState(std::make_unique<PlayerGrenade>());
+					break;
+
 				case INPUT_KEY::W:
 				case INPUT_KEY::A:
 				case INPUT_KEY::S:
 				case INPUT_KEY::D:
-					ChangeState(make_unique<PlayerRun>());
+					// grenade 중에는 run으로 상태 덮어쓰기 금지
+					if (!bGrenadeState)
+						ChangeState(std::make_unique<PlayerRun>());
 					break;
+
 				default:
 					break;
 				}
 			}
-			if (ev.keyEvent.state == KEY_STATE::UP) {
+			else if (ev.keyEvent.state == KEY_STATE::UP)
+			{
 				switch (ev.keyEvent.key)
 				{
 				case INPUT_KEY::W:
 				case INPUT_KEY::A:
 				case INPUT_KEY::S:
 				case INPUT_KEY::D:
-					if(! InputManager::Instance().KeyPress(INPUT_KEY::W) &&
-					   ! InputManager::Instance().KeyPress(INPUT_KEY::A) &&
-					   ! InputManager::Instance().KeyPress(INPUT_KEY::S) &&
-					   ! InputManager::Instance().KeyPress(INPUT_KEY::D))
-						ChangeState(make_unique<PlayerIdle>());
+					// grenade 중에는 idle로 덮어쓰기 금지
+					if (!bGrenadeState)
+					{
+						if (!InputManager::Instance().KeyPress(INPUT_KEY::W) &&
+							!InputManager::Instance().KeyPress(INPUT_KEY::A) &&
+							!InputManager::Instance().KeyPress(INPUT_KEY::S) &&
+							!InputManager::Instance().KeyPress(INPUT_KEY::D))
+						{
+							ChangeState(std::make_unique<PlayerIdle>());
+						}
+					}
+					break;
+
 				default:
 					break;
 				}
 			}
 		}
 		break;
-		case EventType::Timeout:
 
+		case EventType::Timeout:
 			break;
+
 		default:
 			break;
 		}
@@ -993,52 +1041,64 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	}
 
 	// 네트워크 테스트용
-	if (0 != buf_len) {
-		// 여기서 버퍼 전송
+	if (buf_len != 0)
+	{
 		WSABUF wsabuf[1];
 		wsabuf[0].buf = send_buf;
 		wsabuf[0].len = static_cast<ULONG>(buf_len);
+
 		WSAOVERLAPPED send_over;
 		ZeroMemory(&send_over, sizeof(send_over));
 
 		int ret = WSASend(c_socket, wsabuf, 1, NULL, 0, &send_over, NULL);
-		if (SOCKET_ERROR == ret) {
+		if (SOCKET_ERROR == ret)
+		{
 			auto err_no = WSAGetLastError();
-			//error_display("WSASEND : ", err_no);
+			// error_display("WSASEND : ", err_no);
 		}
 	}
 
-	state.get()->Update(this);
+	if (state)
+		state->Update(this);
 
-	//충돌에 따른 방향 전환
+	// 충돌에 따른 방향 전환
 	UpdateDirection();
 
 	XMFLOAT3 direction = MoveDir;
+	direction.y = 0.0f;
 	direction = Vector3::ScalarProduct(direction, 8.0f, false);
 	CPlayer::Move(direction, true);
-
-	/*wchar_t buffer[128];
-	swprintf_s(buffer, L"MoveDir: x=%.3f y=%.3f z=%.3f\n",
-		direction.x, direction.y, direction.z);
-	OutputDebugStringW(buffer);*/
 
 	CPlayer::Update(fTimeElapsed);
 }
 
+//-------------------------------------------------------------------------
 bool PlayerIdle::Enter(CPlayer* Player)
 {
+	Player->SetUseLeftHandIK(true);
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->ChangeAnimation(ANIM_IDLE, 0.2f);
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		// idle 상태에서는 상하체 모두 idle
+		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 	return true;
 }
 
 void PlayerIdle::Update(CPlayer* Player)
 {
+	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 }
 
 void PlayerIdle::Exit(CPlayer* Player)
@@ -1047,6 +1107,47 @@ void PlayerIdle::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerRun::Enter(CPlayer* Player)
 {
+	Player->SetUseLeftHandIK(true);
+
+	auto& input = InputManager::Instance();
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+
+	int nextAnim = ANIM_RUN_F;
+
+	if (!(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f))
+	{
+		float angle = atan2f(dir.y, dir.x);
+
+		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
+			nextAnim = ANIM_RUN_F;
+		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
+			nextAnim = ANIM_RUN_R;
+		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
+			nextAnim = ANIM_RUN_L;
+		else
+			nextAnim = ANIM_RUN_B;
+	}
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		// 평소 run 상태에서는 상하체 둘 다 run
+		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackAnimationSetIfChanged(1, nextAnim);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
 	return true;
 }
 
@@ -1060,10 +1161,14 @@ void PlayerRun::Update(CPlayer* Player)
 	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
 	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
 
-	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
+	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f)
+	{
+		Player->SetMoveDir(XMFLOAT3(0, 0, 0));
+		return;
+	}
 
 	float angle = atan2f(dir.y, dir.x);
-	int nextAnim;
+	int nextAnim = ANIM_RUN_F;
 
 	if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
 		nextAnim = ANIM_RUN_F;
@@ -1077,7 +1182,17 @@ void PlayerRun::Update(CPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->ChangeAnimation(nextAnim, 0.2f);
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		// 평소 run 상태에서는 상하체 둘 다 run
+		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackAnimationSetIfChanged(1, nextAnim);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 
 	XMFLOAT3 look = Player->GetLookVector();
@@ -1085,16 +1200,151 @@ void PlayerRun::Update(CPlayer* Player)
 
 	XMFLOAT3 direction;
 	direction.x = look.x * dir.x + right.x * dir.y;
+	direction.y = 0.0f;
 	direction.z = look.z * dir.x + right.z * dir.y;
 	direction = Vector3::Normalize(direction);
+
 	Player->SetMoveDir(direction);
 }
 
 void PlayerRun::Exit(CPlayer* Player)
 {
-	
 }
 //-------------------------------------------------------------------------
+bool PlayerGrenade::Enter(CPlayer* Player)
+{
+	OutputDebugStringA("[Grenade] Enter\n");
+
+	// grenade 상체 모션이 IK에 안 덮이게 잠시 끔
+	Player->SetUseLeftHandIK(false);
+
+	auto& input = InputManager::Instance();
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+
+	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+
+	int nextLowerAnim = ANIM_IDLE;
+	if (bMove)
+	{
+		float angle = atan2f(dir.y, dir.x);
+
+		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_F;
+		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_R;
+		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_L;
+		else
+			nextLowerAnim = ANIM_RUN_B;
+	}
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		// 하체는 현재 입력 방향 유지
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, nextLowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		// 상체는 grenade를 처음부터 1회 재생
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_GRENADE);
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void PlayerGrenade::Update(CPlayer* Player)
+{
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+
+	auto& input = InputManager::Instance();
+	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+
+	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+
+	int nextLowerAnim = ANIM_IDLE;
+	if (bMove)
+	{
+		float angle = atan2f(dir.y, dir.x);
+
+		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_F;
+		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_R;
+		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
+			nextLowerAnim = ANIM_RUN_L;
+		else
+			nextLowerAnim = ANIM_RUN_B;
+	}
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		// 하체는 계속 이동 방향 유지
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, nextLowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		// 상체는 grenade 유지
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+
+		// grenade 길이 2.933초 기준, 끝나면 상태 복귀
+		if (pCtrl->GetTrackPosition(1) >= 2.80f)
+		{
+			if (bMove)
+				Player->ChangeState(std::make_unique<PlayerRun>());
+			else
+				Player->ChangeState(std::make_unique<PlayerIdle>());
+			return;
+		}
+	}
+
+	XMFLOAT3 look = Player->GetLookVector();
+	XMFLOAT3 right = Player->GetRightVector();
+
+	XMFLOAT3 direction;
+	if (bMove)
+	{
+		direction.x = look.x * dir.x + right.x * dir.y;
+		direction.y = 0.0f;
+		direction.z = look.z * dir.x + right.z * dir.y;
+		direction = Vector3::Normalize(direction);
+	}
+	else
+	{
+		direction = XMFLOAT3(0, 0, 0);
+	}
+
+	Player->SetMoveDir(direction);
+}
+
+void PlayerGrenade::Exit(CPlayer* Player)
+{
+	// grenade 끝나면 IK 다시 켬
+	Player->SetUseLeftHandIK(true);
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+	}
+}//-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
 	auto* pCtrl = Player->GetAnimationController();

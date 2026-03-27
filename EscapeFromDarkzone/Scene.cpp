@@ -827,6 +827,8 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		case '4': key = INPUT_KEY::KEY_4; break;
 
 		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
+		case VK_SPACE:   key = INPUT_KEY::SPACE; break;
+
 		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
 		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
 
@@ -837,8 +839,10 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (!validKey)
 			break;
+
 		if (InputManager::Instance().KeyHold(key))
 			break;
+
 		KEY_STATE state =
 			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
 

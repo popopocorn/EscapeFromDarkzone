@@ -547,6 +547,12 @@ CAnimationController::~CAnimationController()
 	}
 	if (m_ppd3dcbSkinningBoneTransforms) delete[] m_ppd3dcbSkinningBoneTransforms;
 	if (m_ppcbxmf4x4MappedSkinningBoneTransforms) delete[] m_ppcbxmf4x4MappedSkinningBoneTransforms;
+	
+	if (m_pbUpperBodyMask)
+	{
+		delete[] m_pbUpperBodyMask;
+		m_pbUpperBodyMask = nullptr;
+	}
 
 	if (m_pAnimationSets) m_pAnimationSets->Release();
 
@@ -600,6 +606,21 @@ void CAnimationController::SetTrackWeight(int nAnimationTrack, float fWeight)
 	if (m_pAnimationTracks) m_pAnimationTracks[nAnimationTrack].SetWeight(fWeight);
 }
 
+void CAnimationController::SetTrackType(int nAnimationTrack, int nType)
+{
+	if (!m_pAnimationTracks) return;
+	if (nAnimationTrack < 0 || nAnimationTrack >= m_nAnimationTracks) return;
+
+	m_pAnimationTracks[nAnimationTrack].m_nType = nType;
+}
+
+float CAnimationController::GetTrackPosition(int nAnimationTrack) const
+{
+	if (!m_pAnimationTracks) return 0.0f;
+	if (nAnimationTrack < 0 || nAnimationTrack >= m_nAnimationTracks) return 0.0f;
+	return m_pAnimationTracks[nAnimationTrack].m_fPosition;
+}
+
 void CAnimationController::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	for (int i = 0; i < m_nSkinnedMeshes; i++)
@@ -615,29 +636,7 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 
 	if (m_pAnimationTracks)
 	{
-		if (m_bIsBlending)
-		{
-			m_fBlendTime += fTimeElapsed;
-			float fRatio = m_fBlendTime / m_fBlendDuration;
-
-			if (fRatio >= 1.0f)
-			{
-				m_pAnimationTracks[m_nCurTrack].SetWeight(0.0f);
-				m_pAnimationTracks[m_nCurTrack].SetEnable(false);
-
-				m_pAnimationTracks[m_nNextTrack].SetWeight(1.0f);
-
-				std::swap(m_nCurTrack, m_nNextTrack);
-
-				m_bIsBlending = false;
-			}
-			else
-			{
-				m_pAnimationTracks[m_nCurTrack].SetWeight(1.0f - fRatio);
-				m_pAnimationTracks[m_nNextTrack].SetWeight(fRatio);
-			}
-		}
-
+		// 각 트랙 시간 진행
 		for (int k = 0; k < m_nAnimationTracks; k++)
 		{
 			if (m_pAnimationTracks[k].m_bEnable)
@@ -647,62 +646,50 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 
 				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
 
-				m_pAnimationTracks[k].m_fPosition = m_pAnimationTracks[k].UpdatePosition(m_pAnimationTracks[k].m_fPosition, fTimeElapsed, pAnimationSet->m_fLength);
+				m_pAnimationTracks[k].m_fPosition =
+					m_pAnimationTracks[k].UpdatePosition(
+						m_pAnimationTracks[k].m_fPosition,
+						fTimeElapsed,
+						pAnimationSet->m_fLength
+					);
+
 				m_pAnimationTracks[k].HandleCallback();
 			}
 		}
 
 		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 		{
-			XMVECTOR vFinalScale = XMVectorZero();
-			XMVECTOR vFinalRot = XMVectorSet(0, 0, 0, 1); // 항등 쿼터니언
-			XMVECTOR vFinalTrans = XMVectorZero();
-			bool bFirstTrack = true;
+			// upper body bone이면 upper track,
+			// 아니면 lower track 사용
+			int nSelectedTrack = IsUpperBodyBone(j) ? m_nUpperBodyTrack : m_nLowerBodyTrack;
 
-			for (int k = 0; k < m_nAnimationTracks; k++)
-			{
-				if (m_pAnimationTracks[k].m_bEnable)
-				{
-					int nSetIndex = m_pAnimationTracks[k].m_nAnimationSet;
-					if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size()) continue;
-
-					CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
-
-					XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[k].m_fPosition);
-					XMMATRIX matTrack = XMLoadFloat4x4(&xmf4x4TrackTransform);
-
-					XMVECTOR S, R, T;
-					XMMatrixDecompose(&S, &R, &T, matTrack);
-
-					float fWeight = m_pAnimationTracks[k].m_fWeight;
-
-					if (bFirstTrack)
-					{
-						vFinalScale = S;
-						vFinalRot = R;
-						vFinalTrans = T;
-						bFirstTrack = false;
-					}
-					else
-					{
-						vFinalScale = XMVectorLerp(vFinalScale, S, fWeight);
-						vFinalRot = XMQuaternionSlerp(vFinalRot, R, fWeight);
-						vFinalTrans = XMVectorLerp(vFinalTrans, T, fWeight);
-					}
-				}
-			}
-
-			if (!bFirstTrack)
-			{
-				XMMATRIX matFinal = XMMatrixAffineTransformation(vFinalScale, XMVectorZero(), vFinalRot, vFinalTrans);
-				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, matFinal);
-			}
-			else
+			if (nSelectedTrack < 0 || nSelectedTrack >= m_nAnimationTracks)
 			{
 				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+				continue;
 			}
-		}
 
+			if (!m_pAnimationTracks[nSelectedTrack].m_bEnable)
+			{
+				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+				continue;
+			}
+
+			int nSetIndex = m_pAnimationTracks[nSelectedTrack].m_nAnimationSet;
+			if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size())
+			{
+				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+				continue;
+			}
+
+			CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
+			XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[nSelectedTrack].m_fPosition);
+
+			XMStoreFloat4x4(
+				&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent,
+				XMLoadFloat4x4(&xmf4x4TrackTransform)
+			);
+		}
 
 		pRootGameObject->UpdateTransform(NULL);
 
@@ -713,6 +700,7 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 		pRootGameObject->UpdateTransform(NULL);
 	}
 }
+
 void CAnimationController::ChangeAnimation(int nNewAnimID, float fBlendDuration)
 {
 	if (m_nCurAnimID == nNewAnimID) return;
@@ -727,6 +715,131 @@ void CAnimationController::ChangeAnimation(int nNewAnimID, float fBlendDuration)
 	SetTrackWeight(m_nNextTrack, 0.0f);
 	SetTrackEnable(m_nNextTrack, true);
 }
+
+bool CAnimationController::IsUpperBodyBone(int nBoneIndex) const
+{
+	if (!m_pbUpperBodyMask) return false;
+	if (nBoneIndex < 0 || nBoneIndex >= m_pAnimationSets->m_nBoneFrames) return false;
+	return m_pbUpperBodyMask[nBoneIndex];
+}
+
+void CAnimationController::BuildUpperBodyMask(CGameObject* pRootGameObject, const char* pstrUpperBodyRootFrameName)
+{
+	if (!pRootGameObject) return;
+	if (!pstrUpperBodyRootFrameName) return;
+	if (!m_pAnimationSets) return;
+	if (m_pAnimationSets->m_nBoneFrames <= 0) return;
+
+	if (m_pbUpperBodyMask)
+	{
+		delete[] m_pbUpperBodyMask;
+		m_pbUpperBodyMask = nullptr;
+	}
+
+	m_pbUpperBodyMask = new bool[m_pAnimationSets->m_nBoneFrames];
+	for (int i = 0; i < m_pAnimationSets->m_nBoneFrames; ++i)
+	{
+		m_pbUpperBodyMask[i] = false;
+	}
+
+	CGameObject* pUpperRoot = pRootGameObject->FindFrame(pstrUpperBodyRootFrameName);
+	if (!pUpperRoot)
+	{
+		OutputDebugStringA("[UpperBodyMask] upper root frame not found.\n");
+		return;
+	}
+
+	for (int i = 0; i < m_pAnimationSets->m_nBoneFrames; ++i)
+	{
+		CGameObject* pBoneFrame = m_pAnimationSets->m_ppBoneFrameCaches[i];
+		if (!pBoneFrame) continue;
+
+		CGameObject* pCurrent = pBoneFrame;
+		while (pCurrent)
+		{
+			if (pCurrent == pUpperRoot)
+			{
+				m_pbUpperBodyMask[i] = true;
+				break;
+			}
+			pCurrent = pCurrent->m_pParent;
+		}
+	}
+}
+
+void CAnimationController::DebugPrintUpperBodyMask()
+{
+	if (!m_pAnimationSets) return;
+	if (!m_pbUpperBodyMask) return;
+
+	OutputDebugStringA("========== UPPER BODY MASK BONES BEGIN ==========\n");
+
+	for (int i = 0; i < m_pAnimationSets->m_nBoneFrames; ++i)
+	{
+		if (!m_pbUpperBodyMask[i]) continue;
+
+		CGameObject* pBoneFrame = m_pAnimationSets->m_ppBoneFrameCaches[i];
+		if (!pBoneFrame) continue;
+		if (!pBoneFrame->m_pstrFrameName) continue;
+
+		char buffer[512] = { 0 };
+		sprintf_s(buffer, "[UpperBodyMask] [%d] %s\n", i, pBoneFrame->m_pstrFrameName);
+		OutputDebugStringA(buffer);
+	}
+
+	OutputDebugStringA("========== UPPER BODY MASK BONES END ==========\n");
+}
+
+void CAnimationController::SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUpperBodyTrack)
+{
+	m_nLowerBodyTrack = nLowerBodyTrack;
+	m_nUpperBodyTrack = nUpperBodyTrack;
+}
+
+void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet)
+{
+	if (!m_pAnimationTracks) return;
+	if (!m_pAnimationSets) return;
+	if (nAnimationTrack < 0 || nAnimationTrack >= m_nAnimationTracks) return;
+	if (nAnimationSet < 0 || nAnimationSet >= (int)m_pAnimationSets->m_vAnimationSets.size()) return;
+
+	if (m_pAnimationTracks[nAnimationTrack].m_nAnimationSet == nAnimationSet)
+		return;
+
+	m_pAnimationTracks[nAnimationTrack].SetAnimationSet(nAnimationSet);
+	m_pAnimationTracks[nAnimationTrack].SetPosition(0.0f);
+}
+
+void CAnimationController::DebugPrintAnimationSetNames()
+{
+	if (!m_pAnimationSets) return;
+
+	OutputDebugStringA("========== ANIMATION SETS BEGIN ==========\n");
+
+	char buffer[512] = { 0 };
+	sprintf_s(buffer, "[AnimationSetCount] %d\n", (int)m_pAnimationSets->m_vAnimationSets.size());
+	OutputDebugStringA(buffer);
+
+	for (int i = 0; i < (int)m_pAnimationSets->m_vAnimationSets.size(); ++i)
+	{
+		CAnimationSet* pSet = m_pAnimationSets->m_vAnimationSets[i];
+		if (!pSet) continue;
+
+		sprintf_s(
+			buffer,
+			"[AnimationSet] [%d] name=%s length=%.3f fps=%d\n",
+			i,
+			pSet->m_pstrAnimationSetName,
+			pSet->m_fLength,
+			pSet->m_nFramesPerSecond
+		);
+		OutputDebugStringA(buffer);
+	}
+
+	OutputDebugStringA("========== ANIMATION SETS END ==========\n");
+}
+
+
 //*/
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -863,7 +976,28 @@ CGameObject *CGameObject::FindFrame(const char *pstrFrameName)
 
 	return(NULL);
 }
+void CGameObject::DebugPrintMixamoFrameNames(int nDepth)
+{
+	if (m_pstrFrameName)
+	{
+		if (strstr(m_pstrFrameName, "mixamorig:"))
+		{
+			char buffer[512] = { 0 };
+			int offset = 0;
 
+			for (int i = 0; i < nDepth; ++i)
+			{
+				offset += sprintf_s(buffer + offset, sizeof(buffer) - offset, "  ");
+			}
+
+			sprintf_s(buffer + offset, sizeof(buffer) - offset, "%s\n", m_pstrFrameName);
+			OutputDebugStringA(buffer);
+		}
+	}
+
+	if (m_pChild)   m_pChild->DebugPrintMixamoFrameNames(nDepth + 1);
+	if (m_pSibling) m_pSibling->DebugPrintMixamoFrameNames(nDepth);
+}
 void CGameObject::UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent)
 {
 	m_xmf4x4World = (pxmf4x4Parent) ? Matrix4x4::Multiply(m_xmf4x4ToParent, *pxmf4x4Parent) : m_xmf4x4ToParent;
