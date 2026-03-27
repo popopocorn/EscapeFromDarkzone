@@ -6,7 +6,7 @@
 
 #include "Mesh.h"
 #include "Camera.h"
-
+#include<functional>
 #include <vector>
 
 #define DIR_FORWARD					0x01
@@ -515,7 +515,9 @@ public:
 
 
 class UIObject : public CGameObject {
-
+protected:
+	std::function<void()> Task;
 public:
-		void HandleClick();
+	void HandleClick() { if (Task) Task(); }
+	void SetFunc(std::function<void()> func) { Task = func; }
 };

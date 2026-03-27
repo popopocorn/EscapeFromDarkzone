@@ -26,6 +26,8 @@
 #include<array>
 #include<queue>
 
+#include<functional>
+
 using namespace std;
 
 #include <d3d12.h>
