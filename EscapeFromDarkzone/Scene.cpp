@@ -590,115 +590,6 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-//bool CScene::DoCollision(CGameObject* object, int shaderidx)
-//{
-//	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
-//	if (m_ppShaders[shaderidx] == nullptr) return false;
-//
-//	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
-//	if (!otherobj) return false;
-//
-//
-//	bool bCollided = false;
-//
-//		for (const auto& other : *otherobj)
-//		{
-//			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
-//			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-//
-//			if (!other) continue;
-//			CGameObject* pTarget = other.get();
-//
-//			if (object == pTarget) continue;
-//
-//			// 충돌 검사
-//			if (CheckCollision(object, pTarget))
-//			{
-//				bCollided = true;
-//			}
-//		}
-//
-//	return bCollided;
-//}
-//bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
-//{
-//	const auto& oobbs1 = object1->GetOOBB();
-//	const auto& oobbs2 = object2->GetOOBB();
-//
-//	float fMaxPenetrationDepth = -1.0f;
-//	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
-//	bool bIntersectFound = false;
-//
-//	for (const BoundingOrientedBox* obb1 : oobbs1)
-//	{
-//		for (const BoundingOrientedBox* obb2 : oobbs2)
-//		{
-//			if (!obb1 || !obb2) continue;
-//
-//			if (obb1->Intersects(*obb2))
-//			{
-//				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
-//
-//				XMVECTOR vNormal = XMLoadFloat3(&normal);
-//
-//				XMFLOAT3 curPos = object1->GetPosition();
-//				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
-//
-//				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
-//
-//				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-//				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-//				float fDepth = fabs(XMVectorGetX(vDot));
-//
-//				if (fDepth > fMaxPenetrationDepth)
-//				{
-//					fMaxPenetrationDepth = fDepth;
-//					xmf3BestNormal = normal;
-//					bIntersectFound = true;
-//				}
-//			}
-//		}
-//	}
-//
-//	if (bIntersectFound)
-//	{
-//		object1->HandleCollision(xmf3BestNormal);
-//		return true;
-//	}
-//
-//	return false;
-//}
-//void CScene::ResolveCollision(CGameObject* object)
-//{
-//	if (!object) return;
-//
-//	const int nMaxIterations = 3;
-//	XMFLOAT3 originalPos = object->GetPosition();
-//
-//	for (int iter = 0; iter < nMaxIterations; ++iter)
-//	{
-//		bool collided = false;
-//
-//		for (size_t i = 0; i < m_ppShaders.size(); ++i)
-//			if (m_ppShaders[i] && DoCollision(object, (int)i))
-//				collided = true;
-//
-//		if (!collided) break;
-//
-//		XMFLOAT3 cur = object->GetPosition();
-//		float dx = cur.x - originalPos.x;
-//		float dy = cur.y - originalPos.y;
-//		float dz = cur.z - originalPos.z;
-//
-//		if (sqrtf(dx * dx + dy * dy + dz * dz) < 0.0001f)
-//			break;
-//
-//		originalPos = cur;
-//	}
-//
-//	object->UpdateTransform(NULL);
-//}
-
 void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 {
 	for (CEffect* pEffect : m_vEffectPools[type])
@@ -888,12 +779,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
 
-	if (m_pEnemyCursor)
-	{
-		if (m_pPlayer) m_pEnemyCursor->SetPlayer(m_pPlayer);
-	}
-
-
 	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
 	for (int type = 0; type < EFFECT_MAX; type++)
 	{
@@ -935,25 +820,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		XMVECTOR rayDir = vLook;
 
 		float fLaserLength = 15.0f;
-
-		//레	이저와 적 충돌 처리(나중에 벽도 추가하기)
-		if (m_pEnemyCursor)
-		{
-			const auto& oobbs = m_pEnemyCursor->GetOOBB();
-
-			for (BoundingOrientedBox* pOOBB : oobbs)
-			{
-				float fDist = 0.0f;
-
-				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-				{
-					if (fDist > 0.01f && fDist < fLaserLength)
-					{
-						fLaserLength = fDist;
-					}
-				}
-			}
-		}
 
 		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
 
@@ -1036,8 +902,8 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	}
 }
 
-//void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
-//{
-//	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
-//}
+void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+{
+	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
+}
 
