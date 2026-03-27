@@ -853,51 +853,47 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	pd3dCommandList->OMSetStencilRef(1);
+
+	pd3dCommandList->OMSetStencilRef(0xff);
 
 	if (nPipelineState == SHADOW) {
 		for (int i = 0; i < m_ppShaders.size(); i++)
-			pd3dCommandList->OMSetStencilRef(0xff);
-
-		if (nPipelineState == SHADOW) {
-			for (int i = 0; i < m_ppShaders.size(); i++)
-			{
-				if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
-					m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-			}
-		}
-		else {
-			if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-			for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-			m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-		}
-
-		if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
-
-		for (int type = 0; type < EFFECT_MAX; type++)
 		{
-			int activeCount = 0;
+			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
+				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+		}
+	}
+	else {
+		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
 
-			for (CEffect* pEffect : m_vEffectPools[type])
+	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
+
+	for (int type = 0; type < EFFECT_MAX; type++)
+	{
+		int activeCount = 0;
+
+		for (CEffect* pEffect : m_vEffectPools[type])
+		{
+			if (!pEffect->IsDead())
 			{
-				if (!pEffect->IsDead())
-				{
-					m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-					m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
+				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
+				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
 
-					activeCount++;
-					if (activeCount >= 100) break;
-				}
+				activeCount++;
+				if (activeCount >= 100) break;
 			}
+		}
 
-			if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
-			{
-				m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+		{
+			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
 
-				pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
 
-				m_pEffectMesh->Render(pd3dCommandList, activeCount);
-			}
+			m_pEffectMesh->Render(pd3dCommandList, activeCount);
 		}
 	}
 }
