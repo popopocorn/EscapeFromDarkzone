@@ -54,6 +54,11 @@ static XMVECTOR QuaternionFromTo(XMVECTOR vFrom, XMVECTOR vTo)
 
 	return XMQuaternionNormalize(q);
 }
+
+static bool IsMoveHeld(InputManager& input, INPUT_KEY key)
+{
+	return input.KeyDown(key) || input.KeyHold(key);
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CPlayer::CPlayer()
@@ -405,11 +410,13 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	}
 
 	m_pWeapon = pWeapon;
+	m_pWeaponSocket = pWeaponSocket;
 
 	// 오른손 소켓에 무기 부착
 	pWeaponSocket->SetChild(m_pWeapon, true);
 
-	// 기본 장착 위치/회전
+	// 여기서 로컬행렬을 새로 만들지 말고,
+	// "원래 보이던 방식" 그대로 누적해서 base local을 만든다.
 	m_pWeapon->SetPosition(0.0f, 0.0f, 0.0f);
 	m_pWeapon->SetScale(
 		m_xmf3WeaponScale.x,
@@ -422,8 +429,10 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 		m_xmf3WeaponIdleRot.z
 	);
 
+	// 이게 "정상적으로 보이는 idle 총 자세"의 기준값
 	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
 	m_bWeaponBaseLocalSaved = true;
+	m_eWeaponPose = WEAPON_POSE::IDLE;
 
 	// 무기 안에 넣어둔 LeftHandGrip 프레임 찾기
 	m_pLeftHandGrip = m_pWeapon->FindFrame("LeftHandGrip");
@@ -436,8 +445,6 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 		OutputDebugString(L"[IK] 경고: 무기에서 LeftHandGrip 프레임을 찾지 못했습니다.\n");
 	}
 
-	ApplyWeaponPose(WEAPON_POSE::IDLE);
-
 	OutputDebugString(L"성공: 무기가 플레이어 오른손 소켓에 장착되었습니다.\n");
 }
 
@@ -445,63 +452,142 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 {
 	if (!m_pWeapon) return;
 	if (!m_bWeaponBaseLocalSaved) return;
+	if (!m_pWeaponSocket) return;
 
 	m_eWeaponPose = ePose;
 
-	XMFLOAT3 posOffset;
-	XMFLOAT3 rotOffset;
+	// 항상 보이는 기준 idle 자세에서 시작
+	m_pWeapon->m_xmf4x4ToParent = m_xmf4x4WeaponBaseLocal;
 
 	if (ePose == WEAPON_POSE::IDLE)
 	{
-		posOffset = m_xmf3WeaponIdlePos;
-		rotOffset = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		return;
 	}
-	else
+	else if (ePose == WEAPON_POSE::RUN)
 	{
-		posOffset = m_xmf3WeaponRunPos;
-		rotOffset = m_xmf3WeaponRunRot;
+		XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
+		XMMATRIX mRunRot = XMMatrixRotationRollPitchYaw(
+			XMConvertToRadians(m_xmf3WeaponRunRot.x),
+			XMConvertToRadians(m_xmf3WeaponRunRot.y),
+			XMConvertToRadians(m_xmf3WeaponRunRot.z)
+		);
+
+		XMMATRIX mFinal = XMMatrixMultiply(mRunRot, mBase);
+		XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
+
+		m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponRunPos.x;
+		m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponRunPos.y;
+		m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponRunPos.z;
+		return;
 	}
+	else if (ePose == WEAPON_POSE::GRENADE)
+	{
+		if (!m_pLeftHand) return;
+		if (!m_pLeftHandGrip) return;
+		if (!m_bWeaponGrenadeStartCaptured) return;
 
-	XMMATRIX mBase = XMLoadFloat4x4(&m_xmf4x4WeaponBaseLocal);
+		// grenade 시작 순간의 총 로컬/월드 포즈 기준
+		XMMATRIX mStartLocal = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartLocal);
+		XMMATRIX mStartWorld = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartWorld);
 
-	XMVECTOR vScaleBase, vRotBase, vTransBase;
-	XMMatrixDecompose(&vScaleBase, &vRotBase, &vTransBase, mBase);
+		XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
+		XMVECTOR vStartWorldScale, vStartWorldRot, vStartWorldTrans;
+		XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mStartLocal);
+		XMMatrixDecompose(&vStartWorldScale, &vStartWorldRot, &vStartWorldTrans, mStartWorld);
 
-	XMVECTOR vPosOffset = XMVectorSet(
-		posOffset.x,
-		posOffset.y,
-		posOffset.z,
-		0.0f
-	);
+		// grenadeRot를 실제로 반영
+		XMVECTOR vGrenadeRotOffset = XMQuaternionRotationRollPitchYaw(
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.x),
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.y),
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.z)
+		);
 
-	XMVECTOR vFinalTrans = vTransBase + vPosOffset;
+		XMVECTOR vDesiredWorldRot = XMQuaternionMultiply(vGrenadeRotOffset, vStartWorldRot);
 
-	XMVECTOR vRotOffsetQuat = XMQuaternionRotationRollPitchYaw(
-		XMConvertToRadians(rotOffset.x),
-		XMConvertToRadians(rotOffset.y),
-		XMConvertToRadians(rotOffset.z)
-	);
+		// 현재 오른손 소켓 회전을 상쇄해서 local 회전 계산
+		XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
+		XMVECTOR vSocketScale, vSocketRot, vSocketTrans;
+		XMMatrixDecompose(&vSocketScale, &vSocketRot, &vSocketTrans, mSocketWorld);
 
-	XMVECTOR vFinalRot = XMQuaternionMultiply(vRotOffsetQuat, vRotBase);
+		XMVECTOR vLocalRotFinal = XMQuaternionMultiply(
+			vDesiredWorldRot,
+			XMQuaternionInverse(vSocketRot)
+		);
 
-	XMMATRIX mFinal = XMMatrixAffineTransformation(
-		vScaleBase,
-		XMVectorZero(),
-		vFinalRot,
-		vFinalTrans
-	);
+		// 일단 회전/스케일만 맞춘 local로 세팅
+		XMMATRIX mLocal = XMMatrixAffineTransformation(
+			vLocalScale,
+			XMVectorZero(),
+			vLocalRotFinal,
+			vLocalTrans
+		);
+		XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mLocal);
 
-	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
+		// 현재 소켓 기준으로 무기/그립 월드 갱신
+		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 
-	m_pWeapon->UpdateTransform(NULL);
+		XMFLOAT3 curGripWorld = m_pLeftHandGrip->GetPosition();
+
+		// 목표 grip 위치 = 왼손 월드 + grenade 위치 오프셋
+		XMMATRIX mLeftHandWorld = XMLoadFloat4x4(&m_pLeftHand->m_xmf4x4World);
+
+		XMVECTOR vGripOffsetLocal = XMVectorSet(
+			m_xmf3WeaponGrenadePos.x,
+			m_xmf3WeaponGrenadePos.y,
+			m_xmf3WeaponGrenadePos.z,
+			1.0f
+		);
+
+		XMVECTOR vDesiredGripWorld = XMVector3TransformCoord(vGripOffsetLocal, mLeftHandWorld);
+
+		XMVECTOR vCurGripWorld = XMVectorSet(
+			curGripWorld.x,
+			curGripWorld.y,
+			curGripWorld.z,
+			1.0f
+		);
+
+		XMVECTOR vDeltaWorld = vDesiredGripWorld - vCurGripWorld;
+
+		// world delta -> socket local delta
+		XMMATRIX mInvSocketWorld = XMMatrixInverse(nullptr, mSocketWorld);
+		XMVECTOR vDeltaLocal = XMVector3TransformNormal(vDeltaWorld, mInvSocketWorld);
+
+		XMFLOAT3 deltaLocal;
+		XMStoreFloat3(&deltaLocal, vDeltaLocal);
+
+		m_pWeapon->m_xmf4x4ToParent._41 += deltaLocal.x;
+		m_pWeapon->m_xmf4x4ToParent._42 += deltaLocal.y;
+		m_pWeapon->m_xmf4x4ToParent._43 += deltaLocal.z;
+
+		return;
+	}
+}
+
+void CPlayer::BeginGrenadeWeaponPose()
+{
+	if (!m_pWeapon) return;
+
+	m_xmf4x4WeaponGrenadeStartLocal = m_pWeapon->m_xmf4x4ToParent;
+	m_xmf4x4WeaponGrenadeStartWorld = m_pWeapon->m_xmf4x4World;
+	m_bWeaponGrenadeStartCaptured = true;
+}
+
+void CPlayer::EndGrenadeWeaponPose()
+{
+	m_bWeaponGrenadeStartCaptured = false;
 }
 
 void CPlayer::UpdateWeaponPose()
 {
 	if (!m_pWeapon) return;
 
-	// grenade 중에는 무기 포즈를 idle/run으로 덮어쓰지 않음
-	if (IsGrenadeState()) return;
+	// grenade 중에는 매 프레임 다시 계산해야 왼손 따라감
+	if (IsGrenadeState())
+	{
+		ApplyWeaponPose(WEAPON_POSE::GRENADE);
+		return;
+	}
 
 	float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
 
@@ -1066,6 +1152,7 @@ bool PlayerIdle::Enter(CPlayer* Player)
 {
 	Player->SetUseLeftHandIK(true);
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
+	Player->ApplyWeaponPose(WEAPON_POSE::IDLE);
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1087,6 +1174,19 @@ bool PlayerIdle::Enter(CPlayer* Player)
 
 void PlayerIdle::Update(CPlayer* Player, float fTimeElapsed)
 {
+	auto& input = InputManager::Instance();
+
+	bool bW = input.KeyPress(INPUT_KEY::W);
+	bool bS = input.KeyPress(INPUT_KEY::S);
+	bool bA = input.KeyPress(INPUT_KEY::A);
+	bool bD = input.KeyPress(INPUT_KEY::D);
+
+	if (bW || bS || bA || bD)
+	{
+		Player->ChangeState(std::make_unique<PlayerRun>());
+		return;
+	}
+
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 }
 
@@ -1097,6 +1197,7 @@ void PlayerIdle::Exit(CPlayer* Player)
 bool PlayerRun::Enter(CPlayer* Player)
 {
 	Player->SetUseLeftHandIK(true);
+	Player->ApplyWeaponPose(WEAPON_POSE::RUN);
 
 	auto& input = InputManager::Instance();
 
@@ -1150,9 +1251,11 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
 	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
 
+	// 입력이 없으면 반드시 idle로 돌아가야 함
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f)
 	{
 		Player->SetMoveDir(XMFLOAT3(0, 0, 0));
+		Player->ChangeState(std::make_unique<PlayerIdle>());
 		return;
 	}
 
@@ -1174,7 +1277,6 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
 
-		// 평소 run 상태에서는 상하체 둘 다 run
 		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
@@ -1204,44 +1306,48 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 {
 	OutputDebugStringA("[Grenade] Enter\n");
 
-	// grenade 상체 모션이 IK에 안 덮이게 잠시 끔
+	m_fElapsed = 0.0f;
+	m_bKeepRun = false;
+
 	Player->SetUseLeftHandIK(false);
+	Player->BeginGrenadeWeaponPose();
+	Player->ApplyWeaponPose(WEAPON_POSE::GRENADE);
 
 	auto& input = InputManager::Instance();
 
+	bool bW = IsMoveHeld(input, INPUT_KEY::W);
+	bool bS = IsMoveHeld(input, INPUT_KEY::S);
+	bool bA = IsMoveHeld(input, INPUT_KEY::A);
+	bool bD = IsMoveHeld(input, INPUT_KEY::D);
+
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+	if (bW) dir.x += 1;
+	if (bS) dir.x -= 1;
+	if (bA) dir.y -= 1;
+	if (bD) dir.y += 1;
 
 	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+	m_bKeepRun = bMove;
 
 	int nextLowerAnim = ANIM_IDLE;
 	if (bMove)
 	{
 		float angle = atan2f(dir.y, dir.x);
 
-		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_F;
-		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_R;
-		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_L;
-		else
-			nextLowerAnim = ANIM_RUN_B;
+		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4) nextLowerAnim = ANIM_RUN_F;
+		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_R;
+		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_L;
+		else nextLowerAnim = ANIM_RUN_B;
 	}
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		// 하체는 현재 입력 방향 유지
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
 		pCtrl->SetTrackAnimationSetIfChanged(0, nextLowerAnim);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
-		// 상체는 grenade를 처음부터 1회 재생
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
 		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_GRENADE);
 		pCtrl->SetTrackPosition(1, 0.0f);
@@ -1252,56 +1358,48 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 	return true;
 }
 
-void PlayerGrenade::Update(CPlayer* Player)
+void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 {
-	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	m_fElapsed += fTimeElapsed;
 
 	auto& input = InputManager::Instance();
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+
+	bool bW = IsMoveHeld(input, INPUT_KEY::W);
+	bool bS = IsMoveHeld(input, INPUT_KEY::S);
+	bool bA = IsMoveHeld(input, INPUT_KEY::A);
+	bool bD = IsMoveHeld(input, INPUT_KEY::D);
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	if (bW) dir.x += 1;
+	if (bS) dir.x -= 1;
+	if (bA) dir.y -= 1;
+	if (bD) dir.y += 1;
 
 	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+	m_bKeepRun = bMove;
 
 	int nextLowerAnim = ANIM_IDLE;
 	if (bMove)
 	{
 		float angle = atan2f(dir.y, dir.x);
 
-		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_F;
-		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_R;
-		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-			nextLowerAnim = ANIM_RUN_L;
-		else
-			nextLowerAnim = ANIM_RUN_B;
+		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4) nextLowerAnim = ANIM_RUN_F;
+		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_R;
+		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_L;
+		else nextLowerAnim = ANIM_RUN_B;
 	}
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		// 하체는 계속 이동 방향 유지
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
 		pCtrl->SetTrackAnimationSetIfChanged(0, nextLowerAnim);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
-		// 상체는 grenade 유지
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
-
-		// grenade 길이 2.933초 기준, 끝나면 상태 복귀
-		if (pCtrl->GetTrackPosition(1) >= 2.80f)
-		{
-			if (bMove)
-				Player->ChangeState(std::make_unique<PlayerRun>());
-			else
-				Player->ChangeState(std::make_unique<PlayerIdle>());
-			return;
-		}
 	}
 
 	XMFLOAT3 look = Player->GetLookVector();
@@ -1321,19 +1419,55 @@ void PlayerGrenade::Update(CPlayer* Player)
 	}
 
 	Player->SetMoveDir(direction);
+
+	if (m_fElapsed >= 2.80f)
+	{
+		if (m_bKeepRun)
+			Player->ChangeState(std::make_unique<PlayerRun>());
+		else
+			Player->ChangeState(std::make_unique<PlayerIdle>());
+		return;
+	}
 }
 
 void PlayerGrenade::Exit(CPlayer* Player)
 {
-	// grenade 끝나면 IK 다시 켬
 	Player->SetUseLeftHandIK(true);
+	Player->EndGrenadeWeaponPose();
+
+	int nextUpperAnim = ANIM_IDLE;
+	if (m_bKeepRun)
+	{
+		XMFLOAT3 moveDir = Player->GetLookVector(); // 더미 초기화용
+		moveDir = XMFLOAT3(0, 0, 0);
+
+		// 현재 이동 방향 기반이 아니라 "grenade 끝날 때 유지하던 run 상태" 그대로 복구
+		// 방향은 MoveDir에서 복원
+		XMFLOAT3 dir = Player->GetVelocity();
+		dir.y = 0.0f;
+
+		// velocity가 이미 갱신 중일 수 있으니 입력 기반 대신 마지막 keepRun만 유지
+		// 상체 방향은 마지막 lower 기준으로 맞추기 위해 W 기준 run으로 두지 않고
+		// 아래에서 PlayerRun::Enter가 곧 덮어쓰므로 여기선 loop만 복구해도 충분함.
+		nextUpperAnim = ANIM_RUN_F;
+	}
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(1, nextUpperAnim);
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
-}//-------------------------------------------------------------------------
+
+	if (m_bKeepRun)
+		Player->ApplyWeaponPose(WEAPON_POSE::RUN);
+	else
+		Player->ApplyWeaponPose(WEAPON_POSE::IDLE);
+}
+//-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
 	auto* pCtrl = Player->GetAnimationController();

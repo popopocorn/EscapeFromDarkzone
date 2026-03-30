@@ -33,7 +33,8 @@ struct GameEvent {
 enum class WEAPON_POSE
 {
 	IDLE = 0,
-	RUN
+	RUN,
+	GRENADE
 };
 
 class PlayerState;
@@ -81,16 +82,25 @@ protected:
 	char send_buf[BUF_SIZE];
 
 	CGameObject* m_pWeapon = nullptr;
+	CGameObject* m_pWeaponSocket = nullptr;
+
 	XMFLOAT4X4 m_xmf4x4WeaponBaseLocal = Matrix4x4::Identity();
 	bool m_bWeaponBaseLocalSaved = false;
 
 	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
 
-	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(0.0f, 0.1f, 0.1f);
-	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(0.0f, -45.0f, 45.0f);
+	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.20f, 0.1f, 0.1f);
+	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -45.0f, 45.0f);
 
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
-	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-50.0f, 30.0f, 0.0f);
+	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-5.0f, 30.0f, 0.0f);
+
+	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.02f, -0.01f, 0.03f);
+	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
+	bool m_bWeaponGrenadeStartCaptured = false;
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartWorld = Matrix4x4::Identity();
 
 	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
@@ -184,9 +194,16 @@ public:
 		m_xmf3WeaponRunPos = pos;
 		m_xmf3WeaponRunRot = rot;
 	}
-
+	void SetWeaponGrenadePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
+	{
+		m_xmf3WeaponGrenadePos = pos;
+		m_xmf3WeaponGrenadeRot = rot;
+	}
 	void SolveLeftHandIK();
 	void SetUseLeftHandIK(bool bUse) { m_bUseLeftHandIK = bUse; }
+
+	void BeginGrenadeWeaponPose();
+	void EndGrenadeWeaponPose();
 };
 
 class CPlayerAnimationController : public CAnimationController
@@ -257,22 +274,25 @@ private:
 };
 
 class PlayerIdle : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player, float fTimeElapsed);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerRun : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player, float fTimeElapsed);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerGrenade : public State<CPlayer> {
+private:
+	float m_fElapsed = 0.0f;
+	bool m_bKeepRun = false;
 public:
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerDie : public State<CPlayer> {
