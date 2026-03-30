@@ -118,16 +118,16 @@ float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
     return float4(1, 1, 0, 0.3);
 }
 
-VS_UI_OUTPUT VSUI(VS_UI_INPUT input)
+VS_STANDARD_OUTPUT VSUI(VS_STANDARD_INPUT input)
 {
-    VS_UI_OUTPUT output;
-    output.position = mul(float4(input.position, 1.0f), gmtxGameObject).xyz;
+    VS_STANDARD_OUTPUT output;
+    output.position = mul(float4(input.position, 1.0f), gmtxGameObject);
     output.uv = input.uv;
     
     return output;
 }
 
-float4 PSUI(VS_UI_OUTPUT input) :SV_Target
+float4 PSUI(VS_STANDARD_OUTPUT input) : SV_Target
 {
     float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_ALBEDO_MAP)

@@ -864,20 +864,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 			}
 		}
 	}
-	//충돌검사
-	/*if (m_pPlayer)
-	{
-		ResolveCollision(m_pPlayer);
-	}
-	if (m_ppShaders[SHADERIDX::ENEMY]) {
-		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-		for (auto& obj : *objs) {
-			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-			if (pEnemy) {
-				ResolveCollision(pEnemy);
-			}
-		}
-	}*/
 	
 	//레이저 충돌 처리
 	if (m_pPlayer && m_pLaserObject)

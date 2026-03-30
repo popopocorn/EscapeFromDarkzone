@@ -516,8 +516,10 @@ public:
 
 class UIObject : public CGameObject {
 protected:
-	std::function<void()> Task;
+	std::function<void()>	Task;
+	BoundingBox				CollisionBox;
 public:
 	void HandleClick() { if (Task) Task(); }
 	void SetFunc(std::function<void()> func) { Task = func; }
+	void setAABB() {};
 };
