@@ -95,8 +95,8 @@ protected:
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
 	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-5.0f, 30.0f, 0.0f);
 
-	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.02f, -0.01f, 0.03f);
-	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.1f, 0.01f);
+	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
 
 	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
 	bool m_bWeaponGrenadeStartCaptured = false;
@@ -288,6 +288,7 @@ class PlayerRun : public State<CPlayer> {
 class PlayerGrenade : public State<CPlayer> {
 private:
 	float m_fElapsed = 0.0f;
+	int m_nLastLowerAnim = ANIM_IDLE;
 	bool m_bKeepRun = false;
 public:
 	virtual bool Enter(CPlayer* Player) override;
