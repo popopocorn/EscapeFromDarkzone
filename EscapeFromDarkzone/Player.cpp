@@ -599,10 +599,10 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
 
 	auto& input = InputManager::Instance();
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
+	if (input.KeyPress(INPUT_KEY::W)) dir.x += 1;
+	if (input.KeyPress(INPUT_KEY::S)) dir.x -= 1;
+	if (input.KeyPress(INPUT_KEY::A)) dir.y -= 1;
+	if (input.KeyPress(INPUT_KEY::D)) dir.y += 1;
 
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f) return;
 

@@ -145,6 +145,8 @@ public:
 	CParticleMesh* m_pEffectMesh = NULL;
 
 	class CEffectShader* m_pEffectShader = NULL;
+
+	std::unique_ptr<UIObjectShader> UIShader;
 private:
 	CGameObject* m_pLaserObject = NULL;
 	std::unique_ptr<CollisionManager> colManager;
@@ -165,3 +167,20 @@ public:
 	void DeleteDeadObject(UINT64 Fence);
 	void DeleteTrash(UINT64 Fence);
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//UI용 함수 선언
+
+

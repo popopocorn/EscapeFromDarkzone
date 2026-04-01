@@ -49,7 +49,9 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-
+void tempfunc() {
+	OutputDebugString(L"fds\n");
+}
 
 void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
@@ -66,27 +68,26 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
 	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
 
+	UIShader = make_unique<UIObjectShader>();
+	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	
+	UIObject* UItemp = new UIObject();
+	UItemp->SetChild(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", UIShader.get(), 0));
+	UItemp->SetPosition(0.5, 0, 0);
+	UItemp->setAABB();
+	UItemp->SetFunc(tempfunc);
+	UIShader->addObjects(std::unique_ptr<UIObject>(UItemp));
+
+
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	FILE* pInFile = NULL;
 
-	::fopen_s(&pInFile, "Model/map0310_dds.bin", "rb");
-	if (pInFile)
-	{
-		::rewind(pInFile);
-		std::unique_ptr<CGameObject> map(CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, pInFile, stdshader.get(), 0));
-		map->SetPosition(-150, -0.5, -150);
-		map->SetOOBB(NULL);
-		stdshader->addObjects(std::move(map));
-		::fclose(pInFile);
-	}
-	else
-	{
-		OutputDebugString(L"Error: Map file not found.\n");
-	}
-
+	std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/map0310_dds.bin", stdshader.get(), 0));
+	map->SetPosition(-150, -0.5, -150);
+	map->SetOOBB(NULL);
+	stdshader->addObjects(std::move(map));
 	m_ppShaders.push_back(std::move(stdshader));
 
 
@@ -563,114 +564,6 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-//bool CScene::DoCollision(CGameObject* object, int shaderidx)
-//{
-//	if (shaderidx < 0 || shaderidx >= m_ppShaders.size()) return false;
-//	if (m_ppShaders[shaderidx] == nullptr) return false;
-//
-//	auto* otherobj = m_ppShaders[shaderidx]->GetObj();
-//	if (!otherobj) return false;
-//
-//
-//	bool bCollided = false;
-//
-//		for (const auto& other : *otherobj)
-//		{
-//			//나중에 여기서 루트 객체의 바운딩 박스 확인하고 
-//			// 아래 함수에서 충돌 확인 밑 리턴 객체 리턴
-//
-//			if (!other) continue;
-//			CGameObject* pTarget = other.get();
-//
-//			if (object == pTarget) continue;
-//
-//			// 충돌 검사
-//			if (CheckCollision(object, pTarget))
-//			{
-//				bCollided = true;
-//			}
-//		}
-//
-//	return bCollided;
-//}
-//bool CScene::CheckCollision(CGameObject* object1, CGameObject* object2)
-//{
-//	const auto& oobbs1 = object1->GetOOBB();
-//	const auto& oobbs2 = object2->GetOOBB();
-//
-//	float fMaxPenetrationDepth = -1.0f;
-//	XMFLOAT3 xmf3BestNormal = XMFLOAT3(0, 0, 0);
-//	bool bIntersectFound = false;
-//
-//	for (const BoundingOrientedBox* obb1 : oobbs1)
-//	{
-//		for (const BoundingOrientedBox* obb2 : oobbs2)
-//		{
-//			if (!obb1 || !obb2) continue;
-//
-//			if (obb1->Intersects(*obb2))
-//			{
-//				XMFLOAT3 normal = GetCollisionNormal(*obb1, *obb2);
-//
-//				XMVECTOR vNormal = XMLoadFloat3(&normal);
-//
-//				XMFLOAT3 curPos = object1->GetPosition();
-//				XMVECTOR vCurrPos = XMLoadFloat3(&curPos);
-//
-//				XMVECTOR vPrevPos = XMLoadFloat3(&object1->m_xmf3PrevPos);
-//
-//				XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-//				XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-//				float fDepth = fabs(XMVectorGetX(vDot));
-//
-//				if (fDepth > fMaxPenetrationDepth)
-//				{
-//					fMaxPenetrationDepth = fDepth;
-//					xmf3BestNormal = normal;
-//					bIntersectFound = true;
-//				}
-//			}
-//		}
-//	}
-//
-//	if (bIntersectFound)
-//	{
-//		object1->HandleCollision(xmf3BestNormal);
-//		return true;
-//	}
-//
-//	return false;
-//}
-//void CScene::ResolveCollision(CGameObject* object)
-//{
-//	if (!object) return;
-//
-//	const int nMaxIterations = 3;
-//	XMFLOAT3 originalPos = object->GetPosition();
-//
-//	for (int iter = 0; iter < nMaxIterations; ++iter)
-//	{
-//		bool collided = false;
-//
-//		for (size_t i = 0; i < m_ppShaders.size(); ++i)
-//			if (m_ppShaders[i] && DoCollision(object, (int)i))
-//				collided = true;
-//
-//		if (!collided) break;
-//
-//		XMFLOAT3 cur = object->GetPosition();
-//		float dx = cur.x - originalPos.x;
-//		float dy = cur.y - originalPos.y;
-//		float dz = cur.z - originalPos.z;
-//
-//		if (sqrtf(dx * dx + dy * dy + dz * dz) < 0.0001f)
-//			break;
-//
-//		originalPos = cur;
-//	}
-//
-//	object->UpdateTransform(NULL);
-//}
 
 void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
 {
@@ -766,6 +659,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 				}
 			}
 		}
+		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
 		
 	}
 }
@@ -806,7 +700,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
 		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
 		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
-
+			break;
 		default:
 			validKey = false;
 			break;
@@ -814,8 +708,14 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (!validKey)
 			break;
-		if (InputManager::Instance().KeyHold(key))
-			break;
+		
+		if (nMessageID == WM_KEYDOWN)
+		{
+			// lParam의 30번째 비트가 1이면, 이전에 이미 눌려있던 키가 다시 들어온 것입니다.
+			bool wasDownBefore = (lParam & (1 << 30)) != 0;
+			if (wasDownBefore)
+				break;
+		}
 		KEY_STATE state =
 			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
 
@@ -925,6 +825,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+		UIShader->Render(pd3dCommandList, pCamera, true ,nPipelineState);
 	}
 
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);

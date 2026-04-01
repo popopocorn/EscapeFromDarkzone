@@ -1320,6 +1320,24 @@ CGameObject *CGameObject::LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, I
 	return(pGameObject);
 }
 
+CGameObject* CGameObject::LoadGeometryModelByName(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CGameObject* pParent, const char* name, CShader* pShader, int* pnSkinnedMeshes)
+{
+	CGameObject* model = NULL;
+	FILE* pInFile;
+	::fopen_s(&pInFile, name, "rb");
+	if (pInFile)
+	{
+		::rewind(pInFile);
+		model = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, pParent, pInFile, pShader, 0);
+		::fclose(pInFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: file not found.\n");
+	}
+	return model;
+}
+
 void CGameObject::PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent)
 {
 	TCHAR pstrDebug[256] = { 0 };
@@ -1509,4 +1527,51 @@ void ViewObject::Animate(float fTimeElapsed)
 	if (player) {
 		m_xmf4x4ToParent = player->GetMatrix();
 	}
+}
+
+void UIObject::setAABB()
+{
+	auto ext = m_pChild->GetMesh()->GetAABBExtents();
+	auto center = m_pChild->GetMesh()->GetAABBCenter();
+
+	// 1. 월드 변환 행렬 로드
+	XMMATRIX mWorld = XMLoadFloat4x4(&m_xmf4x4World);
+
+	// 2. 로컬 공간의 8개 꼭지점 구하기 
+	// (만약 ext와 center가 2D 전용인 XMFLOAT2라면 z축 연산을 지우고 4개 꼭지점만 쓰시면 됩니다)
+	XMVECTOR corners[8];
+	corners[0] = XMVectorSet(center.x - ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
+	corners[1] = XMVectorSet(center.x + ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
+	corners[2] = XMVectorSet(center.x - ext.x, center.y + ext.y, center.z - ext.z, 1.0f);
+	corners[3] = XMVectorSet(center.x + ext.x, center.y + ext.y, center.z - ext.z, 1.0f);
+	corners[4] = XMVectorSet(center.x - ext.x, center.y - ext.y, center.z + ext.z, 1.0f);
+	corners[5] = XMVectorSet(center.x + ext.x, center.y - ext.y, center.z + ext.z, 1.0f);
+	corners[6] = XMVectorSet(center.x - ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
+	corners[7] = XMVectorSet(center.x + ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
+
+	// 3. 첫 번째 꼭지점을 기준으로 min, max 초기화
+	XMVECTOR vTrans = XMVector3TransformCoord(corners[0], mWorld);
+	XMFLOAT3 pt;
+	XMStoreFloat3(&pt, vTrans);
+
+	float minX = pt.x, maxX = pt.x;
+	float minY = pt.y, maxY = pt.y;
+
+	// 4. 나머지 꼭지점들을 월드 변환하여 가장 바깥쪽의 min/max 값 갱신
+	for (int i = 1; i < 8; ++i)
+	{
+		vTrans = XMVector3TransformCoord(corners[i], mWorld);
+		XMStoreFloat3(&pt, vTrans);
+
+		if (pt.x < minX) minX = pt.x;
+		if (pt.x > maxX) maxX = pt.x;
+		if (pt.y < minY) minY = pt.y;
+		if (pt.y > maxY) maxY = pt.y;
+	}
+
+	// 5. 충돌 박스에 최종 반영
+	CollisionBox.minX = minX;
+	CollisionBox.maxX = maxX;
+	CollisionBox.minY = minY;
+	CollisionBox.maxY = maxY;
 }

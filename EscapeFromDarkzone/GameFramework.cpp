@@ -408,7 +408,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	InputManager::Instance().update();
+	
 	switch (nMessageID)
 	{
 	case WM_ACTIVATE:
@@ -632,6 +632,7 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
+	InputManager::Instance().update();
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
