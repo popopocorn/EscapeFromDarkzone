@@ -498,7 +498,14 @@ void CGameFramework::BuildObjects()
 
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
-
+	if (m_pScene && m_pPlayer)
+	{
+		CGameObject* pWeapon = m_pScene->GetWeaponObject();
+		if (pWeapon)
+		{
+			m_pPlayer->EquipWeapon(pWeapon, "mixamorig:RightHand");
+		}
+	}
 	m_pCamera = m_pPlayer->GetCamera();
 
 	if (m_pScene) m_pScene->SetCamera(m_pCamera);

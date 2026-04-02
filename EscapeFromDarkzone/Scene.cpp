@@ -114,6 +114,33 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	
 	m_ppShaders.push_back(std::move(view));
 	
+	//무기 오브젝트
+	FILE* pWeaponFile = NULL;
+	::fopen_s(&pWeaponFile, "Model/Classic_M4.bin", "rb");
+	if (pWeaponFile)
+	{
+		::rewind(pWeaponFile);
+		m_pWeaponObject = CGameObject::LoadFrameHierarchyFromFile(
+			pd3dDevice,
+			pd3dCommandList,
+			m_pd3dGraphicsRootSignature,
+			NULL,
+			pWeaponFile,
+			stdshader.get(),
+			0
+		);
+
+		if (m_pWeaponObject)
+		{
+			m_pWeaponObject->SetOOBB(NULL);
+		}
+
+		::fclose(pWeaponFile);
+	}
+	else
+	{
+		OutputDebugString(L"Error: Weapon file not found.\n");
+	}
 
 	// 레이저 오브젝트
 	auto pLaserShader = std::make_unique<CLaserShader>();
@@ -698,6 +725,8 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		case '4': key = INPUT_KEY::KEY_4; break;
 
 		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
+		case VK_SPACE:   key = INPUT_KEY::SPACE; break;
+
 		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
 		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
 			break;
@@ -751,7 +780,11 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	//}
 
-
+	if (m_pPlayer && m_pLights.size() > 1)
+	{
+		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	}
 
 	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
 	for (int type = 0; type < EFFECT_MAX; type++)
@@ -812,10 +845,12 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+
+
 	pd3dCommandList->OMSetStencilRef(0xff);
-	
-	if(nPipelineState == SHADOW){
-		for (int i = 0; i < m_ppShaders.size(); i++) 
+
+	if (nPipelineState == SHADOW) {
+		for (int i = 0; i < m_ppShaders.size(); i++)
 		{
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -859,8 +894,6 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-
 	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
-
-
 }
+

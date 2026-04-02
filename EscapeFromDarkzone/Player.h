@@ -30,6 +30,14 @@ struct GameEvent {
 	InputEvent keyEvent;
 };
 
+enum class WEAPON_POSE
+{
+	IDLE = 0,
+	RUN
+};
+
+class PlayerState;
+class CPlayerAnimationController;
 
 class CPlayer : public CGameObject
 {
@@ -71,6 +79,40 @@ protected:
 	SOCKADDR_IN addr;
 
 	char send_buf[BUF_SIZE];
+
+	CGameObject* m_pWeapon = nullptr;
+	XMFLOAT4X4 m_xmf4x4WeaponBaseLocal = Matrix4x4::Identity();
+	bool m_bWeaponBaseLocalSaved = false;
+
+	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
+
+	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(0.0f, 0.1f, 0.1f);
+	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(0.0f, -45.0f, 45.0f);
+
+	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
+	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-50.0f, 30.0f, 0.0f);
+
+	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
+
+	CGameObject* m_pLeftUpperArm = nullptr;
+	CGameObject* m_pLeftForeArm = nullptr;
+	CGameObject* m_pLeftHand = nullptr;
+	CGameObject* m_pLeftHandGrip = nullptr;
+
+	bool  m_bUseLeftHandIK = true;
+	float m_fLeftHandIKWeight = 1.0f;
+
+	XMFLOAT3 m_xmf3CachedLeftElbowDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	bool m_bLeftElbowDirCached = false;
+
+	CGameObject* FindFirstFrameByNames(const char* const* ppNames, int nCount);
+	bool InitializeLeftHandIK();
+	XMVECTOR GetStableLeftElbowBendDir(FXMVECTOR vShoulder, FXMVECTOR vElbow, FXMVECTOR vTargetDir);
+	float GetLeftHandIKWeight() const;
+
+	void RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight);
+
+	void MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight);
 
 public:
 	CPlayer();
@@ -127,8 +169,45 @@ public:
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
 	virtual void HandleCollision(const ColResult& normal);
 	void UpdateDirection();
+	bool IsGrenadeState() const;
+	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
+	CGameObject* GetWeapon() { return m_pWeapon; }
+	void UpdateWeaponPose();
+	void ApplyWeaponPose(WEAPON_POSE ePose);
+	void SetWeaponIdlePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
+	{
+		m_xmf3WeaponIdlePos = pos;
+		m_xmf3WeaponIdleRot = rot;
+	}
+	void SetWeaponRunPose(const XMFLOAT3& pos, const XMFLOAT3& rot)
+	{
+		m_xmf3WeaponRunPos = pos;
+		m_xmf3WeaponRunRot = rot;
+	}
 
+	void SolveLeftHandIK();
+	void SetUseLeftHandIK(bool bUse) { m_bUseLeftHandIK = bUse; }
 };
+
+class CPlayerAnimationController : public CAnimationController
+{
+private:
+	CPlayer* m_pOwner = nullptr;
+
+public:
+	CPlayerAnimationController(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		int nAnimationTracks,
+		CLoadedModelInfo* pModel,
+		CPlayer* pOwner)
+		: CAnimationController(pd3dDevice, pd3dCommandList, nAnimationTracks, pModel)
+	{
+		m_pOwner = pOwner;
+	}
+
+	virtual void OnAnimationIK(CGameObject* pRootGameObject) override;
+}; 
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler
 {
@@ -147,6 +226,7 @@ enum PLAYER_ANIM {
 	ANIM_RUN_L,
 	ANIM_RUN_R,
 	ANIM_RUN_B,
+	ANIM_GRENADE
 };
 
 
@@ -185,6 +265,13 @@ class PlayerIdle : public State<CPlayer> {
 class PlayerRun : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player);
 	virtual void Update(CPlayer* Player, float fTimeElapsed);
+	virtual void Exit(CPlayer* Player);
+};
+
+class PlayerGrenade : public State<CPlayer> {
+public:
+	virtual bool Enter(CPlayer* Player);
+	virtual void Update(CPlayer* Player);
 	virtual void Exit(CPlayer* Player);
 };
 

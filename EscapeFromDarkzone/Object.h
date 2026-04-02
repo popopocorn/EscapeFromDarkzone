@@ -292,6 +292,22 @@ public:
 	CAnimationController(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, int nAnimationTracks, CLoadedModelInfo *pModel);
 	~CAnimationController();
 
+	void BuildUpperBodyMask(CGameObject* pRootGameObject, const char* pstrUpperBodyRootFrameName);
+	void DebugPrintUpperBodyMask();
+	bool IsUpperBodyBone(int nBoneIndex) const;
+
+	void SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUpperBodyTrack);
+	void SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet);
+	
+	float GetTrackPosition(int nAnimationTrack) const;
+	void DebugPrintAnimationSetNames();
+
+protected:
+	bool* m_pbUpperBodyMask = nullptr;
+	int m_nLowerBodyTrack = 0;
+	int m_nUpperBodyTrack = 1;
+
+
 public:
     float 							m_fTime = 0.0f;
 
@@ -324,6 +340,7 @@ public:
 	void SetTrackPosition(int nAnimationTrack, float fPosition);
 	void SetTrackSpeed(int nAnimationTrack, float fSpeed);
 	void SetTrackWeight(int nAnimationTrack, float fWeight);
+	void SetTrackType(int nAnimationTrack, int nType);
 
 	void SetCallbackKeys(int nAnimationTrack, int nCallbackKeys);
 	void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void *pData);
@@ -340,6 +357,7 @@ public:
 	}
 
 public:
+
 	bool							m_bRootMotion = false;
 	CGameObject*					m_pModelRootObject = NULL;
 
@@ -397,8 +415,8 @@ public:
 	CGameObject 					*m_pChild = NULL;
 	CGameObject 					*m_pSibling = NULL;
 
-
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
+
 
 	void SetMesh(CMesh *pMesh);
 	void SetShader(CShader *pShader);
@@ -454,6 +472,8 @@ public:
 	void UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent=NULL);
 	CGameObject *FindFrame(const char *pstrFrameName);
 
+	void DebugPrintMixamoFrameNames(int nDepth = 0);
+
 	CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
 
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
@@ -482,6 +502,7 @@ public:
 	static CLoadedModelInfo *LoadGeometryAndAnimationFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, const char *pstrFileName, CShader *pShader);
 
 	static void PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent);
+
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
