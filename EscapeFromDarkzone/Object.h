@@ -535,7 +535,6 @@ class UIObject : public CGameObject {
 protected:
 	std::function<void()>	Task;
 	CheckBox				CollisionBox;
-
 public:
 	void HandleClick() { if (Task) Task(); }
 	void SetFunc(std::function<void()> func) { Task = func; }

@@ -73,7 +73,9 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	
 	UIObject* UItemp = new UIObject();
 	UItemp->SetChild(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", UIShader.get(), 0));
-	UItemp->SetPosition(0.5, 0, 0);
+	UItemp->SetPosition(0.5, 0, 0.5);
+	UItemp->SetScale(0.5, 0.5, 1);
+
 	UItemp->setAABB();
 	UItemp->SetFunc(tempfunc);
 	UIShader->addObjects(std::unique_ptr<UIObject>(UItemp));
@@ -629,6 +631,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	//handlehp, handlecollision 함수 통일해야함
 	if (nMessageID == WM_LBUTTONDOWN)
 	{
+		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
 		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
 		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
@@ -659,7 +662,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 				}
 			}
 		}
-		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
+		
 		
 	}
 }
