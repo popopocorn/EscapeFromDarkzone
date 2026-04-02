@@ -652,9 +652,6 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
 						if (pEnemy) {
 							pEnemy->HandleHP(10.0f);
-							/*wchar_t szDebug[256];
-							swprintf_s(szDebug, L"==== [TARGET HIT] Distance: %f ====\n", fDist);
-							OutputDebugString(szDebug);*/
 						}
 						
 						break;

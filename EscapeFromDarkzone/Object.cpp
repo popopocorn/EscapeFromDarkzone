@@ -1534,18 +1534,10 @@ void UIObject::setAABB()
 	UpdateTransform(NULL);
 	auto ext = m_pChild->GetMesh()->GetAABBExtents();
 	auto center = m_pChild->GetMesh()->GetAABBCenter();
-
-	// 💡 [디버그 출력 1] 변환 전 로컬 Mesh의 Center와 Extents 정보
-	wchar_t debugBuf[256];
-	swprintf_s(debugBuf, L"[AABB 로컬 원본] Center: (%.3f, %.3f, %.3f) / Extents: (%.3f, %.3f, %.3f)\n",
-		center.x, center.y, center.z,
-		ext.x, ext.y, ext.z);
-	OutputDebugStringW(debugBuf);
 	
-	// 1. 월드 변환 행렬 로드
+
 	XMMATRIX mWorld = XMLoadFloat4x4(&m_pChild->m_xmf4x4World);
 
-	// 2. 로컬 공간의 8개 꼭지점 구하기 
 	XMVECTOR corners[8];
 	corners[0] = XMVectorSet(center.x - ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
 	corners[1] = XMVectorSet(center.x + ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
@@ -1556,7 +1548,6 @@ void UIObject::setAABB()
 	corners[6] = XMVectorSet(center.x - ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
 	corners[7] = XMVectorSet(center.x + ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
 
-	// 3. 첫 번째 꼭지점을 기준으로 min, max 초기화
 	XMVECTOR vTrans = XMVector3TransformCoord(corners[0], mWorld);
 	XMFLOAT3 pt;
 	XMStoreFloat3(&pt, vTrans);
@@ -1564,7 +1555,6 @@ void UIObject::setAABB()
 	float minX = pt.x, maxX = pt.x;
 	float minY = pt.y, maxY = pt.y;
 
-	// 4. 나머지 꼭지점들을 월드 변환하여 가장 바깥쪽의 min/max 값 갱신
 	for (int i = 1; i < 8; ++i)
 	{
 		vTrans = XMVector3TransformCoord(corners[i], mWorld);
@@ -1582,8 +1572,4 @@ void UIObject::setAABB()
 	CollisionBox.minY = minY;
 	CollisionBox.maxY = maxY;
 
-	swprintf_s(debugBuf, L"[AABB 최종 월드] Min(X, Y): (%.3f, %.3f) / Max(X, Y): (%.3f, %.3f)\n------------------------------------------------\n",
-		CollisionBox.minX, CollisionBox.minY,
-		CollisionBox.maxX, CollisionBox.maxY);
-	OutputDebugStringW(debugBuf);
 }
