@@ -2,14 +2,7 @@
 #include "stdafx.h"
 #include "Object.h"
 #include"State.h"
-
-enum PLAYER_ANIM {
-	ANIM_IDLE = 0,
-	ANIM_RUN_F,
-	ANIM_RUN_L,
-	ANIM_RUN_R,
-	ANIM_RUN_B,
-};
+#include "Player.h"
 
 
 class OtherPlayer : public CGameObject

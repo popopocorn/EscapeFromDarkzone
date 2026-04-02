@@ -286,55 +286,23 @@ public:
 	void PrepareSkinning();
 };
 
-class CAnimationController 
+struct SBoneBlendCache {
+	XMVECTOR vScale;
+	XMVECTOR vRot;
+	XMVECTOR vTrans;
+};
+
+class CAnimationController
 {
 public:
-	CAnimationController(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, int nAnimationTracks, CLoadedModelInfo *pModel);
+	CAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, CLoadedModelInfo* pModel);
 	~CAnimationController();
 
 	void BuildUpperBodyMask(CGameObject* pRootGameObject, const char* pstrUpperBodyRootFrameName);
-	void DebugPrintUpperBodyMask();
 	bool IsUpperBodyBone(int nBoneIndex) const;
-
 	void SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUpperBodyTrack);
+
 	void SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet);
-	
-	float GetTrackPosition(int nAnimationTrack) const;
-	void DebugPrintAnimationSetNames();
-
-protected:
-	bool* m_pbUpperBodyMask = nullptr;
-	int m_nLowerBodyTrack = 0;
-	int m_nUpperBodyTrack = 1;
-
-
-public:
-    float 							m_fTime = 0.0f;
-
-    int 							m_nAnimationTracks = 0;
-    CAnimationTrack 				*m_pAnimationTracks = NULL;
-
-	CAnimationSets					*m_pAnimationSets = NULL;
-	//cur_animation - 1
-	//next_animation - 0
-	int 							m_nSkinnedMeshes = 0;
-	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
-
-	ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-	XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-
-private:
-	int     m_nCurTrack = 0;
-	int     m_nNextTrack = 1;
-	int     m_nCurAnimID = -1;
-
-	bool    m_bIsBlending = false;
-	float   m_fBlendTime = 0.0f;
-	float   m_fBlendDuration = 0.2f;
-public:
-	void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
-
-	void SetTrackAnimationSet(int nAnimationTrack, int nAnimationSet);
 
 	void SetTrackEnable(int nAnimationTrack, bool bEnable);
 	void SetTrackPosition(int nAnimationTrack, float fPosition);
@@ -342,32 +310,41 @@ public:
 	void SetTrackWeight(int nAnimationTrack, float fWeight);
 	void SetTrackType(int nAnimationTrack, int nType);
 
+	float GetTrackPosition(int nAnimationTrack) const;
+
+	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
+	void AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject);
+
 	void SetCallbackKeys(int nAnimationTrack, int nCallbackKeys);
-	void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void *pData);
-	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler *pCallbackHandler);
+	void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void* pData);
+	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler* pCallbackHandler);
 
-	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
-
-	void ChangeAnimation(int nNewAnimID, float fBlendDuration = 0.2f);
-
-	float GetTrackWeight(int nAnimationTrack)
-	{
-		if (m_pAnimationTracks) return m_pAnimationTracks[nAnimationTrack].m_fWeight;
-		return 0.0f;
-	}
+	virtual void OnRootMotion(CGameObject* pRootGameObject) {}
+	virtual void OnAnimationIK(CGameObject* pRootGameObject) {}
 
 public:
+	float m_fTime = 0.0f;
 
-	bool							m_bRootMotion = false;
-	CGameObject*					m_pModelRootObject = NULL;
+	int m_nAnimationTracks = 0;
+	CAnimationTrack* m_pAnimationTracks = NULL;
 
-	CGameObject*					m_pRootMotionObject = NULL;
-	XMFLOAT3						m_xmf3FirstRootMotionPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	CAnimationSets* m_pAnimationSets = NULL;
 
-	void SetRootMotion(bool bRootMotion) { m_bRootMotion = bRootMotion; }
+	int m_nSkinnedMeshes = 0;
+	CSkinnedMesh** m_ppSkinnedMeshes = NULL;
+	ID3D12Resource** m_ppd3dcbSkinningBoneTransforms = NULL;
+	XMFLOAT4X4** m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL;
 
-	virtual void OnRootMotion(CGameObject* pRootGameObject) { }
-	virtual void OnAnimationIK(CGameObject* pRootGameObject) { }
+	CGameObject* m_pModelRootObject = NULL;
+
+	bool* m_pbUpperBodyMask = nullptr;
+	int m_nLowerBodyTrack = 0;
+	int m_nUpperBodyTrack = 1;
+
+	std::vector<SBoneBlendCache> m_vBlendCaches;
+	bool m_bIsBlending = false;
+	float m_fBlendTime = 0.0f;
+	float m_fBlendDuration = 0.2f;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -416,7 +393,6 @@ public:
 	CGameObject 					*m_pSibling = NULL;
 
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
-
 
 	void SetMesh(CMesh *pMesh);
 	void SetShader(CShader *pShader);
@@ -492,7 +468,7 @@ public:
 	void SetTrackAnimationSet(int nAnimationTrack, int nAnimationSet);
 	void SetTrackAnimationPosition(int nAnimationTrack, float fPosition);
 
-	void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
+	//void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
 
 	void LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, CGameObject *pParent, FILE *pInFile, CShader *pShader);
 

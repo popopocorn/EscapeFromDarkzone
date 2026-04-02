@@ -226,9 +226,9 @@ void CPlayer::Update(float fTimeElapsed)
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
 
-	UpdateWeaponPose();
-
 	UpdateTransform(NULL);
+
+	UpdateWeaponPose(fTimeElapsed);
 
 	if (m_pPlayerUpdatedContext) OnPlayerUpdateCallback(fTimeElapsed);
 
@@ -482,26 +482,53 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 	else if (ePose == WEAPON_POSE::GRENADE)
 	{
 		if (!m_pLeftHand) return;
+		if (!m_pLeftForeArm) return;
 		if (!m_pLeftHandGrip) return;
 		if (!m_bWeaponGrenadeStartCaptured) return;
 
 		XMMATRIX mStartLocal = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartLocal);
-		XMMATRIX mStartWorld = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartWorld);
-
 		XMVECTOR vStartLocalScale, vStartLocalRot, vStartLocalTrans;
-		XMVECTOR vStartWorldScale, vStartWorldRot, vStartWorldTrans;
-
 		XMMatrixDecompose(&vStartLocalScale, &vStartLocalRot, &vStartLocalTrans, mStartLocal);
-		XMMatrixDecompose(&vStartWorldScale, &vStartWorldRot, &vStartWorldTrans, mStartWorld);
 
 		// 현재 오른손 소켓 월드 회전
 		XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
-
 		XMVECTOR vSocketScale, vSocketRot, vSocketTrans;
 		XMMatrixDecompose(&vSocketScale, &vSocketRot, &vSocketTrans, mSocketWorld);
 
+
+		XMMATRIX mLeftHandWorld = XMLoadFloat4x4(&m_pLeftHand->m_xmf4x4World);
+		XMMATRIX mLeftForeArmWorld = XMLoadFloat4x4(&m_pLeftForeArm->m_xmf4x4World);
+
+		XMVECTOR vHandPos = mLeftHandWorld.r[3];
+		XMVECTOR vForeArmPos = mLeftForeArmWorld.r[3];
+
+		XMVECTOR vForward = XMVector3Normalize(XMVectorSubtract(vHandPos, vForeArmPos));
+
+		XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+		XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vWorldUp, vForward));
+
+		XMVECTOR vUpForearm = XMVector3Normalize(XMVector3Cross(vForward, vRight));
+
+		XMMATRIX mTargetWorldRotMatrix = XMMatrixIdentity();
+		mTargetWorldRotMatrix.r[0] = vRight;
+		mTargetWorldRotMatrix.r[1] = vUpForearm;
+		mTargetWorldRotMatrix.r[2] = vForward;
+		mTargetWorldRotMatrix.r[3] = XMVectorSet(0, 0, 0, 1);
+
+		XMVECTOR vTargetWorldRot = XMQuaternionRotationMatrix(mTargetWorldRotMatrix);
+
+		XMVECTOR vOffsetRot = XMQuaternionRotationRollPitchYaw(
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.x),
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.y),
+			XMConvertToRadians(m_xmf3WeaponGrenadeRot.z)
+		);
+		vTargetWorldRot = XMQuaternionMultiply(vOffsetRot, vTargetWorldRot);
+		vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
+
+
 		XMVECTOR vLocalRotFinal = XMQuaternionMultiply(
-			vStartWorldRot,
+			vTargetWorldRot,
 			XMQuaternionInverse(vSocketRot)
 		);
 		vLocalRotFinal = XMQuaternionNormalize(vLocalRotFinal);
@@ -519,8 +546,6 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 
 		XMFLOAT3 curGripWorld = m_pLeftHandGrip->GetPosition();
-
-		XMMATRIX mLeftHandWorld = XMLoadFloat4x4(&m_pLeftHand->m_xmf4x4World);
 
 		XMVECTOR vGripOffsetLocal = XMVectorSet(
 			m_xmf3WeaponGrenadePos.x,
@@ -540,13 +565,13 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 
 		XMVECTOR vDeltaWorld = vDesiredGripWorld - vCurGripWorld;
 
+		// world delta -> socket local delta
 		XMMATRIX mInvSocketWorld = XMMatrixInverse(nullptr, mSocketWorld);
 		XMVECTOR vDeltaLocal = XMVector3TransformNormal(vDeltaWorld, mInvSocketWorld);
 
 		XMFLOAT3 deltaLocal;
 		XMStoreFloat3(&deltaLocal, vDeltaLocal);
 
-		// 위치만 왼손 grip에 맞추기
 		m_pWeapon->m_xmf4x4ToParent._41 += deltaLocal.x;
 		m_pWeapon->m_xmf4x4ToParent._42 += deltaLocal.y;
 		m_pWeapon->m_xmf4x4ToParent._43 += deltaLocal.z;
@@ -570,33 +595,73 @@ void CPlayer::BeginGrenadeWeaponPose()
 void CPlayer::EndGrenadeWeaponPose()
 {
 	m_bWeaponGrenadeStartCaptured = false;
+
+	if (m_pWeapon)
+	{
+		m_xmf4x4WeaponBlendStartWorld = m_pWeapon->m_xmf4x4World;
+		m_bWeaponBlending = true;
+		m_fWeaponBlendTime = 0.0f;
+	}
 }
 
-void CPlayer::UpdateWeaponPose()
+void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 {
 	if (!m_pWeapon) return;
 
 	if (IsGrenadeState())
 	{
 		ApplyWeaponPose(WEAPON_POSE::GRENADE);
-		return;
-	}
-
-	float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
-
-	if (moveLenSq > 0.0001f)
-	{
-		if (m_eWeaponPose != WEAPON_POSE::RUN)
-		{
-			ApplyWeaponPose(WEAPON_POSE::RUN);
-		}
 	}
 	else
 	{
-		if (m_eWeaponPose != WEAPON_POSE::IDLE)
+		float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
+
+		WEAPON_POSE targetPose = (moveLenSq > 0.0001f) ? WEAPON_POSE::RUN : WEAPON_POSE::IDLE;
+
+		if (m_eWeaponPose != targetPose || m_bWeaponBlending)
 		{
-			ApplyWeaponPose(WEAPON_POSE::IDLE);
+			ApplyWeaponPose(targetPose);
 		}
+	}
+
+	//무기 복귀 블렌딩
+	if (m_bWeaponBlending)
+	{
+		m_fWeaponBlendTime += fTimeElapsed;
+		float t = m_fWeaponBlendTime / m_fWeaponBlendDuration;
+
+		if (t >= 1.0f)
+		{
+			m_bWeaponBlending = false;
+		}
+		else
+		{
+			float easeT = 1.0f - powf(1.0f - t, 3.0f);
+
+			XMMATRIX mTargetLocal = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
+			XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
+			XMMATRIX mTargetWorld = XMMatrixMultiply(mTargetLocal, mSocketWorld);
+
+			XMVECTOR vTargetScale, vTargetRot, vTargetTrans;
+			XMMatrixDecompose(&vTargetScale, &vTargetRot, &vTargetTrans, mTargetWorld);
+
+			XMMATRIX mStartWorld = XMLoadFloat4x4(&m_xmf4x4WeaponBlendStartWorld);
+			XMVECTOR vStartScale, vStartRot, vStartTrans;
+			XMMatrixDecompose(&vStartScale, &vStartRot, &vStartTrans, mStartWorld);
+
+			XMVECTOR vCurScale = XMVectorLerp(vStartScale, vTargetScale, easeT);
+			XMVECTOR vCurRot = XMQuaternionSlerp(vStartRot, vTargetRot, easeT);
+			XMVECTOR vCurTrans = XMVectorLerp(vStartTrans, vTargetTrans, easeT);
+
+			XMMATRIX mCurWorld = XMMatrixAffineTransformation(vCurScale, XMVectorZero(), vCurRot, vCurTrans);
+
+			XMMATRIX mInvSocket = XMMatrixInverse(nullptr, mSocketWorld);
+			XMMATRIX mCurLocal = XMMatrixMultiply(mCurWorld, mInvSocket);
+
+			XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mCurLocal);
+		}
+
+		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	}
 }
 
@@ -924,20 +989,16 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
-	OutputDebugStringA("========== MIXAMO FRAME NAMES BEGIN ==========\n");
-	DebugPrintMixamoFrameNames();
-	OutputDebugStringA("========== MIXAMO FRAME NAMES END ==========\n");
+	//OutputDebugStringA("========== MIXAMO FRAME NAMES BEGIN ==========\n");
+	//DebugPrintMixamoFrameNames();
+	//OutputDebugStringA("========== MIXAMO FRAME NAMES END ==========\n");
 
 	// 왼팔 IK용 본 찾기
 	InitializeLeftHandIK();
 
-	// 기본 컨트롤러 대신 플레이어 전용 컨트롤러 사용
 	m_pSkinnedAnimationController = new CPlayerAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel, this);
 	
-	m_pSkinnedAnimationController->DebugPrintAnimationSetNames();
-	
 	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
-	m_pSkinnedAnimationController->DebugPrintUpperBodyMask();
 
 	// Track 0 = lower body, Track 1 = upper body
 	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
@@ -1442,12 +1503,6 @@ void PlayerGrenade::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->ChangeAnimation(4, 0.1f);
-	}
-	return true;
 }
 
 void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
