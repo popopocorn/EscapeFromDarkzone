@@ -33,7 +33,8 @@ struct GameEvent {
 enum class WEAPON_POSE
 {
 	IDLE = 0,
-	RUN
+	RUN,
+	GRENADE
 };
 
 class PlayerState;
@@ -80,19 +81,35 @@ protected:
 
 	char send_buf[BUF_SIZE];
 
+	//애니메이션 관련 무기
 	CGameObject* m_pWeapon = nullptr;
+	CGameObject* m_pWeaponSocket = nullptr;
+
 	XMFLOAT4X4 m_xmf4x4WeaponBaseLocal = Matrix4x4::Identity();
 	bool m_bWeaponBaseLocalSaved = false;
 
 	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
 
-	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(0.0f, 0.1f, 0.1f);
-	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(0.0f, -45.0f, 45.0f);
+	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.20f, 0.1f, 0.1f);
+	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -45.0f, 45.0f);
 
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
-	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-50.0f, 30.0f, 0.0f);
+	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-5.0f, 30.0f, 0.0f);
+
+	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
+	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
+
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
+	bool m_bWeaponGrenadeStartCaptured = false;
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartWorld = Matrix4x4::Identity();
 
 	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
+
+	// 무기 포즈 블렌딩
+	bool m_bWeaponBlending = false;
+	float m_fWeaponBlendTime = 0.0f;
+	float m_fWeaponBlendDuration = 0.25f;
+	XMFLOAT4X4 m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
 
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
@@ -172,7 +189,7 @@ public:
 	bool IsGrenadeState() const;
 	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
 	CGameObject* GetWeapon() { return m_pWeapon; }
-	void UpdateWeaponPose();
+	void UpdateWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 	void SetWeaponIdlePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
 	{
@@ -184,9 +201,16 @@ public:
 		m_xmf3WeaponRunPos = pos;
 		m_xmf3WeaponRunRot = rot;
 	}
-
+	void SetWeaponGrenadePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
+	{
+		m_xmf3WeaponGrenadePos = pos;
+		m_xmf3WeaponGrenadeRot = rot;
+	}
 	void SolveLeftHandIK();
 	void SetUseLeftHandIK(bool bUse) { m_bUseLeftHandIK = bUse; }
+
+	void BeginGrenadeWeaponPose();
+	void EndGrenadeWeaponPose();
 };
 
 class CPlayerAnimationController : public CAnimationController
@@ -233,11 +257,11 @@ enum PLAYER_ANIM {
 class CTerrainPlayer : public CPlayer
 {
 public:
-	CTerrainPlayer(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CShader* shader);
+	CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* shader);
 	virtual ~CTerrainPlayer();
 
 public:
-	virtual CCamera *ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed);
+	virtual CCamera* ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed);
 
 	virtual void OnPlayerUpdateCallback(float fTimeElapsed);
 	virtual void OnCameraUpdateCallback(float fTimeElapsed);
@@ -245,34 +269,29 @@ public:
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
 
 	virtual void Update(float fTimeElapsed);
-private:
-	int m_nCurTrack = 0; 
-	int m_nNextTrack = 1;
-
-	int m_nCurAnimType = -1;
-
-	float m_fBlendTime = 0.0f; 
-	float m_fBlendDuration = 0.2f;
-	bool  m_bIsBlending = false;
 };
 
 class PlayerIdle : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player, float fTimeElapsed);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerRun : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player, float fTimeElapsed);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerGrenade : public State<CPlayer> {
+private:
+	float m_fElapsed = 0.0f;
+	int m_nLastLowerAnim = ANIM_IDLE;
+	bool m_bKeepRun = false;
 public:
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player);
-	virtual void Exit(CPlayer* Player);
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
 };
 
 class PlayerDie : public State<CPlayer> {

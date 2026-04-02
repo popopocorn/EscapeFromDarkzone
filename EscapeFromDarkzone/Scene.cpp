@@ -116,7 +116,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	
 	//무기 오브젝트
 	FILE* pWeaponFile = NULL;
-	::fopen_s(&pWeaponFile, "Model/Classic_M4.bin", "rb");
+	::fopen_s(&pWeaponFile, "Model/Classic_M4_1.bin", "rb");
 	if (pWeaponFile)
 	{
 		::rewind(pWeaponFile);

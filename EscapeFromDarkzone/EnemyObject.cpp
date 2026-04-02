@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "EnemyObject.h"
 #include "Player.h"
+#include "OtherPlayer.h"
 
 CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -12,10 +13,10 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pEnemyModel);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, ENEMY_ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSet(1, ENEMY_ANIM_RUN);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, ENEMY_ANIM_RUN);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -212,7 +213,7 @@ bool EnemyDie::Enter(CEnemyObject* pEnemy)
 
 	pController->SetTrackEnable(0, false);
 	pController->SetTrackEnable(1, true);
-	pController->SetTrackAnimationSet(1, 0);
+	pController->SetTrackAnimationSetIfChanged(1, 0);
 	pController->SetTrackPosition(1, 0.0f);
 	return true;
 }

@@ -9,7 +9,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 
 	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSet(0, ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
@@ -61,7 +61,7 @@ bool OtherPlayerIdle::Enter(OtherPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->ChangeAnimation(ANIM_IDLE, 0.2f);
+		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
 	}
 	return true;
 }
@@ -95,7 +95,7 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->ChangeAnimation(nextAnim, 0.2f);
+		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
 	}
 }
 
@@ -107,7 +107,7 @@ bool OtherPlayerDie::Enter(OtherPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->ChangeAnimation(4, 0.1f);
+		pCtrl->SetTrackAnimationSetIfChanged(0, 4);
 	}
 	return true;
 }
