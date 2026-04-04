@@ -90,7 +90,7 @@ protected:
 	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
 	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -32.0f, 28.0f);
 
-	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.18f, -0.08f);
+	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.1f, -0.08f);
 	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -12.0f);
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
@@ -127,7 +127,7 @@ protected:
 
 	void RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight);
 	void MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight);
-
+	void RotateForeArmTowardGrip(CGameObject* pForeArm, const XMFLOAT3& xmf3TargetWorldPos, float fWeight);
 public:
 	CPlayer();
 	virtual ~CPlayer();

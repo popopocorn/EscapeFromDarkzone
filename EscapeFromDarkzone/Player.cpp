@@ -896,6 +896,69 @@ void CPlayer::RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3Cur
 	XMStoreFloat4x4(&pBone->m_xmf4x4ToParent, mFinalLocal);
 }
 
+void CPlayer::RotateForeArmTowardGrip(CGameObject* pForeArm, const XMFLOAT3& xmf3TargetWorldPos, float fWeight)
+{
+	if (!pForeArm) return;
+	if (fWeight <= 0.0f) return;
+
+	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pForeArm->m_xmf4x4World);
+
+	XMVECTOR vWorldScale, vWorldRot, vWorldTrans;
+	XMMatrixDecompose(&vWorldScale, &vWorldRot, &vWorldTrans, mBoneWorld);
+
+	// 하박 본의 "조준 기준축"을 직접 사용
+	// 지금까지 테스트상 r[2]가 제일 맞았으므로 그대로 사용
+	XMVECTOR vCurrentAxis = SafeNormalize3(mBoneWorld.r[2]);
+
+	XMVECTOR vTargetPos = XMLoadFloat3(&xmf3TargetWorldPos);
+	XMVECTOR vTargetDir = SafeNormalize3(vTargetPos - vWorldTrans);
+
+	if (XMVectorGetX(XMVector3LengthSq(vCurrentAxis)) < 0.000001f) return;
+	if (XMVectorGetX(XMVector3LengthSq(vTargetDir)) < 0.000001f) return;
+
+	XMVECTOR vDeltaRot = QuaternionFromTo(vCurrentAxis, vTargetDir);
+	vDeltaRot = XMQuaternionNormalize(vDeltaRot);
+
+	XMVECTOR vTargetWorldRot = XMQuaternionMultiply(vDeltaRot, vWorldRot);
+	vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
+
+	float fApply = ClampFloat(fWeight, 0.0f, 1.0f);
+	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vWorldRot, vTargetWorldRot, fApply);
+	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
+
+	XMMATRIX mParentWorld = XMMatrixIdentity();
+	if (pForeArm->m_pParent)
+	{
+		mParentWorld = XMLoadFloat4x4(&pForeArm->m_pParent->m_xmf4x4World);
+	}
+
+	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
+		vWorldScale,
+		XMVectorZero(),
+		vNewWorldRot,
+		vWorldTrans
+	);
+
+	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
+	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
+
+	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
+	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
+
+	XMMATRIX mOldLocal = XMLoadFloat4x4(&pForeArm->m_xmf4x4ToParent);
+	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
+	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
+
+	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
+		vOldLocalScale,
+		XMVectorZero(),
+		vLocalRot,
+		vOldLocalTrans
+	);
+
+	XMStoreFloat4x4(&pForeArm->m_xmf4x4ToParent, mFinalLocal);
+}
+
 void CPlayer::MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight)
 {
 	if (!pBone || !pTarget) return;
@@ -954,19 +1017,32 @@ void CPlayer::SolveLeftHandIK()
 	XMFLOAT3 xmf3Shoulder = m_pLeftUpperArm->GetPosition();
 	XMFLOAT3 xmf3Elbow = m_pLeftForeArm->GetPosition();
 	XMFLOAT3 xmf3Hand = m_pLeftHand->GetPosition();
-	XMFLOAT3 xmf3Target = m_pLeftHandGrip->GetPosition();
+	XMFLOAT3 xmf3RawTarget = m_pLeftHandGrip->GetPosition();
 
 	XMVECTOR vShoulder = XMLoadFloat3(&xmf3Shoulder);
 	XMVECTOR vElbow = XMLoadFloat3(&xmf3Elbow);
 	XMVECTOR vHand = XMLoadFloat3(&xmf3Hand);
-	XMVECTOR vTarget = XMLoadFloat3(&xmf3Target);
+	XMVECTOR vRawTarget = XMLoadFloat3(&xmf3RawTarget);
+
+	// --------------------------------------------------------------------
+	// 핵심 수정:
+	// 움직이는 grip을 100% 그대로 따라가지 않고,
+	// 현재 손 위치와 grip 위치를 섞은 soft target을 사용
+	// 값이 작을수록 원운동은 줄고, 손 고정력은 약해짐
+	// 값이 클수록 손은 더 잘 붙지만 원운동이 다시 커질 수 있음
+	// --------------------------------------------------------------------
+	const float fSoftFollow = 0.65f;
+	XMVECTOR vSoftTarget = XMVectorLerp(vHand, vRawTarget, fSoftFollow);
+
+	XMFLOAT3 xmf3Target;
+	XMStoreFloat3(&xmf3Target, vSoftTarget);
 
 	float fUpperLen = XMVectorGetX(XMVector3Length(vElbow - vShoulder));
 	float fLowerLen = XMVectorGetX(XMVector3Length(vHand - vElbow));
 
 	if (fUpperLen < 0.0001f || fLowerLen < 0.0001f) return;
 
-	XMVECTOR vToTarget = vTarget - vShoulder;
+	XMVECTOR vToTarget = vSoftTarget - vShoulder;
 	float fDistToTarget = XMVectorGetX(XMVector3Length(vToTarget));
 	if (fDistToTarget < 0.0001f) return;
 
@@ -990,21 +1066,47 @@ void CPlayer::SolveLeftHandIK()
 	XMFLOAT3 xmf3ElbowTarget;
 	XMStoreFloat3(&xmf3ElbowTarget, vElbowTarget);
 
-	RotateBoneTowardTarget(m_pLeftUpperArm, xmf3Elbow, xmf3ElbowTarget, fWeight * 0.80f);
+	// ------------------------------------------------------------
+	// 상완: 너무 세게 돌리면 다시 X자 교차가 심해질 수 있으므로 중간 정도
+	// ------------------------------------------------------------
+	RotateBoneTowardTarget(m_pLeftUpperArm, xmf3Elbow, xmf3ElbowTarget, fWeight * 0.55f);
 	if (m_pLeftUpperArm->m_pParent)
 		m_pLeftUpperArm->UpdateTransform(&m_pLeftUpperArm->m_pParent->m_xmf4x4World);
 
+	// 최신 하박/손 위치 재조회
 	xmf3Elbow = m_pLeftForeArm->GetPosition();
 	xmf3Hand = m_pLeftHand->GetPosition();
-	RotateBoneTowardTarget(m_pLeftForeArm, xmf3Hand, xmf3Target, fWeight * 0.38f);
+
+	XMVECTOR vHandNow = XMLoadFloat3(&xmf3Hand);
+	XMVECTOR vTargetNow = XMLoadFloat3(&xmf3Target);
+
+	float fHandError = XMVectorGetX(XMVector3Length(vTargetNow - vHandNow));
+
+	// ------------------------------------------------------------
+	// 손이 멀어질수록 하박만 조금 더 적극적으로 따라가게
+	// ------------------------------------------------------------
+	float fForeArmReachBoost = 0.0f;
+	if (fHandError > 0.15f) fForeArmReachBoost = 0.08f;
+	if (fHandError > 0.30f) fForeArmReachBoost = 0.14f;
+	if (fHandError > 0.50f) fForeArmReachBoost = 0.20f;
+
+	// ------------------------------------------------------------
+	// 하박: 기존 current hand 방향 기반이 아니라
+	// 본 축(r[2])이 soft target 방향을 보게 회전
+	// ------------------------------------------------------------
+	RotateForeArmTowardGrip(m_pLeftForeArm, xmf3Target, fWeight * 0.62f + fForeArmReachBoost);
 	if (m_pLeftForeArm->m_pParent)
 		m_pLeftForeArm->UpdateTransform(&m_pLeftForeArm->m_pParent->m_xmf4x4World);
 
-	StabilizeForeArmTwist(m_pLeftForeArm, m_pLeftHand, fWeight * 0.18f);
+	// ------------------------------------------------------------
+	// twist는 아주 약하게만
+	// 세게 주면 다시 비틀림/교차가 커질 수 있음
+	// ------------------------------------------------------------
+	StabilizeForeArmTwist(m_pLeftForeArm, m_pLeftHand, fWeight * 0.04f);
 	if (m_pLeftForeArm->m_pParent)
 		m_pLeftForeArm->UpdateTransform(&m_pLeftForeArm->m_pParent->m_xmf4x4World);
 
-	// MatchBoneWorldRotation(m_pLeftHand, m_pLeftHandGrip, fWeight * 0.02f);
+	// 손목 회전은 계속 끔
 	if (m_pLeftHand->m_pParent)
 		m_pLeftHand->UpdateTransform(&m_pLeftHand->m_pParent->m_xmf4x4World);
 }
