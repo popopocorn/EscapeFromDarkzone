@@ -21,48 +21,9 @@ static float ClampFloat(float v, float vmin, float vmax)
 	return v;
 }
 
-static XMVECTOR QuaternionFromTo(XMVECTOR vFrom, XMVECTOR vTo)
-{
-	vFrom = SafeNormalize3(vFrom);
-	vTo = SafeNormalize3(vTo);
-
-	float dot = XMVectorGetX(XMVector3Dot(vFrom, vTo));
-
-	if (dot > 0.9999f)
-	{
-		return XMQuaternionIdentity();
-	}
-
-	if (dot < -0.9999f)
-	{
-		XMVECTOR axis = XMVector3Cross(vFrom, XMVectorSet(1, 0, 0, 0));
-		if (XMVectorGetX(XMVector3LengthSq(axis)) < 0.000001f)
-		{
-			axis = XMVector3Cross(vFrom, XMVectorSet(0, 1, 0, 0));
-		}
-		axis = SafeNormalize3(axis);
-		return XMQuaternionRotationAxis(axis, XM_PI);
-	}
-
-	XMVECTOR axis = XMVector3Cross(vFrom, vTo);
-	XMVECTOR q = XMVectorSet(
-		XMVectorGetX(axis),
-		XMVectorGetY(axis),
-		XMVectorGetZ(axis),
-		1.0f + dot
-	);
-
-	return XMQuaternionNormalize(q);
-}
-
 static bool IsMoveHeld(InputManager& input, INPUT_KEY key)
 {
 	return input.KeyDown(key) || input.KeyHold(key);
-}
-
-static XMVECTOR ProjectOnPlane(FXMVECTOR v, FXMVECTOR planeNormal)
-{
-	return v - planeNormal * XMVectorGetX(XMVector3Dot(v, planeNormal));
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -224,6 +185,7 @@ void CPlayer::Update(float fTimeElapsed)
 		m_xmf3Velocity.x *= (fMaxVelocityXZ / fLength);
 		m_xmf3Velocity.z *= (fMaxVelocityXZ / fLength);
 	}
+
 	float fMaxVelocityY = m_fMaxVelocityY;
 	fLength = sqrtf(m_xmf3Velocity.y * m_xmf3Velocity.y);
 	if (fLength > m_fMaxVelocityY) m_xmf3Velocity.y *= (fMaxVelocityY / fLength);
@@ -274,6 +236,7 @@ CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
 		pNewCamera = new CSpaceShipCamera(m_pCamera);
 		break;
 	}
+
 	if (nCurrentCameraMode == SPACESHIP_CAMERA)
 	{
 		m_xmf3Right = Vector3::Normalize(XMFLOAT3(m_xmf3Right.x, 0.0f, m_xmf3Right.z));
@@ -300,17 +263,22 @@ CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
 
 	if (m_pCamera) delete m_pCamera;
 
-	return(pNewCamera);
+	return pNewCamera;
 }
 
 void CPlayer::OnPrepareRender()
 {
 	m_xmf4x4ToParent._11 = m_xmf3Right.x; m_xmf4x4ToParent._12 = m_xmf3Right.y; m_xmf4x4ToParent._13 = m_xmf3Right.z;
-	m_xmf4x4ToParent._21 = m_xmf3Up.x; m_xmf4x4ToParent._22 = m_xmf3Up.y; m_xmf4x4ToParent._23 = m_xmf3Up.z;
-	m_xmf4x4ToParent._31 = m_xmf3Look.x; m_xmf4x4ToParent._32 = m_xmf3Look.y; m_xmf4x4ToParent._33 = m_xmf3Look.z;
-	m_xmf4x4ToParent._41 = m_xmf3Position.x; m_xmf4x4ToParent._42 = m_xmf3Position.y; m_xmf4x4ToParent._43 = m_xmf3Position.z;
+	m_xmf4x4ToParent._21 = m_xmf3Up.x;    m_xmf4x4ToParent._22 = m_xmf3Up.y;    m_xmf4x4ToParent._23 = m_xmf3Up.z;
+	m_xmf4x4ToParent._31 = m_xmf3Look.x;  m_xmf4x4ToParent._32 = m_xmf3Look.y;  m_xmf4x4ToParent._33 = m_xmf3Look.z;
+	m_xmf4x4ToParent._41 = m_xmf3Position.x;
+	m_xmf4x4ToParent._42 = m_xmf3Position.y;
+	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 
-	m_xmf4x4ToParent = Matrix4x4::Multiply(XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z), m_xmf4x4ToParent);
+	m_xmf4x4ToParent = Matrix4x4::Multiply(
+		XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z),
+		m_xmf4x4ToParent
+	);
 }
 
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -320,8 +288,7 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSt
 
 void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 {
-	if (!new_state)
-		return;
+	if (!new_state) return;
 
 	if (state && typeid(*state) == typeid(*new_state))
 		return;
@@ -330,7 +297,6 @@ void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 		state->Exit(this);
 
 	state = std::move(new_state);
-
 	state->Enter(this);
 }
 
@@ -482,94 +448,7 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 	}
 	else if (ePose == WEAPON_POSE::GRENADE)
 	{
-		if (!m_pLeftHand) return;
-		if (!m_pLeftForeArm) return;
-		if (!m_pLeftHandGrip) return;
-		if (!m_bWeaponGrenadeStartCaptured) return;
-
-		XMMATRIX mStartLocal = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartLocal);
-		XMVECTOR vStartLocalScale, vStartLocalRot, vStartLocalTrans;
-		XMMatrixDecompose(&vStartLocalScale, &vStartLocalRot, &vStartLocalTrans, mStartLocal);
-
-		XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
-		XMVECTOR vSocketScale, vSocketRot, vSocketTrans;
-		XMMatrixDecompose(&vSocketScale, &vSocketRot, &vSocketTrans, mSocketWorld);
-
-		XMMATRIX mLeftHandWorld = XMLoadFloat4x4(&m_pLeftHand->m_xmf4x4World);
-		XMMATRIX mLeftForeArmWorld = XMLoadFloat4x4(&m_pLeftForeArm->m_xmf4x4World);
-
-		XMVECTOR vHandPos = mLeftHandWorld.r[3];
-		XMVECTOR vForeArmPos = mLeftForeArmWorld.r[3];
-
-		XMVECTOR vForward = XMVector3Normalize(XMVectorSubtract(vHandPos, vForeArmPos));
-		XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-		XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vWorldUp, vForward));
-		XMVECTOR vUpForearm = XMVector3Normalize(XMVector3Cross(vForward, vRight));
-
-		XMMATRIX mTargetWorldRotMatrix = XMMatrixIdentity();
-		mTargetWorldRotMatrix.r[0] = vRight;
-		mTargetWorldRotMatrix.r[1] = vUpForearm;
-		mTargetWorldRotMatrix.r[2] = vForward;
-		mTargetWorldRotMatrix.r[3] = XMVectorSet(0, 0, 0, 1);
-
-		XMVECTOR vTargetWorldRot = XMQuaternionRotationMatrix(mTargetWorldRotMatrix);
-
-		XMVECTOR vOffsetRot = XMQuaternionRotationRollPitchYaw(
-			XMConvertToRadians(m_xmf3WeaponGrenadeRot.x),
-			XMConvertToRadians(m_xmf3WeaponGrenadeRot.y),
-			XMConvertToRadians(m_xmf3WeaponGrenadeRot.z)
-		);
-		vTargetWorldRot = XMQuaternionMultiply(vOffsetRot, vTargetWorldRot);
-		vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
-
-		XMVECTOR vLocalRotFinal = XMQuaternionMultiply(
-			vTargetWorldRot,
-			XMQuaternionInverse(vSocketRot)
-		);
-		vLocalRotFinal = XMQuaternionNormalize(vLocalRotFinal);
-
-		XMMATRIX mLocal = XMMatrixAffineTransformation(
-			vStartLocalScale,
-			XMVectorZero(),
-			vLocalRotFinal,
-			vStartLocalTrans
-		);
-
-		XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mLocal);
-
-		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
-
-		XMFLOAT3 curGripWorld = m_pLeftHandGrip->GetPosition();
-
-		XMVECTOR vGripOffsetLocal = XMVectorSet(
-			m_xmf3WeaponGrenadePos.x,
-			m_xmf3WeaponGrenadePos.y,
-			m_xmf3WeaponGrenadePos.z,
-			1.0f
-		);
-
-		XMVECTOR vDesiredGripWorld = XMVector3TransformCoord(vGripOffsetLocal, mLeftHandWorld);
-
-		XMVECTOR vCurGripWorld = XMVectorSet(
-			curGripWorld.x,
-			curGripWorld.y,
-			curGripWorld.z,
-			1.0f
-		);
-
-		XMVECTOR vDeltaWorld = vDesiredGripWorld - vCurGripWorld;
-
-		XMMATRIX mInvSocketWorld = XMMatrixInverse(nullptr, mSocketWorld);
-		XMVECTOR vDeltaLocal = XMVector3TransformNormal(vDeltaWorld, mInvSocketWorld);
-
-		XMFLOAT3 deltaLocal;
-		XMStoreFloat3(&deltaLocal, vDeltaLocal);
-
-		m_pWeapon->m_xmf4x4ToParent._41 += deltaLocal.x;
-		m_pWeapon->m_xmf4x4ToParent._42 += deltaLocal.y;
-		m_pWeapon->m_xmf4x4ToParent._43 += deltaLocal.z;
-
-		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+		ApplyGrenadeWeaponPose();
 		return;
 	}
 }
@@ -581,7 +460,6 @@ void CPlayer::BeginGrenadeWeaponPose()
 
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	m_xmf4x4WeaponGrenadeStartLocal = m_pWeapon->m_xmf4x4ToParent;
-	m_xmf4x4WeaponGrenadeStartWorld = m_pWeapon->m_xmf4x4World;
 	m_bWeaponGrenadeStartCaptured = true;
 }
 
@@ -694,431 +572,105 @@ bool CPlayer::InitializeLeftHandIK()
 	return true;
 }
 
-XMVECTOR CPlayer::GetStableLeftElbowBendDir(FXMVECTOR vShoulder, FXMVECTOR vElbow, FXMVECTOR vTargetDir)
+void CPlayer::ApplyGrenadeWeaponPose()
 {
-	XMMATRIX mWorld = XMLoadFloat4x4(&m_xmf4x4World);
+	if (!m_pWeapon) return;
+	if (!m_pWeaponSocket) return;
+	if (!m_pLeftHand) return;
+	if (!m_pLeftForeArm) return;
+	if (!m_pLeftHandGrip) return;
+	if (!m_bWeaponGrenadeStartCaptured) return;
 
-	XMVECTOR vWorldRight = XMVector3Normalize(mWorld.r[0]);
-	XMVECTOR vWorldUp = XMVector3Normalize(mWorld.r[1]);
+	XMMATRIX mStartLocal = XMLoadFloat4x4(&m_xmf4x4WeaponGrenadeStartLocal);
+	XMVECTOR vStartLocalScale, vStartLocalRot, vStartLocalTrans;
+	XMMatrixDecompose(&vStartLocalScale, &vStartLocalRot, &vStartLocalTrans, mStartLocal);
 
-	XMVECTOR vPlayerLeft = -vWorldRight;
-	XMVECTOR vPlayerDown = -vWorldUp;
+	XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
+	XMVECTOR vSocketScale, vSocketRot, vSocketTrans;
+	XMMatrixDecompose(&vSocketScale, &vSocketRot, &vSocketTrans, mSocketWorld);
 
-	XMVECTOR vIdealBendDir = SafeNormalize3(vPlayerLeft + vPlayerDown * 0.5f);
+	XMMATRIX mLeftHandWorld = XMLoadFloat4x4(&m_pLeftHand->m_xmf4x4World);
+	XMMATRIX mLeftForeArmWorld = XMLoadFloat4x4(&m_pLeftForeArm->m_xmf4x4World);
 
-	XMVECTOR vProjected = vIdealBendDir - vTargetDir * XMVectorGetX(XMVector3Dot(vIdealBendDir, vTargetDir));
+	XMVECTOR vHandPos = mLeftHandWorld.r[3];
+	XMVECTOR vForeArmPos = mLeftForeArmWorld.r[3];
 
-	if (XMVectorGetX(XMVector3LengthSq(vProjected)) < 0.000001f)
-	{
-		vProjected = vPlayerLeft - vTargetDir * XMVectorGetX(XMVector3Dot(vPlayerLeft, vTargetDir));
-	}
+	XMVECTOR vForward = XMVector3Normalize(XMVectorSubtract(vHandPos, vForeArmPos));
+	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vWorldUp, vForward));
+	XMVECTOR vUpForearm = XMVector3Normalize(XMVector3Cross(vForward, vRight));
 
-	vProjected = SafeNormalize3(vProjected);
+	XMMATRIX mTargetWorldRotMatrix = XMMatrixIdentity();
+	mTargetWorldRotMatrix.r[0] = vRight;
+	mTargetWorldRotMatrix.r[1] = vUpForearm;
+	mTargetWorldRotMatrix.r[2] = vForward;
+	mTargetWorldRotMatrix.r[3] = XMVectorSet(0, 0, 0, 1);
 
-	XMVECTOR vCurElbowDir = SafeNormalize3(vElbow - vShoulder);
-	vCurElbowDir = SafeNormalize3(vCurElbowDir - vTargetDir * XMVectorGetX(XMVector3Dot(vCurElbowDir, vTargetDir)));
+	XMVECTOR vTargetWorldRot = XMQuaternionRotationMatrix(mTargetWorldRotMatrix);
 
-	XMVECTOR vRefDir = XMVectorZero();
-	if (m_bLeftElbowDirCached)
-	{
-		vRefDir = XMLoadFloat3(&m_xmf3CachedLeftElbowDir);
-	}
-	else if (XMVectorGetX(XMVector3LengthSq(vCurElbowDir)) > 0.000001f)
-	{
-		vRefDir = vCurElbowDir;
-	}
-	else
-	{
-		vRefDir = vProjected;
-	}
-
-	vRefDir = SafeNormalize3(vRefDir);
-
-	float dot = XMVectorGetX(XMVector3Dot(vProjected, vRefDir));
-	if (dot < 0.0f)
-	{
-		vProjected = -vProjected;
-	}
-
-	XMVECTOR vStable = SafeNormalize3(XMVectorLerp(vRefDir, vProjected, 0.15f));
-
-	XMStoreFloat3(&m_xmf3CachedLeftElbowDir, vStable);
-	m_bLeftElbowDirCached = true;
-
-	return vStable;
-}
-
-void CPlayer::StabilizeForeArmTwist(CGameObject* pForeArm, CGameObject* pHand, float fWeight)
-{
-	if (!pForeArm || !pHand) return;
-	if (fWeight <= 0.0f) return;
-
-	XMMATRIX mForeArmWorld = XMLoadFloat4x4(&pForeArm->m_xmf4x4World);
-	XMMATRIX mHandWorld = XMLoadFloat4x4(&pHand->m_xmf4x4World);
-
-	XMVECTOR vScaleFA, vRotFA, vPosFA;
-	XMVECTOR vScaleHand, vRotHand, vPosHand;
-
-	XMMatrixDecompose(&vScaleFA, &vRotFA, &vPosFA, mForeArmWorld);
-	XMMatrixDecompose(&vScaleHand, &vRotHand, &vPosHand, mHandWorld);
-
-	XMVECTOR vForeDir = SafeNormalize3(vPosHand - vPosFA);
-	if (XMVectorGetX(XMVector3LengthSq(vForeDir)) < 0.000001f) return;
-
-	XMVECTOR vCurUp = SafeNormalize3(mForeArmWorld.r[2]);
-
-	XMMATRIX mPlayerWorld = XMLoadFloat4x4(&m_xmf4x4World);
-	XMVECTOR vPlayerUp = SafeNormalize3(mPlayerWorld.r[1]);
-	XMVECTOR vPlayerLeft = SafeNormalize3(-mPlayerWorld.r[0]);
-
-	XMVECTOR vDesiredUp = SafeNormalize3(vPlayerUp + vPlayerLeft * 0.35f);
-
-	vCurUp = SafeNormalize3(ProjectOnPlane(vCurUp, vForeDir));
-	vDesiredUp = SafeNormalize3(ProjectOnPlane(vDesiredUp, vForeDir));
-
-	if (XMVectorGetX(XMVector3LengthSq(vCurUp)) < 0.000001f) return;
-	if (XMVectorGetX(XMVector3LengthSq(vDesiredUp)) < 0.000001f) return;
-
-	XMVECTOR vTwistDelta = QuaternionFromTo(vCurUp, vDesiredUp);
-	vTwistDelta = XMQuaternionNormalize(vTwistDelta);
-
-	XMVECTOR vTargetWorldRot = XMQuaternionMultiply(vTwistDelta, vRotFA);
+	XMVECTOR vOffsetRot = XMQuaternionRotationRollPitchYaw(
+		XMConvertToRadians(m_xmf3WeaponGrenadeRot.x),
+		XMConvertToRadians(m_xmf3WeaponGrenadeRot.y),
+		XMConvertToRadians(m_xmf3WeaponGrenadeRot.z)
+	);
+	vTargetWorldRot = XMQuaternionMultiply(vOffsetRot, vTargetWorldRot);
 	vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
 
-	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vRotFA, vTargetWorldRot, fWeight);
-	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
+	XMVECTOR vLocalRotFinal = XMQuaternionMultiply(
+		vTargetWorldRot,
+		XMQuaternionInverse(vSocketRot)
+	);
+	vLocalRotFinal = XMQuaternionNormalize(vLocalRotFinal);
 
-	XMMATRIX mParentWorld = XMMatrixIdentity();
-	if (pForeArm->m_pParent)
-	{
-		mParentWorld = XMLoadFloat4x4(&pForeArm->m_pParent->m_xmf4x4World);
-	}
-
-	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
-		vScaleFA,
+	XMMATRIX mLocal = XMMatrixAffineTransformation(
+		vStartLocalScale,
 		XMVectorZero(),
-		vNewWorldRot,
-		vPosFA
+		vLocalRotFinal,
+		vStartLocalTrans
 	);
 
-	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
-	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
+	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mLocal);
 
-	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
-	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 
-	XMMATRIX mOldLocal = XMLoadFloat4x4(&pForeArm->m_xmf4x4ToParent);
-	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
-	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
+	XMFLOAT3 curGripWorld = m_pLeftHandGrip->GetPosition();
 
-	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
-		vOldLocalScale,
-		XMVectorZero(),
-		vLocalRot,
-		vOldLocalTrans
-	);
-
-	XMStoreFloat4x4(&pForeArm->m_xmf4x4ToParent, mFinalLocal);
-}
-
-float CPlayer::GetLeftHandIKWeight() const
-{
-	if (!m_bUseLeftHandIK) return 0.0f;
-	if (!m_pWeapon) return 0.0f;
-	if (!m_pLeftHandGrip) return 0.0f;
-	if (!m_pLeftUpperArm || !m_pLeftForeArm || !m_pLeftHand) return 0.0f;
-
-	return m_fLeftHandIKWeight;
-}
-
-void CPlayer::RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight)
-{
-	if (!pBone) return;
-	if (fWeight <= 0.0f) return;
-
-	XMFLOAT3 xmf3BoneWorldPos = pBone->GetPosition();
-
-	XMVECTOR vBonePos = XMLoadFloat3(&xmf3BoneWorldPos);
-	XMVECTOR vCurrentChildPos = XMLoadFloat3(&xmf3CurrentChildWorldPos);
-	XMVECTOR vTargetChildPos = XMLoadFloat3(&xmf3TargetChildWorldPos);
-
-	XMVECTOR vCurrentDir = SafeNormalize3(vCurrentChildPos - vBonePos);
-	XMVECTOR vTargetDir = SafeNormalize3(vTargetChildPos - vBonePos);
-
-	if (XMVectorGetX(XMVector3LengthSq(vCurrentDir)) < 0.000001f) return;
-	if (XMVectorGetX(XMVector3LengthSq(vTargetDir)) < 0.000001f) return;
-
-	XMVECTOR vDeltaRot = QuaternionFromTo(vCurrentDir, vTargetDir);
-
-	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pBone->m_xmf4x4World);
-
-	XMVECTOR vWorldScale, vWorldRot, vWorldTrans;
-	XMMatrixDecompose(&vWorldScale, &vWorldRot, &vWorldTrans, mBoneWorld);
-
-	XMVECTOR vTargetWorldRot = XMQuaternionMultiply(vDeltaRot, vWorldRot);
-	vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
-
-	float fApply = ClampFloat(fWeight, 0.0f, 1.0f);
-
-	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vWorldRot, vTargetWorldRot, fApply);
-	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
-
-	XMMATRIX mParentWorld = XMMatrixIdentity();
-	if (pBone->m_pParent)
-	{
-		mParentWorld = XMLoadFloat4x4(&pBone->m_pParent->m_xmf4x4World);
-	}
-
-	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
-		vWorldScale,
-		XMVectorZero(),
-		vNewWorldRot,
-		vWorldTrans
-	);
-
-	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
-	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
-
-	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
-	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
-
-	XMMATRIX mOldLocal = XMLoadFloat4x4(&pBone->m_xmf4x4ToParent);
-	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
-	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
-
-	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
-		vOldLocalScale,
-		XMVectorZero(),
-		vLocalRot,
-		vOldLocalTrans
-	);
-
-	XMStoreFloat4x4(&pBone->m_xmf4x4ToParent, mFinalLocal);
-}
-
-void CPlayer::RotateForeArmTowardGrip(CGameObject* pForeArm, const XMFLOAT3& xmf3TargetWorldPos, float fWeight)
-{
-	if (!pForeArm) return;
-	if (fWeight <= 0.0f) return;
-
-	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pForeArm->m_xmf4x4World);
-
-	XMVECTOR vWorldScale, vWorldRot, vWorldTrans;
-	XMMatrixDecompose(&vWorldScale, &vWorldRot, &vWorldTrans, mBoneWorld);
-
-	// 하박 본의 "조준 기준축"을 직접 사용
-	// 지금까지 테스트상 r[2]가 제일 맞았으므로 그대로 사용
-	XMVECTOR vCurrentAxis = SafeNormalize3(mBoneWorld.r[2]);
-
-	XMVECTOR vTargetPos = XMLoadFloat3(&xmf3TargetWorldPos);
-	XMVECTOR vTargetDir = SafeNormalize3(vTargetPos - vWorldTrans);
-
-	if (XMVectorGetX(XMVector3LengthSq(vCurrentAxis)) < 0.000001f) return;
-	if (XMVectorGetX(XMVector3LengthSq(vTargetDir)) < 0.000001f) return;
-
-	XMVECTOR vDeltaRot = QuaternionFromTo(vCurrentAxis, vTargetDir);
-	vDeltaRot = XMQuaternionNormalize(vDeltaRot);
-
-	XMVECTOR vTargetWorldRot = XMQuaternionMultiply(vDeltaRot, vWorldRot);
-	vTargetWorldRot = XMQuaternionNormalize(vTargetWorldRot);
-
-	float fApply = ClampFloat(fWeight, 0.0f, 1.0f);
-	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vWorldRot, vTargetWorldRot, fApply);
-	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
-
-	XMMATRIX mParentWorld = XMMatrixIdentity();
-	if (pForeArm->m_pParent)
-	{
-		mParentWorld = XMLoadFloat4x4(&pForeArm->m_pParent->m_xmf4x4World);
-	}
-
-	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
-		vWorldScale,
-		XMVectorZero(),
-		vNewWorldRot,
-		vWorldTrans
-	);
-
-	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
-	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
-
-	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
-	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
-
-	XMMATRIX mOldLocal = XMLoadFloat4x4(&pForeArm->m_xmf4x4ToParent);
-	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
-	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
-
-	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
-		vOldLocalScale,
-		XMVectorZero(),
-		vLocalRot,
-		vOldLocalTrans
-	);
-
-	XMStoreFloat4x4(&pForeArm->m_xmf4x4ToParent, mFinalLocal);
-}
-
-void CPlayer::MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight)
-{
-	if (!pBone || !pTarget) return;
-	if (fWeight <= 0.0f) return;
-
-	XMMATRIX mBoneWorld = XMLoadFloat4x4(&pBone->m_xmf4x4World);
-	XMMATRIX mTargetWorld = XMLoadFloat4x4(&pTarget->m_xmf4x4World);
-
-	XMVECTOR vBoneScale, vBoneRot, vBoneTrans;
-	XMVECTOR vTargetScale, vTargetRot, vTargetTrans;
-
-	XMMatrixDecompose(&vBoneScale, &vBoneRot, &vBoneTrans, mBoneWorld);
-	XMMatrixDecompose(&vTargetScale, &vTargetRot, &vTargetTrans, mTargetWorld);
-
-	XMVECTOR vNewWorldRot = XMQuaternionSlerp(vBoneRot, vTargetRot, fWeight);
-	vNewWorldRot = XMQuaternionNormalize(vNewWorldRot);
-
-	XMMATRIX mParentWorld = XMMatrixIdentity();
-	if (pBone->m_pParent)
-	{
-		mParentWorld = XMLoadFloat4x4(&pBone->m_pParent->m_xmf4x4World);
-	}
-
-	XMMATRIX mDesiredWorld = XMMatrixAffineTransformation(
-		vBoneScale,
-		XMVectorZero(),
-		vNewWorldRot,
-		vBoneTrans
-	);
-
-	XMMATRIX mInvParent = XMMatrixInverse(nullptr, mParentWorld);
-	XMMATRIX mNewLocal = XMMatrixMultiply(mDesiredWorld, mInvParent);
-
-	XMVECTOR vLocalScale, vLocalRot, vLocalTrans;
-	XMMatrixDecompose(&vLocalScale, &vLocalRot, &vLocalTrans, mNewLocal);
-
-	XMMATRIX mOldLocal = XMLoadFloat4x4(&pBone->m_xmf4x4ToParent);
-	XMVECTOR vOldLocalScale, vOldLocalRot, vOldLocalTrans;
-	XMMatrixDecompose(&vOldLocalScale, &vOldLocalRot, &vOldLocalTrans, mOldLocal);
-
-	XMMATRIX mFinalLocal = XMMatrixAffineTransformation(
-		vOldLocalScale,
-		XMVectorZero(),
-		vLocalRot,
-		vOldLocalTrans
-	);
-
-	XMStoreFloat4x4(&pBone->m_xmf4x4ToParent, mFinalLocal);
-}
-
-void CPlayer::SolveLeftHandIK()
-{
-	float fWeight = GetLeftHandIKWeight();
-	if (fWeight <= 0.0f) return;
-
-	XMFLOAT3 xmf3Shoulder = m_pLeftUpperArm->GetPosition();
-	XMFLOAT3 xmf3Elbow = m_pLeftForeArm->GetPosition();
-	XMFLOAT3 xmf3Hand = m_pLeftHand->GetPosition();
-	XMFLOAT3 xmf3RawTarget = m_pLeftHandGrip->GetPosition();
-
-	XMVECTOR vShoulder = XMLoadFloat3(&xmf3Shoulder);
-	XMVECTOR vElbow = XMLoadFloat3(&xmf3Elbow);
-	XMVECTOR vHand = XMLoadFloat3(&xmf3Hand);
-	XMVECTOR vRawTarget = XMLoadFloat3(&xmf3RawTarget);
-
-	// --------------------------------------------------------------------
-	// 핵심 수정:
-	// 움직이는 grip을 100% 그대로 따라가지 않고,
-	// 현재 손 위치와 grip 위치를 섞은 soft target을 사용
-	// 값이 작을수록 원운동은 줄고, 손 고정력은 약해짐
-	// 값이 클수록 손은 더 잘 붙지만 원운동이 다시 커질 수 있음
-	// --------------------------------------------------------------------
-	const float fSoftFollow = 0.65f;
-	XMVECTOR vSoftTarget = XMVectorLerp(vHand, vRawTarget, fSoftFollow);
-
-	XMFLOAT3 xmf3Target;
-	XMStoreFloat3(&xmf3Target, vSoftTarget);
-
-	float fUpperLen = XMVectorGetX(XMVector3Length(vElbow - vShoulder));
-	float fLowerLen = XMVectorGetX(XMVector3Length(vHand - vElbow));
-
-	if (fUpperLen < 0.0001f || fLowerLen < 0.0001f) return;
-
-	XMVECTOR vToTarget = vSoftTarget - vShoulder;
-	float fDistToTarget = XMVectorGetX(XMVector3Length(vToTarget));
-	if (fDistToTarget < 0.0001f) return;
-
-	float fClampedDist = ClampFloat(fDistToTarget, 0.0001f, (fUpperLen + fLowerLen) - 0.001f);
-	XMVECTOR vDir = SafeNormalize3(vToTarget);
-
-	XMVECTOR vBendDir = GetStableLeftElbowBendDir(vShoulder, vElbow, vDir);
-
-	float fCosShoulder = ClampFloat(
-		((fUpperLen * fUpperLen) + (fClampedDist * fClampedDist) - (fLowerLen * fLowerLen)) / (2.0f * fUpperLen * fClampedDist),
-		-1.0f,
+	XMVECTOR vGripOffsetLocal = XMVectorSet(
+		m_xmf3WeaponGrenadePos.x,
+		m_xmf3WeaponGrenadePos.y,
+		m_xmf3WeaponGrenadePos.z,
 		1.0f
 	);
 
-	float fShoulderAngle = acosf(fCosShoulder);
-	float fProjLen = cosf(fShoulderAngle) * fUpperLen;
-	float fBendLen = sinf(fShoulderAngle) * fUpperLen;
+	XMVECTOR vDesiredGripWorld = XMVector3TransformCoord(vGripOffsetLocal, mLeftHandWorld);
 
-	XMVECTOR vElbowTarget = vShoulder + (vDir * fProjLen) + (vBendDir * fBendLen);
+	XMVECTOR vCurGripWorld = XMVectorSet(
+		curGripWorld.x,
+		curGripWorld.y,
+		curGripWorld.z,
+		1.0f
+	);
 
-	XMFLOAT3 xmf3ElbowTarget;
-	XMStoreFloat3(&xmf3ElbowTarget, vElbowTarget);
+	XMVECTOR vDeltaWorld = vDesiredGripWorld - vCurGripWorld;
 
-	// ------------------------------------------------------------
-	// 상완: 너무 세게 돌리면 다시 X자 교차가 심해질 수 있으므로 중간 정도
-	// ------------------------------------------------------------
-	RotateBoneTowardTarget(m_pLeftUpperArm, xmf3Elbow, xmf3ElbowTarget, fWeight * 0.55f);
-	if (m_pLeftUpperArm->m_pParent)
-		m_pLeftUpperArm->UpdateTransform(&m_pLeftUpperArm->m_pParent->m_xmf4x4World);
+	XMMATRIX mInvSocketWorld = XMMatrixInverse(nullptr, mSocketWorld);
+	XMVECTOR vDeltaLocal = XMVector3TransformNormal(vDeltaWorld, mInvSocketWorld);
 
-	// 최신 하박/손 위치 재조회
-	xmf3Elbow = m_pLeftForeArm->GetPosition();
-	xmf3Hand = m_pLeftHand->GetPosition();
+	XMFLOAT3 deltaLocal;
+	XMStoreFloat3(&deltaLocal, vDeltaLocal);
 
-	XMVECTOR vHandNow = XMLoadFloat3(&xmf3Hand);
-	XMVECTOR vTargetNow = XMLoadFloat3(&xmf3Target);
+	m_pWeapon->m_xmf4x4ToParent._41 += deltaLocal.x;
+	m_pWeapon->m_xmf4x4ToParent._42 += deltaLocal.y;
+	m_pWeapon->m_xmf4x4ToParent._43 += deltaLocal.z;
 
-	float fHandError = XMVectorGetX(XMVector3Length(vTargetNow - vHandNow));
-
-	// ------------------------------------------------------------
-	// 손이 멀어질수록 하박만 조금 더 적극적으로 따라가게
-	// ------------------------------------------------------------
-	float fForeArmReachBoost = 0.0f;
-	if (fHandError > 0.15f) fForeArmReachBoost = 0.08f;
-	if (fHandError > 0.30f) fForeArmReachBoost = 0.14f;
-	if (fHandError > 0.50f) fForeArmReachBoost = 0.20f;
-
-	// ------------------------------------------------------------
-	// 하박: 기존 current hand 방향 기반이 아니라
-	// 본 축(r[2])이 soft target 방향을 보게 회전
-	// ------------------------------------------------------------
-	RotateForeArmTowardGrip(m_pLeftForeArm, xmf3Target, fWeight * 0.62f + fForeArmReachBoost);
-	if (m_pLeftForeArm->m_pParent)
-		m_pLeftForeArm->UpdateTransform(&m_pLeftForeArm->m_pParent->m_xmf4x4World);
-
-	// ------------------------------------------------------------
-	// twist는 아주 약하게만
-	// 세게 주면 다시 비틀림/교차가 커질 수 있음
-	// ------------------------------------------------------------
-	StabilizeForeArmTwist(m_pLeftForeArm, m_pLeftHand, fWeight * 0.04f);
-	if (m_pLeftForeArm->m_pParent)
-		m_pLeftForeArm->UpdateTransform(&m_pLeftForeArm->m_pParent->m_xmf4x4World);
-
-	// 손목 회전은 계속 끔
-	if (m_pLeftHand->m_pParent)
-		m_pLeftHand->UpdateTransform(&m_pLeftHand->m_pParent->m_xmf4x4World);
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 void CPlayerAnimationController::OnAnimationIK(CGameObject* pRootGameObject)
 {
 	if (!m_pOwner) return;
-
 	if (m_pOwner->IsGrenadeState()) return;
-
-	m_pOwner->SolveLeftHandIK();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1143,7 +695,13 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
-	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", shader);
+	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/Ch15_nonPBR.bin",
+		shader
+	);
 	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
@@ -1197,7 +755,8 @@ CTerrainPlayer::~CTerrainPlayer()
 CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 {
 	DWORD nCurrentCameraMode = (m_pCamera) ? m_pCamera->GetMode() : 0x00;
-	if (nCurrentCameraMode == nNewCameraMode) return(m_pCamera);
+	if (nCurrentCameraMode == nNewCameraMode) return m_pCamera;
+
 	switch (nNewCameraMode)
 	{
 	case FIRST_PERSON_CAMERA:
@@ -1246,7 +805,7 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 	m_pCamera->SetPosition(Vector3::Add(m_xmf3Position, m_pCamera->GetOffset()));
 	Update(fTimeElapsed);
 
-	return(m_pCamera);
+	return m_pCamera;
 }
 
 void CTerrainPlayer::OnPlayerUpdateCallback(float fTimeElapsed)
@@ -1368,7 +927,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 //-------------------------------------------------------------------------
 bool PlayerIdle::Enter(CPlayer* Player)
 {
-	Player->SetUseLeftHandIK(true);
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 	Player->ApplyWeaponPose(WEAPON_POSE::IDLE);
 
@@ -1414,7 +972,6 @@ void PlayerIdle::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerRun::Enter(CPlayer* Player)
 {
-	Player->SetUseLeftHandIK(true);
 	Player->ApplyWeaponPose(WEAPON_POSE::RUN);
 
 	auto& input = InputManager::Instance();
@@ -1527,7 +1084,6 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 	m_bKeepRun = false;
 	m_nLastLowerAnim = ANIM_IDLE;
 
-	Player->SetUseLeftHandIK(false);
 	Player->BeginGrenadeWeaponPose();
 	Player->ApplyWeaponPose(WEAPON_POSE::GRENADE);
 
@@ -1654,7 +1210,6 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 
 void PlayerGrenade::Exit(CPlayer* Player)
 {
-	Player->SetUseLeftHandIK(true);
 	Player->EndGrenadeWeaponPose();
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -1671,6 +1226,7 @@ void PlayerGrenade::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
+	return false;
 }
 
 void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)

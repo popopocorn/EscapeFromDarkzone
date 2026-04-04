@@ -8,7 +8,7 @@
 #define DIR_UP					0x10
 #define DIR_DOWN				0x20
 
-#include"stdafx.h"
+#include "stdafx.h"
 #include "Object.h"
 #include "Camera.h"
 #include "Network.h"
@@ -18,6 +18,7 @@ enum class EventType {
 	Input,
 	Timeout,
 };
+
 struct InputEvent {
 	INPUT_KEY key;
 	KEY_STATE state;
@@ -48,15 +49,15 @@ protected:
 
 	XMFLOAT3					m_xmf3Scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
 
-	float           			m_fPitch = 0.0f;
-	float           			m_fYaw = 0.0f;
-	float           			m_fRoll = 0.0f;
+	float						m_fPitch = 0.0f;
+	float						m_fYaw = 0.0f;
+	float						m_fRoll = 0.0f;
 
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	XMFLOAT3     				m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	float           			m_fMaxVelocityXZ = 0.0f;
-	float           			m_fMaxVelocityY = 0.0f;
-	float           			m_fFriction = 0.0f;
+	XMFLOAT3					m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	float						m_fMaxVelocityXZ = 0.0f;
+	float						m_fMaxVelocityY = 0.0f;
+	float						m_fFriction = 0.0f;
 
 	LPVOID						m_pPlayerUpdatedContext = NULL;
 	LPVOID						m_pCameraUpdatedContext = NULL;
@@ -68,7 +69,7 @@ protected:
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
 	float						speed{};
 
-	//충돌 노멀
+	// 충돌 노멀
 	std::vector<XMFLOAT3>		CollVector;
 
 	// 네트워크 테스트
@@ -78,7 +79,7 @@ protected:
 
 	char send_buf[BUF_SIZE];
 
-	//애니메이션 관련 무기
+	// 애니메이션 관련 무기
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 
@@ -91,14 +92,13 @@ protected:
 	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -32.0f, 28.0f);
 
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.1f, -0.08f);
-	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -12.0f);
+	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -25.0f);
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
 	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
 
-	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();	
 	bool m_bWeaponGrenadeStartCaptured = false;
-	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartWorld = Matrix4x4::Identity();
 
 	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
@@ -108,26 +108,16 @@ protected:
 	float m_fWeaponBlendDuration = 0.25f;
 	XMFLOAT4X4 m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
 
+	// grenade 포즈용
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
 	CGameObject* m_pLeftHand = nullptr;
 	CGameObject* m_pLeftHandGrip = nullptr;
 
-	bool  m_bUseLeftHandIK = true;
-	float m_fLeftHandIKWeight = 0.7f;
-
-	XMFLOAT3 m_xmf3CachedLeftElbowDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	bool m_bLeftElbowDirCached = false;
-
 	CGameObject* FindFirstFrameByNames(const char* const* ppNames, int nCount);
 	bool InitializeLeftHandIK();
-	XMVECTOR GetStableLeftElbowBendDir(FXMVECTOR vShoulder, FXMVECTOR vElbow, FXMVECTOR vTargetDir);
-	void StabilizeForeArmTwist(CGameObject* pForeArm, CGameObject* pHand, float fWeight);
-	float GetLeftHandIKWeight() const;
+	void ApplyGrenadeWeaponPose();
 
-	void RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight);
-	void MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight);
-	void RotateForeArmTowardGrip(CGameObject* pForeArm, const XMFLOAT3& xmf3TargetWorldPos, float fWeight);
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -142,16 +132,23 @@ public:
 	void SetMaxVelocityXZ(float fMaxVelocity) { m_fMaxVelocityXZ = fMaxVelocity; }
 	void SetMaxVelocityY(float fMaxVelocity) { m_fMaxVelocityY = fMaxVelocity; }
 	void SetVelocity(const XMFLOAT3& xmf3Velocity) { m_xmf3Velocity = xmf3Velocity; }
-	void SetPosition(const XMFLOAT3& xmf3Position) { Move(XMFLOAT3(xmf3Position.x - m_xmf3Position.x, xmf3Position.y - m_xmf3Position.y, xmf3Position.z - m_xmf3Position.z), false); }
+	void SetPosition(const XMFLOAT3& xmf3Position)
+	{
+		Move(XMFLOAT3(
+			xmf3Position.x - m_xmf3Position.x,
+			xmf3Position.y - m_xmf3Position.y,
+			xmf3Position.z - m_xmf3Position.z
+		), false);
+	}
 
 	void SetScale(const XMFLOAT3& xmf3Scale) { m_xmf3Scale = xmf3Scale; }
 
-	const XMFLOAT3& GetVelocity() const { return(m_xmf3Velocity); }
-	float GetYaw() const { return(m_fYaw); }
-	float GetPitch() const { return(m_fPitch); }
-	float GetRoll() const { return(m_fRoll); }
+	const XMFLOAT3& GetVelocity() const { return m_xmf3Velocity; }
+	float GetYaw() const { return m_fYaw; }
+	float GetPitch() const { return m_fPitch; }
+	float GetRoll() const { return m_fRoll; }
 
-	CCamera* GetCamera() { return(m_pCamera); }
+	CCamera* GetCamera() { return m_pCamera; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
@@ -173,7 +170,7 @@ public:
 
 	CCamera* OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode);
 
-	virtual CCamera* ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed) { return(NULL); }
+	virtual CCamera* ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed) { return NULL; }
 	virtual void OnPrepareRender();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 
@@ -181,9 +178,11 @@ public:
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
 	void ChangeState(std::unique_ptr<State<CPlayer>> new_state);
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
+
 	virtual void HandleCollision(const ColResult& normal);
 	void UpdateDirection();
 	bool IsGrenadeState() const;
+
 	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
 	CGameObject* GetWeapon() { return m_pWeapon; }
 	void UpdateWeaponPose(float fTimeElapsed);
@@ -205,19 +204,9 @@ public:
 		m_xmf3WeaponGrenadeRot = rot;
 	}
 
-	void SolveLeftHandIK();
-	void SetUseLeftHandIK(bool bUse)
-	{
-		m_bUseLeftHandIK = bUse;
-		if (!bUse)
-		{
-			m_bLeftElbowDirCached = false;
-			m_xmf3CachedLeftElbowDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
-		}
-	}
-
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
+
 };
 
 class CPlayerAnimationController : public CAnimationController
@@ -293,6 +282,7 @@ private:
 	float m_fElapsed = 0.0f;
 	int m_nLastLowerAnim = ANIM_IDLE;
 	bool m_bKeepRun = false;
+
 public:
 	virtual bool Enter(CPlayer* Player) override;
 	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
