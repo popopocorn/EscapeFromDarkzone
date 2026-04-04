@@ -14,8 +14,6 @@
 #include "Network.h"
 #include "State.h"
 
-
-
 enum class EventType {
 	Input,
 	Timeout,
@@ -63,13 +61,12 @@ protected:
 	LPVOID						m_pPlayerUpdatedContext = NULL;
 	LPVOID						m_pCameraUpdatedContext = NULL;
 
-	CCamera						*m_pCamera = NULL;
+	CCamera* m_pCamera = NULL;
 	std::unique_ptr<State<CPlayer>> state;
 	std::queue<GameEvent>		event_queue;
-	
+
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
 	float						speed{};
-
 
 	//충돌 노멀
 	std::vector<XMFLOAT3>		CollVector;
@@ -90,11 +87,11 @@ protected:
 
 	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
 
-	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.20f, 0.1f, 0.1f);
-	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -45.0f, 45.0f);
+	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -32.0f, 28.0f);
 
-	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.50f, 0.45f, 0.10f);
-	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(-5.0f, 30.0f, 0.0f);
+	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.18f, -0.08f);
+	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -12.0f);
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
 	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
@@ -117,7 +114,7 @@ protected:
 	CGameObject* m_pLeftHandGrip = nullptr;
 
 	bool  m_bUseLeftHandIK = true;
-	float m_fLeftHandIKWeight = 1.0f;
+	float m_fLeftHandIKWeight = 0.7f;
 
 	XMFLOAT3 m_xmf3CachedLeftElbowDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	bool m_bLeftElbowDirCached = false;
@@ -125,10 +122,10 @@ protected:
 	CGameObject* FindFirstFrameByNames(const char* const* ppNames, int nCount);
 	bool InitializeLeftHandIK();
 	XMVECTOR GetStableLeftElbowBendDir(FXMVECTOR vShoulder, FXMVECTOR vElbow, FXMVECTOR vTargetDir);
+	void StabilizeForeArmTwist(CGameObject* pForeArm, CGameObject* pHand, float fWeight);
 	float GetLeftHandIKWeight() const;
 
 	void RotateBoneTowardTarget(CGameObject* pBone, const XMFLOAT3& xmf3CurrentChildWorldPos, const XMFLOAT3& xmf3TargetChildWorldPos, float fWeight);
-
 	void MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight);
 
 public:
@@ -154,8 +151,8 @@ public:
 	float GetPitch() const { return(m_fPitch); }
 	float GetRoll() const { return(m_fRoll); }
 
-	CCamera *GetCamera() { return(m_pCamera); }
-	void SetCamera(CCamera *pCamera) { m_pCamera = pCamera; }
+	CCamera* GetCamera() { return(m_pCamera); }
+	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 
 	virtual void Move(ULONG nDirection, float fDistance, bool bVelocity = false);
 	void Move(const XMFLOAT3& xmf3Shift, bool bVelocity = false);
@@ -164,21 +161,21 @@ public:
 
 	virtual void Update(float fTimeElapsed);
 
-	virtual void OnPlayerUpdateCallback(float fTimeElapsed) { }
+	virtual void OnPlayerUpdateCallback(float fTimeElapsed) {}
 	void SetPlayerUpdatedContext(LPVOID pContext) { m_pPlayerUpdatedContext = pContext; }
 
-	virtual void OnCameraUpdateCallback(float fTimeElapsed) { }
+	virtual void OnCameraUpdateCallback(float fTimeElapsed) {}
 	void SetCameraUpdatedContext(LPVOID pContext) { m_pCameraUpdatedContext = pContext; }
 
-	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
+	virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseShaderVariables();
-	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
+	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
 
-	CCamera *OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode);
+	CCamera* OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode);
 
-	virtual CCamera *ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed) { return(NULL); }
+	virtual CCamera* ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed) { return(NULL); }
 	virtual void OnPrepareRender();
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState, CCamera *pCamera = NULL);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
@@ -191,6 +188,7 @@ public:
 	CGameObject* GetWeapon() { return m_pWeapon; }
 	void UpdateWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
+
 	void SetWeaponIdlePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
 	{
 		m_xmf3WeaponIdlePos = pos;
@@ -206,8 +204,17 @@ public:
 		m_xmf3WeaponGrenadePos = pos;
 		m_xmf3WeaponGrenadeRot = rot;
 	}
+
 	void SolveLeftHandIK();
-	void SetUseLeftHandIK(bool bUse) { m_bUseLeftHandIK = bUse; }
+	void SetUseLeftHandIK(bool bUse)
+	{
+		m_bUseLeftHandIK = bUse;
+		if (!bUse)
+		{
+			m_bLeftElbowDirCached = false;
+			m_xmf3CachedLeftElbowDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		}
+	}
 
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
@@ -231,18 +238,17 @@ public:
 	}
 
 	virtual void OnAnimationIK(CGameObject* pRootGameObject) override;
-}; 
+};
 
 class CSoundCallbackHandler : public CAnimationCallbackHandler
 {
 public:
-	CSoundCallbackHandler() { }
-	~CSoundCallbackHandler() { }
+	CSoundCallbackHandler() {}
+	~CSoundCallbackHandler() {}
 
 public:
-	virtual void HandleCallback(void *pCallbackData, float fTrackPosition); 
+	virtual void HandleCallback(void* pCallbackData, float fTrackPosition);
 };
-
 
 enum PLAYER_ANIM {
 	ANIM_IDLE = 0,
@@ -252,7 +258,6 @@ enum PLAYER_ANIM {
 	ANIM_RUN_B,
 	ANIM_GRENADE
 };
-
 
 class CTerrainPlayer : public CPlayer
 {

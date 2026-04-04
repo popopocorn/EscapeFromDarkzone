@@ -113,34 +113,6 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	}
 	
 	m_ppShaders.push_back(std::move(view));
-	
-	//무기 오브젝트
-	FILE* pWeaponFile = NULL;
-	::fopen_s(&pWeaponFile, "Model/Classic_M4_1.bin", "rb");
-	if (pWeaponFile)
-	{
-		::rewind(pWeaponFile);
-		m_pWeaponObject = CGameObject::LoadFrameHierarchyFromFile(
-			pd3dDevice,
-			pd3dCommandList,
-			m_pd3dGraphicsRootSignature,
-			NULL,
-			pWeaponFile,
-			stdshader.get(),
-			0
-		);
-
-		if (m_pWeaponObject)
-		{
-			m_pWeaponObject->SetOOBB(NULL);
-		}
-
-		::fclose(pWeaponFile);
-	}
-	else
-	{
-		OutputDebugString(L"Error: Weapon file not found.\n");
-	}
 
 	// 레이저 오브젝트
 	auto pLaserShader = std::make_unique<CLaserShader>();

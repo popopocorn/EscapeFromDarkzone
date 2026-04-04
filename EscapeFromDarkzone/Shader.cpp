@@ -829,14 +829,13 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 
 	CMesh* pMesh = pGameObject->GetMesh();
 
-	if (pMesh)
+	if (pMesh && pGameObject->HasOOBB)
 	{
 		// 로컬값 가져오기
 		XMFLOAT3 extents = pMesh->GetAABBExtents();
 		XMFLOAT3 center = pMesh->GetAABBCenter();
 
 		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
-
 		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
 
 		XMFLOAT4X4 localMatrix;
