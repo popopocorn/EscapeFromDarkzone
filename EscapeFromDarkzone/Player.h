@@ -116,6 +116,8 @@ protected:
 
 	CGameObject* FindFirstFrameByNames(const char* const* ppNames, int nCount);
 	bool InitializeLeftHandIK();
+
+	void ApplyRunWeaponPose();
 	void ApplyGrenadeWeaponPose();
 
 public:
@@ -187,6 +189,11 @@ public:
 	CGameObject* GetWeapon() { return m_pWeapon; }
 	void UpdateWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
+
+	XMFLOAT2 GetMoveInput2D() const;
+	int GetRunAnimationFromInput(const XMFLOAT2& dir) const;
+	bool IsMoveInputActive(const XMFLOAT2& dir) const;
+	XMFLOAT3 GetMoveDirectionFromInput(const XMFLOAT2& dir) const;
 
 	void SetWeaponIdlePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
 	{

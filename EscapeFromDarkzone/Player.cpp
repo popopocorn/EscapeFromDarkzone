@@ -20,11 +20,6 @@ static float ClampFloat(float v, float vmin, float vmax)
 	if (v > vmax) return vmax;
 	return v;
 }
-
-static bool IsMoveHeld(InputManager& input, INPUT_KEY key)
-{
-	return input.KeyDown(key) || input.KeyHold(key);
-}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CPlayer::CPlayer()
@@ -425,151 +420,36 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 		m_pWeapon->m_xmf4x4ToParent = m_xmf4x4WeaponBaseLocal;
 	}
 
-	if (ePose == WEAPON_POSE::IDLE)
+	switch (ePose)
 	{
+	case WEAPON_POSE::IDLE:
 		return;
-	}
-	else if (ePose == WEAPON_POSE::RUN)
-	{
-		XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-		XMMATRIX mRunRot = XMMatrixRotationRollPitchYaw(
-			XMConvertToRadians(m_xmf3WeaponRunRot.x),
-			XMConvertToRadians(m_xmf3WeaponRunRot.y),
-			XMConvertToRadians(m_xmf3WeaponRunRot.z)
-		);
 
-		XMMATRIX mFinal = XMMatrixMultiply(mRunRot, mBase);
-		XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
-
-		m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponRunPos.x;
-		m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponRunPos.y;
-		m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponRunPos.z;
+	case WEAPON_POSE::RUN:
+		ApplyRunWeaponPose();
 		return;
-	}
-	else if (ePose == WEAPON_POSE::GRENADE)
-	{
+
+	case WEAPON_POSE::GRENADE:
 		ApplyGrenadeWeaponPose();
 		return;
 	}
 }
 
-void CPlayer::BeginGrenadeWeaponPose()
+void CPlayer::ApplyRunWeaponPose()
 {
-	if (!m_pWeapon) return;
-	if (!m_pWeaponSocket) return;
+	XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
+	XMMATRIX mRunRot = XMMatrixRotationRollPitchYaw(
+		XMConvertToRadians(m_xmf3WeaponRunRot.x),
+		XMConvertToRadians(m_xmf3WeaponRunRot.y),
+		XMConvertToRadians(m_xmf3WeaponRunRot.z)
+	);
 
-	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
-	m_xmf4x4WeaponGrenadeStartLocal = m_pWeapon->m_xmf4x4ToParent;
-	m_bWeaponGrenadeStartCaptured = true;
-}
+	XMMATRIX mFinal = XMMatrixMultiply(mRunRot, mBase);
+	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
 
-void CPlayer::EndGrenadeWeaponPose()
-{
-	if (!m_pWeapon) return;
-
-	m_pWeapon->m_xmf4x4ToParent = m_xmf4x4WeaponBaseLocal;
-	m_bWeaponGrenadeStartCaptured = false;
-}
-
-void CPlayer::UpdateWeaponPose(float fTimeElapsed)
-{
-	if (!m_pWeapon) return;
-
-	if (IsGrenadeState())
-	{
-		ApplyWeaponPose(WEAPON_POSE::GRENADE);
-	}
-	else
-	{
-		float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
-
-		WEAPON_POSE targetPose = (moveLenSq > 0.0001f) ? WEAPON_POSE::RUN : WEAPON_POSE::IDLE;
-
-		if (m_eWeaponPose != targetPose || m_bWeaponBlending)
-		{
-			ApplyWeaponPose(targetPose);
-		}
-	}
-
-	if (m_bWeaponBlending)
-	{
-		m_fWeaponBlendTime += fTimeElapsed;
-		float t = m_fWeaponBlendTime / m_fWeaponBlendDuration;
-
-		if (t >= 1.0f)
-		{
-			m_bWeaponBlending = false;
-		}
-		else
-		{
-			float easeT = 1.0f - powf(1.0f - t, 3.0f);
-
-			XMMATRIX mTargetLocal = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-			XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
-			XMMATRIX mTargetWorld = XMMatrixMultiply(mTargetLocal, mSocketWorld);
-
-			XMVECTOR vTargetScale, vTargetRot, vTargetTrans;
-			XMMatrixDecompose(&vTargetScale, &vTargetRot, &vTargetTrans, mTargetWorld);
-
-			XMMATRIX mStartWorld = XMLoadFloat4x4(&m_xmf4x4WeaponBlendStartWorld);
-			XMVECTOR vStartScale, vStartRot, vStartTrans;
-			XMMatrixDecompose(&vStartScale, &vStartRot, &vStartTrans, mStartWorld);
-
-			XMVECTOR vCurScale = XMVectorLerp(vStartScale, vTargetScale, easeT);
-			XMVECTOR vCurRot = XMQuaternionSlerp(vStartRot, vTargetRot, easeT);
-			XMVECTOR vCurTrans = XMVectorLerp(vStartTrans, vTargetTrans, easeT);
-
-			XMMATRIX mCurWorld = XMMatrixAffineTransformation(vCurScale, XMVectorZero(), vCurRot, vCurTrans);
-
-			XMMATRIX mInvSocket = XMMatrixInverse(nullptr, mSocketWorld);
-			XMMATRIX mCurLocal = XMMatrixMultiply(mCurWorld, mInvSocket);
-
-			XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mCurLocal);
-		}
-
-		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
-	}
-}
-
-CGameObject* CPlayer::FindFirstFrameByNames(const char* const* ppNames, int nCount)
-{
-	for (int i = 0; i < nCount; ++i)
-	{
-		CGameObject* pFound = FindFrame(ppNames[i]);
-		if (pFound) return pFound;
-	}
-	return nullptr;
-}
-
-bool CPlayer::InitializeLeftHandIK()
-{
-	static const char* s_ppUpperArmNames[] =
-	{
-		"mixamorig:LeftArm"
-	};
-
-	static const char* s_ppForeArmNames[] =
-	{
-		"mixamorig:LeftForeArm"
-	};
-
-	static const char* s_ppHandNames[] =
-	{
-		"mixamorig:LeftHand"
-	};
-
-	m_pLeftUpperArm = FindFirstFrameByNames(s_ppUpperArmNames, _countof(s_ppUpperArmNames));
-	m_pLeftForeArm = FindFirstFrameByNames(s_ppForeArmNames, _countof(s_ppForeArmNames));
-	m_pLeftHand = FindFirstFrameByNames(s_ppHandNames, _countof(s_ppHandNames));
-
-	if (!m_pLeftUpperArm || !m_pLeftForeArm || !m_pLeftHand)
-	{
-		OutputDebugString(L"[IK] 경고: 왼팔 본을 전부 찾지 못했습니다.\n");
-		return false;
-	}
-
-	OutputDebugString(L"[IK] 성공: 왼팔 IK 본 캐싱 완료\n");
-	return true;
+	m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponRunPos.x;
+	m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponRunPos.y;
+	m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponRunPos.z;
 }
 
 void CPlayer::ApplyGrenadeWeaponPose()
@@ -664,6 +544,172 @@ void CPlayer::ApplyGrenadeWeaponPose()
 	m_pWeapon->m_xmf4x4ToParent._43 += deltaLocal.z;
 
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+}
+
+void CPlayer::UpdateWeaponPose(float fTimeElapsed)
+{
+	if (!m_pWeapon) return;
+
+	if (IsGrenadeState())
+	{
+		ApplyWeaponPose(WEAPON_POSE::GRENADE);
+	}
+	else
+	{
+		const float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;
+		const WEAPON_POSE targetPose = (moveLenSq > 0.0001f) ? WEAPON_POSE::RUN : WEAPON_POSE::IDLE;
+
+		if (m_eWeaponPose != targetPose || m_bWeaponBlending)
+		{
+			ApplyWeaponPose(targetPose);
+		}
+	}
+
+	if (!m_bWeaponBlending)
+		return;
+
+	m_fWeaponBlendTime += fTimeElapsed;
+	float t = m_fWeaponBlendTime / m_fWeaponBlendDuration;
+
+	if (t >= 1.0f)
+	{
+		m_bWeaponBlending = false;
+		return;
+	}
+
+	float easeT = 1.0f - powf(1.0f - t, 3.0f);
+
+	XMMATRIX mTargetLocal = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
+	XMMATRIX mSocketWorld = XMLoadFloat4x4(&m_pWeaponSocket->m_xmf4x4World);
+	XMMATRIX mTargetWorld = XMMatrixMultiply(mTargetLocal, mSocketWorld);
+
+	XMVECTOR vTargetScale, vTargetRot, vTargetTrans;
+	XMMatrixDecompose(&vTargetScale, &vTargetRot, &vTargetTrans, mTargetWorld);
+
+	XMMATRIX mStartWorld = XMLoadFloat4x4(&m_xmf4x4WeaponBlendStartWorld);
+	XMVECTOR vStartScale, vStartRot, vStartTrans;
+	XMMatrixDecompose(&vStartScale, &vStartRot, &vStartTrans, mStartWorld);
+
+	XMVECTOR vCurScale = XMVectorLerp(vStartScale, vTargetScale, easeT);
+	XMVECTOR vCurRot = XMQuaternionSlerp(vStartRot, vTargetRot, easeT);
+	XMVECTOR vCurTrans = XMVectorLerp(vStartTrans, vTargetTrans, easeT);
+
+	XMMATRIX mCurWorld = XMMatrixAffineTransformation(vCurScale, XMVectorZero(), vCurRot, vCurTrans);
+
+	XMMATRIX mInvSocket = XMMatrixInverse(nullptr, mSocketWorld);
+	XMMATRIX mCurLocal = XMMatrixMultiply(mCurWorld, mInvSocket);
+
+	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mCurLocal);
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+}
+
+void CPlayer::BeginGrenadeWeaponPose()
+{
+	if (!m_pWeapon) return;
+	if (!m_pWeaponSocket) return;
+
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	m_xmf4x4WeaponGrenadeStartLocal = m_pWeapon->m_xmf4x4ToParent;
+	m_bWeaponGrenadeStartCaptured = true;
+}
+
+void CPlayer::EndGrenadeWeaponPose()
+{
+	if (!m_pWeapon) return;
+
+	m_pWeapon->m_xmf4x4ToParent = m_xmf4x4WeaponBaseLocal;
+	m_bWeaponGrenadeStartCaptured = false;
+}
+
+CGameObject* CPlayer::FindFirstFrameByNames(const char* const* ppNames, int nCount)
+{
+	for (int i = 0; i < nCount; ++i)
+	{
+		CGameObject* pFound = FindFrame(ppNames[i]);
+		if (pFound) return pFound;
+	}
+	return nullptr;
+}
+
+bool CPlayer::InitializeLeftHandIK()
+{
+	static const char* s_ppUpperArmNames[] =
+	{
+		"mixamorig:LeftArm"
+	};
+
+	static const char* s_ppForeArmNames[] =
+	{
+		"mixamorig:LeftForeArm"
+	};
+
+	static const char* s_ppHandNames[] =
+	{
+		"mixamorig:LeftHand"
+	};
+
+	m_pLeftUpperArm = FindFirstFrameByNames(s_ppUpperArmNames, _countof(s_ppUpperArmNames));
+	m_pLeftForeArm = FindFirstFrameByNames(s_ppForeArmNames, _countof(s_ppForeArmNames));
+	m_pLeftHand = FindFirstFrameByNames(s_ppHandNames, _countof(s_ppHandNames));
+
+	if (!m_pLeftUpperArm || !m_pLeftForeArm || !m_pLeftHand)
+	{
+		OutputDebugString(L"[IK] 경고: 왼팔 본을 전부 찾지 못했습니다.\n");
+		return false;
+	}
+
+	OutputDebugString(L"[IK] 성공: 왼팔 IK 본 캐싱 완료\n");
+	return true;
+}
+
+XMFLOAT2 CPlayer::GetMoveInput2D() const
+{
+	auto& input = InputManager::Instance();
+
+	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	if (input.KeyPress(INPUT_KEY::W) || input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1.0f;
+	if (input.KeyPress(INPUT_KEY::S) || input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1.0f;
+	if (input.KeyPress(INPUT_KEY::A) || input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1.0f;
+	if (input.KeyPress(INPUT_KEY::D) || input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1.0f;
+
+	return dir;
+}
+
+int CPlayer::GetRunAnimationFromInput(const XMFLOAT2& dir) const
+{
+	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f)
+		return ANIM_RUN_F;
+
+	float angle = atan2f(dir.y, dir.x);
+
+	if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
+		return ANIM_RUN_F;
+	else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
+		return ANIM_RUN_R;
+	else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
+		return ANIM_RUN_L;
+	else
+		return ANIM_RUN_B;
+}
+
+bool CPlayer::IsMoveInputActive(const XMFLOAT2& dir) const
+{
+	return !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+}
+
+XMFLOAT3 CPlayer::GetMoveDirectionFromInput(const XMFLOAT2& dir) const
+{
+	if (!IsMoveInputActive(dir))
+		return XMFLOAT3(0, 0, 0);
+
+	XMFLOAT3 look = GetLookVector();
+	XMFLOAT3 right = GetRightVector();
+
+	XMFLOAT3 direction;
+	direction.x = look.x * dir.x + right.x * dir.y;
+	direction.y = 0.0f;
+	direction.z = look.z * dir.x + right.z * dir.y;
+	return Vector3::Normalize(direction);
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
@@ -974,29 +1020,8 @@ bool PlayerRun::Enter(CPlayer* Player)
 {
 	Player->ApplyWeaponPose(WEAPON_POSE::RUN);
 
-	auto& input = InputManager::Instance();
-
-	XMFLOAT2 dir = XMFLOAT2(0, 0);
-	if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) dir.x += 1;
-	if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) dir.x -= 1;
-	if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) dir.y -= 1;
-	if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) dir.y += 1;
-
-	int nextAnim = ANIM_RUN_F;
-
-	if (!(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f))
-	{
-		float angle = atan2f(dir.y, dir.x);
-
-		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-			nextAnim = ANIM_RUN_F;
-		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-			nextAnim = ANIM_RUN_R;
-		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-			nextAnim = ANIM_RUN_L;
-		else
-			nextAnim = ANIM_RUN_B;
-	}
+	XMFLOAT2 dir = Player->GetMoveInput2D();
+	int nextAnim = Player->GetRunAnimationFromInput(dir);
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1017,32 +1042,16 @@ bool PlayerRun::Enter(CPlayer* Player)
 
 void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
-	XMFLOAT2 dir = XMFLOAT2(0, 0);
+	XMFLOAT2 dir = Player->GetMoveInput2D();
 
-	auto& input = InputManager::Instance();
-	if (input.KeyPress(INPUT_KEY::W)) dir.x += 1;
-	if (input.KeyPress(INPUT_KEY::S)) dir.x -= 1;
-	if (input.KeyPress(INPUT_KEY::A)) dir.y -= 1;
-	if (input.KeyPress(INPUT_KEY::D)) dir.y += 1;
-
-	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f)
+	if (!Player->IsMoveInputActive(dir))
 	{
 		Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 		Player->ChangeState(std::make_unique<PlayerIdle>());
 		return;
 	}
 
-	float angle = atan2f(dir.y, dir.x);
-	int nextAnim = ANIM_RUN_F;
-
-	if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-		nextAnim = ANIM_RUN_F;
-	else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-		nextAnim = ANIM_RUN_R;
-	else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-		nextAnim = ANIM_RUN_L;
-	else
-		nextAnim = ANIM_RUN_B;
+	int nextAnim = Player->GetRunAnimationFromInput(dir);
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1059,16 +1068,7 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 
-	XMFLOAT3 look = Player->GetLookVector();
-	XMFLOAT3 right = Player->GetRightVector();
-
-	XMFLOAT3 direction;
-	direction.x = look.x * dir.x + right.x * dir.y;
-	direction.y = 0.0f;
-	direction.z = look.z * dir.x + right.z * dir.y;
-	direction = Vector3::Normalize(direction);
-
-	Player->SetMoveDir(direction);
+	Player->SetMoveDir(Player->GetMoveDirectionFromInput(dir));
 }
 
 void PlayerRun::Exit(CPlayer* Player)
@@ -1087,33 +1087,11 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 	Player->BeginGrenadeWeaponPose();
 	Player->ApplyWeaponPose(WEAPON_POSE::GRENADE);
 
-	auto& input = InputManager::Instance();
-
-	bool bW = IsMoveHeld(input, INPUT_KEY::W);
-	bool bS = IsMoveHeld(input, INPUT_KEY::S);
-	bool bA = IsMoveHeld(input, INPUT_KEY::A);
-	bool bD = IsMoveHeld(input, INPUT_KEY::D);
-
-	XMFLOAT2 dir = XMFLOAT2(0, 0);
-	if (bW) dir.x += 1;
-	if (bS) dir.x -= 1;
-	if (bA) dir.y -= 1;
-	if (bD) dir.y += 1;
-
-	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+	XMFLOAT2 dir = Player->GetMoveInput2D();
+	bool bMove = Player->IsMoveInputActive(dir);
 	m_bKeepRun = bMove;
 
-	int nextLowerAnim = ANIM_IDLE;
-	if (bMove)
-	{
-		float angle = atan2f(dir.y, dir.x);
-
-		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4) nextLowerAnim = ANIM_RUN_F;
-		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_R;
-		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_L;
-		else nextLowerAnim = ANIM_RUN_B;
-	}
-
+	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
 	m_nLastLowerAnim = nextLowerAnim;
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -1138,33 +1116,11 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 {
 	m_fElapsed += fTimeElapsed;
 
-	auto& input = InputManager::Instance();
-
-	bool bW = IsMoveHeld(input, INPUT_KEY::W);
-	bool bS = IsMoveHeld(input, INPUT_KEY::S);
-	bool bA = IsMoveHeld(input, INPUT_KEY::A);
-	bool bD = IsMoveHeld(input, INPUT_KEY::D);
-
-	XMFLOAT2 dir = XMFLOAT2(0, 0);
-	if (bW) dir.x += 1;
-	if (bS) dir.x -= 1;
-	if (bA) dir.y -= 1;
-	if (bD) dir.y += 1;
-
-	bool bMove = !(fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f);
+	XMFLOAT2 dir = Player->GetMoveInput2D();
+	bool bMove = Player->IsMoveInputActive(dir);
 	m_bKeepRun = bMove;
 
-	int nextLowerAnim = ANIM_IDLE;
-	if (bMove)
-	{
-		float angle = atan2f(dir.y, dir.x);
-
-		if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4) nextLowerAnim = ANIM_RUN_F;
-		else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_R;
-		else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4) nextLowerAnim = ANIM_RUN_L;
-		else nextLowerAnim = ANIM_RUN_B;
-	}
-
+	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
 	m_nLastLowerAnim = nextLowerAnim;
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -1180,23 +1136,7 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 
-	XMFLOAT3 look = Player->GetLookVector();
-	XMFLOAT3 right = Player->GetRightVector();
-
-	XMFLOAT3 direction;
-	if (bMove)
-	{
-		direction.x = look.x * dir.x + right.x * dir.y;
-		direction.y = 0.0f;
-		direction.z = look.z * dir.x + right.z * dir.y;
-		direction = Vector3::Normalize(direction);
-	}
-	else
-	{
-		direction = XMFLOAT3(0, 0, 0);
-	}
-
-	Player->SetMoveDir(direction);
+	Player->SetMoveDir(Player->GetMoveDirectionFromInput(dir));
 
 	if (m_fElapsed >= 2.80f)
 	{
