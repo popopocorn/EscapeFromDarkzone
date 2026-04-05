@@ -24,6 +24,33 @@ D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorNextHandle;
 
+static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
+{
+	if (!pWeapon) return nullptr;
+
+	static const char* s_ppMuzzleNames[] =
+	{
+		"Muzzle",
+		"muzzle",
+		"MuzzleFlash",
+		"muzzleflash",
+		"FirePos",
+		"firepos",
+		"BarrelEnd",
+		"barrel_end",
+		"Socket_Muzzle",
+		"socket_muzzle"
+	};
+
+	for (const char* name : s_ppMuzzleNames)
+	{
+		CGameObject* pFrame = pWeapon->FindFrame(name);
+		if (pFrame) return pFrame;
+	}
+
+	return nullptr;
+}
+
 CScene::CScene()
 {
 	colManager = std::make_unique<CollisionManager>();
@@ -603,7 +630,11 @@ void CScene::SetPlayer(CPlayer* p)
 			}
 		}
 	}
-
+	m_pLaserMuzzle = nullptr;
+	if (m_pPlayer && m_pPlayer->GetWeapon())
+	{
+		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
+	}
 }
 
 CCamera* CScene::GetLightCamera(int idx)
@@ -628,8 +659,12 @@ void CScene::DeleteTrash(UINT64 Fence)
 void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	//handlehp, handlecollision 함수 통일해야함
-	if (nMessageID == WM_LBUTTONDOWN)
+	switch (nMessageID)
 	{
+	case WM_LBUTTONDOWN:
+	{
+		m_bLaserActive = true;
+
 		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
 		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
@@ -637,9 +672,11 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
 
 		XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
-		if (m_ppShaders[SHADERIDX::ENEMY]) {
+		if (m_ppShaders[SHADERIDX::ENEMY])
+		{
 			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-			for (auto& obj : *objs) {
+			for (auto& obj : *objs)
+			{
 				const auto& oobbs = obj->GetOOBB();
 
 				for (BoundingOrientedBox* pOOBB : oobbs)
@@ -649,17 +686,24 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 					{
 						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-						if (pEnemy) {
+						if (pEnemy)
+						{
 							pEnemy->HandleHP(10.0f);
 						}
-						
 						break;
 					}
 				}
 			}
 		}
-		
-		
+		break;
+	}
+
+	case WM_LBUTTONUP:
+		m_bLaserActive = false;
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -770,36 +814,65 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		}
 	}
 	
-	//레이저 충돌 처리
-	if (m_pPlayer && m_pLaserObject)
+	// 레이저 표시/숨김 처리
+	if (m_pLaserObject)
 	{
-		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-		XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
-		XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
-		XMVECTOR vUp = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
-		XMVECTOR vRight = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
-		vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
+		if (m_bLaserActive && m_pPlayer)
+		{
+			if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
+			{
+				m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
+			}
 
-		XMVECTOR rayOrigin = vPos + vUp * 1.2f + vRight * 0.3f + vLook * 0.5f;
+			XMVECTOR rayOrigin;
+			XMVECTOR rayDir;
+			XMVECTOR vUp;
+			XMVECTOR vRight;
 
-		XMVECTOR rayDir = vLook;
+			if (m_pLaserMuzzle)
+			{
+				XMFLOAT3 muzzlePos = m_pLaserMuzzle->GetPosition();
+				XMFLOAT3 muzzleLook = m_pLaserMuzzle->GetLook();
+				XMFLOAT3 muzzleUp = m_pLaserMuzzle->GetUp();
+				XMFLOAT3 muzzleRight = m_pLaserMuzzle->GetRight();
 
-		float fLaserLength = 15.0f;
+				rayOrigin = XMLoadFloat3(&muzzlePos);
+				rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
+				vUp = XMVector3Normalize(XMLoadFloat3(&muzzleUp));
+				vRight = XMVector3Normalize(XMLoadFloat3(&muzzleRight));
+			}
+			else
+			{
+				// 총구 프레임을 못 찾은 경우 fallback
+				XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
+				XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+				vRight = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
+				vUp = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
+				vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
 
-		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, fLaserLength);
+				rayOrigin = vPos + vUp * 1.2f + vRight * 0.3f + vLook * 0.5f;
+				rayDir = vLook;
+			}
 
-		XMMATRIX matRotation = XMMatrixIdentity();
-		matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
-		matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
-		matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
-		matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
+			XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, m_fLaserLength);
 
-		XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
+			XMMATRIX matRotation = XMMatrixIdentity();
+			matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
+			matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
+			matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
+			matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
 
-		XMMATRIX matWorld = matScale * matRotation * matTranslation;
+			XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
+			XMMATRIX matWorld = matScale * matRotation * matTranslation;
 
-		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
-		m_pLaserObject->UpdateTransform(NULL);
+			XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
+			m_pLaserObject->UpdateTransform(NULL);
+		}
+		else
+		{
+			XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
+			m_pLaserObject->UpdateTransform(NULL);
+		}
 	}
 	ShadowCameraManager.Update();
 

@@ -141,6 +141,11 @@ public:
 	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
 	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
 
+	//레이저 관련 멤버 변수
+	bool m_bLaserActive = false;
+	CGameObject* m_pLaserMuzzle = nullptr;
+	float m_fLaserLength = 15.0f;
+
 	CMaterial* m_pEffectMaterials[EFFECT_MAX];
 	CParticleMesh* m_pEffectMesh = NULL;
 
