@@ -17,13 +17,14 @@ CEffect::~CEffect()
 }
 
 
-void CEffect::Play(XMFLOAT3 pos)
+void CEffect::Play(const XMFLOAT3& pos, const XMFLOAT3& right, const XMFLOAT3& up)
 {
-    SetPosition(pos.x, pos.y, pos.z);
+    m_xmf3Position = pos;
+    m_xmf3Right = right;
+    m_xmf3Up = up;
+
     m_fAge = 0.0f;
     m_bIsDead = false;
-
-    UpdateTransform(NULL);
 }
 
 void CEffect::Animate(float dt)

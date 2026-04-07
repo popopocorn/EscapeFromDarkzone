@@ -151,6 +151,13 @@ public:
 
 	class CEffectShader* m_pEffectShader = NULL;
 
+	//스파크 효과 관련 멤버 변수
+	bool m_bSparkFireActive = false;
+	float m_fSparkSpawnTimer = 0.0f;
+	float m_fSparkSpawnInterval = 0.03f;
+
+	CGameObject* m_pWeaponMuzzle = nullptr;
+
 	CGameObject* m_pWeaponObject = nullptr;
 
 	std::unique_ptr<UIObjectShader> UIShader;
@@ -163,7 +170,7 @@ public:
 	//bool CheckCollision(CGameObject* object1, CGameObject* object2);
 	//void ResolveCollision(CGameObject* object);
 
-	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
+	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);
 
 	void SetPlayer(CPlayer* p);
 

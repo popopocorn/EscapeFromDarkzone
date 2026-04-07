@@ -50,6 +50,32 @@ static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
 
 	return nullptr;
 }
+static CGameObject* FindWeaponMuzzleFrame(CGameObject* pWeapon)
+{
+	if (!pWeapon) return nullptr;
+
+	static const char* s_ppMuzzleNames[] =
+	{
+		"Muzzle",
+		"muzzle",
+		"MuzzleFlash",
+		"muzzleflash",
+		"FirePos",
+		"firepos",
+		"BarrelEnd",
+		"barrel_end",
+		"Socket_Muzzle",
+		"socket_muzzle"
+	};
+
+	for (const char* name : s_ppMuzzleNames)
+	{
+		CGameObject* pFrame = pWeapon->FindFrame(name);
+		if (pFrame) return pFrame;
+	}
+
+	return nullptr;
+}
 
 CScene::CScene()
 {
@@ -192,8 +218,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_ppShaders.push_back(std::move(pEffectShader));
 
-	float effectWidth = 5.0f;
-	float effectHeight = 5.0f * (180.0f / 182.0f);
+	float effectWidth = 1.0f;
+	float effectHeight = 1.0f * (180.0f / 182.0f);
 
 	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
 
@@ -208,7 +234,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	//spark effect
 	CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
 
 	m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
@@ -243,7 +269,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	for (int i = 0; i < MAX_BOMB_EFFECTS; i++)
 	{
 		m_vEffectPools[EFFECT_BOMB].push_back(new CEffect(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.5f));
+		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.1f));
 		m_vEffectPools[EFFECT_BLOOD].push_back(new CEffect(EFFECT_BLOOD, 0.8f));
 	}
 	
@@ -592,44 +618,63 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-
-void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos)
+void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up)
 {
 	for (CEffect* pEffect : m_vEffectPools[type])
 	{
 		if (pEffect->IsDead())
 		{
-			pEffect->Play(pos);
+			pEffect->Play(pos, right, up);
 			return;
 		}
 	}
 
-	float lifeTime = (type == EFFECT_BOMB) ? 1.0f : 0.5f;
+	float lifeTime = 0.5f;
+
+	switch (type)
+	{
+	case EFFECT_BOMB:  lifeTime = 1.0f; break;
+	case EFFECT_SPARK: lifeTime = 0.1f; break;
+	case EFFECT_BLOOD: lifeTime = 0.8f; break;
+	}
+
 	CEffect* pNewEffect = new CEffect(type, lifeTime);
-	pNewEffect->Play(pos);
+	pNewEffect->Play(pos, right, up);
 	m_vEffectPools[type].push_back(pNewEffect);
 }
-
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
+
 	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 	CGameObject* pGameObj = (*pVector)[0].get();
 	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
 	pViewObj->setPlayer(p);
+
 	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
 
 	ShadowCameraManager.SetPlayer(p->GetCamera());
 	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
-	if (m_ppShaders[SHADERIDX::ENEMY]) {
+
+	if (m_ppShaders[SHADERIDX::ENEMY])
+	{
 		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-		for (auto& obj : *objs) {
+		for (auto& obj : *objs)
+		{
 			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-			if (pEnemy) {
+			if (pEnemy)
+			{
 				pEnemy->SetPlayer(m_pPlayer);
 			}
 		}
 	}
+
+	m_pWeaponMuzzle = nullptr;
+	if (m_pPlayer && m_pPlayer->GetWeapon())
+	{
+		m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
+	}
+
 	m_pLaserMuzzle = nullptr;
 	if (m_pPlayer && m_pPlayer->GetWeapon())
 	{
@@ -658,20 +703,71 @@ void CScene::DeleteTrash(UINT64 Fence)
 
 void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	//handlehp, handlecollision 함수 통일해야함
 	switch (nMessageID)
 	{
 	case WM_LBUTTONDOWN:
 	{
+		m_bSparkFireActive = true;
 		m_bLaserActive = true;
+		m_fSparkSpawnTimer = 0.0f;
+
+		if (!m_pWeaponMuzzle && m_pPlayer && m_pPlayer->GetWeapon())
+		{
+			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
+		}
+
+		if (m_pPlayer)
+		{
+			XMFLOAT3 sparkPos;
+			XMFLOAT3 sparkRight;
+			XMFLOAT3 sparkUp;
+
+			if (m_pWeaponMuzzle)
+			{
+				XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
+				XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
+				XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
+
+				XMFLOAT3 flatLook = muzzleLook;
+				flatLook.y = 0.0f;
+				flatLook = Vector3::Normalize(flatLook);
+
+				sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
+				sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
+				sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
+
+				sparkRight = muzzleRight;
+				sparkUp = flatLook;
+			}
+			else
+			{
+				XMFLOAT3 pos = m_pPlayer->GetPosition();
+				XMFLOAT3 look = m_pPlayer->GetLookVector();
+				XMFLOAT3 right = m_pPlayer->GetRightVector();
+				XMFLOAT3 up = m_pPlayer->GetUpVector();
+
+				XMFLOAT3 flatLook = look;
+				flatLook.y = 0.0f;
+				flatLook = Vector3::Normalize(flatLook);
+
+				sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
+				sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
+				sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
+
+				sparkRight = right;
+				sparkUp = flatLook;
+			}
+
+			PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+		}
 
 		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
 		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
 		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 		XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-
 		XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
 		if (m_ppShaders[SHADERIDX::ENEMY])
 		{
 			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
@@ -699,14 +795,15 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	}
 
 	case WM_LBUTTONUP:
+		m_bSparkFireActive = false;
 		m_bLaserActive = false;
+		m_fSparkSpawnTimer = 0.0f;
 		break;
 
 	default:
 		break;
 	}
 }
-
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_pPlayer) return false;
@@ -782,19 +879,10 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-
 	m_fElapsedTime = fTimeElapsed;
-	for (int i = 0; i < m_ppShaders.size(); i++) 
+
+	for (int i = 0; i < m_ppShaders.size(); i++)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
-
-	/*for (int i = 0; i < m_ppGameObjects.size(); i++)
-		if (m_ppGameObjects[i]) m_ppGameObjects[i]->Animate(fTimeElapsed);*/
-
-	//if (m_pLights.size() > 1)
-	//{
-	//	m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
-	//	m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
-	//}
 
 	if (m_pPlayer && m_pLights.size() > 1)
 	{
@@ -802,7 +890,66 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
 
-	//이펙트 풀 순회하고 살아있는 이펙트들만 Animate() 호출
+	if (m_bSparkFireActive && m_pPlayer)
+	{
+		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
+		{
+			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
+		}
+
+		m_fSparkSpawnTimer += fTimeElapsed;
+
+		while (m_fSparkSpawnTimer >= m_fSparkSpawnInterval)
+		{
+			XMFLOAT3 sparkPos;
+			XMFLOAT3 sparkRight;
+			XMFLOAT3 sparkUp;
+
+			if (m_pWeaponMuzzle)
+			{
+				XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
+				XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
+				XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
+
+				XMFLOAT3 flatLook = muzzleLook;
+				flatLook.y = 0.0f;
+				flatLook = Vector3::Normalize(flatLook);
+
+				sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
+				sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
+				sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
+
+				sparkRight = muzzleRight;
+				sparkUp = flatLook;
+			}
+			else
+			{
+				XMFLOAT3 pos = m_pPlayer->GetPosition();
+				XMFLOAT3 look = m_pPlayer->GetLookVector();
+				XMFLOAT3 right = m_pPlayer->GetRightVector();
+				XMFLOAT3 up = m_pPlayer->GetUpVector();
+
+				XMFLOAT3 flatLook = look;
+				flatLook.y = 0.0f;
+				flatLook = Vector3::Normalize(flatLook);
+
+				sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
+				sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
+				sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
+
+				sparkRight = right;
+				sparkUp = flatLook;
+			}
+
+			PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
+		}
+	}
+	else
+	{
+		m_fSparkSpawnTimer = 0.0f;
+	}
+
 	for (int type = 0; type < EFFECT_MAX; type++)
 	{
 		for (CEffect* pEffect : m_vEffectPools[type])
@@ -813,7 +960,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 			}
 		}
 	}
-	
 	// 레이저 표시/숨김 처리
 	if (m_pLaserObject)
 	{
@@ -843,7 +989,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 			}
 			else
 			{
-				// 총구 프레임을 못 찾은 경우 fallback
 				XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
 				XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
 				vRight = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
@@ -874,8 +1019,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 			m_pLaserObject->UpdateTransform(NULL);
 		}
 	}
-	ShadowCameraManager.Update();
 
+	ShadowCameraManager.Update();
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
 
@@ -891,21 +1036,22 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-
 	pd3dCommandList->OMSetStencilRef(0xff);
 
-	if (nPipelineState == SHADOW) {
+	if (nPipelineState == SHADOW)
+	{
 		for (int i = 0; i < m_ppShaders.size(); i++)
 		{
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		}
 	}
-	else {
+	else
+	{
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-		UIShader->Render(pd3dCommandList, pCamera, true ,nPipelineState);
+		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
@@ -921,6 +1067,28 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
 				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
 
+				switch (type)
+				{
+				case EFFECT_BOMB:
+					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
+					break;
+
+				case EFFECT_SPARK:
+					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.2f, 1.2f);
+					break;
+
+				case EFFECT_BLOOD:
+					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
+					break;
+
+				default:
+					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.0f, 1.0f);
+					break;
+				}
+
+				m_pMappedInstBufferEffect[type][activeCount].vRight = pEffect->GetRight();
+				m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
+
 				activeCount++;
 				if (activeCount >= 100) break;
 			}
@@ -931,7 +1099,6 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
 
 			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
-
 			m_pEffectMesh->Render(pd3dCommandList, activeCount);
 		}
 	}

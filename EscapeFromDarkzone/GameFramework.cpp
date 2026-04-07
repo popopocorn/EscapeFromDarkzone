@@ -348,13 +348,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
-		//case VK_RETURN:
-		//	break;
-		//case VK_F1:
-		//case VK_F2:
-		//case VK_F3:
-		//	m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
-		//	break;
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
@@ -370,9 +363,9 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				::ClipCursor(&rect);
 
 				::GetCursorPos(&m_ptOldCursorPos);
-			}	
+			}
 			break;
-		case'O':
+		case 'O':
 			observing = !observing;
 			if (observing) {
 				m_pCamera = observer.get();
@@ -389,11 +382,14 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				XMFLOAT3 look = m_pPlayer->GetLookVector();
 
 				XMFLOAT3 bombPos = Vector3::Add(pos, Vector3::ScalarProduct(look, 3.0f, false));
-				bombPos.y += 5.0f;
+				//bombPos.y += 5.0f;
 
-				//m_pScene->PlayEffect(EFFECT_BOMB, bombPos);
+				XMFLOAT3 bombRight = m_pPlayer->GetRightVector();
+				XMFLOAT3 bombFlatLook = m_pPlayer->GetLookVector();
+				bombFlatLook.y = 0.0f;
+				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				m_pScene->PlayEffect(EFFECT_SPARK, bombPos); 
+				m_pScene->PlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
 			}
 			break;
 		}
@@ -405,7 +401,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		break;
 	}
 }
-
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	

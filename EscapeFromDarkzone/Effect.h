@@ -15,7 +15,16 @@ enum EFFECT_TYPE
 struct EFFECT_INFO
 {
     XMFLOAT3 vPosition;
-    float fProgress;
+    float    fProgress;
+
+    XMFLOAT2 vSize;
+    float    padding0[2];
+
+    XMFLOAT3 vRight;
+    float    padding1;
+
+    XMFLOAT3 vUp;
+    float    padding2;
 };
 class CEffect : public CGameObject
 {
@@ -28,7 +37,10 @@ protected:
 
     CEffectShader* m_pEffectShader = nullptr;
 
-public:
+private:
+    XMFLOAT3 m_xmf3Position = XMFLOAT3(0, 0, 0);
+    XMFLOAT3 m_xmf3Right = XMFLOAT3(1, 0, 0);
+    XMFLOAT3 m_xmf3Up = XMFLOAT3(0, 1, 0);
 
 public:
     CEffect(EFFECT_TYPE type, float lifeTime = 1.0f);
@@ -39,8 +51,11 @@ public:
     void SetEffectShader(CEffectShader* shader){ m_pEffectShader = shader; }
 
     float GetProgress() const { return m_fAge / m_fLifeTime; }
-    XMFLOAT3 GetPosition() const { return XMFLOAT3(m_xmf4x4World._41, m_xmf4x4World._42, m_xmf4x4World._43); }
+
+    XMFLOAT3 GetPosition() const { return m_xmf3Position; }
+    const XMFLOAT3& GetRight() const { return m_xmf3Right; }
+    const XMFLOAT3& GetUp() const { return m_xmf3Up; }
 
     bool IsDead() const { return m_bIsDead; }
-    void Play(XMFLOAT3 pos);
+    void Play(const XMFLOAT3& pos, const XMFLOAT3& right, const XMFLOAT3& up);
 };
