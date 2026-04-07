@@ -7,7 +7,7 @@
 #include "Object.h"
 #include "Camera.h"
 #include "DebugObject.h"
-
+#include "UI.h"
 class CGameObject;
 class CCamera;
 class CDebugObject;
