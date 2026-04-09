@@ -46,17 +46,8 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 
     float3 normalW;
     float4 cColor = cAlbedoColor + cSpecularColor + cMetallicColor + cEmissionColor;
-    if (gnTexturesMask & MATERIAL_NORMAL_MAP)
-    {
-        float3x3 TBN = float3x3(normalize(input.tangentW), normalize(input.bitangentW), normalize(input.normalW));
-        float3 vNormal = normalize(cNormalColor.rgb * 2.0f - 1.0f);
-        normalW = normalize(mul(vNormal, TBN));
-    }
-    else
-    {
-        normalW = normalize(input.normalW);
-    }
-
+    
+    normalW = normalize(input.normalW);
     // ºä °ø°£ ±íÀÌ °è»ê (Cascade ¼±ÅÃ¿ë)
     float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
     float viewDepth = posView.z;
