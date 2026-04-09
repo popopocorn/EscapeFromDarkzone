@@ -1503,6 +1503,7 @@ void PlayerGrenade::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerDie::Enter(CPlayer* Player)
 {
+	return false;
 }
 
 void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)

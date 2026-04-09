@@ -145,7 +145,15 @@ void CGameFramework::CreateDirect3DDevice()
 		pd3dDebugController->EnableDebugLayer();
 		pd3dDebugController->Release();
 	}
+
 	nDXGIFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+	ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+	{
+		// Auto-Breadcrumbs와 Page Fault 추적 강제 활성화
+		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+	}
 #endif
 
 	hResult = ::CreateDXGIFactory2(nDXGIFactoryFlags, __uuidof(IDXGIFactory4), (void**)&m_pdxgiFactory);
@@ -639,6 +647,9 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
+
+
+
 	InputManager::Instance().update();
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
@@ -743,7 +754,33 @@ void CGameFramework::FrameAdvance()
 #ifdef _WITH_SYNCH_SWAPCHAIN
 	m_pdxgiSwapChain->Present(1, 0);
 #else
-	m_pdxgiSwapChain->Present(0, 0);
+	HRESULT hr =  m_pdxgiSwapChain->Present(0, 0);
+
+#ifdef _DEBUG
+	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+	{
+		// 1. 디바이스가 제거된 진짜 이유 확인
+		HRESULT removedReason = m_pd3dDevice->GetDeviceRemovedReason();
+		OutputDebugStringA("GPU 크래시(Device Removed) 발생!\n");
+
+		// 2. DRED 데이터 추출
+		ComPtr<ID3D12DeviceRemovedExtendedData1> pDred;
+		if (SUCCEEDED(m_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pDred)))) // 디바이스에서 DRED 인터페이스 가져오기
+		{
+			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 DredAutoBreadcrumbsOutput;
+			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
+
+			// 명령어 실행 기록(Breadcrumbs) 및 페이지 폴트 데이터 가져오기
+			pDred->GetAutoBreadcrumbsOutput1(&DredAutoBreadcrumbsOutput);
+			pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput);
+
+			// 3. 디버거를 강제로 멈추게 함
+			// 여기서 중단점(Breakpoint)이 걸리면, Visual Studio의 '조사식(Watch)' 창에서
+			// DredAutoBreadcrumbsOutput 변수를 열어 어떤 노드(명령어)까지 실행되다 죽었는지 확인합니다.
+			__debugbreak();
+		}
+	}
+#endif
 #endif
 #endif
 	UINT64 targetFence = 0;
