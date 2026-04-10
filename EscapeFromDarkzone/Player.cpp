@@ -7,6 +7,8 @@
 #include "InputManager.h"
 #include "Collision.h"
 
+#include "Network.h"	// 03.27 추가
+
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
 	XMVECTOR lenSq = XMVector3LengthSq(v);
@@ -83,16 +85,6 @@ CPlayer::CPlayer()
 	m_pPlayerUpdatedContext = NULL;
 	m_pCameraUpdatedContext = NULL;
 	state = std::make_unique<PlayerIdle>();
-
-	// 네트워크 테스트
-	WSAStartup(MAKEWORD(2, 2), &WSAData);
-	c_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(SERVER_PORT);
-	inet_pton(AF_INET, SERVER_ADDR, &addr.sin_addr);
-	WSAConnect(c_socket, reinterpret_cast<sockaddr*>(&addr),
-		sizeof(SOCKADDR_IN), NULL, NULL, NULL, NULL);
 }
 
 CPlayer::~CPlayer()
@@ -250,6 +242,26 @@ void CPlayer::Update(float fTimeElapsed)
 		{
 			m_xmf3Velocity.x = 0.0f;
 			m_xmf3Velocity.z = 0.0f;
+		}
+	}
+
+	// 03.27 추가: 플레이어가 움직이는 경우 서버에 이동 패킷 전송
+	if (NetworkManager::IsConnected && (state && typeid(*state) == typeid(PlayerRun)))
+	{
+		char inputs = 0;
+		auto& input = InputManager::Instance();
+		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) inputs |= MOVE_W;
+		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) inputs |= MOVE_S;
+		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) inputs |= MOVE_A;
+		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) inputs |= MOVE_D;
+
+		if (inputs != 0)
+		{
+			NetworkManager::Instance().SendMove(
+				inputs,
+				m_fYaw,
+				static_cast<unsigned int>(GetTickCount())
+			);
 		}
 	}
 }
@@ -1091,9 +1103,6 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
-	// 네트워크 테스트용 버퍼 선언
-	size_t buf_len = 0;
-
 	while (!event_queue.empty())
 	{
 		const GameEvent& ev = event_queue.front();
@@ -1159,29 +1168,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			break;
 		}
 
-		// 네트워크 테스트용
-		memcpy(send_buf + buf_len, &ev, sizeof(GameEvent));
-		buf_len += sizeof(GameEvent);
-
 		event_queue.pop();
-	}
-
-	// 네트워크 테스트용
-	if (buf_len != 0)
-	{
-		WSABUF wsabuf[1];
-		wsabuf[0].buf = send_buf;
-		wsabuf[0].len = static_cast<ULONG>(buf_len);
-
-		WSAOVERLAPPED send_over;
-		ZeroMemory(&send_over, sizeof(send_over));
-
-		int ret = WSASend(c_socket, wsabuf, 1, NULL, 0, &send_over, NULL);
-		if (SOCKET_ERROR == ret)
-		{
-			auto err_no = WSAGetLastError();
-			// error_display("WSASEND : ", err_no);
-		}
 	}
 
 	state.get()->Update(this, fTimeElapsed);

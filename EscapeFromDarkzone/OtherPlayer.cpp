@@ -117,3 +117,17 @@ void OtherPlayerDie::Update(OtherPlayer* Player, float fTimeElapsed)
 
 void OtherPlayerDie::Exit(OtherPlayer * Player)
 {}
+
+OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,
+	float x, float y, float z)
+{
+	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature); 
+	pOther->SetPosition(XMFLOAT3(x, y, z));
+	pOther->SetOOBB(NULL);
+	return pOther;
+}
+
+void OtherPlayer::UpdatePosition(float x, float y, float z) 
+{
+	SetPosition(XMFLOAT3(x, y, z));
+}
