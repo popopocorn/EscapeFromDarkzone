@@ -218,6 +218,14 @@ void CPlayer::Update(float fTimeElapsed)
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
 
+	// 04.10 추가: 서버 위치 보간
+	if (NetworkManager::Instance().IsConnected())
+	{
+		float alpha = 5.0f * fTimeElapsed;		// 추후 보간 속도 조정 (5.0f)
+		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * alpha;
+		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
+	}
+
 	UpdateTransform(NULL);
 
 	UpdateWeaponPose(fTimeElapsed);
@@ -246,7 +254,7 @@ void CPlayer::Update(float fTimeElapsed)
 	}
 
 	// 03.27 추가: 플레이어가 움직이는 경우 서버에 이동 패킷 전송
-	if (NetworkManager::IsConnected && (state && typeid(*state) == typeid(PlayerRun)))
+	if (NetworkManager::Instance().IsConnected() && (state && typeid(*state) == typeid(PlayerRun)))
 	{
 		char inputs = 0;
 		auto& input = InputManager::Instance();

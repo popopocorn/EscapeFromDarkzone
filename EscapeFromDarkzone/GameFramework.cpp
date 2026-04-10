@@ -807,6 +807,7 @@ void CGameFramework::ProcessNetworkPackets()
 			//OutputDebugString(szLog);
 			// 03.30 추가: 서버로부터 받아온 초기 위치로 이동
 			m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
+			m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z)); // 04.10 추가: 서버 위치 초기화
 			m_myId = p->id; // 03.30 추가: 내 ID 저장
 			break;
 		}
@@ -858,7 +859,7 @@ void CGameFramework::ProcessNetworkPackets()
 
 			// 03.30 추가: OtherPlayer 위치 업데이트 (플레이어 위치 보정 미구현)
 			if (p->id == m_myId) {
-				// 현재 플레이어의 위치 보정 기능을 추가하지 않았으므로 그냥 넘어감
+				m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));	// 04.10 추가: 보간용 서버 위치
 				break;
 			}
 

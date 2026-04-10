@@ -123,6 +123,9 @@ protected:
 
 	void MatchBoneWorldRotation(CGameObject* pBone, CGameObject* pTarget, float fWeight);
 
+	// 04.10 추가: 서버 위치 보간
+	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
+
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -203,6 +206,9 @@ public:
 
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
+
+	// 04.10 추가: 서버 위치 보간
+	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };
 
 class CPlayerAnimationController : public CAnimationController
