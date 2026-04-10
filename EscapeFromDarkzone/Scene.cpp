@@ -79,7 +79,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	UItemp->setAABB();
 	UItemp->SetFunc(tempfunc);
-	UIShader->addObjects(std::unique_ptr<UIObject>(UItemp));
+	//UIShader->addObjects(std::unique_ptr<UIObject>(UItemp));
 
 
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
@@ -860,8 +860,13 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	else {
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 		UIShader->Render(pd3dCommandList, pCamera, true ,nPipelineState);
+#ifdef  _DEBUG
+		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+#endif //  _DEBUG
+
+		
+
 	}
 
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);

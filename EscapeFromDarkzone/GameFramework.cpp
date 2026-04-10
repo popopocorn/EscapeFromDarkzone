@@ -726,7 +726,6 @@ void CGameFramework::FrameAdvance()
 	}
 	m_pScene->ThroughRender(m_pd3dCommandList, m_pCamera);
 
-
 	//compute pipline
 	
 
