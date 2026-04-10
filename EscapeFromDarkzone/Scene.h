@@ -9,6 +9,7 @@
 #include "EnemyObject.h"
 #include "Effect.h"
 
+
 #define MAX_LIGHTS						16 
 
 #define POINT_LIGHT						1
@@ -49,6 +50,9 @@ enum SHADERIDX : size_t{
 	ENEMY = 3,
 
 };
+
+struct ColResult;
+class CollisionManager;
 
 class CScene
 {
@@ -141,13 +145,18 @@ public:
 	CParticleMesh* m_pEffectMesh = NULL;
 
 	class CEffectShader* m_pEffectShader = NULL;
+
+	CGameObject* m_pWeaponObject = nullptr;
+
+	std::unique_ptr<UIObjectShader> UIShader;
 private:
 	CGameObject* m_pLaserObject = NULL;
+	std::unique_ptr<CollisionManager> colManager;
 
 public:
-	bool DoCollision(CGameObject* object, int shaderidx);
-	bool CheckCollision(CGameObject* object1, CGameObject* object2);
-	void ResolveCollision(CGameObject* object);
+	//bool DoCollision(CGameObject* object, int shaderidx);
+	//bool CheckCollision(CGameObject* object1, CGameObject* object2);
+	//void ResolveCollision(CGameObject* object);
 
 	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
 
@@ -159,4 +168,24 @@ public:
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence);
 	void DeleteTrash(UINT64 Fence);
+
+	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
+	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//UI용 함수 선언
+
+

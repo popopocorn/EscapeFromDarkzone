@@ -963,3 +963,79 @@ D3D12_DEPTH_STENCIL_DESC PlayerShader::CreateDepthStencilState()
 
 	return(d3dDepthStencilDesc);
 }
+
+D3D12_INPUT_LAYOUT_DESC UIObjectShader::CreateInputLayout()
+{
+	UINT nInputElementDescs = 5;
+	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
+
+	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	pd3dInputElementDescs[1] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	pd3dInputElementDescs[2] = { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	pd3dInputElementDescs[3] = { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 3, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	pd3dInputElementDescs[4] = { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 4, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+
+	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
+	d3dInputLayoutDesc.pInputElementDescs = pd3dInputElementDescs;
+	d3dInputLayoutDesc.NumElements = nInputElementDescs;
+
+	return(d3dInputLayoutDesc);
+}
+
+D3D12_SHADER_BYTECODE UIObjectShader::CreateVertexShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSUI", "vs_5_1", &m_pd3dVertexShaderBlob);
+}
+
+D3D12_SHADER_BYTECODE UIObjectShader::CreatePixelShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSUI", "ps_5_1", &m_pd3dVertexShaderBlob);
+}
+
+D3D12_DEPTH_STENCIL_DESC UIObjectShader::CreateDepthStencilState()
+{
+	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc;
+	::ZeroMemory(&d3dDepthStencilDesc, sizeof(D3D12_DEPTH_STENCIL_DESC));
+	d3dDepthStencilDesc.DepthEnable = FALSE;
+	d3dDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	d3dDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	d3dDepthStencilDesc.StencilEnable = FALSE;
+	d3dDepthStencilDesc.StencilReadMask = 0x00;
+	d3dDepthStencilDesc.StencilWriteMask = 0x00;
+	d3dDepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	d3dDepthStencilDesc.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	return d3dDepthStencilDesc;
+}
+
+void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
+{
+	OnPrepareRender(pd3dCommandList, nPipelineState);
+
+	for (int j = 0; j < m_ppObjects.size(); j++)
+	{
+		if (m_ppObjects[j])
+		{
+			m_ppObjects[j]->Animate(m_fElapsedTime);
+			m_ppObjects[j]->UpdateTransform(NULL);
+			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+		}
+	}
+}
+
+void UIObjectShader::ProcessClick(POINT mousePos)
+{
+	for (int i = 0; i < m_ppObjects.size(); ++i)
+	{
+		if (m_ppObjects[i]->GetBox().Intersects(mousePos))
+		{
+			m_ppObjects[i]->HandleClick();
+		}
+	}
+
+}

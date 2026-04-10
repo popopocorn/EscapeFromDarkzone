@@ -6,7 +6,7 @@
 
 #include "Mesh.h"
 #include "Camera.h"
-
+#include<functional>
 #include <vector>
 
 #define DIR_FORWARD					0x01
@@ -18,6 +18,7 @@
 
 class CShader;
 class CStandardShader;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -285,74 +286,72 @@ public:
 	void PrepareSkinning();
 };
 
-class CAnimationController 
+struct SBoneBlendCache {
+	XMVECTOR vScale;
+	XMVECTOR vRot;
+	XMVECTOR vTrans;
+};
+
+class CAnimationController
 {
 public:
-	CAnimationController(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, int nAnimationTracks, CLoadedModelInfo *pModel);
+	CAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, CLoadedModelInfo* pModel);
 	~CAnimationController();
 
-public:
-    float 							m_fTime = 0.0f;
+	void BuildUpperBodyMask(CGameObject* pRootGameObject, const char* pstrUpperBodyRootFrameName);
+	bool IsUpperBodyBone(int nBoneIndex) const;
+	void SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUpperBodyTrack);
 
-    int 							m_nAnimationTracks = 0;
-    CAnimationTrack 				*m_pAnimationTracks = NULL;
-
-	CAnimationSets					*m_pAnimationSets = NULL;
-	//cur_animation - 1
-	//next_animation - 0
-	int 							m_nSkinnedMeshes = 0;
-	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
-
-	ID3D12Resource					**m_ppd3dcbSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-	XMFLOAT4X4						**m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL; //[SkinnedMeshes]
-
-private:
-	int     m_nCurTrack = 0;
-	int     m_nNextTrack = 1;
-	int     m_nCurAnimID = -1;
-
-	bool    m_bIsBlending = false;
-	float   m_fBlendTime = 0.0f;
-	float   m_fBlendDuration = 0.2f;
-public:
-	void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
-
-	void SetTrackAnimationSet(int nAnimationTrack, int nAnimationSet);
+	void SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet);
 
 	void SetTrackEnable(int nAnimationTrack, bool bEnable);
 	void SetTrackPosition(int nAnimationTrack, float fPosition);
 	void SetTrackSpeed(int nAnimationTrack, float fSpeed);
 	void SetTrackWeight(int nAnimationTrack, float fWeight);
+	void SetTrackType(int nAnimationTrack, int nType);
+
+	float GetTrackPosition(int nAnimationTrack) const;
+
+	void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
+	void AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject);
 
 	void SetCallbackKeys(int nAnimationTrack, int nCallbackKeys);
-	void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void *pData);
-	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler *pCallbackHandler);
+	void SetCallbackKey(int nAnimationTrack, int nKeyIndex, float fTime, void* pData);
+	void SetAnimationCallbackHandler(int nAnimationTrack, CAnimationCallbackHandler* pCallbackHandler);
 
-	void AdvanceTime(float fElapsedTime, CGameObject *pRootGameObject);
-
-	void ChangeAnimation(int nNewAnimID, float fBlendDuration = 0.2f);
-
-	float GetTrackWeight(int nAnimationTrack)
-	{
-		if (m_pAnimationTracks) return m_pAnimationTracks[nAnimationTrack].m_fWeight;
-		return 0.0f;
-	}
+	virtual void OnRootMotion(CGameObject* pRootGameObject) {}
+	virtual void OnAnimationIK(CGameObject* pRootGameObject) {}
 
 public:
-	bool							m_bRootMotion = false;
-	CGameObject*					m_pModelRootObject = NULL;
+	float m_fTime = 0.0f;
 
-	CGameObject*					m_pRootMotionObject = NULL;
-	XMFLOAT3						m_xmf3FirstRootMotionPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	int m_nAnimationTracks = 0;
+	CAnimationTrack* m_pAnimationTracks = NULL;
 
-	void SetRootMotion(bool bRootMotion) { m_bRootMotion = bRootMotion; }
+	CAnimationSets* m_pAnimationSets = NULL;
 
-	virtual void OnRootMotion(CGameObject* pRootGameObject) { }
-	virtual void OnAnimationIK(CGameObject* pRootGameObject) { }
+	int m_nSkinnedMeshes = 0;
+	CSkinnedMesh** m_ppSkinnedMeshes = NULL;
+	ID3D12Resource** m_ppd3dcbSkinningBoneTransforms = NULL;
+	XMFLOAT4X4** m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL;
+
+	CGameObject* m_pModelRootObject = NULL;
+
+	bool* m_pbUpperBodyMask = nullptr;
+	int m_nLowerBodyTrack = 0;
+	int m_nUpperBodyTrack = 1;
+
+	std::vector<SBoneBlendCache> m_vBlendCaches;
+	bool m_bIsBlending = false;
+	float m_fBlendTime = 0.0f;
+	float m_fBlendDuration = 0.2f;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
+
+struct ColResult;
+
 class CGameObject
 {
 private:
@@ -374,6 +373,7 @@ public:
 	CGameObject(int nMaterials);
     virtual ~CGameObject();
 	virtual void init();
+	virtual void initWithObj(CGameObject* child) {};
 
 public:
 	char							m_pstrFrameName[64];
@@ -391,7 +391,6 @@ public:
 	CGameObject 					*m_pParent = NULL;
 	CGameObject 					*m_pChild = NULL;
 	CGameObject 					*m_pSibling = NULL;
-
 
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
 
@@ -449,6 +448,8 @@ public:
 	void UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent=NULL);
 	CGameObject *FindFrame(const char *pstrFrameName);
 
+	void DebugPrintMixamoFrameNames(int nDepth = 0);
+
 	CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
 
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
@@ -456,7 +457,7 @@ public:
 	void SetOOBB(BoundingOrientedBox obb);
 	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
 	bool CheckOOBB() const { return HasOOBB; }
-	virtual void HandleCollision(XMFLOAT3 normal) {};
+	virtual void HandleCollision(const ColResult& normal) {};
 
 	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 
@@ -467,16 +468,17 @@ public:
 	void SetTrackAnimationSet(int nAnimationTrack, int nAnimationSet);
 	void SetTrackAnimationPosition(int nAnimationTrack, float fPosition);
 
-	void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
+	//void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
 
 	void LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, CGameObject *pParent, FILE *pInFile, CShader *pShader);
 
 	static void LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoadedModel);
 	static CGameObject *LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CGameObject *pParent, FILE *pInFile, CShader *pShader, int *pnSkinnedMeshes);
-
+	static CGameObject* LoadGeometryModelByName(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CGameObject* pParent, const char* name, CShader* pShader, int* pnSkinnedMeshes);
 	static CLoadedModelInfo *LoadGeometryAndAnimationFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, const char *pstrFileName, CShader *pShader);
 
 	static void PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent);
+
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -506,4 +508,33 @@ private:
 public:
 	virtual void Animate(float fTimeElapsed);
 	void setPlayer(CPlayer* p) { player = p; }
+};
+
+struct CheckBox {
+	float minX;
+	float minY;
+	float maxX;
+	float maxY;
+	bool Intersects(POINT p)
+	{
+		float ndcX = (2.0f * static_cast<float>(p.x)) / FRAME_BUFFER_WIDTH - 1.0f;
+		float ndcY = 1.0f - (2.0f * static_cast<float>(p.y)) / FRAME_BUFFER_HEIGHT; // DirectX 기준 Y축 상하 반전
+		if (ndcX < minX) return false;
+		if (ndcX > maxX) return false;
+		if (ndcY < minY) return false;
+		if (ndcY > maxY) return false;
+		return true;
+
+	}
+};
+
+class UIObject : public CGameObject {
+protected:
+	std::function<void()>	Task;
+	CheckBox				CollisionBox;
+public:
+	void HandleClick() { if (Task) Task(); }
+	void SetFunc(std::function<void()> func) { Task = func; }
+	void setAABB();
+	CheckBox GetBox() { return CollisionBox; }
 };

@@ -408,7 +408,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	InputManager::Instance().update();
+	
 	switch (nMessageID)
 	{
 	case WM_ACTIVATE:
@@ -498,7 +498,14 @@ void CGameFramework::BuildObjects()
 
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
-
+	if (m_pScene && m_pPlayer)
+	{
+		CGameObject* pWeapon = m_pScene->GetWeaponObject();
+		if (pWeapon)
+		{
+			m_pPlayer->EquipWeapon(pWeapon, "mixamorig:RightHand");
+		}
+	}
 	m_pCamera = m_pPlayer->GetCamera();
 
 	if (m_pScene) m_pScene->SetCamera(m_pCamera);
@@ -578,12 +585,13 @@ void CGameFramework::ProcessInput()
 			}
 		}
 	}
-	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 }
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
 	if (m_pScene) m_pScene->AnimateObjects(fTimeElapsed);
+	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
+	m_pPlayer->UpdateTransform(NULL);
 }
 
 void CGameFramework::WaitForGpuComplete()
@@ -631,11 +639,12 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
+	InputManager::Instance().update();
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-	if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
-
+	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
+	
 	ProcessInput();
 
 	AnimateObjects(fTimeElapsed);

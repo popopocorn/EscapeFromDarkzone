@@ -244,3 +244,17 @@ public:
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 };
 
+
+class UIObjectShader : public CShader {
+private:
+	std::vector<std::unique_ptr<UIObject>>		m_ppObjects;
+public:
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+	void addObjects(std::unique_ptr<UIObject> obj) { m_ppObjects.push_back(std::move(obj)); }
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
+	void ProcessClick(POINT mousePos);
+
+};

@@ -46,17 +46,8 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 
     float3 normalW;
     float4 cColor = cAlbedoColor + cSpecularColor + cMetallicColor + cEmissionColor;
-    if (gnTexturesMask & MATERIAL_NORMAL_MAP)
-    {
-        float3x3 TBN = float3x3(normalize(input.tangentW), normalize(input.bitangentW), normalize(input.normalW));
-        float3 vNormal = normalize(cNormalColor.rgb * 2.0f - 1.0f);
-        normalW = normalize(mul(vNormal, TBN));
-    }
-    else
-    {
-        normalW = normalize(input.normalW);
-    }
-
+    
+    normalW = normalize(input.normalW);
     // ºä °ø°£ ±íÀÌ °è»ê (Cascade ¼±ÅÃ¿ë)
     float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
     float viewDepth = posView.z;
@@ -118,33 +109,28 @@ float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
     return float4(1, 1, 0, 0.3);
 }
 
-
-
-
-
-
-
-VS_TERRAIN_OUTPUT VSTerrain(VS_TERRAIN_INPUT input)
+VS_STANDARD_OUTPUT VSUI(VS_STANDARD_INPUT input)
 {
-	VS_TERRAIN_OUTPUT output;
-
-	output.position = mul(mul(mul(float4(input.position, 1.0f), gmtxGameObject), gmtxView), gmtxProjection);
-	output.color = input.color;
-	output.uv0 = input.uv0;
-	output.uv1 = input.uv1;
-
-	return(output);
+    VS_STANDARD_OUTPUT output;
+    output.position = mul(float4(input.position, 1.0f), gmtxGameObject);
+    output.uv = input.uv;
+    
+    return output;
 }
 
-float4 PSTerrain(VS_TERRAIN_OUTPUT input) : SV_TARGET
+float4 PSUI(VS_STANDARD_OUTPUT input) : SV_Target
 {
-	float4 cBaseTexColor = gtxtTerrainBaseTexture.Sample(gssWrap, input.uv0);
-	float4 cDetailTexColor = gtxtTerrainDetailTexture.Sample(gssWrap, input.uv1);
-//	float4 cColor = saturate((cBaseTexColor * 0.5f) + (cDetailTexColor * 0.5f));
-	float4 cColor = input.color * saturate((cBaseTexColor * 0.5f) + (cDetailTexColor * 0.5f));
-
-	return(cColor);
+    float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
+        cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
+    
+    return cAlbedoColor;
 }
+
+
+
+
+
 
 
 VS_SKYBOX_CUBEMAP_OUTPUT VSSkyBox(VS_SKYBOX_CUBEMAP_INPUT input)

@@ -9,12 +9,23 @@ void InputManager::init(HWND hwnd)
 void InputManager::update()
 {
 
-	BYTE asciiKeys[256] = {};
-	if (::GetKeyboardState(asciiKeys) == false)
+	if (::GetFocus() != m_hwnd)
+	{
+		for (UINT32 key = 0; key < 256; key++)
+		{
+			if (key_states[key] == KEY_STATE::DOWN || key_states[key] == KEY_STATE::HOLD)
+				key_states[key] = KEY_STATE::UP;
+			else
+				key_states[key] = KEY_STATE::NONE;
+		}
 		return;
+	}
+
+	
 	for (UINT32 key = 0; key < 256; key++)
 	{
-		if (asciiKeys[key] & 0x80)
+	
+		if (::GetAsyncKeyState(key) & 0x8000)
 		{
 			KEY_STATE& state = key_states[key];
 
@@ -38,7 +49,8 @@ void InputManager::update()
 			OutputDebugStringW(buffer);
 		}//*/
 	}
-	
+
+
 	::GetCursorPos(&cur_pos);
 	::ScreenToClient(m_hwnd, &cur_pos);
 }

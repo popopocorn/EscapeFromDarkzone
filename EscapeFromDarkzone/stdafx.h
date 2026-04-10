@@ -26,6 +26,8 @@
 #include<array>
 #include<queue>
 
+
+
 using namespace std;
 
 #include <d3d12.h>
@@ -37,7 +39,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-#define _DEBUG
+//#define _DEBUG
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -84,7 +86,8 @@ extern BYTE ReadStringFromFile(FILE *pInFile, char *pstrToken);
 extern int ReadIntegerFromFile(FILE *pInFile);
 extern float ReadFloatFromFile(FILE *pInFile);
 
-extern XMFLOAT3 GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b);
+
+//extern ColResult GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b);
 
 #define RANDOM_COLOR			XMFLOAT4(rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX))
 
@@ -425,3 +428,4 @@ enum RENDERINGPASS : int {
 	SHADOW = 1,
 	THROUGH =2,
 };
+

@@ -2,10 +2,9 @@
 #pragma once
 #include "stdafx.h"
 #include "Object.h"
+#include "State.h"
 
 class CPlayer;
-class CHeightMapTerrain;
-class EnemyState;
 
 enum ENEMY_ANIM {
 	ENEMY_ANIM_IDLE = 0,
@@ -23,18 +22,17 @@ public:
 	virtual void HandleCollision(XMFLOAT3 normal);
 
 	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
-	void SetTerrain(CHeightMapTerrain* pTerrain) { m_pTerrain = pTerrain; }
+	
 
-	void ChangeState(std::unique_ptr<EnemyState> pNewState);
+	void ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState);
 
 	void SetMoveDir(const XMFLOAT3& dir) { m_xmf3MoveDir = dir; }
 	XMFLOAT3 GetMoveDir() const { return m_xmf3MoveDir; }
 	void HandleHP(float value);
 
-	std::unique_ptr<EnemyState> m_pState;
+	std::unique_ptr<State<CEnemyObject>> m_pState;
 
 	CGameObject*				m_pPlayer = nullptr;
-	CHeightMapTerrain*			m_pTerrain = nullptr;
 	float						hp = 100;
 	
 
@@ -48,16 +46,8 @@ public:
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 };
 
-class EnemyState
-{
-public:
-	virtual ~EnemyState() {}
-	virtual bool Enter(CEnemyObject* pEnemy) = 0;
-	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed) = 0;
-	virtual void Exit(CEnemyObject* pEnemy) = 0;
-};
 
-class EnemyIdle : public EnemyState
+class EnemyIdle : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
@@ -65,7 +55,7 @@ public:
 	virtual void Exit(CEnemyObject* pEnemy);
 };
 
-class EnemyRun : public EnemyState
+class EnemyRun : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
@@ -73,10 +63,13 @@ public:
 	virtual void Exit(CEnemyObject* pEnemy);
 };
 
-class EnemyDie : public EnemyState
+class EnemyDie : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
 	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
 	virtual void Exit(CEnemyObject* pEnemy);
 };
+
+
+
