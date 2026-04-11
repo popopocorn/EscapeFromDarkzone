@@ -5,25 +5,23 @@
 
 CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
-	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
+	CLoadedModelInfo* pEnemyModel
+		= CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
 
 	if (!pEnemyModel->m_pAnimationSets) pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
 
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pEnemyModel);
+	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 1, pEnemyModel);
 
+	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
 	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, ENEMY_ANIM_RUN);
-	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	if (pEnemyModel) delete pEnemyModel;
-
-	
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
@@ -134,9 +132,12 @@ bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
+	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
+	pController->SetTrackWeight(0, 1.0f);
 	pController->SetTrackEnable(0, true);
 	pController->SetTrackPosition(0, 0.0f);
-	pController->SetTrackEnable(1, false);
+
 	return true;
 }
 
@@ -165,9 +166,12 @@ bool EnemyRun::Enter(CEnemyObject* pEnemy)
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
-	pController->SetTrackEnable(0, false);
-	pController->SetTrackEnable(1, true);
-	pController->SetTrackPosition(1, 0.0f);
+	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_RUN);
+	pController->SetTrackWeight(0, 1.0f);
+	pController->SetTrackEnable(0, true);
+	pController->SetTrackPosition(0, 0.0f);
+
 	return true;
 }
 
@@ -211,10 +215,12 @@ bool EnemyDie::Enter(CEnemyObject* pEnemy)
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
-	pController->SetTrackEnable(0, false);
-	pController->SetTrackEnable(1, true);
-	pController->SetTrackAnimationSetIfChanged(1, 0);
-	pController->SetTrackPosition(1, 0.0f);
+	pController->SetTrackType(0, ANIMATION_TYPE_ONCE);
+	pController->SetTrackAnimationSetIfChanged(0, 0);
+	pController->SetTrackWeight(0, 1.0f);
+	pController->SetTrackEnable(0, true);
+	pController->SetTrackPosition(0, 0.0f);
+
 	return true;
 }
 
