@@ -8,10 +8,12 @@
 #include "Scene.h"
 #include "ShadowMap.h"
 
+/*
 #include "Network.h"	// 03.27 추가
 
 #include "OtherPlayer.h"	// 03.30 추가
 #include <unordered_map>	// 03.30 추가
+*/
 
 class CGameFramework
 {
@@ -48,7 +50,9 @@ public:
 	void OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
+	/*
 	void ProcessNetworkPackets();	// 03.27 추가
+	*/
 
 private:
 	HINSTANCE					m_hInstance;
@@ -101,8 +105,10 @@ private:
 
 	_TCHAR						m_pszFrameRate[70];
 
+	/*
 	// 03.30 추가: 내 ID 저장용 (OtherPlayer와 구분 용도)
 	short m_myId = -1;
 	std::unordered_map<short, OtherPlayer*> m_otherPlayers;
+	*/
 };
 

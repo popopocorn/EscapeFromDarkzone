@@ -1,4 +1,4 @@
-//-----------------------------------------------------------------------------
+ï»¿//-----------------------------------------------------------------------------
 // File: CGameFramework.cpp
 //-----------------------------------------------------------------------------
 
@@ -71,11 +71,13 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 
+	/*
 	// 03.27 ì¶”ê°€: ë„¤íŠ¸ì›Œí¬ ì´ˆê¸°í™” ë° ì—°ê²°
 	if (!NetworkManager::Instance().Init("Player"))
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
+	*/
 
 	return(true);
 }
@@ -157,7 +159,7 @@ void CGameFramework::CreateDirect3DDevice()
 	ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
-		// Auto-Breadcrumbs¿Í Page Fault ÃßÀû °­Á¦ È°¼ºÈ­
+		// Auto-Breadcrumbsï¿½ï¿½ Page Fault ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ È°ï¿½ï¿½È­
 		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 	}
@@ -448,7 +450,9 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
+	/*
 	NetworkManager::Instance().Shutdown();
+	*/
 
 	WaitForGpuComplete();
 	ReleaseObjects();
@@ -660,11 +664,13 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
+	/*
 	// 03.27 ì¶”ê°€, 03.30 ìœ„ì¹˜ ë³€ê²½
 	if (NetworkManager::Instance().IsConnected())
 	{
 		ProcessNetworkPackets();
 	}
+	*/
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
@@ -761,24 +767,24 @@ void CGameFramework::FrameAdvance()
 #ifdef _DEBUG
 	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
 	{
-		// 1. µğ¹ÙÀÌ½º°¡ Á¦°ÅµÈ ÁøÂ¥ ÀÌÀ¯ È®ÀÎ
+		// 1. ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Åµï¿½ ï¿½ï¿½Â¥ ï¿½ï¿½ï¿½ï¿½ È®ï¿½ï¿½
 		HRESULT removedReason = m_pd3dDevice->GetDeviceRemovedReason();
-		OutputDebugStringA("GPU Å©·¡½Ã(Device Removed) ¹ß»ı!\n");
+		OutputDebugStringA("GPU Å©ï¿½ï¿½ï¿½ï¿½(Device Removed) ï¿½ß»ï¿½!\n");
 
-		// 2. DRED µ¥ÀÌÅÍ ÃßÃâ
+		// 2. DRED ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 		ComPtr<ID3D12DeviceRemovedExtendedData1> pDred;
-		if (SUCCEEDED(m_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pDred)))) // µğ¹ÙÀÌ½º¿¡¼­ DRED ÀÎÅÍÆäÀÌ½º °¡Á®¿À±â
+		if (SUCCEEDED(m_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pDred)))) // ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ï¿½ï¿½ï¿½ï¿½ DRED ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		{
 			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 DredAutoBreadcrumbsOutput;
 			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
 
-			// ¸í·É¾î ½ÇÇà ±â·Ï(Breadcrumbs) ¹× ÆäÀÌÁö ÆúÆ® µ¥ÀÌÅÍ °¡Á®¿À±â
+			// ï¿½ï¿½É¾ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½(Breadcrumbs) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 			pDred->GetAutoBreadcrumbsOutput1(&DredAutoBreadcrumbsOutput);
 			pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput);
 
-			// 3. µğ¹ö°Å¸¦ °­Á¦·Î ¸ØÃß°Ô ÇÔ
-			// ¿©±â¼­ Áß´ÜÁ¡(Breakpoint)ÀÌ °É¸®¸é, Visual StudioÀÇ 'Á¶»ç½Ä(Watch)' Ã¢¿¡¼­
-			// DredAutoBreadcrumbsOutput º¯¼ö¸¦ ¿­¾î ¾î¶² ³ëµå(¸í·É¾î)±îÁö ½ÇÇàµÇ´Ù Á×¾ú´ÂÁö È®ÀÎÇÕ´Ï´Ù.
+			// 3. ï¿½ï¿½ï¿½ï¿½Å¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ß°ï¿½ ï¿½ï¿½
+			// ï¿½ï¿½ï¿½â¼­ ï¿½ß´ï¿½ï¿½ï¿½(Breakpoint)ï¿½ï¿½ ï¿½É¸ï¿½ï¿½ï¿½, Visual Studioï¿½ï¿½ 'ï¿½ï¿½ï¿½ï¿½ï¿½(Watch)' Ã¢ï¿½ï¿½ï¿½ï¿½
+			// DredAutoBreadcrumbsOutput ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½î¶² ï¿½ï¿½ï¿½(ï¿½ï¿½É¾ï¿½)ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ç´ï¿½ ï¿½×¾ï¿½ï¿½ï¿½ï¿½ï¿½ È®ï¿½ï¿½ï¿½Õ´Ï´ï¿½.
 			__debugbreak();
 		}
 	}
@@ -808,6 +814,7 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
+/*
 // 03.27 ì¶”ê°€
 void CGameFramework::ProcessNetworkPackets()
 {
@@ -899,3 +906,4 @@ void CGameFramework::ProcessNetworkPackets()
 		}
 	}
 }
+*/
