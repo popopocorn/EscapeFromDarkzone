@@ -11,7 +11,6 @@
 #include "stdafx.h"
 #include "Object.h"
 #include "Camera.h"
-#include "Network.h"
 #include "State.h"
 
 enum class EventType {
@@ -72,14 +71,7 @@ protected:
 	// 충돌 노멀
 	std::vector<XMFLOAT3>		CollVector;
 
-	// 네트워크 테스트
-	WSADATA WSAData;
-	SOCKET c_socket;
-	SOCKADDR_IN addr;
-
-	char send_buf[BUF_SIZE];
-
-	// 애니메이션 관련 무기
+	//애니메이션 관련 무기
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 
@@ -119,6 +111,9 @@ protected:
 
 	void ApplyRunWeaponPose();
 	void ApplyGrenadeWeaponPose();
+
+	// 04.10 추가: 서버 위치 보간
+	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
 public:
 	CPlayer();
@@ -214,6 +209,8 @@ public:
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
 
+	// 04.10 추가: 서버 위치 보간
+	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };
 
 class CPlayerAnimationController : public CAnimationController

@@ -7,6 +7,8 @@
 #include "InputManager.h"
 #include "Collision.h"
 
+#include "Network.h"	// 03.27 추가
+
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
 	XMVECTOR lenSq = XMVector3LengthSq(v);
@@ -44,16 +46,6 @@ CPlayer::CPlayer()
 	m_pPlayerUpdatedContext = NULL;
 	m_pCameraUpdatedContext = NULL;
 	state = std::make_unique<PlayerIdle>();
-
-	// 네트워크 테스트
-	WSAStartup(MAKEWORD(2, 2), &WSAData);
-	c_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
-
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(SERVER_PORT);
-	inet_pton(AF_INET, SERVER_ADDR, &addr.sin_addr);
-	WSAConnect(c_socket, reinterpret_cast<sockaddr*>(&addr),
-		sizeof(SOCKADDR_IN), NULL, NULL, NULL, NULL);
 }
 
 CPlayer::~CPlayer()
@@ -188,6 +180,14 @@ void CPlayer::Update(float fTimeElapsed)
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
 
+	// 04.10 추가: 서버 위치 보간
+	if (NetworkManager::Instance().IsConnected())
+	{
+		float alpha = 5.0f * fTimeElapsed;		// 추후 보간 속도 조정 (5.0f)
+		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * alpha;
+		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
+	}
+
 	UpdateTransform(NULL);
 
 	UpdateWeaponPose(fTimeElapsed);
@@ -212,6 +212,26 @@ void CPlayer::Update(float fTimeElapsed)
 		{
 			m_xmf3Velocity.x = 0.0f;
 			m_xmf3Velocity.z = 0.0f;
+		}
+	}
+
+	// 03.27 추가: 플레이어가 움직이는 경우 서버에 이동 패킷 전송
+	if (NetworkManager::Instance().IsConnected() && (state && typeid(*state) == typeid(PlayerRun)))
+	{
+		char inputs = 0;
+		auto& input = InputManager::Instance();
+		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) inputs |= MOVE_W;
+		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) inputs |= MOVE_S;
+		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) inputs |= MOVE_A;
+		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) inputs |= MOVE_D;
+
+		if (inputs != 0)
+		{
+			NetworkManager::Instance().SendMove(
+				inputs,
+				m_fYaw,
+				static_cast<unsigned int>(GetTickCount())
+			);
 		}
 	}
 }
@@ -870,6 +890,7 @@ void CTerrainPlayer::Move(DWORD dwDirection, float fDistance, bool bUpdateVeloci
 void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	size_t buf_len = 0;
+
 
 	while (!event_queue.empty())
 	{
