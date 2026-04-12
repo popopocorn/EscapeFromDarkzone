@@ -957,26 +957,8 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			break;
 		}
 
-		memcpy(send_buf + buf_len, &ev, sizeof(GameEvent));
-		buf_len += sizeof(GameEvent);
-
+	
 		event_queue.pop();
-	}
-
-	if (buf_len != 0)
-	{
-		WSABUF wsabuf[1];
-		wsabuf[0].buf = send_buf;
-		wsabuf[0].len = static_cast<ULONG>(buf_len);
-
-		WSAOVERLAPPED send_over;
-		ZeroMemory(&send_over, sizeof(send_over));
-
-		int ret = WSASend(c_socket, wsabuf, 1, NULL, 0, &send_over, NULL);
-		if (SOCKET_ERROR == ret)
-		{
-			auto err_no = WSAGetLastError();
-		}
 	}
 
 	state.get()->Update(this, fTimeElapsed);
