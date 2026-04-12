@@ -718,7 +718,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		m_bLaserActive = true;
 		m_fSparkSpawnTimer = 0.0f;
 
-		if (!m_pWeaponMuzzle && m_pPlayer && m_pPlayer->GetWeapon())
+		if (not inventory->isOpen &&!m_pWeaponMuzzle && m_pPlayer && m_pPlayer->GetWeapon())
 		{
 			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
 		}
