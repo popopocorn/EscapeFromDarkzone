@@ -12,6 +12,7 @@
 #include "EffectShader.h"
 #include"Collision.h"
 #include "UI.h"
+#include"Item.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -66,20 +67,25 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
-	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);
+	/*XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
+	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);*/
 
 	UIShader = make_unique<UIObjectShader>();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	
-	UIObject* UItemp = new UIObject();
+
+	//UI
+
+	/*UIObject* UItemp = new UIObject();
 	UItemp->SetChild(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", UIShader.get(), 0));
 	UItemp->SetPosition(0.5, 0, 0.5);
 	UItemp->SetScale(0.5, 0.5, 1);
 
 	UItemp->setAABB();
 	UItemp->SetFunc(tempfunc);
-	//UIShader->addObjects(std::unique_ptr<UIObject>(UItemp));
+	UIShader->addObjects(UItemp);*/
+
+	inventory = new Inventory(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
 
 
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
@@ -659,7 +665,8 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	//handlehp, handlecollision 함수 통일해야함
 	if (nMessageID == WM_LBUTTONDOWN)
 	{
-		if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
+		//if (UIShader) UIShader->ProcessClick(InputManager::Instance().GetMousePos());
+		if (inventory && inventory->isOpen)inventory->ProcessClick(InputManager::Instance().GetMousePos());
 		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
 		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
@@ -699,6 +706,16 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	switch (nMessageID)
 	{
 	case WM_KEYDOWN:
+		switch (wParam) 
+		{
+		case 'I':
+			if (inventory)
+			{
+				inventory->isOpen = not inventory->isOpen;
+			}
+		}
+	
+
 	case WM_KEYUP:
 	{
 		INPUT_KEY key;
@@ -718,7 +735,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		case 'E': key = INPUT_KEY::E; break;
 		case 'G': key = INPUT_KEY::G; break;
-		case 'I': key = INPUT_KEY::I; break;
+		//case 'I': key = INPUT_KEY::I; break;
 
 		case '1': key = INPUT_KEY::KEY_1; break;
 		case '2': key = INPUT_KEY::KEY_2; break;
@@ -832,6 +849,9 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	}
 	ShadowCameraManager.Update();
 
+
+	if (inventory)inventory->SubmitToShader(UIShader.get());
+	//if (inventory->isOpen)OutputDebugString(L"dfsa\n");
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
 

@@ -1017,6 +1017,10 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 {
 	OnPrepareRender(pd3dCommandList, nPipelineState);
 
+	/*wchar_t buf[256];
+	swprintf_s(buf, L"UI 렌더 큐 사이즈: %d\n", m_ppObjects.size());
+	OutputDebugString(buf);*/
+
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
@@ -1026,16 +1030,6 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}
+	m_ppObjects.clear();
 }
 
-void UIObjectShader::ProcessClick(POINT mousePos)
-{
-	for (int i = 0; i < m_ppObjects.size(); ++i)
-	{
-		if (m_ppObjects[i]->GetBox().Intersects(mousePos))
-		{
-			m_ppObjects[i]->HandleClick();
-		}
-	}
-
-}

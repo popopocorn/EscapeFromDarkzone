@@ -53,6 +53,7 @@ enum SHADERIDX : size_t{
 
 struct ColResult;
 class CollisionManager;
+class Inventory;
 
 class CScene
 {
@@ -152,11 +153,10 @@ public:
 private:
 	CGameObject* m_pLaserObject = NULL;
 	std::unique_ptr<CollisionManager> colManager;
+	Inventory* inventory;
+	
 
 public:
-	//bool DoCollision(CGameObject* object, int shaderidx);
-	//bool CheckCollision(CGameObject* object1, CGameObject* object2);
-	//void ResolveCollision(CGameObject* object);
 
 	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
 

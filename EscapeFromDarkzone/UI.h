@@ -23,7 +23,7 @@ struct CheckBox {
 
 class UIObject : public CGameObject {
 protected:
-	std::function<void()>	Task;
+	std::function<void()>	Task = nullptr;
 	CheckBox				CollisionBox;
 public:
 	void HandleClick() { if (Task) Task(); }
