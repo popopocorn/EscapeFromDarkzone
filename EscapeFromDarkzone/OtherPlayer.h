@@ -25,6 +25,13 @@ public:
 
 	//네트워크 관련 함수 추가
 	//캐릭터 위치변경은 SetPosition으로, 상태 변경은 ChangeState로
+
+	static OtherPlayer* Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, 
+		float x, float y, float z);
+
+	void UpdatePosition(float x, float y, float z);
+
+	void Kill() { Alive = false; }
 };
 
 

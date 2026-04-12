@@ -142,10 +142,22 @@ public:
 	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
 	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
 
+	//레이저 관련 멤버 변수
+	bool m_bLaserActive = false;
+	CGameObject* m_pLaserMuzzle = nullptr;
+	float m_fLaserLength = 15.0f;
+
 	CMaterial* m_pEffectMaterials[EFFECT_MAX];
 	CParticleMesh* m_pEffectMesh = NULL;
 
 	class CEffectShader* m_pEffectShader = NULL;
+
+	//스파크 효과 관련 멤버 변수
+	bool m_bSparkFireActive = false;
+	float m_fSparkSpawnTimer = 0.0f;
+	float m_fSparkSpawnInterval = 0.03f;
+
+	CGameObject* m_pWeaponMuzzle = nullptr;
 
 	CGameObject* m_pWeaponObject = nullptr;
 
@@ -158,7 +170,7 @@ private:
 
 public:
 
-	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos);
+	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);
 
 	void SetPlayer(CPlayer* p);
 

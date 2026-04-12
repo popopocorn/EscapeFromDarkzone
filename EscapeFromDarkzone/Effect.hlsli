@@ -1,4 +1,3 @@
-// Effect.hlsli
 #ifndef EFFECT_HLSLI
 #define EFFECT_HLSLI
 
@@ -13,6 +12,9 @@ struct VS_PARTICLE_INPUT
     // 인스턴스 데이터
     float3 instPosition : INST_POSITION;
     float instProgress : INST_PROGRESS;
+    float2 instSize : INST_SIZE;
+    float3 instRight : INST_RIGHT;
+    float3 instUp : INST_UP;
 };
 
 struct VS_PARTICLE_OUTPUT
@@ -30,16 +32,12 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     float3 centerW = input.instPosition;
     float progress = input.instProgress;
 
-    centerW.y -= 6.0f;
+    float3 vRight = normalize(input.instRight);
+    float3 vUp = normalize(input.instUp);
 
-    float3 vLook = gvCameraPosition - centerW;
-    vLook.y = 0.0f;
-    vLook = normalize(vLook);
-
-    float3 vUp = float3(0, 1, 0);
-    float3 vRight = normalize(cross(vUp, vLook));
-
-    float3 posW = centerW + (input.position.x * vRight) + (input.position.y * vUp);
+    float3 posW = centerW
+                + (input.position.x * input.instSize.x * vRight)
+                + (input.position.y * input.instSize.y * vUp);
 
     output.position = mul(mul(float4(posW, 1), gmtxView), gmtxProjection);
 

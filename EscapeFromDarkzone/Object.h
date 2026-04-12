@@ -356,13 +356,12 @@ class CGameObject
 {
 private:
 	int								m_nReferences = 0;
-	
+
 protected:
 	BoundingOrientedBox				OOBBModel;
 	BoundingOrientedBox				OOBBWorld;
 
 	bool							Alive = true;
-	bool							HasOOBB = false;
 	std::vector<BoundingOrientedBox*> OOBBs;
 public:
 	void AddRef();
@@ -376,6 +375,8 @@ public:
 	virtual void initWithObj(CGameObject* child) {};
 
 public:
+	bool							HasOOBB = false;
+
 	char							m_pstrFrameName[64];
 
 	CMesh							*m_pMesh = NULL;

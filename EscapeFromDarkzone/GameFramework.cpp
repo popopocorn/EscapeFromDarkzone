@@ -70,6 +70,13 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	observer->GenerateProjectionMatrix(m_pPlayer->GetCamera()->GetProjectionMatrix());
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
+
+	// 03.27 추가: 네트워크 초기화 및 연결
+	if (!NetworkManager::Instance().Init("Player"))
+	{
+		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	}
+
 	return(true);
 }
 
@@ -356,13 +363,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
-		//case VK_RETURN:
-		//	break;
-		//case VK_F1:
-		//case VK_F2:
-		//case VK_F3:
-		//	m_pCamera = m_pPlayer->ChangeCamera((DWORD)(wParam - VK_F1 + 1), m_GameTimer.GetTimeElapsed());
-		//	break;
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
@@ -378,9 +378,9 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				::ClipCursor(&rect);
 
 				::GetCursorPos(&m_ptOldCursorPos);
-			}	
+			}
 			break;
-		case'O':
+		case 'O':
 			observing = !observing;
 			if (observing) {
 				m_pCamera = observer.get();
@@ -397,11 +397,14 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				XMFLOAT3 look = m_pPlayer->GetLookVector();
 
 				XMFLOAT3 bombPos = Vector3::Add(pos, Vector3::ScalarProduct(look, 3.0f, false));
-				bombPos.y += 5.0f;
+				//bombPos.y += 5.0f;
 
-				//m_pScene->PlayEffect(EFFECT_BOMB, bombPos);
+				XMFLOAT3 bombRight = m_pPlayer->GetRightVector();
+				XMFLOAT3 bombFlatLook = m_pPlayer->GetLookVector();
+				bombFlatLook.y = 0.0f;
+				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				m_pScene->PlayEffect(EFFECT_SPARK, bombPos); 
+				m_pScene->PlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
 			}
 			break;
 		}
@@ -413,7 +416,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		break;
 	}
 }
-
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	
@@ -446,6 +448,8 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
+	NetworkManager::Instance().Shutdown();
+
 	WaitForGpuComplete();
 	ReleaseObjects();
 
@@ -506,14 +510,7 @@ void CGameFramework::BuildObjects()
 
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
-	if (m_pScene && m_pPlayer)
-	{
-		CGameObject* pWeapon = m_pScene->GetWeaponObject();
-		if (pWeapon)
-		{
-			m_pPlayer->EquipWeapon(pWeapon, "mixamorig:RightHand");
-		}
-	}
+
 	m_pCamera = m_pPlayer->GetCamera();
 
 	if (m_pScene) m_pScene->SetCamera(m_pCamera);
@@ -663,6 +660,12 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
+	// 03.27 추가, 03.30 위치 변경
+	if (NetworkManager::Instance().IsConnected())
+	{
+		ProcessNetworkPackets();
+	}
+
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
 	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -803,4 +806,96 @@ void CGameFramework::FrameAdvance()
 	XMFLOAT3 xmf3Position = m_pPlayer->GetPosition();
 	_stprintf_s(m_pszFrameRate + nLength, 70 - nLength, _T("(%4f, %4f, %4f)"), xmf3Position.x, xmf3Position.y, xmf3Position.z);
 	::SetWindowText(m_hWnd, m_pszFrameRate);
+}
+
+// 03.27 추가
+void CGameFramework::ProcessNetworkPackets()
+{
+	if (!NetworkManager::Instance().IsConnected()) return;
+
+	NetworkManager::Instance().Recv();
+
+	while (true)
+	{
+		std::vector<char> packet = NetworkManager::Instance().PopPacket();
+		if (packet.empty()) break;
+
+		char type = packet[1]; // 패킷 타입 확인
+		switch (type)
+		{
+		case SC_LOGIN_INFO:
+		{
+			SC_LOGIN_INFO_PACKET* p = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(packet.data());
+			//wchar_t szLog[128];
+			//swprintf_s(szLog, L"[Network] SC_LOGIN_INFO - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
+			//OutputDebugString(szLog);
+			// 03.30 추가: 서버로부터 받아온 초기 위치로 이동
+			m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
+			m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z)); // 04.10 추가: 서버 위치 초기화
+			m_myId = p->id; // 03.30 추가: 내 ID 저장
+			break;
+		}
+		case SC_ADD_PLAYER:
+		{
+			SC_ADD_PLAYER_PACKET* p = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(packet.data());
+			//wchar_t szLog[128];
+			//swprintf_s(szLog, L"[Network] SC_ADD_PLAYER - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
+			//OutputDebugStringW(szLog);
+
+			// 03.30 추가: 잘못된 패킷 넘기기 (Broadcast 관련 오류?)
+			if (p->id == m_myId) {
+				break;
+			}
+
+			//03.30 추가: OtherPlayer 생성, 04.07 수정: 함수 래핑
+			if (m_otherPlayers.count(p->id)) break;		// 이미 있으면 넘기기 (오면 안되는 패킷)
+
+			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), 
+				p->x, p->y, p->z);
+
+			m_otherPlayers[p->id] = pOther;
+			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
+
+			break;
+		}
+		case SC_REMOVE_PLAYER:
+		{
+			SC_REMOVE_PLAYER_PACKET* p = reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(packet.data());
+			//wchar_t szLog[128];
+			//swprintf_s(szLog, L"[Network] SC_REMOVE_PLAYER - id: %d\n", p->id);
+			//OutputDebugStringW(szLog);
+
+			// 03.30 추가: OtherPlayer 제거
+			auto it = m_otherPlayers.find(p->id);
+			if (it != m_otherPlayers.end()) {
+				it->second->Kill();			// 임시 삭제, 추후 수정 필요
+				m_otherPlayers.erase(it);
+			}
+
+			break;
+		}
+		case SC_MOVE_PLAYER:
+		{
+			SC_MOVE_PLAYER_PACKET* p = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(packet.data());
+			//wchar_t szLog[128];
+			//swprintf_s(szLog, L"[Network] SC_MOVE_PLAYER - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
+			//OutputDebugStringW(szLog);
+
+			// 03.30 추가: OtherPlayer 위치 업데이트 (플레이어 위치 보정 미구현)
+			if (p->id == m_myId) {
+				m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));	// 04.10 추가: 보간용 서버 위치
+				break;
+			}
+
+			auto it = m_otherPlayers.find(p->id);
+			if (it != m_otherPlayers.end()) {
+				it->second->UpdatePosition(p->x, p->y, p->z);
+			}
+
+			break;
+		}
+		default:
+			break;
+		}
+	}
 }
