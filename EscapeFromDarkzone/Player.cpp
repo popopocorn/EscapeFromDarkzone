@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "InputManager.h"
 #include "Collision.h"
+#include "Item.h"
 
 /*
 #include "Network.h"	// 03.27 추가
@@ -433,6 +434,18 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	OutputDebugString(L"성공: 무기가 플레이어 오른손 소켓에 장착되었습니다.\n");
 }
 
+bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
+{
+	if (!pItem) return false;
+
+	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
+	if (!pWeaponInstance) return false;
+
+	m_pEquippedWeaponItem = pItem;
+	EquipWeapon(pWeaponInstance, pstrSocketName);
+	return true;
+}
+
 void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 {
 	if (!m_pWeapon) return;
@@ -780,24 +793,32 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	SetOOBB(NULL);
 
-	CGameObject* pLoadedWeapon = CGameObject::LoadGeometryModelByName(
+	auto pDefaultWeaponItem = WeaponItem::CreateDefaultPlayerRifle(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		NULL,
-		"Model/Classic_M4_1.bin",
-		shader,
-		NULL
+		shader
 	);
-
-	if (pLoadedWeapon)
+	//디버깅용
+	/*if (pDefaultWeaponItem)
 	{
-		EquipWeapon(pLoadedWeapon, "mixamorig:RightHand");
+		OutputDebugString(L"[Item] Default weapon item created\n");
 	}
 	else
 	{
-		OutputDebugString(L"Error: Weapon file not found.\n");
+		OutputDebugString(L"[Item] Default weapon item creation failed\n");
 	}
+	if (pDefaultWeaponItem)
+	{
+		if (!EquipWeaponItem(pDefaultWeaponItem, "mixamorig:RightHand"))
+		{
+			OutputDebugString(L"Error: Default weapon equip failed.\n");
+		}
+	}
+	else
+	{
+		OutputDebugString(L"Error: Default weapon item creation failed.\n");
+	}*/
 
 	InitializeLeftHandIK();
 
@@ -819,7 +840,6 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	if (pPlayerModel) delete pPlayerModel;
 }
-
 CTerrainPlayer::~CTerrainPlayer()
 {
 }
@@ -963,9 +983,10 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			break;
 		}
 
-	
+
 		event_queue.pop();
 	}
+
 
 	state.get()->Update(this, fTimeElapsed);
 

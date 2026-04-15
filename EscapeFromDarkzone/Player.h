@@ -37,6 +37,7 @@ enum class WEAPON_POSE
 
 class PlayerState;
 class CPlayerAnimationController;
+class WeaponItem;
 
 class CPlayer : public CGameObject
 {
@@ -114,7 +115,9 @@ protected:
 
 	// 04.10 추가: 서버 위치 보간
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
-
+	
+	//무기 선택
+	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -209,6 +212,9 @@ public:
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
 
+	//무기 선택
+	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
+	
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };

@@ -1583,6 +1583,99 @@ CLoadedModelInfo *CGameObject::LoadGeometryAndAnimationFromFile(ID3D12Device *pd
 	return(pLoadedModel);
 }
 
+//모델 리소스 관리 함수
+static CGameObject* CloneModelHierarchyShared(CGameObject* pSrc)
+{
+	if (!pSrc) return nullptr;
+
+	CGameObject* pDst = new CGameObject();
+	pDst->SetModel(pSrc);
+
+	for (CGameObject* pChildSrc = pSrc->m_pChild; pChildSrc; pChildSrc = pChildSrc->m_pSibling)
+	{
+		CGameObject* pChildDst = CloneModelHierarchyShared(pChildSrc);
+		if (pChildDst)
+		{
+			pDst->SetChild(pChildDst, true);
+		}
+	}
+
+	return pDst;
+}
+
+void CGameObject::ClearModelResources()
+{
+	if (m_pMesh)
+	{
+		m_pMesh->Release();
+		m_pMesh = nullptr;
+	}
+
+	if (m_ppMaterials)
+	{
+		for (int i = 0; i < m_nMaterials; ++i)
+		{
+			if (m_ppMaterials[i])
+			{
+				m_ppMaterials[i]->Release();
+				m_ppMaterials[i] = nullptr;
+			}
+		}
+		delete[] m_ppMaterials;
+		m_ppMaterials = nullptr;
+	}
+
+	m_nMaterials = 0;
+	HasOOBB = false;
+	OOBBs.clear();
+}
+
+void CGameObject::SetModel(CGameObject* pModelPrototype)
+{
+	if (!pModelPrototype) return;
+
+	ClearModelResources();
+
+	m_xmf4x4ToParent = pModelPrototype->m_xmf4x4ToParent;
+	m_xmf4x4World = pModelPrototype->m_xmf4x4World;
+
+	strcpy_s(m_pstrFrameName, 64, pModelPrototype->m_pstrFrameName);
+
+	if (pModelPrototype->m_pMesh)
+	{
+		SetMesh(pModelPrototype->m_pMesh);
+	}
+
+	if (pModelPrototype->m_nMaterials > 0)
+	{
+		m_nMaterials = pModelPrototype->m_nMaterials;
+		m_ppMaterials = new CMaterial * [m_nMaterials];
+
+		for (int i = 0; i < m_nMaterials; ++i)
+		{
+			m_ppMaterials[i] = nullptr;
+			if (pModelPrototype->m_ppMaterials[i])
+			{
+				SetMaterial(i, pModelPrototype->m_ppMaterials[i]);
+			}
+		}
+	}
+
+	HasOOBB = pModelPrototype->HasOOBB;
+	OOBBModel = pModelPrototype->OOBBModel;
+	OOBBWorld = pModelPrototype->OOBBWorld;
+
+	OOBBs.clear();
+	if (HasOOBB)
+	{
+		OOBBs.push_back(&OOBBWorld);
+	}
+}
+
+CGameObject* CGameObject::CreateModelInstance(CGameObject* pModelPrototype)
+{
+	return CloneModelHierarchyShared(pModelPrototype);
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 CSkyBox::CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature) : CGameObject(1)

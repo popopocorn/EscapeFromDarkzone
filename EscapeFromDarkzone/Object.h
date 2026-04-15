@@ -480,6 +480,11 @@ public:
 
 	static void PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent);
 
+public:
+	//모델 리소스 관리 함수
+	void ClearModelResources();
+	void SetModel(CGameObject* pModelPrototype);
+	static CGameObject* CreateModelInstance(CGameObject* pModelPrototype);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
