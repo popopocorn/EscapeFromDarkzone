@@ -75,7 +75,7 @@ public:
 
 protected:
 	ItemType type = ItemType::MATERIAL;
-	CGameObject* model = nullptr;					//모델 참조
+	CGameObject* model = nullptr;					//모델 참조 포인터
 	bool CanMake = false;
 	// 제작방법
 };

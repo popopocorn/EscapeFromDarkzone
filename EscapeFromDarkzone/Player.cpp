@@ -437,13 +437,15 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
 {
 	if (!pItem) return false;
+	if (!pstrSocketName) return false;
 
 	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
 	if (!pWeaponInstance) return false;
 
 	m_pEquippedWeaponItem = pItem;
 	EquipWeapon(pWeaponInstance, pstrSocketName);
-	return true;
+
+	return (m_pWeapon != nullptr);
 }
 
 void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
@@ -799,15 +801,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 		pd3dGraphicsRootSignature,
 		shader
 	);
-	//디버깅용
-	/*if (pDefaultWeaponItem)
-	{
-		OutputDebugString(L"[Item] Default weapon item created\n");
-	}
-	else
-	{
-		OutputDebugString(L"[Item] Default weapon item creation failed\n");
-	}
+
 	if (pDefaultWeaponItem)
 	{
 		if (!EquipWeaponItem(pDefaultWeaponItem, "mixamorig:RightHand"))
@@ -818,7 +812,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	else
 	{
 		OutputDebugString(L"Error: Default weapon item creation failed.\n");
-	}*/
+	}
 
 	InitializeLeftHandIK();
 
@@ -840,6 +834,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	if (pPlayerModel) delete pPlayerModel;
 }
+
 CTerrainPlayer::~CTerrainPlayer()
 {
 }
