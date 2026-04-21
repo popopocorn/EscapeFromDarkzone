@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "InputManager.h"
 #include "Collision.h"
+#include "Item.h"
 
 /*
 #include "Network.h"	// 03.27 추가
@@ -177,7 +178,8 @@ void CPlayer::Update(float fTimeElapsed)
 
 	float fMaxVelocityY = m_fMaxVelocityY;
 	fLength = sqrtf(m_xmf3Velocity.y * m_xmf3Velocity.y);
-	if (fLength > m_fMaxVelocityY) m_xmf3Velocity.y *= (fMaxVelocityY / fLength);
+	if (fLength > m_fMaxVelocityY)
+		m_xmf3Velocity.y *= (fMaxVelocityY / fLength);
 
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
@@ -192,9 +194,10 @@ void CPlayer::Update(float fTimeElapsed)
 	}
 	*/
 
-	UpdateTransform(NULL);
-
+	UpdateWeaponCombat(fTimeElapsed);
 	UpdateWeaponPose(fTimeElapsed);
+
+	UpdateTransform(NULL);
 
 	if (m_pPlayerUpdatedContext) OnPlayerUpdateCallback(fTimeElapsed);
 
@@ -207,7 +210,11 @@ void CPlayer::Update(float fTimeElapsed)
 	fLength = Vector3::Length(m_xmf3Velocity);
 	float fDeceleration = (m_fFriction * fTimeElapsed);
 	if (fDeceleration > fLength) fDeceleration = fLength;
-	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true));
+
+	m_xmf3Velocity = Vector3::Add(
+		m_xmf3Velocity,
+		Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true)
+	);
 
 	if (m_xmf3Velocity.x != 0.0f || m_xmf3Velocity.z != 0.0f)
 	{
@@ -688,6 +695,146 @@ bool CPlayer::InitializeLeftHandIK()
 	return true;
 }
 
+bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
+{
+	if (!pItem) return false;
+
+	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
+	if (!pWeaponInstance) return false;
+
+	m_pEquippedWeaponItem = pItem;
+
+	EquipWeapon(pWeaponInstance, pstrSocketName);
+
+	if (m_pWeapon != pWeaponInstance)
+		return false;
+
+	InitializeWeaponAmmo();
+	return true;
+}
+
+float CPlayer::GetWeaponShotInterval() const
+{
+	if (!m_pEquippedWeaponItem)
+		return 0.1f;
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	if (spec.rpm <= 0.0f)
+		return 0.1f;
+
+	return (60.0f / spec.rpm);
+}
+
+float CPlayer::GetWeaponDamage() const
+{
+	if (!m_pEquippedWeaponItem)
+		return 10.0f;
+
+	return m_pEquippedWeaponItem->GetSpec().damage;
+}
+
+void CPlayer::InitializeWeaponAmmo()
+{
+	if (!m_pEquippedWeaponItem)
+	{
+		m_nCurrentAmmo = 0;
+		m_nMaxAmmo = 0;
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+		m_fReloadDuration = 0.0f;
+		m_fFireCooldown = 0.0f;
+		return;
+	}
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	m_nMaxAmmo = (spec.magazineSize > 0) ? spec.magazineSize : 1;
+	m_nCurrentAmmo = m_nMaxAmmo;
+
+	m_bReloading = false;
+	m_fReloadElapsed = 0.0f;
+	m_fReloadDuration = spec.reloadTime;
+	m_fFireCooldown = 0.0f;
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Ammo Init : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+}
+
+void CPlayer::UpdateWeaponCombat(float fTimeElapsed)
+{
+	if (m_fFireCooldown > 0.0f)
+	{
+		m_fFireCooldown -= fTimeElapsed;
+		if (m_fFireCooldown < 0.0f)
+			m_fFireCooldown = 0.0f;
+	}
+
+	if (!m_bReloading)
+		return;
+
+	m_fReloadElapsed += fTimeElapsed;
+
+	if (m_fReloadElapsed >= m_fReloadDuration)
+	{
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+		m_nCurrentAmmo = m_nMaxAmmo;
+
+		wchar_t debugBuf[256];
+		swprintf_s(debugBuf, L"[Weapon] Reload Complete : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+		OutputDebugStringW(debugBuf);
+	}
+}
+
+bool CPlayer::CanFireWeapon() const
+{
+	if (!m_pWeapon) return false;
+	if (!m_pEquippedWeaponItem) return false;
+	if (m_bReloading) return false;
+	if (m_nCurrentAmmo <= 0) return false;
+	return true;
+}
+
+bool CPlayer::TryFireWeapon()
+{
+	if (!CanFireWeapon())
+		return false;
+
+	if (m_fFireCooldown > 0.0f)
+		return false;
+
+	--m_nCurrentAmmo;
+	m_fFireCooldown = GetWeaponShotInterval();
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Ammo : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+
+	return true;
+}
+
+void CPlayer::StartReload()
+{
+	if (!m_pWeapon) return;
+	if (!m_pEquippedWeaponItem) return;
+	if (m_bReloading) return;
+	if (m_nCurrentAmmo >= m_nMaxAmmo) return;
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	m_bReloading = true;
+	m_fReloadElapsed = 0.0f;
+	m_fReloadDuration = (spec.reloadTime > 0.0f) ? spec.reloadTime : 1.0f;
+	m_fFireCooldown = 0.0f;
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Reload Start (%d / %d)\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+}
+
+
 XMFLOAT2 CPlayer::GetMoveInput2D() const
 {
 	auto& input = InputManager::Instance();
@@ -780,23 +927,23 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	SetOOBB(NULL);
 
-	CGameObject* pLoadedWeapon = CGameObject::LoadGeometryModelByName(
+	auto pDefaultWeaponItem = WeaponItem::CreateDefaultPlayerRifle(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		NULL,
-		"Model/Classic_M4_1.bin",
-		shader,
-		NULL
+		shader
 	);
 
-	if (pLoadedWeapon)
+	if (pDefaultWeaponItem)
 	{
-		EquipWeapon(pLoadedWeapon, "mixamorig:RightHand");
+		if (!EquipWeaponItem(pDefaultWeaponItem, "mixamorig:RightHand"))
+		{
+			OutputDebugString(L"Error: Default weapon equip failed.\n");
+		}
 	}
 	else
 	{
-		OutputDebugString(L"Error: Weapon file not found.\n");
+		OutputDebugString(L"Error: Default weapon item creation failed.\n");
 	}
 
 	InitializeLeftHandIK();
@@ -897,7 +1044,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	size_t buf_len = 0;
 
-
 	while (!event_queue.empty())
 	{
 		const GameEvent& ev = event_queue.front();
@@ -915,6 +1061,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				case INPUT_KEY::SPACE:
 					if (!bGrenadeState)
 						ChangeState(std::make_unique<PlayerGrenade>());
+					break;
+
+				case INPUT_KEY::R:
+					if (!bGrenadeState)
+						StartReload();
 					break;
 
 				case INPUT_KEY::W:
@@ -963,7 +1114,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			break;
 		}
 
-	
 		event_queue.pop();
 	}
 

@@ -25,7 +25,8 @@
 #include <vector>
 #include<array>
 #include<queue>
-
+#include <memory>
+#include <unordered_map>
 
 
 using namespace std;
@@ -400,6 +401,7 @@ enum class INPUT_KEY {
 	D = 'D',
 
 	E = 'E',
+	R = 'R',
 	G = 'G',
 	I = 'I',
 

@@ -37,6 +37,7 @@ enum class WEAPON_POSE
 
 class PlayerState;
 class CPlayerAnimationController;
+class WeaponItem;
 
 class CPlayer : public CGameObject
 {
@@ -114,7 +115,17 @@ protected:
 
 	// 04.10 추가: 서버 위치 보간
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
+	
+	//현재 장착 중인 무기 데이터
+	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
 
+	int   m_nCurrentAmmo = 0;
+	int   m_nMaxAmmo = 0;
+
+	bool  m_bReloading = false;
+	float m_fReloadElapsed = 0.0f;
+	float m_fReloadDuration = 0.0f;
+	float m_fFireCooldown = 0.0f;
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -209,6 +220,23 @@ public:
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
 
+	//현재 장착 무기 데이터
+	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
+
+	void InitializeWeaponAmmo();
+	void UpdateWeaponCombat(float fTimeElapsed);
+
+	bool TryFireWeapon();
+	void StartReload();
+	bool CanFireWeapon() const;
+
+	bool IsReloading() const { return m_bReloading; }
+	int GetCurrentAmmo() const { return m_nCurrentAmmo; }
+	int GetMaxAmmo() const { return m_nMaxAmmo; }
+
+	float GetWeaponShotInterval() const;
+	float GetWeaponDamage() const;
+	
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };

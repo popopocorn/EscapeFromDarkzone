@@ -649,6 +649,7 @@ void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3
 	pNewEffect->Play(pos, right, up);
 	m_vEffectPools[type].push_back(pNewEffect);
 }
+
 void CScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
@@ -714,68 +715,83 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	{
 	case WM_LBUTTONDOWN:
 	{
+		// 인벤토리가 열려 있으면 UI 클릭만 처리하고 발사는 막음
+		if (inventory && inventory->isOpen)
+		{
+			inventory->ProcessClick(InputManager::Instance().GetMousePos());
+
+			m_bSparkFireActive = false;
+			m_bLaserActive = false;
+			m_fSparkSpawnTimer = 0.0f;
+			return;
+		}
+
+		if (!m_pPlayer) return;
+
 		m_bSparkFireActive = true;
 		m_bLaserActive = true;
 		m_fSparkSpawnTimer = 0.0f;
+		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
 
-		if (not inventory->isOpen &&!m_pWeaponMuzzle && m_pPlayer && m_pPlayer->GetWeapon())
+		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
 		{
 			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
 		}
 
-		if (m_pPlayer)
+		// 첫 클릭 시 1발 먼저 발사
+		if (!m_pPlayer->TryFireWeapon())
 		{
-			XMFLOAT3 sparkPos;
-			XMFLOAT3 sparkRight;
-			XMFLOAT3 sparkUp;
-
-			if (m_pWeaponMuzzle)
-			{
-				XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
-				XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
-				XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
-
-				XMFLOAT3 flatLook = muzzleLook;
-				flatLook.y = 0.0f;
-				flatLook = Vector3::Normalize(flatLook);
-
-				sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-				sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-				sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
-
-				sparkRight = muzzleRight;
-				sparkUp = flatLook;
-			}
-			else
-			{
-				XMFLOAT3 pos = m_pPlayer->GetPosition();
-				XMFLOAT3 look = m_pPlayer->GetLookVector();
-				XMFLOAT3 right = m_pPlayer->GetRightVector();
-				XMFLOAT3 up = m_pPlayer->GetUpVector();
-
-				XMFLOAT3 flatLook = look;
-				flatLook.y = 0.0f;
-				flatLook = Vector3::Normalize(flatLook);
-
-				sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
-				sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
-				sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
-
-				sparkRight = right;
-				sparkUp = flatLook;
-			}
-
-			PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			return;
 		}
-		if (inventory && inventory->isOpen)inventory->ProcessClick(InputManager::Instance().GetMousePos());
-		if (!m_pPlayer || m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty()) return;
 
-		XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-		XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-		XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+		XMFLOAT3 sparkPos;
+		XMFLOAT3 sparkRight;
+		XMFLOAT3 sparkUp;
 
-		if (m_ppShaders[SHADERIDX::ENEMY])
+		if (m_pWeaponMuzzle)
 		{
+			XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
+			XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
+			XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
+
+			XMFLOAT3 flatLook = muzzleLook;
+			flatLook.y = 0.0f;
+			flatLook = Vector3::Normalize(flatLook);
+
+			sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
+			sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
+			sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
+
+			sparkRight = muzzleRight;
+			sparkUp = flatLook;
+		}
+		else
+		{
+			XMFLOAT3 pos = m_pPlayer->GetPosition();
+			XMFLOAT3 look = m_pPlayer->GetLookVector();
+			XMFLOAT3 right = m_pPlayer->GetRightVector();
+			XMFLOAT3 up = m_pPlayer->GetUpVector();
+
+			XMFLOAT3 flatLook = look;
+			flatLook.y = 0.0f;
+			flatLook = Vector3::Normalize(flatLook);
+
+			sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
+			sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
+			sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
+
+			sparkRight = right;
+			sparkUp = flatLook;
+		}
+
+		PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+
+		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
+		{
+			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+			XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+			XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
 			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
 			for (auto& obj : *objs)
 			{
@@ -790,7 +806,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
 						if (pEnemy)
 						{
-							pEnemy->HandleHP(10.0f);
+							pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
 						}
 						break;
 					}
@@ -810,6 +826,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		break;
 	}
 }
+
 bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_pPlayer) return false;
@@ -817,15 +834,15 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	switch (nMessageID)
 	{
 	case WM_KEYDOWN:
-		switch (wParam) 
+		switch (wParam)
 		{
 		case 'I':
 			if (inventory)
 			{
-				inventory->isOpen = not inventory->isOpen;
+				inventory->isOpen = !inventory->isOpen;
 			}
+			break;
 		}
-	
 
 	case WM_KEYUP:
 	{
@@ -846,7 +863,8 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		case 'E': key = INPUT_KEY::E; break;
 		case 'G': key = INPUT_KEY::G; break;
-		//case 'I': key = INPUT_KEY::I; break;
+		case 'I': key = INPUT_KEY::I; break;
+		case 'R': key = INPUT_KEY::R; break;
 
 		case '1': key = INPUT_KEY::KEY_1; break;
 		case '2': key = INPUT_KEY::KEY_2; break;
@@ -858,7 +876,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
 		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
-			break;
+
 		default:
 			validKey = false;
 			break;
@@ -866,14 +884,14 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (!validKey)
 			break;
-		
+
 		if (nMessageID == WM_KEYDOWN)
 		{
-			// lParam의 30번째 비트가 1이면, 이전에 이미 눌려있던 키가 다시 들어온 것입니다.
 			bool wasDownBefore = (lParam & (1 << 30)) != 0;
 			if (wasDownBefore)
 				break;
 		}
+
 		KEY_STATE state =
 			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
 
@@ -888,6 +906,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 	return false;
 }
+
 bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 {
 	return(false);
@@ -898,7 +917,9 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	m_fElapsedTime = fTimeElapsed;
 
 	for (int i = 0; i < m_ppShaders.size(); i++)
+	{
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
+	}
 
 	if (m_pPlayer && m_pLights.size() > 1)
 	{
@@ -906,17 +927,25 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
 
-	if (m_bSparkFireActive && m_pPlayer)
+	// 연사 처리
+	if (m_bSparkFireActive && m_pPlayer && !(inventory && inventory->isOpen))
 	{
 		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
 		{
 			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
 		}
 
+		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
 		m_fSparkSpawnTimer += fTimeElapsed;
 
 		while (m_fSparkSpawnTimer >= m_fSparkSpawnInterval)
 		{
+			if (!m_pPlayer->TryFireWeapon())
+			{
+				m_fSparkSpawnTimer = 0.0f;
+				break;
+			}
+
 			XMFLOAT3 sparkPos;
 			XMFLOAT3 sparkRight;
 			XMFLOAT3 sparkUp;
@@ -958,6 +987,35 @@ void CScene::AnimateObjects(float fTimeElapsed)
 			}
 
 			PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+
+			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
+			{
+				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+				for (auto& obj : *objs)
+				{
+					const auto& oobbs = obj->GetOOBB();
+
+					for (BoundingOrientedBox* pOOBB : oobbs)
+					{
+						float fDist = 0.0f;
+
+						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+						{
+							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+							if (pEnemy)
+							{
+								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+							}
+							break;
+						}
+					}
+				}
+			}
+
 			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
 		}
 	}
@@ -970,77 +1028,76 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	{
 		for (CEffect* pEffect : m_vEffectPools[type])
 		{
-			if (!pEffect->IsDead())
+			if (pEffect && !pEffect->IsDead())
 			{
 				pEffect->Animate(fTimeElapsed);
 			}
 		}
 	}
-	// 레이저 표시/숨김 처리
-	if (m_pLaserObject)
+
+	// 레이저는 인벤토리 열려 있으면 숨김
+	if (m_bLaserActive && m_pLaserObject && m_pPlayer && !(inventory && inventory->isOpen))
 	{
-		if (m_bLaserActive && m_pPlayer)
+		if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
 		{
-			if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
-			{
-				m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
-			}
+			m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
+		}
 
-			XMVECTOR rayOrigin;
-			XMVECTOR rayDir;
-			XMVECTOR vUp;
-			XMVECTOR vRight;
+		XMVECTOR rayOrigin;
+		XMVECTOR rayDir;
+		XMVECTOR vRight;
+		XMVECTOR vUp;
 
-			if (m_pLaserMuzzle)
-			{
-				XMFLOAT3 muzzlePos = m_pLaserMuzzle->GetPosition();
-				XMFLOAT3 muzzleLook = m_pLaserMuzzle->GetLook();
-				XMFLOAT3 muzzleUp = m_pLaserMuzzle->GetUp();
-				XMFLOAT3 muzzleRight = m_pLaserMuzzle->GetRight();
+		if (m_pLaserMuzzle)
+		{
+			XMFLOAT3 pos = m_pLaserMuzzle->GetPosition();
+			XMFLOAT3 look = m_pLaserMuzzle->GetLook();
+			XMFLOAT3 right = m_pLaserMuzzle->GetRight();
+			XMFLOAT3 up = m_pLaserMuzzle->GetUp();
 
-				rayOrigin = XMLoadFloat3(&muzzlePos);
-				rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-				vUp = XMVector3Normalize(XMLoadFloat3(&muzzleUp));
-				vRight = XMVector3Normalize(XMLoadFloat3(&muzzleRight));
-			}
-			else
-			{
-				XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
-				XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
-				vRight = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
-				vUp = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
-				vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
-
-				rayOrigin = vPos + vUp * 1.2f + vRight * 0.3f + vLook * 0.5f;
-				rayDir = vLook;
-			}
-
-			XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, m_fLaserLength);
-
-			XMMATRIX matRotation = XMMatrixIdentity();
-			matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
-			matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
-			matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
-			matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
-
-			XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
-			XMMATRIX matWorld = matScale * matRotation * matTranslation;
-
-			XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
-			m_pLaserObject->UpdateTransform(NULL);
+			rayOrigin = XMLoadFloat3(&pos);
+			rayDir = XMVector3Normalize(XMLoadFloat3(&look));
+			vRight = XMVector3Normalize(XMLoadFloat3(&right));
+			vUp = XMVector3Normalize(XMLoadFloat3(&up));
 		}
 		else
 		{
-			XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
-			m_pLaserObject->UpdateTransform(NULL);
+			XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
+			XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+			XMVECTOR vRightPlayer = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
+			XMVECTOR vUpPlayer = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
+
+			vRight = vRightPlayer;
+			vUp = vUpPlayer;
+
+			rayOrigin = vPos + vUp * 1.2f + vRightPlayer * 0.3f + vLook * 0.5f;
+			rayDir = vLook;
 		}
+
+		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, m_fLaserLength);
+
+		XMMATRIX matRotation = XMMatrixIdentity();
+		matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
+		matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
+		matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
+		matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
+
+		XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
+		XMMATRIX matWorld = matScale * matRotation * matTranslation;
+
+		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
+		m_pLaserObject->UpdateTransform(NULL);
+	}
+	else if (m_pLaserObject)
+	{
+		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
+		m_pLaserObject->UpdateTransform(NULL);
 	}
 
 	ShadowCameraManager.Update();
 
+	if (inventory) inventory->SubmitToShader(UIShader.get());
 
-	if (inventory)inventory->SubmitToShader(UIShader.get());
-	//if (inventory->isOpen)OutputDebugString(L"dfsa\n");
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
 
