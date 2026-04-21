@@ -36,6 +36,9 @@ struct WeaponSpec
 
 	float maxDistanceDamageReductionRatio = 0.0f;
 	float zeroDamageBeyondDistance = 0.0f;
+
+	int magazineSize = 0;
+	float reloadTime = 0.0f;
 };
 
 class CGameObject;

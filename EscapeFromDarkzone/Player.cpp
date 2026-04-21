@@ -178,24 +178,16 @@ void CPlayer::Update(float fTimeElapsed)
 
 	float fMaxVelocityY = m_fMaxVelocityY;
 	fLength = sqrtf(m_xmf3Velocity.y * m_xmf3Velocity.y);
-	if (fLength > m_fMaxVelocityY) m_xmf3Velocity.y *= (fMaxVelocityY / fLength);
+	if (fLength > m_fMaxVelocityY)
+		m_xmf3Velocity.y *= (fMaxVelocityY / fLength);
 
 	XMFLOAT3 xmf3Velocity = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	Move(xmf3Velocity, false);
 
-	/*
-	// 04.10 추가: 서버 위치 보간
-	if (NetworkManager::Instance().IsConnected())
-	{
-		float alpha = 5.0f * fTimeElapsed;		// 추후 보간 속도 조정 (5.0f)
-		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * alpha;
-		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
-	}
-	*/
+	UpdateWeaponCombat(fTimeElapsed);
+	UpdateWeaponPose(fTimeElapsed);
 
 	UpdateTransform(NULL);
-
-	UpdateWeaponPose(fTimeElapsed);
 
 	if (m_pPlayerUpdatedContext) OnPlayerUpdateCallback(fTimeElapsed);
 
@@ -208,7 +200,11 @@ void CPlayer::Update(float fTimeElapsed)
 	fLength = Vector3::Length(m_xmf3Velocity);
 	float fDeceleration = (m_fFriction * fTimeElapsed);
 	if (fDeceleration > fLength) fDeceleration = fLength;
-	m_xmf3Velocity = Vector3::Add(m_xmf3Velocity, Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true));
+
+	m_xmf3Velocity = Vector3::Add(
+		m_xmf3Velocity,
+		Vector3::ScalarProduct(m_xmf3Velocity, -fDeceleration, true)
+	);
 
 	if (m_xmf3Velocity.x != 0.0f || m_xmf3Velocity.z != 0.0f)
 	{
@@ -219,28 +215,6 @@ void CPlayer::Update(float fTimeElapsed)
 			m_xmf3Velocity.z = 0.0f;
 		}
 	}
-
-	/*
-	// 03.27 추가: 플레이어가 움직이는 경우 서버에 이동 패킷 전송
-	if (NetworkManager::Instance().IsConnected() && (state && typeid(*state) == typeid(PlayerRun)))
-	{
-		char inputs = 0;
-		auto& input = InputManager::Instance();
-		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) inputs |= MOVE_W;
-		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) inputs |= MOVE_S;
-		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) inputs |= MOVE_A;
-		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) inputs |= MOVE_D;
-
-		if (inputs != 0)
-		{
-			NetworkManager::Instance().SendMove(
-				inputs,
-				m_fYaw,
-				static_cast<unsigned int>(GetTickCount())
-			);
-		}
-	}
-	*/
 }
 
 CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
@@ -432,20 +406,6 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	}
 
 	OutputDebugString(L"성공: 무기가 플레이어 오른손 소켓에 장착되었습니다.\n");
-}
-
-bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
-{
-	if (!pItem) return false;
-	if (!pstrSocketName) return false;
-
-	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
-	if (!pWeaponInstance) return false;
-
-	m_pEquippedWeaponItem = pItem;
-	EquipWeapon(pWeaponInstance, pstrSocketName);
-
-	return (m_pWeapon != nullptr);
 }
 
 void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
@@ -703,6 +663,146 @@ bool CPlayer::InitializeLeftHandIK()
 	return true;
 }
 
+bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
+{
+	if (!pItem) return false;
+
+	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
+	if (!pWeaponInstance) return false;
+
+	m_pEquippedWeaponItem = pItem;
+
+	EquipWeapon(pWeaponInstance, pstrSocketName);
+
+	if (m_pWeapon != pWeaponInstance)
+		return false;
+
+	InitializeWeaponAmmo();
+	return true;
+}
+
+float CPlayer::GetWeaponShotInterval() const
+{
+	if (!m_pEquippedWeaponItem)
+		return 0.1f;
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	if (spec.rpm <= 0.0f)
+		return 0.1f;
+
+	return (60.0f / spec.rpm);
+}
+
+float CPlayer::GetWeaponDamage() const
+{
+	if (!m_pEquippedWeaponItem)
+		return 10.0f;
+
+	return m_pEquippedWeaponItem->GetSpec().damage;
+}
+
+void CPlayer::InitializeWeaponAmmo()
+{
+	if (!m_pEquippedWeaponItem)
+	{
+		m_nCurrentAmmo = 0;
+		m_nMaxAmmo = 0;
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+		m_fReloadDuration = 0.0f;
+		m_fFireCooldown = 0.0f;
+		return;
+	}
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	m_nMaxAmmo = (spec.magazineSize > 0) ? spec.magazineSize : 1;
+	m_nCurrentAmmo = m_nMaxAmmo;
+
+	m_bReloading = false;
+	m_fReloadElapsed = 0.0f;
+	m_fReloadDuration = spec.reloadTime;
+	m_fFireCooldown = 0.0f;
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Ammo Init : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+}
+
+void CPlayer::UpdateWeaponCombat(float fTimeElapsed)
+{
+	if (m_fFireCooldown > 0.0f)
+	{
+		m_fFireCooldown -= fTimeElapsed;
+		if (m_fFireCooldown < 0.0f)
+			m_fFireCooldown = 0.0f;
+	}
+
+	if (!m_bReloading)
+		return;
+
+	m_fReloadElapsed += fTimeElapsed;
+
+	if (m_fReloadElapsed >= m_fReloadDuration)
+	{
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+		m_nCurrentAmmo = m_nMaxAmmo;
+
+		wchar_t debugBuf[256];
+		swprintf_s(debugBuf, L"[Weapon] Reload Complete : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+		OutputDebugStringW(debugBuf);
+	}
+}
+
+bool CPlayer::CanFireWeapon() const
+{
+	if (!m_pWeapon) return false;
+	if (!m_pEquippedWeaponItem) return false;
+	if (m_bReloading) return false;
+	if (m_nCurrentAmmo <= 0) return false;
+	return true;
+}
+
+bool CPlayer::TryFireWeapon()
+{
+	if (!CanFireWeapon())
+		return false;
+
+	if (m_fFireCooldown > 0.0f)
+		return false;
+
+	--m_nCurrentAmmo;
+	m_fFireCooldown = GetWeaponShotInterval();
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Ammo : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+
+	return true;
+}
+
+void CPlayer::StartReload()
+{
+	if (!m_pWeapon) return;
+	if (!m_pEquippedWeaponItem) return;
+	if (m_bReloading) return;
+	if (m_nCurrentAmmo >= m_nMaxAmmo) return;
+
+	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
+
+	m_bReloading = true;
+	m_fReloadElapsed = 0.0f;
+	m_fReloadDuration = (spec.reloadTime > 0.0f) ? spec.reloadTime : 1.0f;
+	m_fFireCooldown = 0.0f;
+
+	wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"[Weapon] Reload Start (%d / %d)\n", m_nCurrentAmmo, m_nMaxAmmo);
+	OutputDebugStringW(debugBuf);
+}
+
+
 XMFLOAT2 CPlayer::GetMoveInput2D() const
 {
 	auto& input = InputManager::Instance();
@@ -912,7 +1012,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	size_t buf_len = 0;
 
-
 	while (!event_queue.empty())
 	{
 		const GameEvent& ev = event_queue.front();
@@ -930,6 +1029,11 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				case INPUT_KEY::SPACE:
 					if (!bGrenadeState)
 						ChangeState(std::make_unique<PlayerGrenade>());
+					break;
+
+				case INPUT_KEY::R:
+					if (!bGrenadeState)
+						StartReload();
 					break;
 
 				case INPUT_KEY::W:
@@ -978,10 +1082,8 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 			break;
 		}
 
-
 		event_queue.pop();
 	}
-
 
 	state.get()->Update(this, fTimeElapsed);
 

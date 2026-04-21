@@ -77,11 +77,15 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
 		spec.dps = 64.166667f;
+		spec.magazineSize = 15;
+		spec.reloadTime = 1.2f;
 		break;
 
 	case WeaponCategory::ASSAULT_RIFLE:
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
+		spec.magazineSize = 30;
+		spec.reloadTime = 1.8f;
 
 		switch (grade)
 		{
@@ -109,6 +113,8 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 	case WeaponCategory::SMG:
 		spec.rpm = 900.0f;
 		spec.maxDistanceDamageReductionRatio = 0.50f;
+		spec.magazineSize = 35;
+		spec.reloadTime = 1.6f;
 
 		switch (grade)
 		{
@@ -136,6 +142,8 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 	case WeaponCategory::SHOTGUN:
 		spec.rpm = 200.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
+		spec.magazineSize = 8;
+		spec.reloadTime = 2.4f;
 
 		switch (grade)
 		{

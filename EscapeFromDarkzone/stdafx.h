@@ -401,6 +401,7 @@ enum class INPUT_KEY {
 	D = 'D',
 
 	E = 'E',
+	R = 'R',
 	G = 'G',
 	I = 'I',
 
