@@ -2,48 +2,120 @@
 #include"stdafx.h"
 #include "UI.h"
 
+UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
+{
+	m_pxmf3Positions.resize(6);
+	m_pxmf3Positions[0] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
+	m_pxmf3Positions[1] = XMFLOAT3(-0.5f, 0.5f, 0.0f); // LT
+	m_pxmf3Positions[2] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
+
+	m_pxmf3Positions[3] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
+	m_pxmf3Positions[4] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
+	m_pxmf3Positions[5] = XMFLOAT3(0.5f, -0.5f, 0.0f); // RB
+
+	UVs.resize(6);
+	UVs[0] = XMFLOAT2(0.0f, 1.0f); // LB
+	UVs[1] = XMFLOAT2(0.0f, 0.0f); // LT
+	UVs[2] = XMFLOAT2(1.0f, 0.0f); // RT
+
+	UVs[3] = XMFLOAT2(0.0f, 1.0f); // LB
+	UVs[4] = XMFLOAT2(1.0f, 0.0f); // RT
+	UVs[5] = XMFLOAT2(1.0f, 1.0f); // RB
+
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+
+	m_pd3dPositionBuffer = ::CreateBufferResource(
+		device, 
+		commandlist,
+		m_pxmf3Positions.data(), 
+		sizeof(XMFLOAT3) * m_pxmf3Positions.size(), 
+		D3D12_HEAP_TYPE_DEFAULT, 
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
+		&m_pd3dPositionUploadBuffer);
+
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_pxmf3Positions.size();
+	
+	UVBuffer = ::CreateBufferResource(
+		device,
+		commandlist,
+		UVs.data(),
+		sizeof(XMFLOAT2) * UVs.size(),
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&UVUploadBuffer
+	);
+
+	UVBufferView.BufferLocation = UVBuffer->GetGPUVirtualAddress();
+	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
+	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
+}
+
+UIMesh::~UIMesh()
+{
+}
+
+void UIMesh::ReleaseUploadBuffers()
+{
+}
+
+void UIMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)
+{
+	D3D12_VERTEX_BUFFER_VIEW b[] = { m_d3dPositionBufferView, UVBufferView };
+	pd3dCommandList->IASetVertexBuffers(0, 2, b);
+}
+
+void UIMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet, int nInstances)
+{
+	OnPreRender(pd3dCommandList, NULL);
+
+	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
+
+	pd3dCommandList->DrawInstanced(m_pxmf3Positions.size(), nInstances, 0, 0);
+}
+
+
+
+UIObject::UIObject()
+{
+	XMStoreFloat4x4(&world, XMMatrixIdentity());
+}
+
+void UIObject::SetScale(float x, float y, float z)
+{
+	XMMATRIX mtxScale = XMMatrixScaling(x, y, z);
+	world = Matrix4x4::Multiply(mtxScale, world);
+
+}
+
+void UIObject::SetLocate(float x, float y, float z)
+{
+	world._41 = x;
+	world._42 = y;
+	world._43 = z;
+}
 
 void UIObject::setAABB()
 {
-	UpdateTransform(NULL);
-	auto ext = m_pChild->GetMesh()->GetAABBExtents();
-	auto center = m_pChild->GetMesh()->GetAABBCenter();
+	float cx = world._41;
+	float cy = world._42;
 
+	float sx = sqrtf(world._11 * world._11 + world._12 * world._12 + world._13 * world._13);
+	float sy = sqrtf(world._21 * world._21 + world._22 * world._22 + world._23 * world._23);
 
-	XMMATRIX mWorld = XMLoadFloat4x4(&m_pChild->m_xmf4x4World);
-
-	XMVECTOR corners[8];
-	corners[0] = XMVectorSet(center.x - ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
-	corners[1] = XMVectorSet(center.x + ext.x, center.y - ext.y, center.z - ext.z, 1.0f);
-	corners[2] = XMVectorSet(center.x - ext.x, center.y + ext.y, center.z - ext.z, 1.0f);
-	corners[3] = XMVectorSet(center.x + ext.x, center.y + ext.y, center.z - ext.z, 1.0f);
-	corners[4] = XMVectorSet(center.x - ext.x, center.y - ext.y, center.z + ext.z, 1.0f);
-	corners[5] = XMVectorSet(center.x + ext.x, center.y - ext.y, center.z + ext.z, 1.0f);
-	corners[6] = XMVectorSet(center.x - ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
-	corners[7] = XMVectorSet(center.x + ext.x, center.y + ext.y, center.z + ext.z, 1.0f);
-
-	XMVECTOR vTrans = XMVector3TransformCoord(corners[0], mWorld);
-	XMFLOAT3 pt;
-	XMStoreFloat3(&pt, vTrans);
-
-	float minX = pt.x, maxX = pt.x;
-	float minY = pt.y, maxY = pt.y;
-
-	for (int i = 1; i < 8; ++i)
-	{
-		vTrans = XMVector3TransformCoord(corners[i], mWorld);
-		XMStoreFloat3(&pt, vTrans);
-
-		if (pt.x < minX) minX = pt.x;
-		if (pt.x > maxX) maxX = pt.x;
-		if (pt.y < minY) minY = pt.y;
-		if (pt.y > maxY) maxY = pt.y;
-	}
-
-	// 5. 충돌 박스에 최종 반영
-	CollisionBox.minX = minX;
-	CollisionBox.maxX = maxX;
-	CollisionBox.minY = minY;
-	CollisionBox.maxY = maxY;
-
+	CollisionBox.minX = cx - sx * 0.5f;
+	CollisionBox.maxX = cx + sx * 0.5f;
+	CollisionBox.minY = cy - sy * 0.5f;
+	CollisionBox.maxY = cy + sy * 0.5f;
 }
+
+void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
+{
+	XMFLOAT4X4 xmf4x4World;
+	XMStoreFloat4x4(&xmf4x4World, XMMatrixTranspose(XMLoadFloat4x4(&world)));
+	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4World, 0);
+	object->Render(pd3dCommandList, 0, 1);
+}
+

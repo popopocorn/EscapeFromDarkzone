@@ -19,7 +19,8 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	float slotH = totalH / static_cast<float>(MAX_SLOTS);
 	float posX = box.minX + (totalW * 0.5f);
 	float gap = 0.025;
-	CGameObject* uibase = CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", pShader, 0);
+	//CGameObject* uibase = CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", pShader, 0);
+	UIMesh* m = new UIMesh(pd3dDevice, pd3dCommandList);
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
 		float posY = box.maxY - (slotH * 0.5f) - (i * slotH);
@@ -31,9 +32,9 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 		ui->SetFunc([this, i]() {
 			this->SlotClicked(i);
 			});
-		ui->SetChild(uibase);
+		ui->SetUIMesh(m);
 		ui->SetScale(slotW, slotH - gap, 1.0f);
-		ui->SetPosition(posX, posY, 0.5f);
+		ui->SetLocate(posX, posY, 0.5f);
 		ui->setAABB();
 
 	}
@@ -43,7 +44,7 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 void Inventory::SubmitToShader(UIObjectShader* shader)
 {
 	if (not isOpen)return;
-	for (int i = 0; i < MAX_SLOTS; ++i) 
+	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
 		shader->addObjects(slots[i].ui);
 	}

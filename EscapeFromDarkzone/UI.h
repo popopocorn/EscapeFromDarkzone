@@ -2,6 +2,30 @@
 #include "Object.h"
 
 
+class UIMesh {
+private:
+	D3D12_PRIMITIVE_TOPOLOGY		m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	
+	vector<XMFLOAT3>				m_pxmf3Positions;
+	vector<XMFLOAT2>				UVs;
+
+	ID3D12Resource*					m_pd3dPositionBuffer = NULL;
+	ID3D12Resource*					m_pd3dPositionUploadBuffer = NULL;
+	ID3D12Resource*					UVBuffer = NULL;
+	ID3D12Resource*					UVUploadBuffer = NULL;
+	D3D12_VERTEX_BUFFER_VIEW		m_d3dPositionBufferView;
+	D3D12_VERTEX_BUFFER_VIEW		UVBufferView;
+	CTexture*						texture;
+public:	
+	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist);
+	~UIMesh();
+	virtual void ReleaseUploadBuffers();
+
+	virtual void OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0, int nInstances = 1);
+
+};
+
 struct CheckBox {
 	float minX;
 	float minY;
@@ -21,13 +45,23 @@ struct CheckBox {
 };
 
 
-class UIObject : public CGameObject {
+class UIObject {
 protected:
+	UIMesh*					object;
+	XMFLOAT4X4				world;
 	std::function<void()>	Task = nullptr;
 	CheckBox				CollisionBox;
 public:
+	UIObject();
+
+	void SetUIMesh(UIMesh* mesh) { object = mesh; }
+	void SetScale(float x, float y, float z);
+	void SetLocate(float x, float y, float z);
 	void HandleClick() { if (Task) Task(); }
 	void SetFunc(std::function<void()> func) { Task = func; }
 	void setAABB();
 	CheckBox GetBox() { return CollisionBox; }
+
+
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
 };

@@ -62,12 +62,12 @@ struct VS_STANDARD_INPUT
 
 struct VS_UI_INPUT
 {
-    float3 position : POSITIONT;
+    float3 position : POSITION;
     float2 uv : TEXCOORD;
 };
 struct VS_UI_OUTPUT
 {
-    float3 position : POSITIONT;
+    float4 position : SV_POSITION;
     float2 uv : TEXCOORD;
 };
 
