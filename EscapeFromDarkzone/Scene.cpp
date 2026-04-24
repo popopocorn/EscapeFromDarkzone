@@ -216,29 +216,31 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	// 시야 오브젝트 생성
 	{
 		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
 		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
 
-		// 주변 원판 시야
-		CGameObject* pCircleObj = new CGameObject();
+		auto pCircleObj = std::make_unique<CGameObject>();
 		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
 		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 1.0f, 72));
 		pCircleObj->SetShader(view.get());
 		pCircleObj->SetPosition(0.0f, 0.0f, 0.0f);
 
-		// 전방 부채꼴 시야
-		CGameObject* pConeObj = new CGameObject();
+		auto pConeObj = std::make_unique<CGameObject>();
 		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
 		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 15.0f, 60.0f, 72));
 		pConeObj->SetShader(view.get());
 		pConeObj->SetPosition(0.0f, 0.001f, 0.0f);
 
-		viewobj->SetCircleObject(pCircleObj);
-		viewobj->SetConeObject(pConeObj);
+		viewobj->SetCircleObject(pCircleObj.get());
+		viewobj->SetConeObject(pConeObj.get());
 
-		viewobj->SetChild(pCircleObj);
-		viewobj->SetChild(pConeObj);
+		viewobj->SetChild(pCircleObj.get());
+		viewobj->SetChild(pConeObj.get());
+
+		pCircleObj.release();
+		pConeObj.release();
 
 		view->addObjects(std::move(viewobj));
 	}
