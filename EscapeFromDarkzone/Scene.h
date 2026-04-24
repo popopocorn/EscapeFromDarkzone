@@ -162,6 +162,8 @@ public:
 	CGameObject* m_pWeaponObject = nullptr;
 
 	std::unique_ptr<UIObjectShader> UIShader;
+
+	std::vector<CGameObject*> m_vVisionMapChunks;	//blocker¿ë º¤ÅÍ
 private:
 	CGameObject* m_pLaserObject = NULL;
 	std::unique_ptr<CollisionManager> colManager;

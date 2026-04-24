@@ -115,6 +115,48 @@ static void GatherVisionBlockersNearPlayer(CShader* pShader, const XMFLOAT3& pla
 		}
 	}
 }
+static bool IntersectsVisionQueryRect2D(BoundingOrientedBox* pOOBB, const XMFLOAT3& playerPos, float halfExtent)
+{
+	if (!pOOBB) return false;
+
+	const XMFLOAT3& c = pOOBB->Center;
+
+	float radiusXZ = sqrtf(
+		pOOBB->Extents.x * pOOBB->Extents.x +
+		pOOBB->Extents.z * pOOBB->Extents.z
+	);
+
+	if (fabsf(c.x - playerPos.x) > (halfExtent + radiusXZ)) return false;
+	if (fabsf(c.z - playerPos.z) > (halfExtent + radiusXZ)) return false;
+
+	return true;
+}
+static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*>& mapChunks, const XMFLOAT3& playerPos, float halfExtent, std::vector<CGameObject*>& outBlockers)
+{
+	for (CGameObject* pObj : mapChunks)
+	{
+		if (!pObj) continue;
+
+		bool intersects = false;
+
+		const auto& oobbs = pObj->GetOOBB();
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			if (IntersectsVisionQueryRect2D(pOOBB, playerPos, halfExtent))
+			{
+				intersects = true;
+				break;
+			}
+		}
+
+		if (intersects)
+		{
+			outBlockers.push_back(pObj);
+		}
+	}
+}
 
 CScene::CScene()
 {
@@ -205,12 +247,21 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	// 04.24 추가: 맵 여러 번 호출
+	// 시야 blocker용 맵 조각 참조 목록 초기화
+	m_vVisionMapChunks.clear();
+	m_vVisionMapChunks.reserve(64);
+
 	{
-		std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/floor_01.bin", stdshader.get(), 0));
-		map->SetPosition(0, -0.5, 0);
-		map->SetOOBB(NULL);
-		stdshader->addObjects(std::move(map));
+		std::unique_ptr<CGameObject> floorObj(
+			CGameObject::LoadGeometryModelByName(
+				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
+				NULL, "Model/floor_01.bin", stdshader.get(), 0
+			)
+		);
+		floorObj->SetPosition(0, -0.5f, 0);
+		floorObj->SetOOBB(NULL);
+		stdshader->addObjects(std::move(floorObj));
+
 		static const char* s_mapFiles[] = {
 			"Model/block1.bin",
 			"Model/block3.bin",
@@ -243,11 +294,21 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 			"Model/block38.bin",
 			"Model/block40.bin"
 		};
+
 		for (const char* fileName : s_mapFiles)
 		{
-			std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, fileName, stdshader.get(), 0));
-			map->SetPosition(-150, -0.5, -150);
+			std::unique_ptr<CGameObject> map(
+				CGameObject::LoadGeometryModelByName(
+					pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
+					NULL, fileName, stdshader.get(), 0
+				)
+			);
+			map->SetPosition(-150, -0.5f, -150);
 			map->SetOOBB(NULL);
+
+			// block 계열만 충돌 처리 후보에 저장
+			m_vVisionMapChunks.push_back(map.get());
+
 			stdshader->addObjects(std::move(map));
 		}
 	}
@@ -329,7 +390,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
-	//이펙트	쉐이더
+	//이펙트 쉐이더
 	auto pEffectShader = std::make_unique<CEffectShader>();
 	CEffectShader* pRawEffectShader = pEffectShader.get();
 
@@ -374,7 +435,6 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 	for (int i = 0; i < EFFECT_MAX; i++)
 	{
-		// 인스턴스 버퍼	크기
 		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
 
 		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(
@@ -425,6 +485,8 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 void CScene::ReleaseObjects()
 {
+	m_vVisionMapChunks.clear();
+
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
 
@@ -1050,23 +1112,25 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 	}
 
+	// 시야 메쉬 계산
 	{
 		std::vector<CGameObject*> visionBlockers;
+		visionBlockers.reserve(64);
 
 		if (m_pPlayer)
 		{
 			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 
-			if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
-			{
-				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP].get(), visionBlockers);
-			}
+			const float fMapQueryHalfExtent = 18.0f;
+
+			GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, fMapQueryHalfExtent, visionBlockers);
 
 			if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
 			{
 				GatherVisionBlockersNearPlayer(m_ppShaders[SHADERIDX::ENEMY].get(), playerPos, 18.0f, visionBlockers);
 			}
 
+			// view object 갱신
 			if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
 			{
 				auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
@@ -1261,6 +1325,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
+
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
