@@ -71,6 +71,16 @@ struct VS_UI_OUTPUT
     float2 uv : TEXCOORD;
 };
 
+struct VS_VIEW_INPUT
+{
+    float3 position : POSITION;
+};
+
+struct VS_VIEW_OUTPUT
+{
+    float4 position : SV_POSITION;
+};
+
 struct VS_STANDARD_OUTPUT
 {
     float4 position : SV_POSITION;

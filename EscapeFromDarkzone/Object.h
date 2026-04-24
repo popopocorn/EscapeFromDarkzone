@@ -18,7 +18,7 @@
 
 class CShader;
 class CStandardShader;
-
+class CPlayer;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -443,7 +443,7 @@ public:
 	void Rotate(XMFLOAT3 *pxmf3Axis, float fAngle);
 	void Rotate(XMFLOAT4 *pxmf4Quaternion);
 
-	CMesh* GetMesh() { return m_pMesh; }
+	CMesh* GetMesh() const { return m_pMesh; }
 
 	CGameObject *GetParent() { return(m_pParent); }
 	void UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent=NULL);
@@ -508,10 +508,21 @@ public:
 	virtual void HandleCallback(void* pCallbackData, float fTrackPosition);
 };
 
-class ViewObject : public CGameObject {
+class ViewObject : public CGameObject
+{
 private:
-	CPlayer* player;
+	CPlayer* player = nullptr;
+	CGameObject* m_pCircleObject = nullptr;
+	CGameObject* m_pConeObject = nullptr;
+
 public:
-	virtual void Animate(float fTimeElapsed);
+	virtual void Animate(float fTimeElapsed) override;
+
+	// 플레이어 / 시야 오브젝트 연결
 	void setPlayer(CPlayer* p) { player = p; }
+	void SetCircleObject(CGameObject* pObj) { m_pCircleObject = pObj; }
+	void SetConeObject(CGameObject* pObj) { m_pConeObject = pObj; }
+
+	//시야 메쉬 업데이트
+	void UpdateClippedMeshes(const std::vector<CGameObject*>& blockers);
 };

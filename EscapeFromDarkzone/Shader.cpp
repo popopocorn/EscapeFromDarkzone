@@ -638,6 +638,29 @@ ViewShader::ViewShader()
 	m_pd3dPipelineState.resize(3);
 }
 
+D3D12_INPUT_LAYOUT_DESC ViewShader::CreateInputLayout()
+{
+	UINT nInputElementDescs = 1;
+	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
+
+	pd3dInputElementDescs[0] =
+	{
+		"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
+		0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
+	};
+
+	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
+	d3dInputLayoutDesc.pInputElementDescs = pd3dInputElementDescs;
+	d3dInputLayoutDesc.NumElements = nInputElementDescs;
+
+	return d3dInputLayoutDesc;
+}
+
+D3D12_SHADER_BYTECODE ViewShader::CreateVertexShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSView", "vs_5_1", &m_pd3dVertexShaderBlob);
+}
+
 D3D12_SHADER_BYTECODE ViewShader::CreatePixelShader()
 {
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSView", "ps_5_1", &m_pd3dPixelShaderBlob));
@@ -663,6 +686,27 @@ D3D12_DEPTH_STENCIL_DESC ViewShader::CreateDepthStencilState()
 	d3dDepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 
 	return(d3dDepthStencilDesc);
+}
+
+D3D12_BLEND_DESC ViewShader::CreateBlendState()
+{
+	D3D12_BLEND_DESC d3dBlendDesc{};
+	d3dBlendDesc.AlphaToCoverageEnable = FALSE;
+	d3dBlendDesc.IndependentBlendEnable = FALSE;
+
+	D3D12_RENDER_TARGET_BLEND_DESC& rt = d3dBlendDesc.RenderTarget[0];
+	rt.BlendEnable = FALSE;
+	rt.LogicOpEnable = FALSE;
+	rt.SrcBlend = D3D12_BLEND_ONE;
+	rt.DestBlend = D3D12_BLEND_ZERO;
+	rt.BlendOp = D3D12_BLEND_OP_ADD;
+	rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	rt.LogicOp = D3D12_LOGIC_OP_NOOP;
+	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	return d3dBlendDesc;
 }
 
 void ViewShader::CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
@@ -715,6 +759,15 @@ D3D12_DEPTH_STENCIL_DESC ViewShader::CreateThroughDepthStencilState()
 void ViewShader::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;
+
+	for (int j = 0; j < m_ppObjects.size(); j++)
+	{
+		if (m_ppObjects[j])
+		{
+			m_ppObjects[j]->Animate(m_fElapsedTime);
+			m_ppObjects[j]->UpdateTransform(NULL);
+		}
+	}
 }
 
 void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
@@ -725,8 +778,7 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 	{
 		if (m_ppObjects[j])
 		{
-			m_ppObjects[j]->Animate(m_fElapsedTime);
-			m_ppObjects[j]->UpdateTransform(NULL);
+			// Animate / UpdateTransform 은 AnimateObjects()에서 이미 끝냄
 			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}

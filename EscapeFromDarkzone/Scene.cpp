@@ -78,10 +78,68 @@ static CGameObject* FindWeaponMuzzleFrame(CGameObject* pWeapon)
 
 	return nullptr;
 }
+static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
+{
+	if (!pShader) return;
+
+	auto* objs = pShader->GetObj();
+	if (!objs) return;
+
+	for (auto& obj : *objs)
+	{
+		if (!obj) continue;
+		outBlockers.push_back(obj.get());
+	}
+}
+static void GatherVisionBlockersNearPlayer(CShader* pShader, const XMFLOAT3& playerPos, float maxDistance, std::vector<CGameObject*>& outBlockers)
+{
+	if (!pShader) return;
+
+	auto* objs = pShader->GetObj();
+	if (!objs) return;
+
+	const float maxDistSq = maxDistance * maxDistance;
+
+	for (auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		XMFLOAT3 objPos = obj->GetPosition();
+		float dx = objPos.x - playerPos.x;
+		float dz = objPos.z - playerPos.z;
+		float distSq = dx * dx + dz * dz;
+
+		if (distSq <= maxDistSq)
+		{
+			outBlockers.push_back(obj.get());
+		}
+	}
+}
 
 CScene::CScene()
 {
 	colManager = std::make_unique<CollisionManager>();
+
+	for (int i = 0; i < EFFECT_MAX; ++i)
+	{
+		m_pd3dInstBufferEffect[i] = nullptr;
+		m_pMappedInstBufferEffect[i] = nullptr;
+		ZeroMemory(&m_d3dInstBufferViewEffect[i], sizeof(D3D12_VERTEX_BUFFER_VIEW));
+
+		m_pEffectMaterials[i] = nullptr;
+		m_vEffectPools[i].clear();
+	}
+
+	m_pEffectMesh = nullptr;
+	m_pEffectShader = nullptr;
+
+	m_pLaserObject = nullptr;
+	m_pLaserMuzzle = nullptr;
+	m_pWeaponMuzzle = nullptr;
+	m_pWeaponObject = nullptr;
+
+	m_pDebugShader = nullptr;
+	inventory = nullptr;
 }
 
 CScene::~CScene()
@@ -108,13 +166,13 @@ void tempfunc() {
 	OutputDebugString(L"fds\n");
 }
 
-void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
+void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
 	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4);
 
-	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
+	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	BuildDefaultLightsAndMaterials();
 
@@ -125,7 +183,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	UIShader = make_unique<UIObjectShader>();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	
+
 
 	//UI
 
@@ -157,21 +215,34 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	FILE* viewFile = NULL;
 
-	::fopen_s(&viewFile, "Model/r.bin", "rb");
-	if (viewFile)
 	{
-		::rewind(viewFile);
-		CGameObject* viewmodel = CGameObject::LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, viewFile, view.get(), 0);
-		viewmodel->SetPosition(0, 0, 0);
 		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
-		viewobj->SetPosition(0, 0, 0);
-		viewobj->SetChild(viewmodel);
+		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
+
+		// 주변 원판 시야
+		CGameObject* pCircleObj = new CGameObject();
+		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
+		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 1.0f, 72));
+		pCircleObj->SetShader(view.get());
+		pCircleObj->SetPosition(0.0f, 0.0f, 0.0f);
+
+		// 전방 부채꼴 시야
+		CGameObject* pConeObj = new CGameObject();
+		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
+		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 15.0f, 60.0f, 72));
+		pConeObj->SetShader(view.get());
+		pConeObj->SetPosition(0.0f, 0.001f, 0.0f);
+
+		viewobj->SetCircleObject(pCircleObj);
+		viewobj->SetConeObject(pConeObj);
+
+		viewobj->SetChild(pCircleObj);
+		viewobj->SetChild(pConeObj);
+
 		view->addObjects(std::move(viewobj));
-		::fclose(viewFile);
 	}
-	
+
 	m_ppShaders.push_back(std::move(view));
 
 	// 레이저 오브젝트
@@ -210,7 +281,6 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	//여기에 otherplayer 생성하고 위처럼 집어 넣으면 됨
-
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
@@ -262,15 +332,29 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		// 인스턴스 버퍼	크기
 		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
 
-		// 버퍼	생성
-		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL,
-			nBufferSize, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-		m_pd3dInstBufferEffect[i]->Map(0, NULL, (void**)&m_pMappedInstBufferEffect[i]);
+		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(
+			pd3dDevice,
+			pd3dCommandList,
+			NULL,
+			nBufferSize,
+			D3D12_HEAP_TYPE_UPLOAD,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+			NULL
+		);
 
-		// 인스턴 버퍼 뷰 생성
-		m_d3dInstBufferViewEffect[i].BufferLocation = m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
-		m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
-		m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
+		m_pMappedInstBufferEffect[i] = nullptr;
+		ZeroMemory(&m_d3dInstBufferViewEffect[i], sizeof(D3D12_VERTEX_BUFFER_VIEW));
+
+		if (m_pd3dInstBufferEffect[i])
+		{
+			HRESULT hr = m_pd3dInstBufferEffect[i]->Map(0, NULL, (void**)&m_pMappedInstBufferEffect[i]);
+			if (SUCCEEDED(hr) && m_pMappedInstBufferEffect[i])
+			{
+				m_d3dInstBufferViewEffect[i].BufferLocation = m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
+				m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
+				m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
+			}
+		}
 	}
 
 	for (int i = 0; i < MAX_BOMB_EFFECTS; i++)
@@ -279,7 +363,7 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.1f));
 		m_vEffectPools[EFFECT_BLOOD].push_back(new CEffect(EFFECT_BLOOD, 0.8f));
 	}
-	
+
 	for (const auto& shader : m_ppShaders) {
 		auto* objs = shader->GetObj();
 		if (objs != nullptr && !objs->empty()) {
@@ -921,6 +1005,38 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 	}
 
+	{
+		std::vector<CGameObject*> visionBlockers;
+
+		if (m_pPlayer)
+		{
+			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+
+			if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+			{
+				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP].get(), visionBlockers);
+			}
+
+			if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+			{
+				GatherVisionBlockersNearPlayer(m_ppShaders[SHADERIDX::ENEMY].get(), playerPos, 18.0f, visionBlockers);
+			}
+
+			if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
+			{
+				auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+				if (viewObjs && !viewObjs->empty())
+				{
+					ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0).get());
+					if (pViewObj)
+					{
+						pViewObj->UpdateClippedMeshes(visionBlockers);
+					}
+				}
+			}
+		}
+	}
+
 	if (m_pPlayer && m_pLights.size() > 1)
 	{
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
@@ -1127,23 +1243,25 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	{
 		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		UIShader->Render(pd3dCommandList, pCamera, true ,nPipelineState);
+		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 #ifdef  _DEBUG
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 #endif //  _DEBUG
-
-		
-
 	}
 
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 
 	for (int type = 0; type < EFFECT_MAX; type++)
 	{
+		if (!m_pMappedInstBufferEffect[type] || !m_pd3dInstBufferEffect[type])
+			continue;
+
 		int activeCount = 0;
 
 		for (CEffect* pEffect : m_vEffectPools[type])
 		{
+			if (!pEffect) continue;
+
 			if (!pEffect->IsDead())
 			{
 				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();

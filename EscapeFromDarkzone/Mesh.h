@@ -216,3 +216,33 @@ public:
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nInstances);
 };
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+class CViewCircleMesh : public CMesh
+{
+public:
+	CViewCircleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fRadius = 1.0f, int nSlices = 72);
+	virtual ~CViewCircleMesh() {}
+
+	void UpdateClippedMesh(const XMFLOAT3& worldOrigin, const std::vector<CGameObject*>& blockers);
+
+private:
+	float m_fRadius = 1.0f;
+	int m_nSlices = 72;
+	XMFLOAT3* m_pMappedPositions = nullptr;
+};
+
+class CViewConeMesh : public CMesh
+{
+public:
+	CViewConeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fRadius = 15.0f, float fAngleDegrees = 60.0f, int nSlices = 72);
+	virtual ~CViewConeMesh() {}
+
+	void UpdateClippedMesh(const XMFLOAT3& worldOrigin, float fYaw, const std::vector<CGameObject*>& blockers);
+
+private:
+	float m_fRadius = 15.0f;
+	float m_fAngleDegrees = 60.0f;
+	int m_nSlices = 72;
+	XMFLOAT3* m_pMappedPositions = nullptr;
+};

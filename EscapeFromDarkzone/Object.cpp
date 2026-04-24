@@ -1254,18 +1254,15 @@ void CGameObject::LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12Graphics
 
 			if (nMeshType & VERTEXT_NORMAL_TANGENT_TEXTURE)
 			{
-				// 1. 뼈대가 있는 스키닝 메쉬 (캐릭터 몸통 등)
 				if (nMeshType & VERTEXT_BONE_INDEX_WEIGHT)
 				{
 					if (pShader)
-						pMaterial->SetShader(pShader); // 인자로 받은 PlayerShader를 적용!
+						pMaterial->SetShader(pShader);
 					else
-						pMaterial->SetSkinnedAnimationShader(); // 인자가 없으면 부모의 기본 스키닝 셰이더
+						pMaterial->SetSkinnedAnimationShader();
 				}
-				// 2. 뼈대가 없는 일반 메쉬 (무기, 악세사리 등)
 				else
 				{
-					// 🚨 주의: 여기에 PlayerShader를 넣으면 Input Layout이 달라서 터집니다!
 					pMaterial->SetStandardShader();
 				}
 			}
@@ -1713,9 +1710,93 @@ void CSkyBox::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
+// 시야 오브젝트 배치
 void ViewObject::Animate(float fTimeElapsed)
 {
-	if (player) {
-		m_xmf4x4ToParent = player->GetMatrix();
+	if (!player) return;
+
+	XMFLOAT3 viewPos = player->GetPosition();
+	viewPos.y += 0.03f;
+
+	m_xmf4x4ToParent = Matrix4x4::Identity();
+	m_xmf4x4ToParent._41 = viewPos.x;
+	m_xmf4x4ToParent._42 = viewPos.y;
+	m_xmf4x4ToParent._43 = viewPos.z;
+
+	if (m_pCircleObject)
+	{
+		m_pCircleObject->m_xmf4x4ToParent = Matrix4x4::Identity();
+		m_pCircleObject->m_xmf4x4ToParent._42 = 0.0f;
+	}
+
+	//카메라 방향 회전
+	if (m_pConeObject)
+	{
+		XMFLOAT3 look = player->GetLookVector();
+
+		if (player->GetCamera())
+			look = player->GetCamera()->GetLookVector();
+
+		look.y = 0.0f;
+
+		float lenSq = look.x * look.x + look.z * look.z;
+		if (lenSq < 0.000001f)
+		{
+			look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+		}
+		else
+		{
+			look = Vector3::Normalize(look);
+		}
+
+		float yaw = atan2f(look.x, look.z);
+
+		XMMATRIX mRot = XMMatrixRotationY(yaw);
+		XMFLOAT4X4 localRot;
+		XMStoreFloat4x4(&localRot, mRot);
+
+		localRot._42 = 0.001f;
+		m_pConeObject->m_xmf4x4ToParent = localRot;
+	}
+}
+
+// block기준으로 시야 메시 계산
+void ViewObject::UpdateClippedMeshes(const std::vector<CGameObject*>& blockers)
+{
+	if (!player) return;
+
+	XMFLOAT3 origin = player->GetPosition();
+	origin.y += 0.5f;
+
+	XMFLOAT3 look = player->GetLookVector();
+	if (player->GetCamera())
+		look = player->GetCamera()->GetLookVector();
+
+	look.y = 0.0f;
+
+	float lenSq = look.x * look.x + look.z * look.z;
+	if (lenSq < 0.000001f)
+	{
+		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	}
+	else
+	{
+		look = Vector3::Normalize(look);
+	}
+
+	float yaw = atan2f(look.x, look.z);
+
+	if (m_pCircleObject)
+	{
+		CViewCircleMesh* pCircleMesh = dynamic_cast<CViewCircleMesh*>(m_pCircleObject->GetMesh());
+		if (pCircleMesh)
+			pCircleMesh->UpdateClippedMesh(origin, blockers);
+	}
+
+	if (m_pConeObject)
+	{
+		CViewConeMesh* pConeMesh = dynamic_cast<CViewConeMesh*>(m_pConeObject->GetMesh());
+		if (pConeMesh)
+			pConeMesh->UpdateClippedMesh(origin, yaw, blockers);
 	}
 }

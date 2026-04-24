@@ -5,6 +5,68 @@
 #include "stdafx.h"
 #include "Mesh.h"
 #include "Object.h"
+#include "EnemyObject.h"
+#include "OtherPlayer.h"
+
+static XMFLOAT3 RotateVectorY(const XMFLOAT3& v, float yaw)
+{
+	float c = cosf(yaw);
+	float s = sinf(yaw);
+
+	return XMFLOAT3(
+		v.x * c + v.z * s,
+		0.0f,
+		-v.x * s + v.z * c
+	);
+}
+
+// 시야ray랑 block 충돌 거리 중에 가까운 값 반환
+static float RaycastVisionBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT3& worldDir, float maxDistance, const std::vector<CGameObject*>& blockers)
+{
+	float nearest = maxDistance;
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&worldOrigin);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&worldDir));
+
+	for (CGameObject* pObj : blockers)
+	{
+		if (!pObj) continue;
+
+		const auto& oobbs = pObj->GetOOBB();
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			if (pOOBB->Extents.y < 0.3f)
+				continue;
+
+			float hitDist = 0.0f;
+			if (pOOBB->Intersects(rayOrigin, rayDir, hitDist))
+			{
+				float clipDist = hitDist;
+
+				if (dynamic_cast<CEnemyObject*>(pObj) || dynamic_cast<OtherPlayer*>(pObj))
+				{
+					float bodyDepth = (pOOBB->Extents.x > pOOBB->Extents.z) ? pOOBB->Extents.x : pOOBB->Extents.z;
+					bodyDepth = bodyDepth * 2.0f;
+					clipDist = hitDist + bodyDepth + 0.05f;
+				}
+				else
+				{
+					clipDist = hitDist - 0.05f;
+				}
+
+				if (clipDist < 0.05f) clipDist = 0.05f;
+				if (clipDist < nearest) nearest = clipDist;
+			}
+		}
+	}
+
+	if (nearest > maxDistance) nearest = maxDistance;
+	if (nearest < 0.05f) nearest = 0.05f;
+
+	return nearest;
+}
 
 CMesh::CMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
@@ -606,4 +668,233 @@ void CParticleMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nInst
 	pd3dCommandList->IASetIndexBuffer(&m_pd3dSubSetIndexBufferViews[0]);
 
 	pd3dCommandList->DrawIndexedInstanced(6, nInstances, 0, 0, 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+//
+CViewCircleMesh::CViewCircleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fRadius, int nSlices)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	if (nSlices < 3) nSlices = 3;
+	if (nSlices > 16) nSlices = 16;
+
+	m_fRadius = fRadius;
+	m_nSlices = nSlices;
+
+	m_nType |= VERTEXT_POSITION;
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	m_nVertices = m_nSlices + 1;
+	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
+
+	m_pxmf3Positions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	const float fStep = XM_2PI / float(m_nSlices);
+	for (int i = 0; i < m_nSlices; ++i)
+	{
+		float a = fStep * i;
+		float x = sinf(a) * m_fRadius;
+		float z = cosf(a) * m_fRadius;
+		m_pxmf3Positions[i + 1] = XMFLOAT3(x, 0.0f, z);
+	}
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1];
+	m_pnSubSetIndices[0] = m_nSlices * 3;
+
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[m_pnSubSetIndices[0]];
+
+	for (int i = 0; i < m_nSlices; ++i)
+	{
+		int next = (i + 1) % m_nSlices;
+
+		m_ppnSubSetIndices[0][i * 3 + 0] = 0;
+		m_ppnSubSetIndices[0][i * 3 + 1] = i + 1;
+		m_ppnSubSetIndices[0][i * 3 + 2] = next + 1;
+	}
+
+	UINT nVertexBufferSize = sizeof(XMFLOAT3) * m_nVertices;
+	m_pd3dPositionBuffer = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		NULL,
+		nVertexBufferSize,
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		NULL
+	);
+	m_pd3dPositionBuffer->Map(0, NULL, (void**)&m_pMappedPositions);
+	memcpy(m_pMappedPositions, m_pxmf3Positions, nVertexBufferSize);
+
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = nVertexBufferSize;
+
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_ppd3dSubSetIndexUploadBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		m_ppnSubSetIndices[0],
+		sizeof(UINT) * m_pnSubSetIndices[0],
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_ppd3dSubSetIndexUploadBuffers[0]
+	);
+
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * m_pnSubSetIndices[0];
+
+	m_xmf3AABBCenter = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_xmf3AABBExtents = XMFLOAT3(m_fRadius, 0.05f, m_fRadius);
+}
+
+CViewConeMesh::CViewConeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fRadius, float fAngleDegrees, int nSlices)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	if (nSlices < 1) nSlices = 1;
+	if (nSlices > 40) nSlices = 40;
+
+	m_fRadius = fRadius;
+	m_fAngleDegrees = fAngleDegrees;
+	m_nSlices = nSlices;
+
+	m_nType |= VERTEXT_POSITION;
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	const int nArcVertices = m_nSlices + 1;
+
+	m_nVertices = nArcVertices + 1;
+	m_pxmf3Positions = new XMFLOAT3[m_nVertices];
+
+	m_pxmf3Positions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fHalfAngleRad = XMConvertToRadians(m_fAngleDegrees * 0.5f);
+	float fStart = -fHalfAngleRad;
+	float fStep = (fHalfAngleRad * 2.0f) / float(m_nSlices);
+
+	for (int i = 0; i <= m_nSlices; ++i)
+	{
+		float a = fStart + fStep * i;
+		float x = sinf(a) * m_fRadius;
+		float z = cosf(a) * m_fRadius;
+		m_pxmf3Positions[i + 1] = XMFLOAT3(x, 0.0f, z);
+	}
+
+	m_nSubMeshes = 1;
+	m_pnSubSetIndices = new int[1];
+	m_pnSubSetIndices[0] = m_nSlices * 3;
+
+	m_ppnSubSetIndices = new UINT * [1];
+	m_ppnSubSetIndices[0] = new UINT[m_pnSubSetIndices[0]];
+
+	for (int i = 0; i < m_nSlices; ++i)
+	{
+		m_ppnSubSetIndices[0][i * 3 + 0] = 0;
+		m_ppnSubSetIndices[0][i * 3 + 1] = i + 1;
+		m_ppnSubSetIndices[0][i * 3 + 2] = i + 2;
+	}
+
+	UINT nVertexBufferSize = sizeof(XMFLOAT3) * m_nVertices;
+	m_pd3dPositionBuffer = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		NULL,
+		nVertexBufferSize,
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		NULL
+	);
+	m_pd3dPositionBuffer->Map(0, NULL, (void**)&m_pMappedPositions);
+	memcpy(m_pMappedPositions, m_pxmf3Positions, nVertexBufferSize);
+
+	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
+	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
+	m_d3dPositionBufferView.SizeInBytes = nVertexBufferSize;
+
+	m_ppd3dSubSetIndexBuffers = new ID3D12Resource * [1];
+	m_ppd3dSubSetIndexUploadBuffers = new ID3D12Resource * [1];
+	m_pd3dSubSetIndexBufferViews = new D3D12_INDEX_BUFFER_VIEW[1];
+
+	m_ppd3dSubSetIndexBuffers[0] = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		m_ppnSubSetIndices[0],
+		sizeof(UINT) * m_pnSubSetIndices[0],
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_ppd3dSubSetIndexUploadBuffers[0]
+	);
+
+	m_pd3dSubSetIndexBufferViews[0].BufferLocation = m_ppd3dSubSetIndexBuffers[0]->GetGPUVirtualAddress();
+	m_pd3dSubSetIndexBufferViews[0].Format = DXGI_FORMAT_R32_UINT;
+	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * m_pnSubSetIndices[0];
+
+	m_xmf3AABBCenter = XMFLOAT3(0.0f, 0.0f, m_fRadius * 0.5f);
+	m_xmf3AABBExtents = XMFLOAT3(m_fRadius, 0.05f, m_fRadius * 0.5f);
+}
+
+//block 충돌 결과에 맞춰서 잘린 형태 갱신
+void CViewCircleMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, const std::vector<CGameObject*>& blockers)
+{
+	if (!m_pMappedPositions) return;
+
+	m_pMappedPositions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	const float fStep = XM_2PI / float(m_nSlices);
+
+	for (int i = 0; i < m_nSlices; ++i)
+	{
+		float a = fStep * i;
+
+		XMFLOAT3 localDir(
+			sinf(a),
+			0.0f,
+			cosf(a)
+		);
+
+		float hitDist = RaycastVisionBlockers(worldOrigin, localDir, m_fRadius, blockers);
+
+		m_pMappedPositions[i + 1] = XMFLOAT3(
+			localDir.x * hitDist,
+			0.0f,
+			localDir.z * hitDist
+		);
+	}
+}
+
+void CViewConeMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, float fYaw, const std::vector<CGameObject*>& blockers)
+{
+	if (!m_pMappedPositions) return;
+
+	m_pMappedPositions[0] = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fHalfAngleRad = XMConvertToRadians(m_fAngleDegrees * 0.5f);
+	float fStart = -fHalfAngleRad;
+	float fStep = (fHalfAngleRad * 2.0f) / float(m_nSlices);
+
+	for (int i = 0; i <= m_nSlices; ++i)
+	{
+		float a = fStart + fStep * i;
+
+		XMFLOAT3 localDir(
+			sinf(a),
+			0.0f,
+			cosf(a)
+		);
+
+		XMFLOAT3 worldDir = RotateVectorY(localDir, fYaw);
+
+		float hitDist = RaycastVisionBlockers(worldOrigin, worldDir, m_fRadius, blockers);
+
+		m_pMappedPositions[i + 1] = XMFLOAT3(
+			localDir.x * hitDist,
+			0.0f,
+			localDir.z * hitDist
+		);
+	}
 }

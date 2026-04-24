@@ -26,6 +26,16 @@ VS_STANDARD_OUTPUT VSStandard(VS_STANDARD_INPUT input)
 	return(output);
 }
 
+VS_VIEW_OUTPUT VSView(VS_VIEW_INPUT input)
+{
+    VS_VIEW_OUTPUT output;
+
+    float4 positionW = mul(float4(input.position, 1.0f), gmtxGameObject);
+    output.position = mul(mul(positionW, gmtxView), gmtxProjection);
+
+    return output;
+}
+
 float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
     float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -104,10 +114,9 @@ VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)
 	return(output);
 }
 
-float4 PSView(VS_STANDARD_OUTPUT input) : SV_TARGET
+float4 PSView(VS_VIEW_OUTPUT input) : SV_TARGET
 {
-
-    return float4(1, 1, 0, 0.3);
+    return float4(1.0f, 1.0f, 0.0f, 0.3f);
 }
 
 VS_UI_OUTPUT VSUI(VS_UI_INPUT input)

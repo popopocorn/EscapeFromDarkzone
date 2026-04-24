@@ -213,26 +213,30 @@ protected:
 };
 
 
-class ViewShader : public CStandardShader {
+class ViewShader : public CStandardShader
+{
 public:
 	ViewShader();
 
-	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
-	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+	//시야 메쉬용 셰이더
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout() override;
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader() override;
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader() override;
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState() override;
+	virtual D3D12_BLEND_DESC CreateBlendState() override;
 
 	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
 
-
+	//시야 오브젝트 갱신
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
-	
-	
-	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
-private:
-	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 
+	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
+
+private:
+	std::vector<std::unique_ptr<CGameObject>> m_ppObjects;
 };
 
 class PlayerShader : public CSkinnedAnimationStandardShader {
