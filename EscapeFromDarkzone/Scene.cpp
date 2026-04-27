@@ -310,7 +310,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 		auto pCircleObj = std::make_unique<CGameObject>();
 		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
-		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 1.0f, 72));
+		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 2.0f, 72));
 		pCircleObj->SetShader(view.get());
 		pCircleObj->SetPosition(0.0f, 0.0f, 0.0f);
 
