@@ -112,7 +112,8 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4);
+	//CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4);
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);		// 04.24 추가: 임시로 넉넉하게 잡음. 
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature); 
 
@@ -146,10 +147,52 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/map0310_dds.bin", stdshader.get(), 0));
-	map->SetPosition(-150, -0.5, -150);
-	map->SetOOBB(NULL);
-	stdshader->addObjects(std::move(map));
+	// 04.24 추가: 맵 여러 번 호출
+	{
+		std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/floor_01.bin", stdshader.get(), 0));
+		map->SetPosition(0, -0.5, 0);
+		map->SetOOBB(NULL);
+		stdshader->addObjects(std::move(map));
+		static const char* s_mapFiles[] = {
+			"Model/block1.bin",
+			"Model/block3.bin",
+			"Model/block4.bin",
+			"Model/block5.bin",
+			"Model/block6.bin",
+			"Model/block10.bin",
+			"Model/block11.bin",
+			"Model/block12.bin",
+			"Model/block13.bin",
+			"Model/block14.bin",
+			"Model/block15.bin",
+			"Model/block16.bin",
+			"Model/block17.bin",
+			"Model/block18.bin",
+			"Model/block19.bin",
+			"Model/block20.bin",
+			"Model/block21.bin",
+			"Model/block22.bin",
+			"Model/block23.bin",
+			"Model/block24.bin",
+			"Model/block30.bin",
+			"Model/block31.bin",
+			"Model/block32.bin",
+			"Model/block33.bin",
+			"Model/block34.bin",
+			"Model/block35.bin",
+			"Model/block36.bin",
+			"Model/block37.bin",
+			"Model/block38.bin",
+			"Model/block40.bin"
+		};
+		for (const char* fileName : s_mapFiles)
+		{
+			std::unique_ptr<CGameObject> map(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, fileName, stdshader.get(), 0));
+			map->SetPosition(-150, -0.5, -150);
+			map->SetOOBB(NULL);
+			stdshader->addObjects(std::move(map));
+		}
+	}
 	m_ppShaders.push_back(std::move(stdshader));
 
 
