@@ -216,30 +216,50 @@ int GetCascadeIndex(float depth)
 float CalcShadowFactor(float3 positionW, float viewDepth)
 {
     int cascadeIndex = GetCascadeIndex(viewDepth);
-
     
     float4 posLight = mul(float4(positionW, 1.0f), gmtxLightView[cascadeIndex]);
     posLight = mul(posLight, gmtxLightProjection[cascadeIndex]);
-
     
     float2 shadowUV;
     shadowUV.x = posLight.x / posLight.w * 0.5f + 0.5f;
     shadowUV.y = -posLight.y / posLight.w * 0.5f + 0.5f;
 
     float currentDepth = posLight.z / posLight.w;
-
     
     if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
         shadowUV.y < 0.0f || shadowUV.y > 1.0f)
         return 1.0f;
 
+    // 1. 그림자 맵의 해상도를 가져와 1픽셀(Texel)의 크기를 구합니다.
+    uint width, height, elements, levels;
+    shadowMap.GetDimensions(0, width, height, elements, levels);
+    float dx = 1.0f / (float) width;
+    float dy = 1.0f / (float) height;
 
-    float shadow = shadowMap.SampleCmpLevelZero(
-        shadowSampler,
-        float3(shadowUV, cascadeIndex),
-        currentDepth - 0.0015f);
+    // 2. 주변 3x3 영역의 그림자 값을 누적할 변수
+    float percentLit = 0.0f;
 
-    return shadow;
+    // 3x3 픽셀 오프셋 배열 (현재 픽셀을 중심으로 주변 8방향)
+    const float2 offsets[9] =
+    {
+        float2(-dx, -dy), float2(0.0f, -dy), float2(dx, -dy),
+        float2(-dx, 0.0f), float2(0.0f, 0.0f), float2(dx, 0.0f),
+        float2(-dx, dy), float2(0.0f, dy), float2(dx, dy)
+    };
+
+    // 3. 루프를 돌며 9번 텍스처를 샘플링하고 더합니다.
+    // [unroll] 속성을 달아주면 컴파일러가 루프를 풀어줘서 성능에 유리합니다.
+    [unroll]
+    for (int i = 0; i < 9; ++i)
+    {
+        percentLit += shadowMap.SampleCmpLevelZero(
+            shadowSampler,
+            float3(shadowUV + offsets[i], cascadeIndex),
+            currentDepth - 0.0015f);
+    }
+
+    // 4. 샘플링한 횟수(9)만큼 나누어 평균(퍼센트)을 냅니다.
+    return percentLit / 9.0f;
 }
 
 #endif // COMMON_HLSLI

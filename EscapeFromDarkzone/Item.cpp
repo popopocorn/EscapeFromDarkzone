@@ -212,7 +212,6 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	float slotH = totalH / static_cast<float>(MAX_SLOTS);
 	float posX = box.minX + (totalW * 0.5f);
 	float gap = 0.025;
-	//CGameObject* uibase = CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", pShader, 0);
 	UIMesh* m = new UIMesh(pd3dDevice, pd3dCommandList);
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
