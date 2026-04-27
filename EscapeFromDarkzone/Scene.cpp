@@ -104,9 +104,6 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-void tempfunc() {
-	OutputDebugString(L"fds\n");
-}
 
 void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
@@ -121,23 +118,9 @@ void CScene::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *p
 
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	/*XMFLOAT3 xmf3Scale(8.0f, 2.0f, 8.0f);
-	XMFLOAT4 xmf4Color(0.0f, 0.3f, 0.0f, 0.0f);*/
 
 	UIShader = make_unique<UIObjectShader>();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	
-
-	//UI
-
-	/*UIObject* UItemp = new UIObject();
-	UItemp->SetChild(CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL, "Model/pannel.bin", UIShader.get(), 0));
-	UItemp->SetPosition(0.5, 0, 0.5);
-	UItemp->SetScale(0.5, 0.5, 1);
-
-	UItemp->setAABB();
-	UItemp->SetFunc(tempfunc);
-	UIShader->addObjects(UItemp);*/
 
 	inventory = new Inventory(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
 

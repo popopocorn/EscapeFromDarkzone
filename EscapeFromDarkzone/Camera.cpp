@@ -396,9 +396,18 @@ void LightCamera::BuildLightMatrices(
 	minZ -= 100.0f;
 
 	// 5. 직교 투영 행렬 생성
-	XMMATRIX ortho = XMMatrixOrthographicOffCenterLH(
-		minX, maxX, minY, maxY, minZ, maxZ);
-	XMStoreFloat4x4(&m_xmf4x4Projection, ortho);
+	XMMATRIX ortho = XMMatrixOrthographicOffCenterLH(minX, maxX, minY, maxY, minZ, maxZ);
+	XMFLOAT4X4 f4x4Projection;
+	XMStoreFloat4x4(&f4x4Projection, ortho);
+
+	// 투영 행렬 세팅 (여기서 cameraFrustumLocal이 갱신됨)
+	GenerateProjectionMatrix(f4x4Projection);
+
+	XMMATRIX viewMatrix = XMLoadFloat4x4(&m_xmf4x4View);
+	XMMATRIX viewInverse = XMMatrixInverse(nullptr, viewMatrix);
+
+	// cameraFrustumLocal을 viewInverse로 변환하여 최종 cameraFrustum(월드 기준)을 만듭니다.
+	cameraFrustumLocal.Transform(cameraFrustum, viewInverse);
 }
 
 LightCamera::LightCamera()
