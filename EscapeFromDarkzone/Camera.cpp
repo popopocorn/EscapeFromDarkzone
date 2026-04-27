@@ -429,7 +429,7 @@ void LightCameraManager::ComputeCascadeSplits(
 	float fNear, float fFar,
 	float outSplits[CASCADE_COUNT + 1])
 {
-	constexpr float lambda = 1.0f;
+	constexpr float lambda = 0.97f;
 
 	outSplits[0] = fNear;
 	outSplits[CASCADE_COUNT] = fFar;
