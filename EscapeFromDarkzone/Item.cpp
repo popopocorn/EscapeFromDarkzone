@@ -207,22 +207,23 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	float totalW = box.maxX - box.minX;
 	float totalH = box.maxY - box.minY;
 
-	// 2. 개별 슬롯의 크기 결정 (리스트 형태이므로 가로는 전체 너비)
 	float slotW = totalW;
 	float slotH = totalH / static_cast<float>(MAX_SLOTS);
 	float posX = box.minX + (totalW * 0.5f);
-	float gap = 0.025;
+	float gap = 0.025f;
+
 	UIMesh* m = new UIMesh(pd3dDevice, pd3dCommandList);
+
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
 		float posY = box.maxY - (slotH * 0.5f) - (i * slotH);
 
 		if (!slots[i].ui)
 		{
-			slots[i].ui = new UIObject();
+			slots[i].ui = std::make_unique<UIObject>();
 		}
 
-		auto* ui = slots[i].ui;
+		auto* ui = slots[i].ui.get();
 		ui->SetFunc([this, i]() {
 			this->SlotClicked(i);
 			});
@@ -235,10 +236,14 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 
 void Inventory::SubmitToShader(UIObjectShader* shader)
 {
-	if (not isOpen)return;
+	if (!isOpen) return;
+
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		shader->addObjects(slots[i].ui);
+		if (slots[i].ui)
+		{
+			shader->addObjects(slots[i].ui.get());
+		}
 	}
 }
 
@@ -253,7 +258,9 @@ void Inventory::ProcessClick(POINT mouse)
 {
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		auto* ui = slots[i].ui;
+		auto* ui = slots[i].ui.get();
+		if (!ui) continue;
+
 		if (ui->GetBox().Intersects(mouse))
 		{
 			ui->HandleClick();
@@ -276,6 +283,15 @@ bool Inventory::AddItem(const std::shared_ptr<Item>& item, int count)
 	}
 
 	return false;
+}
+
+void Inventory::ClearItems()
+{
+	for (auto& slot : slots)
+	{
+		slot.item.reset();
+		slot.count = 0;
+	}
 }
 
 ItemSlot* Inventory::GetSlot(int idx)

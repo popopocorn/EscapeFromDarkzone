@@ -87,7 +87,7 @@ protected:
 struct ItemSlot {
 	std::shared_ptr<Item> item;
 	int count = 0;
-	UIObject* ui = nullptr;
+	std::unique_ptr<UIObject> ui;
 };
 
 const int MAX_SLOTS = 10;
@@ -108,6 +108,8 @@ public:
 
 	bool AddItem(const std::shared_ptr<Item>& item, int count = 1);
 	ItemSlot* GetSlot(int idx);
+
+	void ClearItems();
 
 	bool isOpen = false;
 };

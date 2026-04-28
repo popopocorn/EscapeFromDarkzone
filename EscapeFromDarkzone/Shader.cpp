@@ -459,6 +459,35 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, 
 	}
 }
 
+void CStandardObjectsShader::DeleteObject(UINT64 fence)
+{
+	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+		if (!obj->IsAlive())
+		{
+			CGameObject* pRawObj = obj.release();
+			GarbageQueue.push({ pRawObj, fence });
+			return true;
+		}
+		return false;
+		});
+}
+
+void CStandardObjectsShader::ProcessingGarbageQueue(UINT64 completed)
+{
+	while (!GarbageQueue.empty())
+	{
+		auto& garbage = GarbageQueue.front();
+		if (completed >= garbage.FenceValue)
+		{
+			garbage.obj->Release();
+			GarbageQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
+}
 
 float Random(float fMin, float fMax)
 {
@@ -880,14 +909,28 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 {
 	if (!pGameObject) return;
 
+	bool bCanAdd = false;
+	XMFLOAT3 extents = XMFLOAT3(0, 0, 0);
+	XMFLOAT3 center = XMFLOAT3(0, 0, 0);
+
 	CMesh* pMesh = pGameObject->GetMesh();
 
 	if (pMesh && pGameObject->HasOOBB)
 	{
-		// 로컬값 가져오기
-		XMFLOAT3 extents = pMesh->GetAABBExtents();
-		XMFLOAT3 center = pMesh->GetAABBCenter();
+		extents = pMesh->GetAABBExtents();
+		center = pMesh->GetAABBCenter();
+		bCanAdd = true;
+	}
+	else if (pGameObject->HasOOBB)
+	{
+		const BoundingOrientedBox& oobb = pGameObject->GetOOBBModel();
+		extents = oobb.Extents;
+		center = oobb.Center;
+		bCanAdd = true;
+	}
 
+	if (bCanAdd)
+	{
 		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
 		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
 
@@ -901,7 +944,6 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 		m_DebugInstances.push_back(instance);
 	}
 
-	//트리 순회
 	if (pGameObject->m_pChild)
 	{
 		AddObject(pGameObject->m_pChild);
@@ -912,7 +954,6 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 		AddObject(pGameObject->m_pSibling);
 	}
 }
-
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)
 {
 	if (m_DebugInstances.empty()) return;

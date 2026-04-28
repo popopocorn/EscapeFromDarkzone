@@ -154,15 +154,18 @@ public:
 	CStandardObjectsShader();
 	virtual ~CStandardObjectsShader();
 
-	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL);
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* pModel, void* pContext = NULL);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void ReleaseObjects();
 
 	virtual void ReleaseUploadBuffers();
 
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
-	std::vector<std::unique_ptr<CGameObject>>* GetObj(){ return &m_ppObjects; }
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
+	virtual void DeleteObject(UINT64 fence);
+	virtual void ProcessingGarbageQueue(UINT64 completed);
+
+	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };

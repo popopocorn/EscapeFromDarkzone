@@ -43,12 +43,12 @@ struct LIGHTS
 
 class ShadowMap;
 
-enum SHADERIDX : size_t{
+enum SHADERIDX : size_t {
 	MAP = 0,
 	VIEW = 1,
 	LASER = 2,
 	ENEMY = 3,
-
+	LOOT = 4,
 };
 
 struct ColResult;
@@ -122,11 +122,11 @@ public:
 
 	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	std::vector<std::unique_ptr<CShader>>				m_ppShaders;
+	vector<std::unique_ptr<CShader>>				m_ppShaders;
 
-	std::unique_ptr<CSkyBox>								m_pSkyBox;
+	unique_ptr<CSkyBox>								m_pSkyBox;
 
-	std::vector<LIGHT>					m_pLights;
+	vector<LIGHT>									m_pLights;
 	int									m_nLights = 0;
 
 	XMFLOAT4							m_xmf4GlobalAmbient;
@@ -134,9 +134,9 @@ public:
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
-	CBoundingBoxShader* m_pDebugShader = NULL;
+	unique_ptr<CBoundingBoxShader> m_pDebugShader;
 
-	std::vector<CEffect*> m_vEffectPools[EFFECT_MAX];
+	vector<unique_ptr<CEffect>> m_vEffectPools[EFFECT_MAX];
 
 	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
 	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
@@ -148,7 +148,7 @@ public:
 	float m_fLaserLength = 15.0f;
 
 	CMaterial* m_pEffectMaterials[EFFECT_MAX];
-	CParticleMesh* m_pEffectMesh = NULL;
+	unique_ptr<CParticleMesh> m_pEffectMesh;
 
 	class CEffectShader* m_pEffectShader = NULL;
 
@@ -161,14 +161,16 @@ public:
 
 	CGameObject* m_pWeaponObject = nullptr;
 
-	std::unique_ptr<UIObjectShader> UIShader;
+	unique_ptr<UIObjectShader> UIShader;
 
-	std::vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
+	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
 	CGameObject* m_pLaserObject = NULL;
-	std::unique_ptr<CollisionManager> colManager;
-	Inventory* inventory;
-	
+	unique_ptr<CollisionManager> colManager;
+	unique_ptr<Inventory> inventory;
+	unique_ptr<Inventory> corpseInventory = nullptr;
+	CLootContainerObject* m_pOpenedLoot = nullptr;
+	float m_fLootInteractDistance = 3.0f;
 
 public:
 
@@ -183,23 +185,13 @@ public:
 	void DeleteDeadObject(UINT64 Fence);
 	void DeleteTrash(UINT64 Fence);
 
+	//인벤토리용 함수
+	bool IsAnyInventoryOpen() const;
+	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
+	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+	CLootContainerObject* FindNearestLootContainer(float fMaxDistance) const;	// 상호작용 거리 내 가장 가까운 루팅 오브젝트 찾기
+	void SpawnLootContainerFromEnemy(CEnemyObject* pEnemy);						// 죽은 적 위치에 루팅 오브젝트 생성
+
 	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//UI용 함수 선언
-
-
