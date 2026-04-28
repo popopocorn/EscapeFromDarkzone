@@ -694,20 +694,22 @@ D3D12_BLEND_DESC ViewShader::CreateBlendState()
 	d3dBlendDesc.IndependentBlendEnable = FALSE;
 
 	D3D12_RENDER_TARGET_BLEND_DESC& rt = d3dBlendDesc.RenderTarget[0];
-	rt.BlendEnable = FALSE;
+	rt.BlendEnable = TRUE;
 	rt.LogicOpEnable = FALSE;
-	rt.SrcBlend = D3D12_BLEND_ONE;
-	rt.DestBlend = D3D12_BLEND_ZERO;
+
+	rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 	rt.BlendOp = D3D12_BLEND_OP_ADD;
+
 	rt.SrcBlendAlpha = D3D12_BLEND_ONE;
 	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
 	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
 	rt.LogicOp = D3D12_LOGIC_OP_NOOP;
 	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 	return d3dBlendDesc;
 }
-
 void ViewShader::CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
