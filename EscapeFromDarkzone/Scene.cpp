@@ -1016,6 +1016,9 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 				inventory->isOpen = !inventory->isOpen;
 			}
 			break;
+		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
+			DumpMapOOBBToCSV("map_oobb.csv");
+			break;
 		}
 
 	case WM_KEYUP:
@@ -1079,6 +1082,56 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	}
 
 	return false;
+}
+
+void CScene::DumpMapOOBBToCSV(const char* filename)
+{
+	if (m_ppShaders.size() <= SHADERIDX::MAP) return;
+	if (!m_ppShaders[SHADERIDX::MAP]) return;
+
+	auto* objs = m_ppShaders[SHADERIDX::MAP]->GetObj();
+	if (!objs) return;
+
+	FILE* fp = nullptr;
+	fopen_s(&fp, filename, "w");
+	if (!fp)
+	{
+		OutputDebugStringA("DumpMapOOBBToCSV: failed to open file\n");
+		return;
+	}
+
+	// 헤더 주석
+	fprintf(fp, "# center_x,center_y,center_z,ext_x,ext_y,ext_z,quat_x,quat_y,quat_z,quat_w\n");
+
+	int count = 0;
+	for (const auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		const auto& oobbs = obj->GetOOBB();
+		for (const BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			// 쿼터니언 정규화 (단위 쿼터니언 보장)
+			XMVECTOR q = XMLoadFloat4(&pOOBB->Orientation);
+			q = XMQuaternionNormalize(q);
+			XMFLOAT4 quat;
+			XMStoreFloat4(&quat, q);
+
+			fprintf(fp, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+				pOOBB->Center.x, pOOBB->Center.y, pOOBB->Center.z,
+				pOOBB->Extents.x, pOOBB->Extents.y, pOOBB->Extents.z,
+				quat.x, quat.y, quat.z, quat.w);
+			++count;
+		}
+	}
+
+	fclose(fp);
+
+	char msg[128];
+	sprintf_s(msg, "DumpMapOOBBToCSV: dumped %d OOBBs to %s\n", count, filename);
+	OutputDebugStringA(msg);
 }
 
 bool CScene::ProcessInput(UCHAR *pKeysBuffer)
