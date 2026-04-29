@@ -268,6 +268,14 @@ void Inventory::ProcessClick(POINT mouse)
 	}
 }
 
+void Inventory::SetPosition(float x, float y)
+{
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		slots[i].ui->SetLocate(x, y, 0.5f);
+	}
+}
+
 bool Inventory::AddItem(const std::shared_ptr<Item>& item, int count)
 {
 	if (!item || count <= 0) return false;
