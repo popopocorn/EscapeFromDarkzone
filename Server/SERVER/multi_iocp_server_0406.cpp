@@ -13,6 +13,8 @@
 
 #include "protocol.h"
 
+#include "Collision.h"
+
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
 using namespace std;
