@@ -554,6 +554,8 @@ void CSkinnedAnimationObjectsShader::ReleaseObjects()
 
 void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 {
+	m_fElapsedTime = fTimeElapsed;
+
 	for (int i = 0; i < m_ppObjects.size(); i++)
 	{
 		if (m_ppObjects[i])
@@ -595,35 +597,19 @@ D3D12_DEPTH_STENCIL_DESC CSkinnedAnimationObjectsShader::CreateDepthStencilState
 	return(d3dDepthStencilDesc);
 }
 
-void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
+void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
 	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
-	/*for (int j = 0; j < m_ppObjects.size(); j++)
-	{
-		if (m_ppObjects[j])
-		{
-			if (m_ppObjects[j]->m_pSkinnedAnimationController)
-			{
-				m_ppObjects[j]->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, m_ppObjects[j].get());
-
-				m_ppObjects[j]->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
-			}
-			m_ppObjects[j]->Animate(m_fElapsedTime);
-			m_ppObjects[j]->Render(pd3dCommandList, pCamera);
-		}
-	}*/
-	
 	for (const auto& pObject : m_ppObjects)
 	{
+		if (!pObject) continue;
+
 		if (pObject->m_pSkinnedAnimationController)
 		{
-			pObject->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, pObject.get());
-
 			pObject->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 		}
 
-		// °´Ã¼ ±×¸®±â
 		pObject->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 	}
 }

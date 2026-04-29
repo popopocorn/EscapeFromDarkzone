@@ -199,25 +199,22 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
 
 Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
 {
-	box.maxY = 0.5;
-	box.minY = -0.5;
-	box.minX = -0.5;
-	box.maxX = 0.0;
+	box.maxY = 0.5f;
+	box.minY = -0.5f;
+	box.minX = -0.5f;
+	box.maxX = 0.0f;
 
 	float totalW = box.maxX - box.minX;
 	float totalH = box.maxY - box.minY;
 
-	float slotW = totalW;
-	float slotH = totalH / static_cast<float>(MAX_SLOTS);
-	float posX = box.minX + (totalW * 0.5f);
-	float gap = 0.025f;
+	m_slotW = totalW;
+	m_slotH = totalH / static_cast<float>(MAX_SLOTS);
+	m_slotGap = 0.025f;
 
 	UIMesh* m = new UIMesh(pd3dDevice, pd3dCommandList);
 
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		float posY = box.maxY - (slotH * 0.5f) - (i * slotH);
-
 		if (!slots[i].ui)
 		{
 			slots[i].ui = std::make_unique<UIObject>();
@@ -228,10 +225,10 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 			this->SlotClicked(i);
 			});
 		ui->SetUIMesh(m);
-		ui->SetScale(slotW, slotH - gap, 1.0f);
-		ui->SetLocate(posX, posY, 0.5f);
-		ui->setAABB();
+		ui->SetScale(m_slotW, m_slotH - m_slotGap, 1.0f);
 	}
+
+	SetPosition(0.0f, 0.0f);
 }
 
 void Inventory::SubmitToShader(UIObjectShader* shader)
@@ -270,9 +267,16 @@ void Inventory::ProcessClick(POINT mouse)
 
 void Inventory::SetPosition(float x, float y)
 {
+	m_baseX = x;
+	m_baseY = y;
+
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		slots[i].ui->SetLocate(x, y, 0.5f);
+		if (!slots[i].ui) continue;
+
+		float posY = m_baseY + (0.5f - (m_slotH * 0.5f) - (i * m_slotH));
+		slots[i].ui->SetLocate(m_baseX, posY, 0.5f);
+		slots[i].ui->setAABB();
 	}
 }
 

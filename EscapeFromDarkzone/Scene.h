@@ -171,7 +171,7 @@ private:
 	unique_ptr<Inventory> corpseInventory = nullptr;
 	CLootContainerObject* m_pOpenedLoot = nullptr;
 	float m_fLootInteractDistance = 3.0f;
-
+	bool m_bTabInventoryHold = false;
 public:
 
 	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);

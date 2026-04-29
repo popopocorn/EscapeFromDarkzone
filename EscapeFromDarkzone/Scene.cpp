@@ -230,6 +230,9 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	corpseInventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
 	corpseInventory->isOpen = false;
 
+	inventory->SetPosition(-0.25f, 0.0f);
+	corpseInventory->SetPosition(0.25f, 0.0f);
+
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -919,8 +922,6 @@ void CScene::OpenLootContainer(CLootContainerObject* pLoot)
 {
 	if (!pLoot || !corpseInventory) return;
 
-	if (inventory) inventory->isOpen = false;
-
 	corpseInventory->ClearItems();
 	pLoot->FillInventoryUI(corpseInventory.get());
 	corpseInventory->isOpen = true;
@@ -1000,13 +1001,16 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		// 인벤토리가 열려 있으면 UI 클릭만 처리하고 발사는 막음
 		if (IsAnyInventoryOpen())
 		{
+			POINT mousePos = InputManager::Instance().GetMousePos();
+
+			if (inventory && inventory->isOpen)
+			{
+				inventory->ProcessClick(mousePos);
+			}
+
 			if (corpseInventory && corpseInventory->isOpen)
 			{
-				corpseInventory->ProcessClick(InputManager::Instance().GetMousePos());
-			}
-			else if (inventory && inventory->isOpen)
-			{
-				inventory->ProcessClick(InputManager::Instance().GetMousePos());
+				corpseInventory->ProcessClick(mousePos);
 			}
 
 			m_bSparkFireActive = false;
@@ -1123,38 +1127,69 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	{
 	case WM_KEYDOWN:
 	{
+		bool wasDownBefore = (lParam & (1 << 30)) != 0;
+
 		switch (wParam)
 		{
 		case 'I':
-		case VK_TAB:
 		{
-			if (corpseInventory && corpseInventory->isOpen)
+			// I 키는 1회 입력만 처리
+			if (wasDownBefore) return true;
+
+			// 이미 하나라도 열려 있으면 전부 닫기
+			if (IsAnyInventoryOpen())
 			{
+				if (inventory) inventory->isOpen = false;
 				CloseCorpseInventory();
+				m_bTabInventoryHold = false;
 				return true;
 			}
 
-			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
+			// 기본적으로 내 인벤토리는 연다
+			if (inventory) inventory->isOpen = true;
 
-			// 가까운 루팅 오브젝트가 있으면 그 인벤토리를 엶
+			// 시체 근처면 시체 인벤토리도 같이 연다
+			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
 			if (pNearestLoot)
 			{
 				OpenLootContainer(pNearestLoot);
-				return true;
 			}
-
-			// 가까운 루팅 오브젝트가 없으면 I키만 플레이어 인벤토리 토글
-			if (wParam == 'I')
+			else
 			{
-				if (inventory)
-				{
-					inventory->isOpen = !inventory->isOpen;
-				}
-				return true;
+				CloseCorpseInventory();
 			}
 
 			return true;
 		}
+
+		case VK_TAB:
+		{
+			// TAB은 누르고 있는 동안만 열림
+			// 이미 I키 등으로 열려 있으면 hold 상태로 전환하지 않음
+			if (IsAnyInventoryOpen())
+			{
+				return true;
+			}
+
+			if (!m_bTabInventoryHold)
+			{
+				if (inventory) inventory->isOpen = true;
+
+				CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
+				if (pNearestLoot)
+				{
+					OpenLootContainer(pNearestLoot);
+				}
+				else
+				{
+					CloseCorpseInventory();
+				}
+
+				m_bTabInventoryHold = true;
+			}
+			return true;
+		}
+
 		default:
 			break;
 		}
@@ -1163,6 +1198,18 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 	case WM_KEYUP:
 	{
+		// TAB 떼면 TAB으로 연 인벤토리만 닫음
+		if (wParam == VK_TAB)
+		{
+			if (m_bTabInventoryHold)
+			{
+				if (inventory) inventory->isOpen = false;
+				CloseCorpseInventory();
+				m_bTabInventoryHold = false;
+			}
+			return true;
+		}
+
 		INPUT_KEY key;
 		bool validKey = true;
 
@@ -1202,15 +1249,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (!validKey)
 			break;
 
-		if (nMessageID == WM_KEYDOWN)
-		{
-			bool wasDownBefore = (lParam & (1 << 30)) != 0;
-			if (wasDownBefore)
-				break;
-		}
-
-		KEY_STATE state =
-			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
+		KEY_STATE state = KEY_STATE::UP;
 
 		GameEvent e;
 		e.type = EventType::Input;
