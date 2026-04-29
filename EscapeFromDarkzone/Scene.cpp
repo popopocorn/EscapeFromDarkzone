@@ -1123,6 +1123,54 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 {
 	if (!m_pPlayer) return false;
 
+	auto SendPlayerKeyEvent = [this](WPARAM keyCode, KEY_STATE state) -> bool
+		{
+			INPUT_KEY key;
+			bool validKey = true;
+
+			switch (keyCode)
+			{
+			case VK_UP:     key = INPUT_KEY::UP; break;
+			case VK_DOWN:   key = INPUT_KEY::DOWN; break;
+			case VK_LEFT:   key = INPUT_KEY::LEFT; break;
+			case VK_RIGHT:  key = INPUT_KEY::RIGHT; break;
+
+			case 'W': key = INPUT_KEY::W; break;
+			case 'A': key = INPUT_KEY::A; break;
+			case 'S': key = INPUT_KEY::S; break;
+			case 'D': key = INPUT_KEY::D; break;
+
+			case 'E': key = INPUT_KEY::E; break;
+			case 'G': key = INPUT_KEY::G; break;
+			case 'I': key = INPUT_KEY::I; break;
+			case 'R': key = INPUT_KEY::R; break;
+
+			case '1': key = INPUT_KEY::KEY_1; break;
+			case '2': key = INPUT_KEY::KEY_2; break;
+			case '3': key = INPUT_KEY::KEY_3; break;
+			case '4': key = INPUT_KEY::KEY_4; break;
+
+			case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
+			case VK_SPACE:   key = INPUT_KEY::SPACE; break;
+
+			case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
+			case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
+
+			default:
+				validKey = false;
+				break;
+			}
+
+			if (!validKey) return false;
+
+			GameEvent e;
+			e.type = EventType::Input;
+			e.keyEvent = { key, state };
+
+			m_pPlayer->AddEvent(e);
+			return true;
+		};
+
 	switch (nMessageID)
 	{
 	case WM_KEYDOWN:
@@ -1133,10 +1181,9 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 		case 'I':
 		{
-			// I 키는 1회 입력만 처리
 			if (wasDownBefore) return true;
 
-			// 이미 하나라도 열려 있으면 전부 닫기
+			// 이미 열려 있으면 전부 닫기
 			if (IsAnyInventoryOpen())
 			{
 				if (inventory) inventory->isOpen = false;
@@ -1145,10 +1192,8 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 				return true;
 			}
 
-			// 기본적으로 내 인벤토리는 연다
 			if (inventory) inventory->isOpen = true;
 
-			// 시체 근처면 시체 인벤토리도 같이 연다
 			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
 			if (pNearestLoot)
 			{
@@ -1158,19 +1203,11 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			{
 				CloseCorpseInventory();
 			}
-
 			return true;
 		}
 
 		case VK_TAB:
 		{
-			// TAB은 누르고 있는 동안만 열림
-			// 이미 I키 등으로 열려 있으면 hold 상태로 전환하지 않음
-			if (IsAnyInventoryOpen())
-			{
-				return true;
-			}
-
 			if (!m_bTabInventoryHold)
 			{
 				if (inventory) inventory->isOpen = true;
@@ -1193,12 +1230,18 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		default:
 			break;
 		}
-		break;
+
+		if (IsAnyInventoryOpen())
+			return true;
+
+		if (wasDownBefore)
+			return true;
+
+		return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
 	}
 
 	case WM_KEYUP:
 	{
-		// TAB 떼면 TAB으로 연 인벤토리만 닫음
 		if (wParam == VK_TAB)
 		{
 			if (m_bTabInventoryHold)
@@ -1210,53 +1253,10 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			return true;
 		}
 
-		INPUT_KEY key;
-		bool validKey = true;
+		if (IsAnyInventoryOpen())
+			return true;
 
-		switch (wParam)
-		{
-		case VK_UP:     key = INPUT_KEY::UP; break;
-		case VK_DOWN:   key = INPUT_KEY::DOWN; break;
-		case VK_LEFT:   key = INPUT_KEY::LEFT; break;
-		case VK_RIGHT:  key = INPUT_KEY::RIGHT; break;
-
-		case 'W': key = INPUT_KEY::W; break;
-		case 'A': key = INPUT_KEY::A; break;
-		case 'S': key = INPUT_KEY::S; break;
-		case 'D': key = INPUT_KEY::D; break;
-
-		case 'E': key = INPUT_KEY::E; break;
-		case 'G': key = INPUT_KEY::G; break;
-		case 'I': key = INPUT_KEY::I; break;
-		case 'R': key = INPUT_KEY::R; break;
-
-		case '1': key = INPUT_KEY::KEY_1; break;
-		case '2': key = INPUT_KEY::KEY_2; break;
-		case '3': key = INPUT_KEY::KEY_3; break;
-		case '4': key = INPUT_KEY::KEY_4; break;
-
-		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
-		case VK_SPACE:   key = INPUT_KEY::SPACE; break;
-
-		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
-		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
-
-		default:
-			validKey = false;
-			break;
-		}
-
-		if (!validKey)
-			break;
-
-		KEY_STATE state = KEY_STATE::UP;
-
-		GameEvent e;
-		e.type = EventType::Input;
-		e.keyEvent = { key, state };
-
-		m_pPlayer->AddEvent(e);
-		return true;
+		return SendPlayerKeyEvent(wParam, KEY_STATE::UP);
 	}
 	}
 
