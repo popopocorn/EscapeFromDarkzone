@@ -111,7 +111,7 @@ public:
 	void SubmitToShader(UIObjectShader* shader);
 	void SlotClicked(int slotidx);
 	void ProcessClick(POINT mouse);
-
+	//드래그 앤 드롭 처리 함수 추가
 	bool AddItem(const std::shared_ptr<Item>& item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 

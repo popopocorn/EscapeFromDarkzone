@@ -262,6 +262,9 @@ void Inventory::ProcessClick(POINT mouse)
 		{
 			ui->HandleClick();
 		}
+		//여기에 드래그 앤 드롭 처리 추가
+
+
 	}
 }
 

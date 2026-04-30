@@ -226,6 +226,9 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	UIShader = make_unique<UIObjectShader>();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
+	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
 	inventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
 	corpseInventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
 	corpseInventory->isOpen = false;
@@ -404,7 +407,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BOMB] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
 	m_pEffectMaterials[EFFECT_BOMB]->SetShader(pRawEffectShader);
 
@@ -413,7 +416,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_SPARK] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
 	m_pEffectMaterials[EFFECT_SPARK]->SetShader(pRawEffectShader);
 
@@ -422,7 +425,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BLOOD] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
 	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(pRawEffectShader);
 
@@ -489,6 +492,7 @@ void CScene::ReleaseObjects()
 
 	m_pEffectMesh.reset();
 	m_pDebugShader.reset();
+	m_pFogOverlayShader.reset();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
@@ -1183,7 +1187,6 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (wasDownBefore) return true;
 
-			// 이미 열려 있으면 전부 닫기
 			if (IsAnyInventoryOpen())
 			{
 				if (inventory) inventory->isOpen = false;
@@ -1554,7 +1557,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	pd3dCommandList->OMSetStencilRef(0xff);
+	pd3dCommandList->OMSetStencilRef(0x01);
 
 	if (nPipelineState == SHADOW)
 	{
@@ -1563,17 +1566,19 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		}
-	}
-	else
-	{
-		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-#ifdef  _DEBUG
-		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-#endif //  _DEBUG
+		return;
 	}
 
+	// 1. 월드
+	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+
+	for (int i = 0; i < m_ppShaders.size(); i++)
+	{
+		if (m_ppShaders[i])
+			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+	// 2. 이펙트
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 
 	for (int type = 0; type < EFFECT_MAX; type++)
@@ -1627,6 +1632,28 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			m_pEffectMesh->Render(pd3dCommandList, activeCount);
 		}
 	}
+
+	// 3. 시야 바깥
+	if (m_pFogOverlayShader)
+	{
+		pd3dCommandList->OMSetStencilRef(0x00);
+		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+
+		pd3dCommandList->OMSetStencilRef(0x01);
+	}
+
+	// 4. UI
+	if (UIShader)
+	{
+		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+#ifdef _DEBUG
+	if (m_pDebugShader)
+	{
+		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
+#endif
 }
 
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

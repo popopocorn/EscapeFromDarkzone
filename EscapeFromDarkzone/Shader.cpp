@@ -709,22 +709,21 @@ D3D12_BLEND_DESC ViewShader::CreateBlendState()
 	d3dBlendDesc.IndependentBlendEnable = FALSE;
 
 	D3D12_RENDER_TARGET_BLEND_DESC& rt = d3dBlendDesc.RenderTarget[0];
-	rt.BlendEnable = TRUE;
+	rt.BlendEnable = FALSE;
 	rt.LogicOpEnable = FALSE;
-
-	rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	rt.SrcBlend = D3D12_BLEND_ONE;
+	rt.DestBlend = D3D12_BLEND_ZERO;
 	rt.BlendOp = D3D12_BLEND_OP_ADD;
-
 	rt.SrcBlendAlpha = D3D12_BLEND_ONE;
 	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
 	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-
 	rt.LogicOp = D3D12_LOGIC_OP_NOOP;
-	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	rt.RenderTargetWriteMask = 0;
 
 	return d3dBlendDesc;
 }
+
 void ViewShader::CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -794,7 +793,6 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 	{
 		if (m_ppObjects[j])
 		{
-			// Animate / UpdateTransform 은 AnimateObjects()에서 이미 끝냄
 			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}
@@ -805,14 +803,13 @@ CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 {
 	m_pd3dGraphicsRootSignature = pd3dGraphicsRootSignature;
 
-	m_pDebugObject = new CDebugObject(pd3dDevice, pd3dCommandList);
+	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList);
 
 	CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
 
 CBoundingBoxShader::~CBoundingBoxShader()
 {
-	if (m_pDebugObject) delete m_pDebugObject;
 	m_DebugInstances.clear();
 }
 
@@ -1106,3 +1103,74 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 	m_ppObjects.clear();
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+D3D12_INPUT_LAYOUT_DESC CFogOverlayShader::CreateInputLayout()
+{
+	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
+	d3dInputLayoutDesc.pInputElementDescs = nullptr;
+	d3dInputLayoutDesc.NumElements = 0;
+	return d3dInputLayoutDesc;
+}
+
+D3D12_RASTERIZER_DESC CFogOverlayShader::CreateRasterizerState()
+{
+	D3D12_RASTERIZER_DESC d3dRasterizerDesc{};
+	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
+	d3dRasterizerDesc.DepthBias = 0;
+	d3dRasterizerDesc.DepthBiasClamp = 0.0f;
+	d3dRasterizerDesc.SlopeScaledDepthBias = 0.0f;
+	d3dRasterizerDesc.DepthClipEnable = FALSE;
+	d3dRasterizerDesc.MultisampleEnable = FALSE;
+	d3dRasterizerDesc.AntialiasedLineEnable = FALSE;
+	d3dRasterizerDesc.ForcedSampleCount = 0;
+	d3dRasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+	return d3dRasterizerDesc;
+}
+
+D3D12_BLEND_DESC CFogOverlayShader::CreateBlendState()
+{
+	return CShader::CreateBlendState();
+}
+
+D3D12_DEPTH_STENCIL_DESC CFogOverlayShader::CreateDepthStencilState()
+{
+	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc{};
+	d3dDepthStencilDesc.DepthEnable = FALSE;
+	d3dDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	d3dDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+	d3dDepthStencilDesc.StencilEnable = TRUE;
+	d3dDepthStencilDesc.StencilReadMask = 0x01;
+	d3dDepthStencilDesc.StencilWriteMask = 0x00;
+
+	d3dDepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	d3dDepthStencilDesc.BackFace = d3dDepthStencilDesc.FrontFace;
+
+	return d3dDepthStencilDesc;
+}
+
+D3D12_SHADER_BYTECODE CFogOverlayShader::CreateVertexShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSFogOverlay", "vs_5_1", &m_pd3dVertexShaderBlob);
+}
+
+D3D12_SHADER_BYTECODE CFogOverlayShader::CreatePixelShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSFogOverlay", "ps_5_1", &m_pd3dPixelShaderBlob);
+}
+
+void CFogOverlayShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
+{
+	OnPrepareRender(pd3dCommandList, nPipelineState);
+
+	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	pd3dCommandList->DrawInstanced(3, 1, 0, 0);
+}

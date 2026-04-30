@@ -134,23 +134,23 @@ public:
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
-	unique_ptr<CBoundingBoxShader> m_pDebugShader;
+	std::unique_ptr<CBoundingBoxShader> m_pDebugShader = nullptr;
 
-	vector<unique_ptr<CEffect>> m_vEffectPools[EFFECT_MAX];
+	std::array<std::vector<std::unique_ptr<CEffect>>, EFFECT_MAX> m_vEffectPools;
 
 	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
 	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
 	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
 
+	std::array<std::unique_ptr<CMaterial>, EFFECT_MAX> m_pEffectMaterials;
+	std::unique_ptr<CParticleMesh> m_pEffectMesh = nullptr;
+
+	class CEffectShader* m_pEffectShader = NULL;
+
 	//레이저 관련 멤버 변수
 	bool m_bLaserActive = false;
 	CGameObject* m_pLaserMuzzle = nullptr;
 	float m_fLaserLength = 15.0f;
-
-	CMaterial* m_pEffectMaterials[EFFECT_MAX];
-	unique_ptr<CParticleMesh> m_pEffectMesh;
-
-	class CEffectShader* m_pEffectShader = NULL;
 
 	//스파크 효과 관련 멤버 변수
 	bool m_bSparkFireActive = false;
@@ -172,6 +172,8 @@ private:
 	CLootContainerObject* m_pOpenedLoot = nullptr;
 	float m_fLootInteractDistance = 3.0f;
 	bool m_bTabInventoryHold = false;
+
+	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 public:
 
 	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);
