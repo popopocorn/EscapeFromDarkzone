@@ -108,6 +108,7 @@ public:
 
 	bool AddItem(const std::shared_ptr<Item>& item, int count = 1);
 	ItemSlot* GetSlot(int idx);
+	void SetPosition(float x, float y);
 
 	bool isOpen = false;
 };

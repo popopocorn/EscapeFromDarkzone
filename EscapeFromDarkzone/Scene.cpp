@@ -13,6 +13,7 @@
 #include"Collision.h"
 #include "UI.h"
 #include"Item.h"
+#include"AI.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -460,6 +461,12 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 			}
 		}
 	}
+
+
+	AstarNavigation a;
+	a.LoadNavMeshFromFile("Model/NavMeshData.bin");
+
+
 
 	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
