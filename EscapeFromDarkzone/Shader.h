@@ -111,14 +111,12 @@ public:
 protected:
 	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
 
-	CDebugObject* m_pDebugObject = nullptr;
+	std::unique_ptr<CDebugObject> m_pDebugObject;
 
 	std::vector<DebugInstance> m_DebugInstances;
 };
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 class CSkyBoxShader : public CShader
 {
 public:
@@ -133,7 +131,6 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 class CStandardShader : public CShader
 {
 public:
@@ -155,15 +152,18 @@ public:
 	CStandardObjectsShader();
 	virtual ~CStandardObjectsShader();
 
-	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL);
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* pModel, void* pContext = NULL);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void ReleaseObjects();
 
 	virtual void ReleaseUploadBuffers();
 
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
-	std::vector<std::unique_ptr<CGameObject>>* GetObj(){ return &m_ppObjects; }
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
+	virtual void DeleteObject(UINT64 fence);
+	virtual void ProcessingGarbageQueue(UINT64 completed);
+
+	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };
@@ -213,7 +213,6 @@ protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
 };
 
-
 class ViewShader : public CStandardShader
 {
 public:
@@ -261,4 +260,21 @@ public:
 	void addObjects(UIObject* obj) { m_ppObjects.push_back(obj); }
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 
+};
+
+class CFogOverlayShader : public CShader
+{
+public:
+	CFogOverlayShader() = default;
+	virtual ~CFogOverlayShader() = default;
+
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout() override;
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState() override;
+	virtual D3D12_BLEND_DESC CreateBlendState() override;
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState() override;
+
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader() override;
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader() override;
+
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState) override;
 };

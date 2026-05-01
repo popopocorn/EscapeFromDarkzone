@@ -158,6 +158,11 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
+static CStandardObjectsShader* GetLootShaderFromSceneShaders(const std::vector<std::unique_ptr<CShader>>& shaders)
+{
+	if (shaders.size() <= SHADERIDX::LOOT) return nullptr;
+	return dynamic_cast<CStandardObjectsShader*>(shaders[SHADERIDX::LOOT].get());
+}
 
 CScene::CScene()
 {
@@ -183,6 +188,8 @@ CScene::CScene()
 
 	m_pDebugShader = nullptr;
 	inventory = nullptr;
+	corpseInventory = nullptr;
+	m_pOpenedLoot = nullptr;
 }
 
 CScene::~CScene()
@@ -205,12 +212,10 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-
 void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	//CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 29 + 4);
 	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);		// 04.24 추가: 임시로 넉넉하게 잡음. 
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -219,12 +224,18 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-
 	UIShader = make_unique<UIObjectShader>();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	inventory = new Inventory(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
+	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
+	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	inventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
+	corpseInventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
+	corpseInventory->isOpen = false;
+
+	inventory->SetPosition(-0.25f, 0.0f);
+	corpseInventory->SetPosition(0.25f, 0.0f);
 
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -290,7 +301,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 			map->SetPosition(-150, -0.5f, -150);
 			map->SetOOBB(NULL);
 
-			// block 계열만 충돌 처리 후보에 저장
+			// block 계열만 시야 blocker 후보에 저장
 			m_vVisionMapChunks.push_back(map.get());
 
 			stdshader->addObjects(std::move(map));
@@ -298,13 +309,12 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	}
 	m_ppShaders.push_back(std::move(stdshader));
 
-
+	// 시야 객체 생성
 	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
 	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	// 시야 오브젝트 생성
 	{
 		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
 		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
@@ -352,10 +362,10 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 	m_ppShaders.push_back(std::move(pLaserShader));
 
-	//디버그 쉐이더
-	m_pDebugShader = new CBoundingBoxShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	// 디버그 쉐이더
+	m_pDebugShader = std::make_unique<CBoundingBoxShader>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	//오브젝트 쉐이더(스탠다드, 스킨드)
+	// 적 쉐이더
 	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
 
 	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -376,11 +386,16 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pEnemy->setNav(AStarNav.get());
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
-	//여기에 otherplayer 생성하고 위처럼 집어 넣으면 됨
-
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
-	//이펙트 쉐이더
+	// 루팅 전용 쉐이더
+	auto pLootShader = std::make_unique<CStandardObjectsShader>();
+	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	m_ppShaders.push_back(std::move(pLootShader));
+
+	// 이펙트 쉐이더
 	auto pEffectShader = std::make_unique<CEffectShader>();
 	CEffectShader* pRawEffectShader = pEffectShader.get();
 
@@ -394,32 +409,32 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	float effectWidth = 1.0f;
 	float effectHeight = 1.0f * (180.0f / 182.0f);
 
-	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
+	m_pEffectMesh = std::make_unique<CParticleMesh>(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
 
-	//bomb effect
+	// bomb effect
 	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BOMB] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
 	m_pEffectMaterials[EFFECT_BOMB]->SetShader(pRawEffectShader);
 
-	//spark effect
+	// spark effect
 	CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_SPARK] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
 	m_pEffectMaterials[EFFECT_SPARK]->SetShader(pRawEffectShader);
 
-	//blood effect
+	// blood effect
 	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 	CScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
 
-	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
+	m_pEffectMaterials[EFFECT_BLOOD] = std::make_unique<CMaterial>(1);
 	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
 	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(pRawEffectShader);
 
@@ -454,15 +469,18 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 	for (int i = 0; i < MAX_BOMB_EFFECTS; i++)
 	{
-		m_vEffectPools[EFFECT_BOMB].push_back(new CEffect(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.1f));
-		m_vEffectPools[EFFECT_BLOOD].push_back(new CEffect(EFFECT_BLOOD, 0.8f));
+		m_vEffectPools[EFFECT_BOMB].push_back(std::make_unique<CEffect>(EFFECT_BOMB, 1.0f));
+		m_vEffectPools[EFFECT_SPARK].push_back(std::make_unique<CEffect>(EFFECT_SPARK, 0.1f));
+		m_vEffectPools[EFFECT_BLOOD].push_back(std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
 	}
 
-	for (const auto& shader : m_ppShaders) {
+	for (const auto& shader : m_ppShaders)
+	{
 		auto* objs = shader->GetObj();
-		if (objs != nullptr && !objs->empty()) {
-			for (auto& obj : *objs) {
+		if (objs != nullptr && !objs->empty())
+		{
+			for (auto& obj : *objs)
+			{
 				m_pDebugShader->AddObject(obj.get());
 			}
 		}
@@ -477,7 +495,15 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 void CScene::ReleaseObjects()
 {
+	corpseInventory.reset();
+	inventory.reset();
+
+	m_pOpenedLoot = nullptr;
 	m_vVisionMapChunks.clear();
+
+	m_pEffectMesh.reset();
+	m_pDebugShader.reset();
+	m_pFogOverlayShader.reset();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
@@ -810,9 +836,9 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 
 void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up)
 {
-	for (CEffect* pEffect : m_vEffectPools[type])
+	for (auto& pEffect : m_vEffectPools[type])
 	{
-		if (pEffect->IsDead())
+		if (pEffect && pEffect->IsDead())
 		{
 			pEffect->Play(pos, right, up);
 			return;
@@ -828,9 +854,9 @@ void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3
 	case EFFECT_BLOOD: lifeTime = 0.8f; break;
 	}
 
-	CEffect* pNewEffect = new CEffect(type, lifeTime);
+	auto pNewEffect = std::make_unique<CEffect>(type, lifeTime);
 	pNewEffect->Play(pos, right, up);
-	m_vEffectPools[type].push_back(pNewEffect);
+	m_vEffectPools[type].push_back(std::move(pNewEffect));
 }
 
 void CScene::SetPlayer(CPlayer* p)
@@ -892,6 +918,95 @@ void CScene::DeleteTrash(UINT64 Fence)
 	}
 }
 
+bool CScene::IsAnyInventoryOpen() const
+{
+	return (inventory && inventory->isOpen) || (corpseInventory && corpseInventory->isOpen);
+}
+
+void CScene::CloseCorpseInventory()
+{
+	if (corpseInventory)
+	{
+		corpseInventory->isOpen = false;
+		corpseInventory->ClearItems();
+	}
+	m_pOpenedLoot = nullptr;
+}
+
+void CScene::OpenLootContainer(CLootContainerObject* pLoot)
+{
+	if (!pLoot || !corpseInventory) return;
+
+	corpseInventory->ClearItems();
+	pLoot->FillInventoryUI(corpseInventory.get());
+	corpseInventory->isOpen = true;
+	m_pOpenedLoot = pLoot;
+}
+
+CLootContainerObject* CScene::FindNearestLootContainer(float fMaxDistance) const
+{
+	if (!m_pPlayer) return nullptr;
+	if (m_ppShaders.size() <= SHADERIDX::LOOT) return nullptr;
+	if (!m_ppShaders[SHADERIDX::LOOT]) return nullptr;
+
+	auto* objs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
+	if (!objs) return nullptr;
+
+	const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+	const float maxDistSq = fMaxDistance * fMaxDistance;
+
+	CLootContainerObject* pNearest = nullptr;
+	float nearestDistSq = maxDistSq;
+
+	for (const auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
+		if (!pLoot) continue;
+		if (!pLoot->IsAlive()) continue;
+
+		float distSq = pLoot->GetDistanceSq(playerPos);
+		if (distSq <= nearestDistSq)
+		{
+			nearestDistSq = distSq;
+			pNearest = pLoot;
+		}
+	}
+
+	return pNearest;
+}
+
+void CScene::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
+{
+	if (!pEnemy) return;
+
+	auto* pLootShader = GetLootShaderFromSceneShaders(m_ppShaders);
+	if (!pLootShader) return;
+
+	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
+
+	XMFLOAT3 pos = pEnemy->GetPosition();
+	pLoot->SetPosition(pos);
+
+	BoundingOrientedBox obb;
+	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
+	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
+	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
+	pLoot->SetOOBB(obb);
+
+	// 임시 기본 루팅 아이템
+	//pLoot->AddLoot(std::make_shared<WeaponItem>(ItemGrade::GRADE_1, WeaponCategory::PISTOL), 1);
+	//pLoot->AddLoot(std::make_shared<ArmorItem>(), 1);
+
+	pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
+
+	if (m_pDebugShader)
+	{
+		m_pDebugShader->AddObject(pLoot);
+	}
+}
+
 void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	switch (nMessageID)
@@ -899,9 +1014,19 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	case WM_LBUTTONDOWN:
 	{
 		// 인벤토리가 열려 있으면 UI 클릭만 처리하고 발사는 막음
-		if (inventory && inventory->isOpen)
+		if (IsAnyInventoryOpen())
 		{
-			inventory->ProcessClick(InputManager::Instance().GetMousePos());
+			POINT mousePos = InputManager::Instance().GetMousePos();
+
+			if (inventory && inventory->isOpen)
+			{
+				inventory->ProcessClick(mousePos);
+			}
+
+			if (corpseInventory && corpseInventory->isOpen)
+			{
+				corpseInventory->ProcessClick(mousePos);
+			}
 
 			m_bSparkFireActive = false;
 			m_bLaserActive = false;
@@ -921,7 +1046,6 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
 		}
 
-		// 첫 클릭 시 1발 먼저 발사
 		if (!m_pPlayer->TryFireWeapon())
 		{
 			return;
@@ -1014,76 +1138,139 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 {
 	if (!m_pPlayer) return false;
 
+	auto SendPlayerKeyEvent = [this](WPARAM keyCode, KEY_STATE state) -> bool
+		{
+			INPUT_KEY key;
+			bool validKey = true;
+
+			switch (keyCode)
+			{
+			case VK_UP:     key = INPUT_KEY::UP; break;
+			case VK_DOWN:   key = INPUT_KEY::DOWN; break;
+			case VK_LEFT:   key = INPUT_KEY::LEFT; break;
+			case VK_RIGHT:  key = INPUT_KEY::RIGHT; break;
+
+			case 'W': key = INPUT_KEY::W; break;
+			case 'A': key = INPUT_KEY::A; break;
+			case 'S': key = INPUT_KEY::S; break;
+			case 'D': key = INPUT_KEY::D; break;
+
+			case 'E': key = INPUT_KEY::E; break;
+			case 'G': key = INPUT_KEY::G; break;
+			case 'I': key = INPUT_KEY::I; break;
+			case 'R': key = INPUT_KEY::R; break;
+
+			case '1': key = INPUT_KEY::KEY_1; break;
+			case '2': key = INPUT_KEY::KEY_2; break;
+			case '3': key = INPUT_KEY::KEY_3; break;
+			case '4': key = INPUT_KEY::KEY_4; break;
+
+			case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
+			case VK_SPACE:   key = INPUT_KEY::SPACE; break;
+
+			case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
+			case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
+
+			default:
+				validKey = false;
+				break;
+			}
+
+			if (!validKey) return false;
+
+			GameEvent e;
+			e.type = EventType::Input;
+			e.keyEvent = { key, state };
+
+			m_pPlayer->AddEvent(e);
+			return true;
+		};
+
 	switch (nMessageID)
 	{
 	case WM_KEYDOWN:
+	{
+		bool wasDownBefore = (lParam & (1 << 30)) != 0;
+
 		switch (wParam)
 		{
 		case 'I':
-			if (inventory)
+		{
+			if (wasDownBefore) return true;
+
+			if (IsAnyInventoryOpen())
 			{
-				inventory->isOpen = !inventory->isOpen;
+				if (inventory) inventory->isOpen = false;
+				CloseCorpseInventory();
+				m_bTabInventoryHold = false;
+				return true;
 			}
+
+			if (inventory) inventory->isOpen = true;
+
+			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
+			if (pNearestLoot)
+			{
+				OpenLootContainer(pNearestLoot);
+			}
+			else
+			{
+				CloseCorpseInventory();
+			}
+			return true;
+		}
+
+		case VK_TAB:
+		{
+			if (!m_bTabInventoryHold)
+			{
+				if (inventory) inventory->isOpen = true;
+
+				CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
+				if (pNearestLoot)
+				{
+					OpenLootContainer(pNearestLoot);
+				}
+				else
+				{
+					CloseCorpseInventory();
+				}
+
+				m_bTabInventoryHold = true;
+			}
+			return true;
+		}
+
+		default:
 			break;
 		}
+
+		if (IsAnyInventoryOpen())
+			return true;
+
+		if (wasDownBefore)
+			return true;
+
+		return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
+	}
 
 	case WM_KEYUP:
 	{
-		INPUT_KEY key;
-		bool validKey = true;
-
-		switch (wParam)
+		if (wParam == VK_TAB)
 		{
-		case VK_UP:     key = INPUT_KEY::UP; break;
-		case VK_DOWN:   key = INPUT_KEY::DOWN; break;
-		case VK_LEFT:   key = INPUT_KEY::LEFT; break;
-		case VK_RIGHT:  key = INPUT_KEY::RIGHT; break;
-
-		case 'W': key = INPUT_KEY::W; break;
-		case 'A': key = INPUT_KEY::A; break;
-		case 'S': key = INPUT_KEY::S; break;
-		case 'D': key = INPUT_KEY::D; break;
-
-		case 'E': key = INPUT_KEY::E; break;
-		case 'G': key = INPUT_KEY::G; break;
-		case 'I': key = INPUT_KEY::I; break;
-		case 'R': key = INPUT_KEY::R; break;
-
-		case '1': key = INPUT_KEY::KEY_1; break;
-		case '2': key = INPUT_KEY::KEY_2; break;
-		case '3': key = INPUT_KEY::KEY_3; break;
-		case '4': key = INPUT_KEY::KEY_4; break;
-
-		case VK_SHIFT:   key = INPUT_KEY::SHIFT; break;
-		case VK_SPACE:   key = INPUT_KEY::SPACE; break;
-
-		case VK_LBUTTON: key = INPUT_KEY::LBUTTON; break;
-		case VK_RBUTTON: key = INPUT_KEY::RBUTTON; break;
-
-		default:
-			validKey = false;
-			break;
+			if (m_bTabInventoryHold)
+			{
+				if (inventory) inventory->isOpen = false;
+				CloseCorpseInventory();
+				m_bTabInventoryHold = false;
+			}
+			return true;
 		}
 
-		if (!validKey)
-			break;
+		if (IsAnyInventoryOpen())
+			return true;
 
-		if (nMessageID == WM_KEYDOWN)
-		{
-			bool wasDownBefore = (lParam & (1 << 30)) != 0;
-			if (wasDownBefore)
-				break;
-		}
-
-		KEY_STATE state =
-			(nMessageID == WM_KEYDOWN) ? KEY_STATE::DOWN : KEY_STATE::UP;
-
-		GameEvent e;
-		e.type = EventType::Input;
-		e.keyEvent = { key, state };
-
-		m_pPlayer->AddEvent(e);
-		return true;
+		return SendPlayerKeyEvent(wParam, KEY_STATE::UP);
 	}
 	}
 
@@ -1104,36 +1291,87 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 	}
 
-	// 시야 메쉬 계산
+	// 시야 객체 blocker 갱신
 	{
-		std::vector<CGameObject*> visionBlockers;
-		visionBlockers.reserve(64);
-
-		if (m_pPlayer)
+		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
 		{
+			std::vector<CGameObject*> visionBlockers;
+			visionBlockers.reserve(32);
+
 			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 
-			const float fMapQueryHalfExtent = 18.0f;
-
-			GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, fMapQueryHalfExtent, visionBlockers);
-
-			if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+			if (!m_vVisionMapChunks.empty())
 			{
-				GatherVisionBlockersNearPlayer(m_ppShaders[SHADERIDX::ENEMY].get(), playerPos, 18.0f, visionBlockers);
+				GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, 18.0f, visionBlockers);
+			}
+			else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+			{
+				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP].get(), visionBlockers);
 			}
 
-			// view object 갱신
-			if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
+			auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+			if (viewObjs && !viewObjs->empty())
 			{
-				auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
-				if (viewObjs && !viewObjs->empty())
+				ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0).get());
+				if (pViewObj)
 				{
-					ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0).get());
-					if (pViewObj)
-					{
-						pViewObj->UpdateClippedMeshes(visionBlockers);
-					}
+					pViewObj->UpdateClippedMeshes(visionBlockers);
 				}
+			}
+		}
+	}
+
+	// 루팅 오브젝트 수명 업데이트
+	if (m_ppShaders.size() > SHADERIDX::LOOT && m_ppShaders[SHADERIDX::LOOT])
+	{
+		auto* lootObjs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
+		if (lootObjs)
+		{
+			for (auto& obj : *lootObjs)
+			{
+				CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
+				if (pLoot)
+				{
+					pLoot->UpdateLifetime(fTimeElapsed);
+				}
+			}
+		}
+	}
+
+	// 적 death 애니메이션 종료 후 루팅 오브젝트 생성
+	if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+	{
+		auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+		if (enemyObjs)
+		{
+			for (auto& obj : *enemyObjs)
+			{
+				CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+				if (!pEnemy) continue;
+
+				if (pEnemy->ConsumeLootSpawnRequest())
+				{
+					SpawnLootContainerFromEnemy(pEnemy);
+					pEnemy->MarkDeadForRemoval();
+				}
+			}
+		}
+	}
+
+	if (m_pOpenedLoot)
+	{
+		if (!m_pOpenedLoot->IsAlive())
+		{
+			CloseCorpseInventory();
+		}
+		else if (m_pPlayer)
+		{
+			float distSq = m_pOpenedLoot->GetDistanceSq(m_pPlayer->GetPosition());
+			float maxDistSq = m_fLootInteractDistance * m_fLootInteractDistance;
+
+			if (distSq > maxDistSq)
+			{
+				CloseCorpseInventory();
 			}
 		}
 	}
@@ -1145,7 +1383,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	}
 
 	// 연사 처리
-	if (m_bSparkFireActive && m_pPlayer && !(inventory && inventory->isOpen))
+	if (m_bSparkFireActive && m_pPlayer && !IsAnyInventoryOpen())
 	{
 		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
 		{
@@ -1243,7 +1481,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 	for (int type = 0; type < EFFECT_MAX; type++)
 	{
-		for (CEffect* pEffect : m_vEffectPools[type])
+		for (auto& pEffect : m_vEffectPools[type])
 		{
 			if (pEffect && !pEffect->IsDead())
 			{
@@ -1252,8 +1490,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		}
 	}
 
-	// 레이저는 인벤토리 열려 있으면 숨김
-	if (m_bLaserActive && m_pLaserObject && m_pPlayer && !(inventory && inventory->isOpen))
+	if (m_bLaserActive && m_pLaserObject && m_pPlayer && !IsAnyInventoryOpen())
 	{
 		if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
 		{
@@ -1314,10 +1551,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	ShadowCameraManager.Update();
 
 	if (inventory) inventory->SubmitToShader(UIShader.get());
+	if (corpseInventory) corpseInventory->SubmitToShader(UIShader.get());
 
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }
-
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
@@ -1331,7 +1568,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	pd3dCommandList->OMSetStencilRef(0xff);
+	pd3dCommandList->OMSetStencilRef(0x01);
 
 	if (nPipelineState == SHADOW)
 	{
@@ -1340,17 +1577,19 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		}
-	}
-	else
-	{
-		if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-		for (int i = 0; i < m_ppShaders.size(); i++) if (m_ppShaders[i]) m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-#ifdef  _DEBUG
-		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
-#endif //  _DEBUG
+		return;
 	}
 
+	// 1. 월드
+	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
+
+	for (int i = 0; i < m_ppShaders.size(); i++)
+	{
+		if (m_ppShaders[i])
+			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+	// 2. 이펙트
 	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 
 	for (int type = 0; type < EFFECT_MAX; type++)
@@ -1360,7 +1599,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 		int activeCount = 0;
 
-		for (CEffect* pEffect : m_vEffectPools[type])
+		for (auto& pEffect : m_vEffectPools[type])
 		{
 			if (!pEffect) continue;
 
@@ -1404,6 +1643,28 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			m_pEffectMesh->Render(pd3dCommandList, activeCount);
 		}
 	}
+
+	// 3. 시야 바깥
+	if (m_pFogOverlayShader)
+	{
+		pd3dCommandList->OMSetStencilRef(0x00);
+		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+
+		pd3dCommandList->OMSetStencilRef(0x01);
+	}
+
+	// 4. UI
+	if (UIShader)
+	{
+		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+#ifdef _DEBUG
+	if (m_pDebugShader)
+	{
+		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
+#endif
 }
 
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
