@@ -54,6 +54,7 @@ enum SHADERIDX : size_t{
 struct ColResult;
 class CollisionManager;
 class Inventory;
+class AstarNavigation;
 
 class CScene
 {
@@ -101,6 +102,8 @@ protected:
 	static D3D12_GPU_DESCRIPTOR_HANDLE	m_d3dSrvGPUDescriptorNextHandle;
 
 	LightCameraManager ShadowCameraManager;
+	unique_ptr<AstarNavigation> AStarNav;
+
 
 public:
 	static void CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews);

@@ -10,9 +10,14 @@ enum ENEMY_ANIM {
 	ENEMY_ANIM_IDLE = 0,
 	ENEMY_ANIM_RUN = 1
 };
-
+class AstarNavigation;
 class CEnemyObject : public CGameObject
 {
+protected:
+	AstarNavigation* AStarNav = NULL;
+	
+	
+	
 public:
 	CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual ~CEnemyObject();
@@ -20,7 +25,7 @@ public:
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
 	virtual void HandleCollision(XMFLOAT3 normal);
-
+	virtual void SetPosition(float x, float y, float z);
 	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
 	
 
@@ -30,11 +35,15 @@ public:
 	XMFLOAT3 GetMoveDir() const { return m_xmf3MoveDir; }
 	void HandleHP(float value);
 
+	void setNav(AstarNavigation* nav) { AStarNav = nav; }
+	AstarNavigation* GetNav() { return AStarNav; }
 	std::unique_ptr<State<CEnemyObject>> m_pState;
 
 	CGameObject*				m_pPlayer = nullptr;
 	float						hp = 100;
-	
+	float						updateTimer = 0;
+	vector<XMFLOAT3>			ways;
+	int							wayIdx = 0;
 
 public:
 	float						m_fMoveSpeed = 7.0f;

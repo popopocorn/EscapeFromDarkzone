@@ -7,6 +7,8 @@ const ULONG MAX_SAMPLE_COUNT = 50; // Maximum frame time sample count
 
 class CGameTimer
 {
+private:
+
 public:
 	CGameTimer();
 	virtual ~CGameTimer();

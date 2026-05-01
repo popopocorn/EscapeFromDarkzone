@@ -85,7 +85,7 @@ protected:
 
 //아이템 슬롯
 struct ItemSlot {
-	std::shared_ptr<Item> item;
+	std::unique_ptr<Item> item = NULL;
 	int count = 0;
 	UIObject* ui = nullptr;
 };
@@ -96,7 +96,7 @@ class Inventory {
 private:
 	std::array<ItemSlot, MAX_SLOTS> slots;
 	CheckBox box;
-
+	int ID;
 public:
 	Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
@@ -106,10 +106,10 @@ public:
 	void SlotClicked(int slotidx);
 	void ProcessClick(POINT mouse);
 
-	bool AddItem(const std::shared_ptr<Item>& item, int count = 1);
+	bool AddItem(std::unique_ptr<Item> item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 	void SetPosition(float x, float y);
-
+	void SetId(int x) { ID = x; }
 	bool isOpen = false;
 };
 

@@ -2,6 +2,7 @@
 #include "EnemyObject.h"
 #include "Player.h"
 #include "OtherPlayer.h"
+#include "AI.h"
 
 CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -68,7 +69,7 @@ void CEnemyObject::Update(float fTimeElapsed)
 	{
 		m_pState->Update(this, fTimeElapsed);
 	}
-	if (not Alive)return;
+	//if (not Alive)return;
 	XMFLOAT3 direction = m_xmf3MoveDir;
 	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
 
@@ -123,6 +124,15 @@ void CEnemyObject::HandleCollision(XMFLOAT3 normal)
 		}
 		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
 	}
+}
+
+void CEnemyObject::SetPosition(float x, float y, float z)
+{
+	CGameObject::SetPosition(x, y, z);
+	m_xmf3Position.x = x;
+	m_xmf3Position.y = y;
+	m_xmf3Position.z = z;
+	
 }
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
@@ -182,30 +192,63 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	XMFLOAT3 xmf3MyPos = pEnemy->GetPosition();
 	XMFLOAT3 xmf3PlayerPos = pEnemy->m_pPlayer->GetPosition();
 
-	XMFLOAT3 xmf3Dir = Vector3::Subtract(xmf3PlayerPos, xmf3MyPos);
-	xmf3Dir.y = 0.0f;
-	float fDistance = Vector3::Length(xmf3Dir);
+	
+	XMFLOAT3 xmf3DirToPlayer = Vector3::Subtract(xmf3PlayerPos, xmf3MyPos);
+	xmf3DirToPlayer.y = 0.0f;
+	float fDistanceToPlayer = Vector3::Length(xmf3DirToPlayer);
 
-	if (fDistance > pEnemy->m_fDetectionRange || fDistance <= pEnemy->m_fAttackRange)
+	if (fDistanceToPlayer > pEnemy->m_fDetectionRange || fDistanceToPlayer <= pEnemy->m_fAttackRange)
 	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
 		return;
 	}
 
-	XMFLOAT3 xmf3Look = Vector3::Normalize(xmf3Dir);
+	
+	pEnemy->updateTimer += fTimeElapsed;
+	if (pEnemy->updateTimer >= 1.0f)
+	{
+		pEnemy->updateTimer -= 1.0f;
+		pEnemy->ways = pEnemy->GetNav()->FindPath(xmf3MyPos, xmf3PlayerPos);
+		pEnemy->wayIdx = 0;
+	}
 
+	XMFLOAT3 xmf3Look = pEnemy->GetLook();
+	bool bIsMoving = false;
+
+	
+	if (!pEnemy->ways.empty())
+	{
+		while (pEnemy->wayIdx < pEnemy->ways.size())
+		{
+			XMFLOAT3 xmf3NextWaypoint = pEnemy->ways[pEnemy->wayIdx];
+			XMFLOAT3 xmf3DirToWayPoint = Vector3::Subtract(xmf3NextWaypoint, xmf3MyPos);
+			xmf3DirToWayPoint.y = 0.0f;
+
+			if (Vector3::Length(xmf3DirToWayPoint) < 1.0f) // 0.1f는 너무 작습니다.
+			{
+				pEnemy->wayIdx++;
+			}
+			else
+			{
+				xmf3Look = Vector3::Normalize(xmf3DirToWayPoint);
+				pEnemy->SetMoveDir(xmf3Look);
+				bIsMoving = true;
+				break;
+			}
+		}
+	}
+	if (!bIsMoving)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		if (fDistanceToPlayer > 0.1f) xmf3Look = Vector3::Normalize(xmf3DirToPlayer);
+	}
+
+	
 	float fAngleRad = atan2(xmf3Look.x, xmf3Look.z);
 	float fAngleDeg = XMConvertToDegrees(fAngleRad);
-	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
-
-	pEnemy->m_xmf4x4ToParent = xmf4x4Rotate;
-	pEnemy->m_xmf4x4ToParent._41 = xmf3MyPos.x;
-	pEnemy->m_xmf4x4ToParent._42 = xmf3MyPos.y;
-	pEnemy->m_xmf4x4ToParent._43 = xmf3MyPos.z;
-
-	pEnemy->SetMoveDir(xmf3Look);
+	pEnemy->m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
 }
-
 void EnemyRun::Exit(CEnemyObject* pEnemy)
 {
 }

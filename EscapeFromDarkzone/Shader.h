@@ -62,6 +62,7 @@ public:
 	bool DoShadow() { return do_shadow; }
 	virtual void DeleteObject(UINT64 fence ) {};
 	virtual void ProcessingGarbageQueue(UINT64 completed) {};
+	
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;

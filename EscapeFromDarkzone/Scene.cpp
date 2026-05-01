@@ -363,11 +363,17 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 
+
+	AStarNav = make_unique<AstarNavigation>();
+	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
+
+
 	//적 오브젝트
 	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pEnemy->SetPosition(0.0f, 0.0f, 10.0f);
+	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->SetOOBB(NULL);
+	pEnemy->setNav(AStarNav.get());
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	//여기에 otherplayer 생성하고 위처럼 집어 넣으면 됨
@@ -461,10 +467,6 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 			}
 		}
 	}
-
-
-	AstarNavigation a;
-	a.LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 
 

@@ -269,7 +269,7 @@ void Inventory::SetPosition(float x, float y)
 	}
 }
 
-bool Inventory::AddItem(const std::shared_ptr<Item>& item, int count)
+bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
 {
 	if (!item || count <= 0) return false;
 
@@ -277,7 +277,7 @@ bool Inventory::AddItem(const std::shared_ptr<Item>& item, int count)
 	{
 		if (!slot.item)
 		{
-			slot.item = item;
+			slot.item = std::move(item);
 			slot.count = count;
 			return true;
 		}
