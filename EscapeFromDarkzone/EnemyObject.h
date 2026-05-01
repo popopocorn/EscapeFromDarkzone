@@ -55,7 +55,7 @@ public:
 
 public:
 	float m_fMoveSpeed = 7.0f;
-	float m_fDetectionRange = 10.0f;
+	float m_fDetectionRange = 20.0f;
 	float m_fAttackRange = 3.0f;
 
 	XMFLOAT3 m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 10.0f);

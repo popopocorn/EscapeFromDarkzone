@@ -300,6 +300,12 @@ vector<XMFLOAT3> AstarNavigation::FindPath(XMFLOAT3 start, XMFLOAT3 end)
 	int startID = FindPolyID(start);
 	int endID = FindPolyID(end);
 
+	wchar_t szDebugMsg[256];
+
+
+	swprintf_s(szDebugMsg, L"p1:%d p2: %d\n", startID, endID);
+
+	OutputDebugString(szDebugMsg);
 
 
 	if (startID == -1 || endID == -1)

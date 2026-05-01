@@ -1755,7 +1755,7 @@ void ViewObject::Animate(float fTimeElapsed)
 		XMFLOAT4X4 localRot;
 		XMStoreFloat4x4(&localRot, mRot);
 
-		localRot._42 = 0.001f;
+		localRot._42 = 0.001f; 
 		m_pConeObject->m_xmf4x4ToParent = localRot;
 	}
 }
