@@ -240,9 +240,9 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	
 	pEnemy->updateTimer += fTimeElapsed;
-	if (pEnemy->updateTimer >= 1.0f)
+	if (pEnemy->updateTimer >= pEnemy->findTime)
 	{
-		pEnemy->updateTimer -= 1.0f;
+		pEnemy->updateTimer -= pEnemy->findTime;
 		pEnemy->ways = pEnemy->GetNav()->FindPath(xmf3MyPos, xmf3PlayerPos);
 		pEnemy->wayIdx = 0;
 	}

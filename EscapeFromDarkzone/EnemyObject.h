@@ -51,6 +51,7 @@ public:
 	float						updateTimer = 0;
 	vector<XMFLOAT3>			ways;
 	int							wayIdx = 0;
+	float						findTime = 0.5f;
 
 
 public:

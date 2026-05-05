@@ -253,7 +253,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 				NULL, "Model/floor_01.bin", stdshader.get(), 0
 			)
 		);
-		floorObj->SetPosition(0, -0.5f, 0);
+		floorObj->SetPosition(0, 0.0f, 0);
 		floorObj->SetOOBB(NULL);
 		stdshader->addObjects(std::move(floorObj));
 
@@ -298,7 +298,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 					NULL, fileName, stdshader.get(), 0
 				)
 			);
-			map->SetPosition(-150, -0.5f, -150);
+			map->SetPosition(-150, 0.0f, -150);
 			map->SetOOBB(NULL);
 
 			// block 계열만 시야 blocker 후보에 저장
