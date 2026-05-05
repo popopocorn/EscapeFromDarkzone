@@ -1,4 +1,4 @@
-#include "Collision.h"
+#include "Server_Collision.h"
 
 #include <vector>
 #include <limits>
@@ -98,4 +98,42 @@ ColResult CalcCollision(
 	XMStoreFloat3(&result.mtv, mtv);
 
 	return result;
+}
+
+BoundingOrientedBox MakePlayerOOBB(const XMFLOAT3& position, float yawRad)
+{
+	BoundingOrientedBox obb;
+
+	// 로컬 center를 위치만큼 평행이동
+	// (로컬 center가 (0, 0.9, 0)이라 yaw 회전이 center에는 영향 없음)
+	obb.Center.x = position.x + PLAYER_OOBB_CENTER.x;
+	obb.Center.y = position.y + PLAYER_OOBB_CENTER.y;
+	obb.Center.z = position.z + PLAYER_OOBB_CENTER.z;
+
+	// Extents는 로컬값 그대로
+	obb.Extents = PLAYER_OOBB_EXTENTS;
+
+	// yaw를 Y축 회전 쿼터니언으로
+	XMVECTOR q = XMQuaternionRotationAxis(
+		XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), yawRad);
+	XMStoreFloat4(&obb.Orientation, q);
+
+	return obb;
+}
+
+std::vector<ColResult> CheckCollisionWithMap(const BoundingOrientedBox& playerOOBB, const std::vector<BoundingOrientedBox>& mapOOBBs)
+{
+	std::vector<ColResult> results;
+	results.reserve(mapOOBBs.size());
+
+	for (const auto& mapOOBB : mapOOBBs)
+	{
+		ColResult res = CalcCollision(playerOOBB, mapOOBB);
+		if (res.isCollide)
+		{
+			results.push_back(res);
+		}
+	}
+
+	return results;
 }
