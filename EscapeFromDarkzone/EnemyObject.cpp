@@ -2,6 +2,7 @@
 #include "EnemyObject.h"
 #include "Player.h"
 #include "OtherPlayer.h"
+#include "AI.h"
 
 CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -44,19 +45,38 @@ void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
 
 void CEnemyObject::HandleHP(float value)
 {
-	if(hp>0) hp -= value;
-	else {
-		Alive = false;
+	if (m_bDying) return;
+	if (value <= 0.0f) return;
+
+	hp -= value;
+
+	if (hp <= 0.0f)
+	{
+		hp = 0.0f;
+		m_bDying = true;
+		m_bLootSpawnRequested = false;
+		m_fDieElapsed = 0.0f;
+
 		ChangeState(std::make_unique<EnemyDie>());
-		OutputDebugString(L"Dead\n");
+		OutputDebugString(L"Enemy Die Start\n");
 	}
-	
+}
+
+bool CEnemyObject::ConsumeLootSpawnRequest()
+{
+	if (!m_bLootSpawnRequested) return false;
+	m_bLootSpawnRequested = false;
+	return true;
+}
+
+void CEnemyObject::MarkDeadForRemoval()
+{
+	Kill();
 }
 
 void CEnemyObject::Animate(float fTimeElapsed)
 {
 	CGameObject::Animate(fTimeElapsed);
-
 	Update(fTimeElapsed);
 }
 
@@ -64,11 +84,24 @@ void CEnemyObject::Update(float fTimeElapsed)
 {
 	m_xmf3PrevPos = m_xmf3Position;
 
-	if ( m_pState)
+	if (m_pState)
 	{
 		m_pState->Update(this, fTimeElapsed);
 	}
-	if (not Alive)return;
+
+	//if (not Alive)return;
+
+	if (m_bDying)
+	{
+		m_xmf4x4ToParent._41 = m_xmf3Position.x;
+		m_xmf4x4ToParent._42 = m_xmf3Position.y;
+		m_xmf4x4ToParent._43 = m_xmf3Position.z;
+		UpdateTransform(NULL);
+		return;
+	}
+
+	if (!IsAlive()) return;
+
 	XMFLOAT3 direction = m_xmf3MoveDir;
 	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
 
@@ -125,6 +158,15 @@ void CEnemyObject::HandleCollision(XMFLOAT3 normal)
 	}
 }
 
+void CEnemyObject::SetPosition(float x, float y, float z)
+{
+	CGameObject::SetPosition(x, y, z);
+	m_xmf3Position.x = x;
+	m_xmf3Position.y = y;
+	m_xmf3Position.z = z;
+	
+}
+
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 {
 	pEnemy->SetMoveDir(XMFLOAT3(0, 0, 0));
@@ -144,6 +186,7 @@ bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 void EnemyIdle::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	if (!pEnemy->m_pPlayer) return;
+	if (pEnemy->m_bDying) return;
 
 	XMFLOAT3 xmf3MyPos = pEnemy->GetPosition();
 	XMFLOAT3 xmf3PlayerPos = pEnemy->m_pPlayer->GetPosition();
@@ -178,34 +221,68 @@ bool EnemyRun::Enter(CEnemyObject* pEnemy)
 void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	if (!pEnemy->m_pPlayer) return;
+	if (pEnemy->m_bDying) return;
 
 	XMFLOAT3 xmf3MyPos = pEnemy->GetPosition();
 	XMFLOAT3 xmf3PlayerPos = pEnemy->m_pPlayer->GetPosition();
 
-	XMFLOAT3 xmf3Dir = Vector3::Subtract(xmf3PlayerPos, xmf3MyPos);
-	xmf3Dir.y = 0.0f;
-	float fDistance = Vector3::Length(xmf3Dir);
+	
+	XMFLOAT3 xmf3DirToPlayer = Vector3::Subtract(xmf3PlayerPos, xmf3MyPos);
+	xmf3DirToPlayer.y = 0.0f;
+	float fDistanceToPlayer = Vector3::Length(xmf3DirToPlayer);
 
-	if (fDistance > pEnemy->m_fDetectionRange || fDistance <= pEnemy->m_fAttackRange)
+	if (fDistanceToPlayer > pEnemy->m_fDetectionRange || fDistanceToPlayer <= pEnemy->m_fAttackRange)
 	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
 		return;
 	}
 
-	XMFLOAT3 xmf3Look = Vector3::Normalize(xmf3Dir);
+	
+	pEnemy->updateTimer += fTimeElapsed;
+	if (pEnemy->updateTimer >= 1.0f)
+	{
+		pEnemy->updateTimer -= 1.0f;
+		pEnemy->ways = pEnemy->GetNav()->FindPath(xmf3MyPos, xmf3PlayerPos);
+		pEnemy->wayIdx = 0;
+	}
 
+	XMFLOAT3 xmf3Look = pEnemy->GetLook();
+	bool bIsMoving = false;
+
+	
+	if (!pEnemy->ways.empty())
+	{
+		while (pEnemy->wayIdx < pEnemy->ways.size())
+		{
+			XMFLOAT3 xmf3NextWaypoint = pEnemy->ways[pEnemy->wayIdx];
+			XMFLOAT3 xmf3DirToWayPoint = Vector3::Subtract(xmf3NextWaypoint, xmf3MyPos);
+			xmf3DirToWayPoint.y = 0.0f;
+
+			if (Vector3::Length(xmf3DirToWayPoint) < 1.0f) // 0.1f???덈Т ?묒뒿?덈떎.
+			{
+				pEnemy->wayIdx++;
+			}
+			else
+			{
+				xmf3Look = Vector3::Normalize(xmf3DirToWayPoint);
+				pEnemy->SetMoveDir(xmf3Look);
+				bIsMoving = true;
+				break;
+			}
+		}
+	}
+	if (!bIsMoving)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		if (fDistanceToPlayer > 0.1f) xmf3Look = Vector3::Normalize(xmf3DirToPlayer);
+	}
+
+	
 	float fAngleRad = atan2(xmf3Look.x, xmf3Look.z);
 	float fAngleDeg = XMConvertToDegrees(fAngleRad);
-	XMFLOAT4X4 xmf4x4Rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
-
-	pEnemy->m_xmf4x4ToParent = xmf4x4Rotate;
-	pEnemy->m_xmf4x4ToParent._41 = xmf3MyPos.x;
-	pEnemy->m_xmf4x4ToParent._42 = xmf3MyPos.y;
-	pEnemy->m_xmf4x4ToParent._43 = xmf3MyPos.z;
-
-	pEnemy->SetMoveDir(xmf3Look);
+	pEnemy->m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
 }
-
 void EnemyRun::Exit(CEnemyObject* pEnemy)
 {
 }
@@ -215,8 +292,12 @@ bool EnemyDie::Enter(CEnemyObject* pEnemy)
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
 
+	pEnemy->m_bDying = true;
+	pEnemy->m_bLootSpawnRequested = false;
+	pEnemy->m_fDieElapsed = 0.0f;
+
 	pController->SetTrackType(0, ANIMATION_TYPE_ONCE);
-	pController->SetTrackAnimationSetIfChanged(0, 0);
+	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_DIE);
 	pController->SetTrackWeight(0, 1.0f);
 	pController->SetTrackEnable(0, true);
 	pController->SetTrackPosition(0, 0.0f);
@@ -226,8 +307,72 @@ bool EnemyDie::Enter(CEnemyObject* pEnemy)
 
 void EnemyDie::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
+	pEnemy->m_fDieElapsed += fTimeElapsed;
+
+	if (!pEnemy->m_bLootSpawnRequested && pEnemy->m_fDieElapsed >= pEnemy->m_fDieDuration)
+	{
+		pEnemy->m_bLootSpawnRequested = true;
+	}
 }
 
 void EnemyDie::Exit(CEnemyObject* pEnemy)
 {
+}
+
+//루팅 오브젝트
+CLootContainerObject::CLootContainerObject(float fLifeTime)
+{
+	m_fRemainTime = fLifeTime;
+}
+
+void CLootContainerObject::UpdateLifetime(float fTimeElapsed)
+{
+	if (!IsAlive()) return;
+
+	m_fRemainTime -= fTimeElapsed;
+	if (m_fRemainTime <= 0.0f)
+	{
+		Kill();
+	}
+}
+
+bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
+{
+	if (!item || count <= 0) return false;
+
+	for (int i = 0; i < MAX_LOOT_SLOTS; ++i)
+	{
+		if (!m_LootItems[i])
+		{
+			m_LootItems[i] = move(item);
+			m_LootCounts[i] = count;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
+{
+	if (!pInventory) return;
+
+	pInventory->ClearItems();
+
+	for (int i = 0; i < MAX_LOOT_SLOTS; ++i)
+	{
+		if (m_LootItems[i] && m_LootCounts[i] > 0)
+		{
+			//pInventory->AddItem(std::move(m_LootItems[i]), m_LootCounts[i]);
+		}
+	}
+}
+
+float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
+{
+	XMFLOAT3 myPos = GetPosition();
+	float dx = myPos.x - pos.x;
+	float dy = myPos.y - pos.y;
+	float dz = myPos.z - pos.z;
+	return dx * dx + dy * dy + dz * dz;
 }

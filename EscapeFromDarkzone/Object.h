@@ -354,12 +354,11 @@ struct ColResult;
 
 class CGameObject
 {
-private:
-	int								m_nReferences = 0;
-
 protected:
 	BoundingOrientedBox				OOBBModel;
 	BoundingOrientedBox				OOBBWorld;
+private:
+	int								m_nReferences = 0;
 
 	bool							Alive = true;
 	std::vector<BoundingOrientedBox*> OOBBs;
@@ -459,10 +458,13 @@ public:
 	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
 	bool CheckOOBB() const { return HasOOBB; }
 	virtual void HandleCollision(const ColResult& normal) {};
+	const BoundingOrientedBox& GetOOBBModel() const { return OOBBModel; }
 
 	void SavePrevPosition() { m_xmf3PrevPos = GetPosition();}
 
-	bool IsAlive() { return Alive; }
+	bool IsAlive() const { return Alive; }
+	void SetAlive(bool bAlive) { Alive = bAlive; }
+	void Kill() { Alive = false; }
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 

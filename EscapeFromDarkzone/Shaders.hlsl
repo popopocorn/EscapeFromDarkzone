@@ -116,7 +116,7 @@ VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)
 
 float4 PSView(VS_VIEW_OUTPUT input) : SV_TARGET
 {
-    return float4(1.0f, 1.0f, 0.0f, 0.3f);
+    return float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 VS_UI_OUTPUT VSUI(VS_UI_INPUT input)
@@ -137,11 +137,31 @@ float4 PSUI(VS_UI_OUTPUT input) : SV_Target
     return cAlbedoColor;
 }
 
+// 안개 오버레이용 셰이더
+struct VS_FOG_OVERLAY_OUTPUT
+{
+    float4 position : SV_POSITION;
+};
 
+VS_FOG_OVERLAY_OUTPUT VSFogOverlay(uint nVertexID : SV_VertexID)
+{
+    VS_FOG_OVERLAY_OUTPUT output;
 
+    float2 positions[3] =
+    {
+        float2(-1.0f, -1.0f),
+        float2(-1.0f, 3.0f),
+        float2(3.0f, -1.0f)
+    };
 
+    output.position = float4(positions[nVertexID], 0.0f, 1.0f);
+    return output;
+}
 
-
+float4 PSFogOverlay(VS_FOG_OVERLAY_OUTPUT input) : SV_TARGET
+{
+    return float4(0.0f, 0.0f, 0.0f, 0.75f);
+}
 
 VS_SKYBOX_CUBEMAP_OUTPUT VSSkyBox(VS_SKYBOX_CUBEMAP_INPUT input)
 {
@@ -152,8 +172,6 @@ VS_SKYBOX_CUBEMAP_OUTPUT VSSkyBox(VS_SKYBOX_CUBEMAP_INPUT input)
 
 	return(output);
 }
-
-
 
 float4 PSSkyBox(VS_SKYBOX_CUBEMAP_OUTPUT input) : SV_TARGET
 {

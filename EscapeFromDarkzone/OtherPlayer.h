@@ -30,8 +30,7 @@ public:
 		float x, float y, float z);
 
 	void UpdatePosition(float x, float y, float z);
-
-	void Kill() { Alive = false; }
+	void Kill() { CGameObject::Kill(); }
 };
 
 

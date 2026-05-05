@@ -459,6 +459,35 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, 
 	}
 }
 
+void CStandardObjectsShader::DeleteObject(UINT64 fence)
+{
+	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+		if (!obj->IsAlive())
+		{
+			CGameObject* pRawObj = obj.release();
+			GarbageQueue.push({ pRawObj, fence });
+			return true;
+		}
+		return false;
+		});
+}
+
+void CStandardObjectsShader::ProcessingGarbageQueue(UINT64 completed)
+{
+	while (!GarbageQueue.empty())
+	{
+		auto& garbage = GarbageQueue.front();
+		if (completed >= garbage.FenceValue)
+		{
+			garbage.obj->Release();
+			GarbageQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
+}
 
 float Random(float fMin, float fMax)
 {
@@ -525,6 +554,8 @@ void CSkinnedAnimationObjectsShader::ReleaseObjects()
 
 void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 {
+	m_fElapsedTime = fTimeElapsed;
+
 	for (int i = 0; i < m_ppObjects.size(); i++)
 	{
 		if (m_ppObjects[i])
@@ -566,35 +597,19 @@ D3D12_DEPTH_STENCIL_DESC CSkinnedAnimationObjectsShader::CreateDepthStencilState
 	return(d3dDepthStencilDesc);
 }
 
-void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
+void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
 	CSkinnedAnimationStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
-	/*for (int j = 0; j < m_ppObjects.size(); j++)
-	{
-		if (m_ppObjects[j])
-		{
-			if (m_ppObjects[j]->m_pSkinnedAnimationController)
-			{
-				m_ppObjects[j]->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, m_ppObjects[j].get());
-
-				m_ppObjects[j]->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
-			}
-			m_ppObjects[j]->Animate(m_fElapsedTime);
-			m_ppObjects[j]->Render(pd3dCommandList, pCamera);
-		}
-	}*/
-	
 	for (const auto& pObject : m_ppObjects)
 	{
+		if (!pObject) continue;
+
 		if (pObject->m_pSkinnedAnimationController)
 		{
-			pObject->m_pSkinnedAnimationController->AdvanceTime(m_fElapsedTime, pObject.get());
-
 			pObject->m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 		}
 
-		// 객체 그리기
 		pObject->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 	}
 }
@@ -703,7 +718,8 @@ D3D12_BLEND_DESC ViewShader::CreateBlendState()
 	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
 	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 	rt.LogicOp = D3D12_LOGIC_OP_NOOP;
-	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	rt.RenderTargetWriteMask = 0;
 
 	return d3dBlendDesc;
 }
@@ -777,7 +793,6 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 	{
 		if (m_ppObjects[j])
 		{
-			// Animate / UpdateTransform 은 AnimateObjects()에서 이미 끝냄
 			m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 		}
 	}
@@ -788,14 +803,13 @@ CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 {
 	m_pd3dGraphicsRootSignature = pd3dGraphicsRootSignature;
 
-	m_pDebugObject = new CDebugObject(pd3dDevice, pd3dCommandList);
+	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList);
 
 	CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
 
 CBoundingBoxShader::~CBoundingBoxShader()
 {
-	if (m_pDebugObject) delete m_pDebugObject;
 	m_DebugInstances.clear();
 }
 
@@ -878,14 +892,28 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 {
 	if (!pGameObject) return;
 
+	bool bCanAdd = false;
+	XMFLOAT3 extents = XMFLOAT3(0, 0, 0);
+	XMFLOAT3 center = XMFLOAT3(0, 0, 0);
+
 	CMesh* pMesh = pGameObject->GetMesh();
 
 	if (pMesh && pGameObject->HasOOBB)
 	{
-		// 로컬값 가져오기
-		XMFLOAT3 extents = pMesh->GetAABBExtents();
-		XMFLOAT3 center = pMesh->GetAABBCenter();
+		extents = pMesh->GetAABBExtents();
+		center = pMesh->GetAABBCenter();
+		bCanAdd = true;
+	}
+	else if (pGameObject->HasOOBB)
+	{
+		const BoundingOrientedBox& oobb = pGameObject->GetOOBBModel();
+		extents = oobb.Extents;
+		center = oobb.Center;
+		bCanAdd = true;
+	}
 
+	if (bCanAdd)
+	{
 		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
 		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
 
@@ -899,7 +927,6 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 		m_DebugInstances.push_back(instance);
 	}
 
-	//트리 순회
 	if (pGameObject->m_pChild)
 	{
 		AddObject(pGameObject->m_pChild);
@@ -910,7 +937,6 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 		AddObject(pGameObject->m_pSibling);
 	}
 }
-
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)
 {
 	if (m_DebugInstances.empty()) return;
@@ -1077,3 +1103,74 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 	m_ppObjects.clear();
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+D3D12_INPUT_LAYOUT_DESC CFogOverlayShader::CreateInputLayout()
+{
+	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
+	d3dInputLayoutDesc.pInputElementDescs = nullptr;
+	d3dInputLayoutDesc.NumElements = 0;
+	return d3dInputLayoutDesc;
+}
+
+D3D12_RASTERIZER_DESC CFogOverlayShader::CreateRasterizerState()
+{
+	D3D12_RASTERIZER_DESC d3dRasterizerDesc{};
+	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
+	d3dRasterizerDesc.DepthBias = 0;
+	d3dRasterizerDesc.DepthBiasClamp = 0.0f;
+	d3dRasterizerDesc.SlopeScaledDepthBias = 0.0f;
+	d3dRasterizerDesc.DepthClipEnable = FALSE;
+	d3dRasterizerDesc.MultisampleEnable = FALSE;
+	d3dRasterizerDesc.AntialiasedLineEnable = FALSE;
+	d3dRasterizerDesc.ForcedSampleCount = 0;
+	d3dRasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+	return d3dRasterizerDesc;
+}
+
+D3D12_BLEND_DESC CFogOverlayShader::CreateBlendState()
+{
+	return CShader::CreateBlendState();
+}
+
+D3D12_DEPTH_STENCIL_DESC CFogOverlayShader::CreateDepthStencilState()
+{
+	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc{};
+	d3dDepthStencilDesc.DepthEnable = FALSE;
+	d3dDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	d3dDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+	d3dDepthStencilDesc.StencilEnable = TRUE;
+	d3dDepthStencilDesc.StencilReadMask = 0x01;
+	d3dDepthStencilDesc.StencilWriteMask = 0x00;
+
+	d3dDepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	d3dDepthStencilDesc.BackFace = d3dDepthStencilDesc.FrontFace;
+
+	return d3dDepthStencilDesc;
+}
+
+D3D12_SHADER_BYTECODE CFogOverlayShader::CreateVertexShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSFogOverlay", "vs_5_1", &m_pd3dVertexShaderBlob);
+}
+
+D3D12_SHADER_BYTECODE CFogOverlayShader::CreatePixelShader()
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSFogOverlay", "ps_5_1", &m_pd3dPixelShaderBlob);
+}
+
+void CFogOverlayShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
+{
+	OnPrepareRender(pd3dCommandList, nPipelineState);
+
+	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	pd3dCommandList->DrawInstanced(3, 1, 0, 0);
+}

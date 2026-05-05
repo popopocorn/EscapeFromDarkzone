@@ -85,9 +85,9 @@ protected:
 
 //아이템 슬롯
 struct ItemSlot {
-	std::shared_ptr<Item> item;
+	std::unique_ptr<Item> item = NULL;
 	int count = 0;
-	UIObject* ui = nullptr;
+	std::unique_ptr<UIObject> ui;
 };
 
 const int MAX_SLOTS = 10;
@@ -97,6 +97,13 @@ private:
 	std::array<ItemSlot, MAX_SLOTS> slots;
 	CheckBox box;
 
+	float m_baseX = 0.0f; 
+	float m_baseY = 0.0f;
+	float m_slotW = 0.0f;
+	float m_slotH = 0.0f;
+	float m_slotGap = 0.025f;
+
+	int ID;
 public:
 	Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
@@ -105,10 +112,13 @@ public:
 	void SubmitToShader(UIObjectShader* shader);
 	void SlotClicked(int slotidx);
 	void ProcessClick(POINT mouse);
-
-	bool AddItem(const std::shared_ptr<Item>& item, int count = 1);
+	//드래그 앤 드롭 처리 함수 추가
+	bool AddItem(unique_ptr<Item> item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 
+	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
+	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동
+	void SetId(int x) { ID = x; }
 	bool isOpen = false;
 };
 

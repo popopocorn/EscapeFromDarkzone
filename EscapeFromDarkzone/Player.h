@@ -277,7 +277,8 @@ enum PLAYER_ANIM {
 	ANIM_RUN_L,
 	ANIM_RUN_R,
 	ANIM_RUN_B,
-	ANIM_GRENADE
+	ANIM_GRENADE,
+	ANIM_DIE
 };
 
 class CTerrainPlayer : public CPlayer
