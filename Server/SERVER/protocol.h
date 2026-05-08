@@ -16,11 +16,15 @@ constexpr char SC_ADD_PLAYER = 3;
 constexpr char SC_REMOVE_PLAYER = 4;
 constexpr char SC_MOVE_PLAYER = 5;
 
+constexpr char CS_INVENTORY_CLICK = 6;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
 constexpr char MOVE_A = 0x04;
 constexpr char MOVE_D = 0x08;
+
+constexpr char INV_ACTION_CLICK = 0;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -29,19 +33,6 @@ struct CS_LOGIN_PACKET {
 	char	name[NAME_SIZE];
 };
 
-//struct CS_MOVE_PACKET {
-//	unsigned char size;
-//	char	type;
-//	char	direction;  // 0 : UP, 1 : DOWN, 2 : LEFT, 3 : RIGHT
-//	unsigned	move_time;
-//};
-//struct CS_MOVE_PACKET {
-//	unsigned char size;
-//	char          type;
-//	float         x, y, z;        // direction 제거, 좌표로 대체
-//	unsigned int  move_time;
-//};
-// 클라이언트 -> 서버: 입력 정보 전송 (서버가 좌표 계산)
 struct CS_MOVE_PACKET {
 	unsigned char size;
 	char          type;
@@ -50,12 +41,6 @@ struct CS_MOVE_PACKET {
 	unsigned int  move_time;    // 패킷 순서 보정용 
 };
 
-//struct SC_LOGIN_INFO_PACKET {
-//	unsigned char size;
-//	char	type;
-//	short	id;
-//	short	x, y;
-//};
 struct SC_LOGIN_INFO_PACKET {
 	unsigned char size;
 	char          type;
@@ -63,13 +48,6 @@ struct SC_LOGIN_INFO_PACKET {
 	float         x, y, z;        // short → float
 };
 
-//struct SC_ADD_PLAYER_PACKET {
-//	unsigned char size;
-//	char	type;
-//	short	id;
-//	short	x, y;
-//	char	name[NAME_SIZE];
-//};
 struct SC_ADD_PLAYER_PACKET {
 	unsigned char size;
 	char          type;
@@ -84,19 +62,19 @@ struct SC_REMOVE_PLAYER_PACKET {
 	short	id;
 };
 
-//struct SC_MOVE_PLAYER_PACKET {
-//	unsigned char size;
-//	char	type;
-//	short	id;
-//	short	x, y;
-//	unsigned int move_time;
-//};
 struct SC_MOVE_PLAYER_PACKET {
 	unsigned char size;
 	char          type;
 	short         id;
 	float         x, y, z;        // short → float
 	unsigned int  move_time;
+};
+
+struct CS_INVENTORY_CLICK_PACKET {
+	unsigned char size;
+	char          type;
+	char          action;
+	short         slotidx;
 };
 
 #pragma pack (pop)

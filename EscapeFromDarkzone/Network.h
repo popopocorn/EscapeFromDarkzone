@@ -46,6 +46,6 @@ public:
     std::vector<char> PopPacket();
 
     bool SendLogin(const char* name);
-    //bool SendMove(float x, float y, float z, unsigned int move_time);
     bool SendMove(char inputs, float yaw, unsigned int move_time);
+    bool SendInventoryClick(char action, short slotidx);
 };

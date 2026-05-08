@@ -3,6 +3,7 @@
 #include "Item.h"
 #include "Shader.h"
 #include "Object.h"
+#include "Network.h"	// 05.08 추가: 아이템 클릭 패킷 전송
 
 //모델 원본 풀
 std::unordered_map<std::string, CGameObject*> ItemModelLibrary::s_ModelPool;
@@ -249,6 +250,12 @@ void Inventory::SlotClicked(int slotidx)
 	wchar_t debugBuf[256];
 	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
 	OutputDebugStringW(debugBuf);
+
+	if (NetworkManager::Instance().IsConnected()) {
+		NetworkManager::Instance().SendInventoryClick(
+			INV_ACTION_CLICK,
+			static_cast<short>(slotidx));
+	}
 }
 
 void Inventory::ProcessClick(POINT mouse)

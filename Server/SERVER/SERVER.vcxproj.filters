@@ -15,10 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="protocol.h">
+    <ClInclude Include="Server_Collision.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="Server_Collision.h">
+    <ClInclude Include="protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

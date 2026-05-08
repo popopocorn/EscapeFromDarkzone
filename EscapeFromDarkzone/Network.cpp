@@ -257,3 +257,15 @@ bool NetworkManager::SendMove(char inputs, float yaw, unsigned int move_time)
 
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendInventoryClick(char action, short slotidx)
+{
+	CS_INVENTORY_CLICK_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_INVENTORY_CLICK_PACKET);
+	pkt.type = CS_INVENTORY_CLICK;
+	pkt.action = action;
+	pkt.slotidx = slotidx;
+
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}

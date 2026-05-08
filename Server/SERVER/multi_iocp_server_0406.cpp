@@ -396,6 +396,16 @@ void process_packet(int c_id, char* packet)
 
 		break;
 	}
+	case CS_INVENTORY_CLICK: {
+		CS_INVENTORY_CLICK_PACKET* p =
+			reinterpret_cast<CS_INVENTORY_CLICK_PACKET*>(packet);
+
+		std::cout << "[INVENTORY_CLICK] id:" << c_id
+			<< " (" << clients[c_id]._name << ")"
+			<< " action:" << static_cast<int>(p->action)
+			<< " slot:" << p->slotidx << "\n";
+		break;
+	}
 	}
 }
 
