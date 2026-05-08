@@ -185,7 +185,7 @@ void CPlayer::Update(float fTimeElapsed)
 	// 04.10 추가: 서버 위치 보간
 	if (NetworkManager::Instance().IsConnected())
 	{
-		float alpha = 5.0f * fTimeElapsed;		// 추후 보간 속도 조정 (5.0f)
+		float alpha = 10.0f * fTimeElapsed;		// 보간 속도 조정 (기본: 5.0f, 05.08: 10.f로 변경)
 		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * alpha;
 		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
 	}
