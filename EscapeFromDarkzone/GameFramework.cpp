@@ -71,13 +71,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 
-	/*
 	// 03.27 추가: 네트워크 초기화 및 연결
 	if (!NetworkManager::Instance().Init("Player"))
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
-	*/
 
 	return(true);
 }
@@ -450,9 +448,9 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
-	/*
-	NetworkManager::Instance().Shutdown();
-	*/
+	if (NetworkManager::Instance().IsConnected()) {
+		NetworkManager::Instance().Shutdown();
+	}
 
 	WaitForGpuComplete();
 	ReleaseObjects();
@@ -664,13 +662,11 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
-	/*
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())
 	{
 		ProcessNetworkPackets();
 	}
-	*/
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
@@ -814,7 +810,6 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
-/*
 // 03.27 추가
 void CGameFramework::ProcessNetworkPackets()
 {
@@ -853,14 +848,20 @@ void CGameFramework::ProcessNetworkPackets()
 			if (p->id == m_myId) {
 				break;
 			}
-
-			//03.30 추가: OtherPlayer 생성, 04.07 수정: 함수 래핑
-			if (m_otherPlayers.count(p->id)) break;		// 이미 있으면 넘기기 (오면 안되는 패킷)
+			if (FindOtherPlayer(p->id)) {
+				break;
+			}
 
 			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), 
 				p->x, p->y, p->z);
 
-			m_otherPlayers[p->id] = pOther;
+			
+			if (!AddOtherPlayer(p->id, pOther)) {	// 슬롯 부족 — 생성 취소
+				OutputDebugString(L"[Network] OtherPlayer slot full.\n");
+				pOther->Kill();
+				break;
+			}
+
 			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
 
 			break;
@@ -873,10 +874,9 @@ void CGameFramework::ProcessNetworkPackets()
 			//OutputDebugStringW(szLog);
 
 			// 03.30 추가: OtherPlayer 제거
-			auto it = m_otherPlayers.find(p->id);
-			if (it != m_otherPlayers.end()) {
-				it->second->Kill();			// 임시 삭제, 추후 수정 필요
-				m_otherPlayers.erase(it);
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				pOther->Kill();
+				RemoveOtherPlayer(p->id);
 			}
 
 			break;
@@ -894,9 +894,8 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			auto it = m_otherPlayers.find(p->id);
-			if (it != m_otherPlayers.end()) {
-				it->second->UpdatePosition(p->x, p->y, p->z);
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				pOther->UpdatePosition(p->x, p->y, p->z);
 			}
 
 			break;
@@ -906,4 +905,28 @@ void CGameFramework::ProcessNetworkPackets()
 		}
 	}
 }
-*/
+
+// 05.08 추가: unordered_map에서 array로, 함수 추가
+
+OtherPlayer* CGameFramework::FindOtherPlayer(short id)
+{
+	for (auto& s : m_otherPlayers)
+		if (s.id == id) return s.pPlayer;
+	return nullptr;
+}
+bool CGameFramework::AddOtherPlayer(short id, OtherPlayer* p)
+{
+	for (auto& s : m_otherPlayers) {
+		if (s.id == -1) { s.id = id; s.pPlayer = p; return true; }
+	}
+	return false;
+}
+void CGameFramework::RemoveOtherPlayer(short id)
+{
+	for (auto& s : m_otherPlayers) {
+		if (s.id == id) {
+			s.id = -1; s.pPlayer = nullptr;
+			return;
+		}
+	}
+}

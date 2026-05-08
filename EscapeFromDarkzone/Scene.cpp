@@ -1606,7 +1606,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 	if (inventory) inventory->SubmitToShader(UIShader.get());
 	if (corpseInventory) corpseInventory->SubmitToShader(UIShader.get());
 
-	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
+	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
 void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
