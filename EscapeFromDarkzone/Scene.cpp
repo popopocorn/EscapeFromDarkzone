@@ -250,10 +250,10 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 		std::unique_ptr<CGameObject> floorObj(
 			CGameObject::LoadGeometryModelByName(
 				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-				NULL, "Model/floor_01.bin", stdshader.get(), 0
+				NULL, "Model/floor.bin", stdshader.get(), 0
 			)
 		);
-		floorObj->SetPosition(0, -0.5f, 0);
+		floorObj->SetPosition(-150, -0.5f, -150);
 		floorObj->SetOOBB(NULL);
 		stdshader->addObjects(std::move(floorObj));
 
