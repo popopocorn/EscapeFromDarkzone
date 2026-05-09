@@ -10,7 +10,7 @@ class Inventory;
 enum ENEMY_ANIM {
 	ENEMY_ANIM_IDLE = 0,
 	ENEMY_ANIM_RUN = 1,
-	ENEMY_ANIM_DIE = 4
+	ENEMY_ANIM_DIE = 2
 };
 
 constexpr int MAX_LOOT_SLOTS = 10;
@@ -40,6 +40,7 @@ public:
 
 	void HandleHP(float value);
 
+	bool ConsumeDeadRemovalRequest();
 	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비
 	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시
 	void setNav(AstarNavigation* nav) { AStarNav = nav; }
@@ -65,7 +66,8 @@ public:
 	bool m_bDying = false;
 	bool m_bLootSpawnRequested = false;
 	float m_fDieElapsed = 0.0f;
-	float m_fDieDuration = 1.2f;
+	float m_fDieDuration = 3.4f;
+	bool m_bDeadRemoveRequested = false;
 };
 
 class EnemyIdle : public State<CEnemyObject>

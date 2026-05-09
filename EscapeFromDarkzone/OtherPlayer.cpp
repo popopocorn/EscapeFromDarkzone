@@ -107,7 +107,7 @@ bool OtherPlayerDie::Enter(OtherPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, 4);
+		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_DIE);
 	}
 	return true;
 }

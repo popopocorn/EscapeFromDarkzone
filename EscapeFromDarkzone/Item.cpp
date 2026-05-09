@@ -362,7 +362,7 @@ void Inventory::SetPosition(float x, float y)
 	LayoutSlotViews();
 }
 
-bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
+/*bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
 {
 	if (!item || count <= 0) return false;
 
@@ -377,7 +377,7 @@ bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
 	}
 
 	return false;
-}
+}*/
 
 void Inventory::ClearItems()
 {

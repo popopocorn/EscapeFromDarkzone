@@ -1013,6 +1013,9 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	{
 	case WM_LBUTTONDOWN:
 	{
+		if (m_pPlayer)
+			m_pPlayer->SetFireHeld(false);
+
 		// 인벤토리가 열려 있으면 UI 클릭만 처리하고 발사는 막음
 		if (IsAnyInventoryOpen())
 		{
@@ -1036,6 +1039,8 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 
 		if (!m_pPlayer) return;
 
+		m_pPlayer->SetFireHeld(true);
+
 		m_bSparkFireActive = true;
 		m_bLaserActive = true;
 		m_fSparkSpawnTimer = 0.0f;
@@ -1050,6 +1055,8 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		{
 			return;
 		}
+
+		m_pPlayer->NotifyWeaponFired();
 
 		XMFLOAT3 sparkPos;
 		XMFLOAT3 sparkRight;
@@ -1352,6 +1359,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				if (pEnemy->ConsumeLootSpawnRequest())
 				{
 					SpawnLootContainerFromEnemy(pEnemy);
+				}
+
+				if (pEnemy->ConsumeDeadRemovalRequest())
+				{
 					pEnemy->MarkDeadForRemoval();
 				}
 			}
@@ -1400,6 +1411,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				m_fSparkSpawnTimer = 0.0f;
 				break;
 			}
+
+			m_pPlayer->NotifyWeaponFired();
 
 			XMFLOAT3 sparkPos;
 			XMFLOAT3 sparkRight;
@@ -1568,7 +1581,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	pd3dCommandList->OMSetStencilRef(0x01);
+	pd3dCommandList->OMSetStencilRef(0xff);
 
 	if (nPipelineState == SHADOW)
 	{
@@ -1644,13 +1657,13 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 		}
 	}
 
-	// 3. 시야 바깥
+	// 3. 시야 바깥 Fog 오버레이
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 
-		pd3dCommandList->OMSetStencilRef(0x01);
+		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
 	// 4. UI
@@ -1669,6 +1682,22 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 
 void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
-}
+	if (!m_pPlayer || !pCamera) return;
 
+	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	if (m_pd3dCbvSrvDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvDescriptorHeap);
+
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pd3dcbLights)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	}
+
+	pd3dCommandList->OMSetStencilRef(0xff);
+
+	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+}

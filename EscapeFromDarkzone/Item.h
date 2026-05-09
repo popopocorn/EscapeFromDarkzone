@@ -135,7 +135,7 @@ public:
 	bool ProcessClick(POINT mouse);
 	//드래그 앤 드롭 처리 함수 추가, 지금은 클릭 처리만 구현
 
-	bool AddItem(std::unique_ptr<Item> item, int count = 1);
+	//bool AddItem(std::unique_ptr<Item> item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
