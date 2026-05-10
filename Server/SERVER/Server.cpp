@@ -14,6 +14,7 @@
 #include "protocol.h"
 
 #include "Server_Collision.h"
+#include "Server_Npc.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -291,6 +292,102 @@ int get_new_client_id()
 	return -1;
 }
 
+struct PlayerSnapshot {
+	bool  in_game;
+	float x, y, z;
+};
+
+static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
+{
+	for (int i = 0; i < MAX_USER; ++i) {
+		std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+		if (clients[i]._state == ST_INGAME) {
+			out[i].in_game = true;
+			out[i].x = clients[i].x;
+			out[i].y = clients[i].y;
+			out[i].z = clients[i].z;
+		}
+		else {
+			out[i].in_game = false;
+		}
+	}
+}
+
+static void HandleNpcEvent(const NpcInputEvent& e)
+{
+	switch (e.type) {
+	case NpcInputEvent::HIT:
+		// TODO (6단계): ray vs OOBB 교차, HP 차감
+		break;
+	case NpcInputEvent::NEW_CLIENT_JOINED:
+		//std::cout << "[NPC] NEW_CLIENT_JOINED received, client " << e.new_client_id << "\n";
+		// TODO (2.5단계): 모든 살아있는 NPC의 SC_ADD_NPC를 e.new_client_id에 송신
+		break;
+	}
+}
+
+static void UpdateNpc(SERVER_NPC& npc, float dt,
+	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	// TODO (4단계): Idle/Run/Die 상태 머신, A* 추적
+	// TODO (5단계): NPC vs 맵 충돌 보정
+}
+
+static void BroadcastNpcPositions()
+{
+	// TODO (2.5단계): for each alive NPC → for each ST_INGAME client → SC_MOVE_NPC 송신
+}
+
+static void npc_thread()
+{
+	using clock = std::chrono::steady_clock;
+	constexpr auto TICK = std::chrono::milliseconds(33);	// 30Hz
+	constexpr float DT = 1.0f / 30.0f;
+	constexpr int   BROADCAST_EVERY = 6;					// 5Hz
+
+	std::vector<NpcInputEvent>            events;
+	events.reserve(32);
+	std::array<PlayerSnapshot, MAX_USER>  player_snapshot;
+
+	auto next = clock::now();
+	int  tick_count = 0;
+
+	while (true) {
+		next += TICK;
+
+		{
+			//static int debug_tick = 0;
+			//if (++debug_tick % 30 == 0) {
+			//	std::cout << "[NPC] tick " << debug_tick << "\n";
+			//}
+		}
+
+		// 워커가 보낸 입력 처리
+		g_npc_input_queue.DrainTo(events);
+		for (auto& e : events) {
+			HandleNpcEvent(e);
+		}
+
+		// 플레이어 위치 스냅샷
+		SnapshotPlayers(player_snapshot);
+
+		// 각 살아있는 NPC 갱신
+		for (auto& npc : g_npcs) {
+			if (!npc.alive) continue;
+			UpdateNpc(npc, DT, player_snapshot);
+		}
+
+		// 5Hz 위치 브로드캐스트 (6틱마다)
+		++tick_count;
+		if (tick_count >= BROADCAST_EVERY) {
+			tick_count = 0;
+			BroadcastNpcPositions();
+		}
+
+		std::this_thread::sleep_until(next);
+	}
+}
+
 void process_packet(int c_id, char* packet)
 {
 	switch (packet[1]) {
@@ -316,6 +413,13 @@ void process_packet(int c_id, char* packet)
 			printf("ADD_PLAYER: %d, SEND TO %d\n", c_id, pl._id);
 			clients[c_id].send_add_player_packet(pl._id);
 			printf("ADD_PLAYER: %d, SEND TO %d\n", pl._id, c_id);
+		}
+
+		{
+			NpcInputEvent ev{};
+			ev.type = NpcInputEvent::NEW_CLIENT_JOINED;
+			ev.new_client_id = c_id;
+			g_npc_input_queue.Push(std::move(ev));
 		}
 
 		break;
@@ -545,6 +649,8 @@ int main()
 		//}
 	}
 
+	init_npcs();
+
 	HANDLE h_iocp;
 
 	WSADATA WSAData;
@@ -566,11 +672,16 @@ int main()
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
 	std::vector<std::thread> worker_threads;
-	int num_threads = std::thread::hardware_concurrency();
+	int num_threads = std::thread::hardware_concurrency() - 1;
+	if (num_threads < 1) num_threads = 1;
 	for (int i = 0; i < num_threads; ++i)
 		worker_threads.emplace_back(worker_thread, h_iocp);
+
+	std::thread npc_th(npc_thread);
+
 	for (auto& th : worker_threads)
 		th.join();
+	npc_th.join();
 	closesocket(g_s_socket);
 	WSACleanup();
 }

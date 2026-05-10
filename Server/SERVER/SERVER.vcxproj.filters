@@ -18,6 +18,9 @@
     <ClInclude Include="Server_Collision.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="Server_Npc.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -27,6 +30,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Server_Collision.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Server_Npc.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

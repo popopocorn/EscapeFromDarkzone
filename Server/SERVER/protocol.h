@@ -1,8 +1,11 @@
+#pragma once
+
 constexpr int PORT_NUM = 4000;
 constexpr int BUF_SIZE = 200;
 constexpr int NAME_SIZE = 20;
 
 constexpr int MAX_USER = 10000;
+constexpr int MAX_NPC = 128;
 
 constexpr int W_WIDTH = 400;
 constexpr int W_HEIGHT = 400;
@@ -18,6 +21,16 @@ constexpr char SC_MOVE_PLAYER = 5;
 
 constexpr char CS_INVENTORY_CLICK = 6;
 
+// NPC 패킷 S2C
+constexpr char SC_ADD_NPC = 7;
+constexpr char SC_REMOVE_NPC = 8;
+constexpr char SC_MOVE_NPC = 9;
+constexpr char SC_NPC_STATE_CHANGE = 10;
+constexpr char SC_NPC_HP_UPDATE = 11;
+
+// NPC 패킷 C2S
+constexpr char CS_HIT_NPC = 12;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -25,6 +38,10 @@ constexpr char MOVE_A = 0x04;
 constexpr char MOVE_D = 0x08;
 
 constexpr char INV_ACTION_CLICK = 0;
+
+constexpr char NPC_STATE_IDLE = 0;
+constexpr char NPC_STATE_RUN = 1;
+constexpr char NPC_STATE_DIE = 2;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -75,6 +92,55 @@ struct CS_INVENTORY_CLICK_PACKET {
 	char          type;
 	char          action;
 	short         slotidx;
+};
+
+// NPC 패킷 추가
+
+struct SC_ADD_NPC_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+	char          npc_kind;       // 나중에
+	float         x, y, z;
+	float         yaw;
+	short         hp;
+};
+
+struct SC_REMOVE_NPC_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+};
+
+struct SC_MOVE_NPC_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+	float         x, y, z;
+	float         yaw;
+};
+
+struct SC_NPC_STATE_CHANGE_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+	char          state;          // NPC 상태 변환용
+};
+
+struct SC_NPC_HP_UPDATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+	short         hp;
+};
+
+struct CS_HIT_NPC_PACKET {
+	unsigned char size;
+	char          type;
+	float         ray_ox, ray_oy, ray_oz;
+	float         ray_dx, ray_dy, ray_dz;
+	char          weapon_id;				// 나중에
+	unsigned int  fire_time;				// 나중에
 };
 
 #pragma pack (pop)

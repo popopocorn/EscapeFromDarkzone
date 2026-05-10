@@ -133,12 +133,14 @@
   <ItemGroup>
     <ClInclude Include="protocol.h" />
     <ClInclude Include="Server_Collision.h" />
+    <ClInclude Include="Server_Npc.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Server_Collision.cpp" />
+    <ClCompile Include="Server_Npc.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
