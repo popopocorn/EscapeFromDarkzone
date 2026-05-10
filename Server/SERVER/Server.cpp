@@ -8,7 +8,6 @@
 #include <fstream>
 #include <string>
 
-// 03.27 추가
 #include <chrono>
 #include <cmath>
 
@@ -524,6 +523,7 @@ int main()
 		return 1;
 	}
 
+	// 테스트용 코드 (주석처리됨)
 	{
 		//// 케이스 1: 맵 안전한 곳 (충돌 없을 거라 예상)
 		//XMFLOAT3 testPos = { 0.0f, 0.1f, 0.0f };
