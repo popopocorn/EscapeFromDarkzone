@@ -135,7 +135,7 @@
     <ClInclude Include="Server_Collision.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="multi_iocp_server_0406.cpp">
+    <ClCompile Include="Server.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Server_Collision.cpp" />
