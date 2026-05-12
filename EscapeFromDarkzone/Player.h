@@ -229,6 +229,9 @@ public:
 		m_xmf3WeaponShootRot = rot;
 	}
 
+	void SetWeaponBlending(bool bBlending) { m_bWeaponBlending = bBlending; }
+	void SetWeaponBlendTime(float fTime) { m_fWeaponBlendTime = fTime; }
+
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
 

@@ -1396,6 +1396,8 @@ bool PlayerShoot::Enter(CPlayer* Player)
 {
 	m_fElapsed = 0.0f;
 
+	Player->SetWeaponBlending(false);
+	Player->SetWeaponBlendTime(0.0f);
 	Player->ApplyWeaponPose(WEAPON_POSE::SHOOT);
 
 	XMFLOAT2 dir = Player->GetMoveInput2D();
