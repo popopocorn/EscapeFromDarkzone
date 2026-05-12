@@ -4,7 +4,7 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 
-CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* model)
 {
 	CLoadedModelInfo* pEnemyModel
 		= CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
@@ -29,6 +29,7 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 CEnemyObject::~CEnemyObject()
 {
+
 }
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)

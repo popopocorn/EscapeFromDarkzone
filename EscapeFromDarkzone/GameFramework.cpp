@@ -491,6 +491,7 @@ void CGameFramework::OnDestroy()
 	HRESULT hResult = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
 	pdxgiDebug->Release();
 #endif
+
 }
 
 //#define _WITH_TERRAIN_PLAYER
@@ -499,7 +500,7 @@ void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
-	m_pScene = new CScene();
+	m_pScene = new MainScene();
 	
 	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 

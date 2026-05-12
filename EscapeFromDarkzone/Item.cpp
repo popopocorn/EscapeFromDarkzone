@@ -59,21 +59,21 @@ CGameObject* Item::CreateModelInstance() const
 	return CGameObject::CreateModelInstance(model);
 }
 
-WeaponItem::WeaponItem(ItemGrade grade, WeaponCategory category)
+WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)
 {
-	type = ItemType::WEAPON;
+	type = ItemType::PISTOL;
 	m_Spec = BuildSpec(category, grade);
 }
 
 //무기 수치
-WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
+WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 {
 	WeaponSpec spec;
 
 	switch (category)
 	{
-	case WeaponCategory::PISTOL:
+	case ItemType::PISTOL:
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
 		spec.dps = 64.166667f;
@@ -81,7 +81,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		spec.reloadTime = 1.2f;
 		break;
 
-	case WeaponCategory::ASSAULT_RIFLE:
+	case ItemType::ASSAULT_RIFLE:
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
 		spec.magazineSize = 30;
@@ -110,7 +110,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		}
 		break;
 
-	case WeaponCategory::SMG:
+	case ItemType::SMG:
 		spec.rpm = 900.0f;
 		spec.maxDistanceDamageReductionRatio = 0.50f;
 		spec.magazineSize = 35;
@@ -139,7 +139,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		}
 		break;
 
-	case WeaponCategory::SHOTGUN:
+	case ItemType::SHOTGUN:
 		spec.rpm = 200.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
 		spec.magazineSize = 8;
@@ -180,7 +180,7 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
 {
 	auto pItem = std::make_shared<WeaponItem>(
 		ItemGrade::GRADE_1,
-		WeaponCategory::ASSAULT_RIFLE
+		ItemType::ASSAULT_RIFLE
 	);
 
 	pItem->SetModelPrototype(
@@ -283,20 +283,58 @@ void Inventory::SetPosition(float x, float y)
 	}
 }
 
+int Inventory::GetItemCnt(ItemID id) const
+{
+	
+	for (const auto& slot : slots)
+	{
+		if (slot.item != nullptr && slot.item->GetID() == id)
+		{
+			return slot.count;
+		}
+	}
+	
+}
+
+void Inventory::ConsumeItem(ItemID id, int cnt)
+{
+	for (auto& s : slots)
+	{
+		if (s.item != nullptr && s.item->GetID() == id)
+		{
+			s.count -= cnt;
+			if (s.count == 0)
+			{
+				s.item.reset();
+			}
+			break;
+		}
+	}
+}
+
 bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
 {
 	if (!item || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
-		if (!slot.item)
+		if (slot.item!=nullptr && slot.item->GetID() == item->GetID())
+		{
+			slot.count += count;
+			return true;
+		}
+		
+	}
+	for (auto& slot : slots)
+	{
+		if (slot.item == nullptr)
 		{
 			slot.item = std::move(item);
 			slot.count = count;
 			return true;
 		}
+		
 	}
-
 	return false;
 }
 
@@ -313,4 +351,29 @@ ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
 	return &slots[idx];
+}
+
+void CraftBox::Init()
+{
+
+}
+
+bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
+{
+	auto it = recipeTable.find(target);
+	if (it == recipeTable.end())return false;
+
+	const Recipe& r = it->second;
+
+	for (const auto& req : r.ingredients)
+	{
+		if (playerinventory->GetItemCnt(req.itemID) < req.reuireCnt)
+			return false;
+	}
+	for (const auto& req : r.ingredients)
+	{
+		playerinventory->ConsumeItem(req.itemID, req.reuireCnt);
+	}
+	//playerinventory 아이템 추가
+
 }

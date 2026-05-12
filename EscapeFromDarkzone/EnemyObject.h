@@ -24,7 +24,7 @@ protected:
 	
 	
 public:
-	CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* model);
 	virtual ~CEnemyObject();
 
 	virtual void Animate(float fTimeElapsed) override;

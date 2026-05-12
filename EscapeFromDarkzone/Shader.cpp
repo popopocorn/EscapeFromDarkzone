@@ -541,6 +541,7 @@ CSkinnedAnimationObjectsShader::CSkinnedAnimationObjectsShader()
 
 CSkinnedAnimationObjectsShader::~CSkinnedAnimationObjectsShader()
 {
+
 }
 
 void CSkinnedAnimationObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext)
@@ -549,6 +550,7 @@ void CSkinnedAnimationObjectsShader::BuildObjects(ID3D12Device *pd3dDevice, ID3D
 
 void CSkinnedAnimationObjectsShader::ReleaseObjects()
 {
+
 	m_ppObjects.clear();
 }
 
@@ -769,6 +771,12 @@ D3D12_DEPTH_STENCIL_DESC ViewShader::CreateThroughDepthStencilState()
 	d3dDepthStencilDesc.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
 
 	return(d3dDepthStencilDesc);
+}
+
+void ViewShader::ReleaseObjects()
+{
+
+	m_ppObjects.clear();
 }
 
 void ViewShader::AnimateObjects(float fTimeElapsed)

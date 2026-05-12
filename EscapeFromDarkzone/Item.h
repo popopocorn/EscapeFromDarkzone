@@ -1,10 +1,14 @@
 #pragma once
 
 #include "UI.h"
+#include<algorithm>
 
 //아이템 선언
 enum class ItemType {
-	WEAPON,
+	PISTOL,
+	ASSAULT_RIFLE,
+	SMG,
+	SHOTGUN,
 	ARMOR,
 	PLATE,
 	CONSUMABLE,
@@ -20,13 +24,7 @@ enum class ItemGrade
 	GRADE_4
 };
 
-enum class WeaponCategory
-{
-	PISTOL,
-	ASSAULT_RIFLE,
-	SMG,
-	SHOTGUN
-};
+
 
 struct WeaponSpec
 {
@@ -40,6 +38,36 @@ struct WeaponSpec
 	int magazineSize = 0;
 	float reloadTime = 0.0f;
 };
+
+//재료를 위한 구조
+enum class ItemID {
+	NONE = 0,
+	MAT_1,
+	MAT_2,
+	MAT_3,
+	MAT_4,
+	MAT_5,
+	MAT_6,
+
+	WEAPON_UPGRADE_1,
+	WEAPON_UPGRADE_2,
+	WEAPON_UPGRADE_3,
+	WEAPON_UPGRADE_4,
+	ARMOR_PLATE,
+};
+
+struct RecipeElement {
+	ItemID itemID;
+	int reuireCnt;
+};
+
+struct Recipe {
+	ItemID result;
+	int resultCnt;
+	vector<RecipeElement>ingredients;
+};
+
+
 
 class CGameObject;
 class UIObject;
@@ -75,11 +103,12 @@ public:
 	CGameObject* CreateModelInstance() const;		//인스턴스 생성
 
 	ItemType GetType() const { return type; }
+	ItemID GetID()const { return id; }
 
 protected:
 	ItemType type = ItemType::MATERIAL;
 	CGameObject* model = nullptr;					//모델 참조 포인터
-	bool CanMake = false;
+	ItemID id = ItemID::NONE;
 	// 제작방법
 };
 
@@ -119,20 +148,35 @@ public:
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
 	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동
 	void SetId(int x) { ID = x; }
+	int GetItemCnt(ItemID id)const;
+	void ConsumeItem(ItemID id, int cnt);
+
 	bool isOpen = false;
 };
+
+//아이템 제작시스템
+class CraftBox {
+private:
+	map<ItemID, Recipe> recipeTable;
+public:
+	void Init();
+
+	bool TryCraft(ItemID target, Inventory* playerinventory);
+};
+
+
+
 
 //무기 선언
 class WeaponItem : public Item
 {
 public:
-	WeaponItem(ItemGrade grade, WeaponCategory category);
+	WeaponItem(ItemGrade grade, ItemType category);
 
 	const WeaponSpec& GetSpec() const { return m_Spec; }
 	ItemGrade GetGrade() const { return m_Grade; }
-	WeaponCategory GetCategory() const { return m_Category; }
 
-	static WeaponSpec BuildSpec(WeaponCategory category, ItemGrade grade);
+	static WeaponSpec BuildSpec(ItemType category, ItemGrade grade);
 
 	static std::shared_ptr<WeaponItem> CreateDefaultPlayerRifle(
 		ID3D12Device* pd3dDevice,
@@ -142,7 +186,7 @@ public:
 
 private:
 	ItemGrade m_Grade = ItemGrade::BASIC;
-	WeaponCategory m_Category = WeaponCategory::PISTOL;
+	ItemType m_Category = ItemType::PISTOL;
 	WeaponSpec m_Spec;
 };
 

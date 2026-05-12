@@ -861,7 +861,7 @@ void CViewCircleMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, const std::
 
 		m_pMappedPositions[i + 1] = XMFLOAT3(
 			localDir.x * hitDist,
-			0.0f,
+			1.4f,
 			localDir.z * hitDist
 		);
 	}
@@ -893,7 +893,7 @@ void CViewConeMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, float fYaw, c
 
 		m_pMappedPositions[i + 1] = XMFLOAT3(
 			localDir.x * hitDist,
-			0.0f,
+			1.4f,
 			localDir.z * hitDist
 		);
 	}

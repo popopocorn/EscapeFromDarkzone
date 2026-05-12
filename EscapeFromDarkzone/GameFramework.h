@@ -93,7 +93,7 @@ private:
 
 	CGameTimer					m_GameTimer;
 
-	CScene						*m_pScene = NULL;	//소유용
+	MainScene						*m_pScene = NULL;	//소유용
 	CPlayer						*m_pPlayer = NULL;	//소유용
 	CCamera						*m_pCamera = NULL;	// 참조용
 	std::unique_ptr<CCamera>	observer;

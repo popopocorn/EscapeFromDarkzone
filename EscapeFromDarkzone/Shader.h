@@ -227,7 +227,8 @@ public:
 
 	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
-
+	
+	virtual void ReleaseObjects();
 	//시야 오브젝트 갱신
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
@@ -260,6 +261,7 @@ public:
 	void addObjects(UIObject* obj) { m_ppObjects.push_back(obj); }
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 
+	
 };
 
 class CFogOverlayShader : public CShader

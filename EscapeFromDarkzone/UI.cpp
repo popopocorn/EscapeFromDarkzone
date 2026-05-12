@@ -52,7 +52,9 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	UVBufferView.BufferLocation = UVBuffer->GetGPUVirtualAddress();
 	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
 	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
-	LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
+	
+	
+	//LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
@@ -67,7 +69,7 @@ void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 {
 	texture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	texture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pszFileName, RESOURCE_TEXTURE2D, 0);
-	CScene::CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
+	MainScene::CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
 }
 
 void UIMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)
