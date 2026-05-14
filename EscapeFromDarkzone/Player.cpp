@@ -1019,7 +1019,7 @@ CTerrainPlayer::CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 CTerrainPlayer::~CTerrainPlayer()
 {
-	if (m_pChild)m_pChild->Release();
+	//if (m_pChild)m_pChild->Release();
 }
 
 CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
