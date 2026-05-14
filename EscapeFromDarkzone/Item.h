@@ -160,7 +160,7 @@ public:
 
 	void SubmitToShader(UIObjectShader* shader);
 	void SlotClicked(int slotidx);
-	void ProcessClick(POINT mouse);
+	bool ProcessClick(POINT mouse);
 	//드래그 앤 드롭 처리 함수 추가
 	bool AddItem(ItemID item, int count = 1);
 	ItemSlot* GetSlot(int idx);

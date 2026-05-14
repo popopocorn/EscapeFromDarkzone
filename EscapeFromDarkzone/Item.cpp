@@ -326,10 +326,6 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 		{
 			shader->addObjects(slotViews[i].countCell.get());
 		}
-		if (slots[i].ItemUI)
-		{
-			shader->addObjects(slots[i].ItemUI);
-		}
 	}
 }
 
@@ -352,7 +348,6 @@ bool Inventory::ProcessClick(POINT mouse)
 			hitBox->HandleClick();
 			return true; // UI 클릭 소비됨
 		}
-		//여기에 드래그 앤 드롭 처리 추가
 	}
 
 	return false; // UI 클릭 아님

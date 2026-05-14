@@ -83,7 +83,7 @@ UIMesh::~UIMesh()
 		UVUploadBuffer->Release();
 		UVUploadBuffer = nullptr;
 	}
-	texture->Release();
+	if(texture) texture->Release();
 }
 
 void UIMesh::ReleaseUploadBuffers()
