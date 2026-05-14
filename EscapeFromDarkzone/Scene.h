@@ -50,6 +50,7 @@ enum SHADERIDX
 	ENEMY = 2,
 	LOOT = 3
 };
+
 struct ColResult;
 class CollisionManager;
 class Inventory;
@@ -57,21 +58,13 @@ class AstarNavigation;
 class EffectManager;
 class InventoryManager;
 
-enum class SceneModel
+enum class ModelName
 {
-	PLAYER,
+	PLAYER = 0,
 	ENEMY,
 	RIFLE,
 	PISTOL,
 	SHOTGUN
-};
-
-struct SceneModelHash
-{
-	size_t operator()(SceneModel key) const noexcept
-	{
-		return static_cast<size_t>(key);
-	}
 };
 
 
@@ -191,7 +184,7 @@ private:
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 
-	std::unordered_map<SceneModel, CGameObject*, SceneModelHash> m_ModelPrototypes;
+	std::unordered_map<ModelName, CGameObject*> m_ModelPrototypes;
 public:
 	void SetPlayer(CPlayer* p);
 
@@ -208,16 +201,21 @@ public:
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
 
 	bool LoadAndRegisterModelPrototype(
-		SceneModel key,
+		ModelName key,
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		const char* modelPath,
 		CShader* pShader
 	);
 
-	void RegisterModelPrototype(SceneModel key, CGameObject* pPrototype);
-	CGameObject* GetModelPrototype(SceneModel key) const;
+	void RegisterModelPrototype(ModelName key, CGameObject* pPrototype);
+	CGameObject* GetModelPrototype(ModelName key) const;
 	void ReleaseModelPrototypes();
+	void BuildModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		CShader* pPlayerShader
+	);
 
 	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }

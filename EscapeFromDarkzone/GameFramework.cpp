@@ -517,11 +517,9 @@ void CGameFramework::BuildObjects()
 
 	if (m_pScene)
 	{
-		m_pScene->LoadAndRegisterModelPrototype(
-			SceneModel::RIFLE,
+		m_pScene->BuildModelPrototypes(
 			m_pd3dDevice,
 			m_pd3dCommandList,
-			"Model/Classic_M4_1.bin",
 			pshader
 		);
 	}
@@ -531,8 +529,9 @@ void CGameFramework::BuildObjects()
 		m_pd3dCommandList,
 		m_pScene->GetGraphicsRootSignature(),
 		pshader,
-		(m_pScene) ? m_pScene->GetModelPrototype(SceneModel::RIFLE) : nullptr
+		(m_pScene) ? m_pScene->GetModelPrototype(ModelName::RIFLE) : nullptr
 	);
+
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
 
 	m_pPlayer = pPlayer;
