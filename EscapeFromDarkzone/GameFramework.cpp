@@ -5,6 +5,7 @@
 #include "stdafx.h"
 #include "GameFramework.h"
 #include "InputManager.h"
+#include "EffectManager.h"
 
 CGameFramework::CGameFramework()
 {
@@ -406,7 +407,10 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				bombFlatLook.y = 0.0f;
 				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				m_pScene->PlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
+				if (m_pScene && m_pScene->GetEffectManager())
+				{
+					m_pScene->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
+				}
 			}
 			break;
 		}

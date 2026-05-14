@@ -32,6 +32,7 @@ enum class WEAPON_POSE
 {
 	IDLE = 0,
 	RUN,
+	SHOOT,
 	GRENADE
 };
 
@@ -82,16 +83,18 @@ protected:
 	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
 
 	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
-	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -32.0f, 28.0f);
+	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -90.0f, 28.0f);
 
 	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.1f, -0.08f);
 	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -25.0f);
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
 	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
-
 	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();	
 	bool m_bWeaponGrenadeStartCaptured = false;
+
+	XMFLOAT3 m_xmf3WeaponShootPos = XMFLOAT3(0.02f, 0.00f, 0.00f);
+	XMFLOAT3 m_xmf3WeaponShootRot = XMFLOAT3(0.0f, 8.0f, 0.0f);
 
 	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
@@ -112,6 +115,7 @@ protected:
 
 	void ApplyRunWeaponPose();
 	void ApplyGrenadeWeaponPose();
+	void ApplyShootWeaponPose();
 
 	// 04.10 추가: 서버 위치 보간
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
@@ -126,6 +130,9 @@ protected:
 	float m_fReloadElapsed = 0.0f;
 	float m_fReloadDuration = 0.0f;
 	float m_fFireCooldown = 0.0f;
+	bool  m_bFireHeld = false;
+	bool  m_bShotAnimRequest = false;
+
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -216,6 +223,14 @@ public:
 		m_xmf3WeaponGrenadePos = pos;
 		m_xmf3WeaponGrenadeRot = rot;
 	}
+	void SetWeaponShootPose(const XMFLOAT3& pos, const XMFLOAT3& rot)
+	{
+		m_xmf3WeaponShootPos = pos;
+		m_xmf3WeaponShootRot = rot;
+	}
+
+	void SetWeaponBlending(bool bBlending) { m_bWeaponBlending = bBlending; }
+	void SetWeaponBlendTime(float fTime) { m_fWeaponBlendTime = fTime; }
 
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
@@ -237,6 +252,16 @@ public:
 	float GetWeaponShotInterval() const;
 	float GetWeaponDamage() const;
 	
+	void SetFireHeld(bool bHeld) { m_bFireHeld = bHeld; }
+	bool IsFireHeld() const { return m_bFireHeld; }
+
+	void NotifyWeaponFired();
+	bool ConsumeShotAnimRequest();
+
+	float GetReloadDuration() const { return m_fReloadDuration; }
+
+	bool IsShootState() const;
+
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };
@@ -278,6 +303,8 @@ enum PLAYER_ANIM {
 	ANIM_RUN_R,
 	ANIM_RUN_B,
 	ANIM_GRENADE,
+	ANIM_SHOOT,
+	ANIM_RELOAD,
 	ANIM_DIE
 };
 
@@ -316,6 +343,24 @@ private:
 	int m_nLastLowerAnim = ANIM_IDLE;
 	bool m_bKeepRun = false;
 
+public:
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
+};
+
+class PlayerShoot : public State<CPlayer> {
+private:
+	float m_fElapsed = 0.0f;
+	float m_fAnimDuration = 0.15f;
+
+public:
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
+};
+
+class PlayerReload : public State<CPlayer> {
 public:
 	virtual bool Enter(CPlayer* Player) override;
 	virtual void Update(CPlayer* Player, float fTimeElapsed) override;

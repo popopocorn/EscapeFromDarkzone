@@ -112,12 +112,19 @@ protected:
 	// 제작방법
 };
 
-//아이템 슬롯
+//아이템 데이터와 출력 구조체로 나눠서 관리
+//아이템 데이터 슬롯
 struct ItemSlot {
 	ItemID item;
 	int count = 0;
-	std::unique_ptr<UIObject> ui;
-	UIObject* ItemUI = NULL;
+};
+
+//아이템 출력 슬롯
+struct ItemSlotView {
+	std::unique_ptr<UIObject> hitBox;
+	std::unique_ptr<UIObject> iconCell;
+	std::unique_ptr<UIObject> textCell;
+	std::unique_ptr<UIObject> countCell;
 };
 
 const int MAX_SLOTS = 10;
@@ -125,15 +132,27 @@ const int MAX_SLOTS = 10;
 class Inventory {
 private:
 	std::array<ItemSlot, MAX_SLOTS> slots;
+	std::array<ItemSlotView, MAX_SLOTS> slotViews;
 	CheckBox box;
 
-	float m_baseX = 0.0f; 
+	float m_baseX = 0.0f;
 	float m_baseY = 0.0f;
 	float m_slotW = 0.0f;
 	float m_slotH = 0.0f;
 	float m_slotGap = 0.025f;
 
+	float m_iconRatio = 0.20f;
+	float m_textRatio = 0.60f;
+	float m_countRatio = 0.20f;
+
 	int ID;
+
+	std::unique_ptr<UIMesh> m_pSharedMesh; // UI 공용 메쉬
+
+private:
+	void BuildSlotViews();  // 3칸 UI 생성
+	void LayoutSlotViews(); // 3칸 위치 배치
+
 public:
 	Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
