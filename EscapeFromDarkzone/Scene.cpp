@@ -15,6 +15,7 @@
 #include "Item.h"
 #include "AI.h"
 #include "EffectManager.h"
+#include "InventoryManager.h"
 
 ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
@@ -159,26 +160,41 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
-static CStandardObjectsShader* GetLootShaderFromSceneShaders(const std::vector<std::unique_ptr<CShader>>& shaders)
-{
-	if (shaders.size() <= SHADERIDX::LOOT) return nullptr;
-	return dynamic_cast<CStandardObjectsShader*>(shaders[SHADERIDX::LOOT].get());
-}
 
 CScene::CScene()
 {
 	colManager = std::make_unique<CollisionManager>();
 
+	m_pPlayer = nullptr;
+
+	m_pd3dGraphicsRootSignature = nullptr;
+	m_pd3dcbLights = nullptr;
+	m_pcbMappedLights = nullptr;
+
+	m_pSkyBox = nullptr;
+	m_pFogOverlayShader = nullptr;
+	UIShader = nullptr;
+	m_pDebugShader = nullptr;
+
 	m_pLaserMuzzle = nullptr;
 	m_pWeaponMuzzle = nullptr;
 	m_pWeaponObject = nullptr;
 
-	m_pDebugShader = nullptr;
+	m_pEffectManager = nullptr;
+	m_pInventoryManager = nullptr;
+
 	inventory = nullptr;
 	corpseInventory = nullptr;
-	m_pOpenedLoot = nullptr;
+	craftInventory = nullptr;
 
-	m_pEffectManager = nullptr;
+	m_bLaserActive = false;
+	m_bSparkFireActive = false;
+	m_fSparkSpawnTimer = 0.0f;
+	m_fSparkSpawnInterval = 0.03f;
+	m_fLaserLength = 15.0f;
+
+	m_nLights = 0;
+	m_fElapsedTime = 0.0f;
 }
 
 CScene::~CScene()
@@ -219,23 +235,18 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
 	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	inventory = std::make_unique<Inventory>(
+	m_pInventoryManager = new InventoryManager();
+	m_pInventoryManager->Initialize(
 		pd3dDevice,
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
 		UIShader.get()
 	);
 
-	corpseInventory = std::make_unique<Inventory>(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		UIShader.get()
-	);
-	corpseInventory->isOpen = false;
-
-	inventory->SetPosition(-0.25f, 0.0f);
-	corpseInventory->SetPosition(0.25f, 0.0f);
+	// Scene에는 비소유 포인터만 연결
+	inventory = m_pInventoryManager->GetPlayerInventory();
+	corpseInventory = m_pInventoryManager->GetLootInventory();
+	craftInventory = m_pInventoryManager->GetCraftInventory();
 
 	// 맵 쉐이더
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
@@ -374,7 +385,15 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
+
 	m_ppShaders.push_back(std::move(pLootShader));
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->BindLootWorld(nullptr, pLootShaderRaw, m_pDebugShader.get());
+	}
 
 	// EffectManager 생성
 	m_pEffectManager = new EffectManager();
@@ -399,17 +418,23 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 void CScene::ReleaseObjects()
 {
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->Release();
+		delete m_pInventoryManager;
+		m_pInventoryManager = nullptr;
+	}
+
+	inventory = nullptr;
+	corpseInventory = nullptr;
+	craftInventory = nullptr;
+
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->Release();
 		delete m_pEffectManager;
 		m_pEffectManager = nullptr;
 	}
-
-	corpseInventory.reset();
-	inventory.reset();
-
-	m_pOpenedLoot = nullptr;
 
 	if (m_pd3dGraphicsRootSignature)
 	{
@@ -836,6 +861,11 @@ void CScene::SetPlayer(CPlayer* p)
 	{
 		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
 	}
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->SetPlayer(m_pPlayer);
+	}
 }
 
 CCamera* CScene::GetLightCamera(int idx)
@@ -859,90 +889,22 @@ void CScene::DeleteTrash(UINT64 Fence)
 
 bool CScene::IsAnyInventoryOpen() const
 {
-	return (inventory && inventory->isOpen) || (corpseInventory && corpseInventory->isOpen);
+	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
 }
 
 void CScene::CloseCorpseInventory()
 {
-	if (corpseInventory)
+	if (m_pInventoryManager)
 	{
-		corpseInventory->isOpen = false;
-		corpseInventory->ClearItems();
+		m_pInventoryManager->CloseLootInventory();
 	}
-	m_pOpenedLoot = nullptr;
 }
 
 void CScene::OpenLootContainer(CLootContainerObject* pLoot)
 {
-	if (!pLoot || !corpseInventory) return;
-
-	corpseInventory->ClearItems();
-	pLoot->FillInventoryUI(corpseInventory.get());
-	corpseInventory->isOpen = true;
-	m_pOpenedLoot = pLoot;
-}
-
-CLootContainerObject* CScene::FindNearestLootContainer(float fMaxDistance) const
-{
-	if (!m_pPlayer) return nullptr;
-	if (m_ppShaders.size() <= SHADERIDX::LOOT) return nullptr;
-	if (!m_ppShaders[SHADERIDX::LOOT]) return nullptr;
-
-	auto* objs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
-	if (!objs) return nullptr;
-
-	const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-	const float maxDistSq = fMaxDistance * fMaxDistance;
-
-	CLootContainerObject* pNearest = nullptr;
-	float nearestDistSq = maxDistSq;
-
-	for (const auto& obj : *objs)
+	if (m_pInventoryManager)
 	{
-		if (!obj) continue;
-
-		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
-		if (!pLoot) continue;
-		if (!pLoot->IsAlive()) continue;
-
-		float distSq = pLoot->GetDistanceSq(playerPos);
-		if (distSq <= nearestDistSq)
-		{
-			nearestDistSq = distSq;
-			pNearest = pLoot;
-		}
-	}
-
-	return pNearest;
-}
-
-void CScene::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
-{
-	if (!pEnemy) return;
-
-	auto* pLootShader = GetLootShaderFromSceneShaders(m_ppShaders);
-	if (!pLootShader) return;
-
-	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
-
-	XMFLOAT3 pos = pEnemy->GetPosition();
-	pLoot->SetPosition(pos);
-
-	BoundingOrientedBox obb;
-	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
-	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
-	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
-	pLoot->SetOOBB(obb);
-
-	// 임시 기본 루팅 아이템
-	//pLoot->AddLoot(std::make_shared<WeaponItem>(ItemGrade::GRADE_1, WeaponCategory::PISTOL), 1);
-	//pLoot->AddLoot(std::make_shared<ArmorItem>(), 1);
-
-	pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
-
-	if (m_pDebugShader)
-	{
-		m_pDebugShader->AddObject(pLoot);
+		m_pInventoryManager->OpenLootContainer(pLoot);
 	}
 }
 
@@ -954,13 +916,9 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	{
 		if (IsAnyInventoryOpen())
 		{
-			if (corpseInventory && corpseInventory->isOpen)
+			if (m_pInventoryManager)
 			{
-				corpseInventory->ProcessClick(InputManager::Instance().GetMousePos());
-			}
-			else if (inventory && inventory->isOpen)
-			{
-				inventory->ProcessClick(InputManager::Instance().GetMousePos());
+				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
 			}
 
 			m_bSparkFireActive = false;
@@ -991,7 +949,6 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 			return;
 		}
 
-		// shoot 상태 전환 요청
 		m_pPlayer->NotifyWeaponFired();
 
 		XMFLOAT3 sparkPos;
@@ -1149,45 +1106,18 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (wasDownBefore) return true;
 
-			if (IsAnyInventoryOpen())
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = false;
-				CloseCorpseInventory();
-				m_bTabInventoryHold = false;
-				return true;
-			}
-
-			if (inventory) inventory->isOpen = true;
-
-			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
-			if (pNearestLoot)
-			{
-				OpenLootContainer(pNearestLoot);
-			}
-			else
-			{
-				CloseCorpseInventory();
+				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
 			}
 			return true;
 		}
 
 		case VK_TAB:
 		{
-			if (!m_bTabInventoryHold)
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = true;
-
-				CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
-				if (pNearestLoot)
-				{
-					OpenLootContainer(pNearestLoot);
-				}
-				else
-				{
-					CloseCorpseInventory();
-				}
-
-				m_bTabInventoryHold = true;
+				m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
 			}
 			return true;
 		}
@@ -1209,11 +1139,9 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	{
 		if (wParam == VK_TAB)
 		{
-			if (m_bTabInventoryHold)
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = false;
-				CloseCorpseInventory();
-				m_bTabInventoryHold = false;
+				m_pInventoryManager->HandleTabReleased();
 			}
 			return true;
 		}
@@ -1242,47 +1170,16 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 	}
 
-	// 루팅 오브젝트 수명 업데이트
-	if (m_ppShaders.size() > SHADERIDX::LOOT && m_ppShaders[SHADERIDX::LOOT])
+	if (m_pInventoryManager)
 	{
-		auto* lootObjs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
-		if (lootObjs)
+		m_pInventoryManager->UpdateLootWorld(fTimeElapsed);
+
+		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
 		{
-			for (auto& obj : *lootObjs)
-			{
-				CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
-				if (pLoot)
-				{
-					pLoot->UpdateLifetime(fTimeElapsed);
-				}
-			}
+			m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());
 		}
-	}
 
-	// 적 death 애니메이션 종료 후 루팅 오브젝트 생성
-	if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
-	{
-		auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-		if (enemyObjs)
-		{
-			for (auto& obj : *enemyObjs)
-			{
-				CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-				if (!pEnemy) continue;
-
-				if (pEnemy->ConsumeLootSpawnRequest())
-				{
-					SpawnLootContainerFromEnemy(pEnemy);
-					pEnemy->MarkDeadForRemoval();
-				}
-			}
-		}
-	}
-
-	// 열려 있는 루팅 오브젝트가 삭제되면 UI 닫기
-	if (m_pOpenedLoot && !m_pOpenedLoot->IsAlive())
-	{
-		CloseCorpseInventory();
+		m_pInventoryManager->Update(fTimeElapsed);
 	}
 
 	if (m_pPlayer && m_pLights.size() > 1)
@@ -1443,8 +1340,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 	ShadowCameraManager.Update();
 
-	if (inventory) inventory->SubmitToShader(UIShader.get());
-	if (corpseInventory) corpseInventory->SubmitToShader(UIShader.get());
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->SubmitToShader(UIShader.get());
+	}
 
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
 }

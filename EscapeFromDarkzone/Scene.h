@@ -55,6 +55,7 @@ class CollisionManager;
 class Inventory;
 class AstarNavigation;
 class EffectManager;
+class InventoryManager;
 
 class CScene
 {
@@ -160,11 +161,15 @@ public:
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
 	unique_ptr<CollisionManager> colManager;
-	std::unique_ptr<Inventory> inventory;
-	std::unique_ptr<Inventory> corpseInventory;
-	CLootContainerObject* m_pOpenedLoot = nullptr;
+
+	InventoryManager* m_pInventoryManager = nullptr;
+	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
+
+	Inventory* inventory = nullptr;
+	Inventory* corpseInventory = nullptr;
+	Inventory* craftInventory = nullptr;
+
 	float m_fLootInteractDistance = 3.0f;
-	bool m_bTabInventoryHold = false;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 public:
@@ -181,8 +186,6 @@ public:
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
-	CLootContainerObject* FindNearestLootContainer(float fMaxDistance) const;	// 상호작용 거리 내 가장 가까운 루팅 오브젝트 찾기
-	void SpawnLootContainerFromEnemy(CEnemyObject* pEnemy);						// 죽은 적 위치에 루팅 오브젝트 생성
 
 	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }

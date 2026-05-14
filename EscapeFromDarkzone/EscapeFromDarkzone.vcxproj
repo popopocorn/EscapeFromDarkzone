@@ -147,6 +147,7 @@
     <ClInclude Include="EscapeFromDarkzone.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
+    <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Network.h" />
@@ -177,6 +178,7 @@
     <ClCompile Include="EscapeFromDarkzone.cpp" />
     <ClCompile Include="GameFramework.cpp" />
     <ClCompile Include="InputManager.cpp" />
+    <ClCompile Include="InventoryManager.cpp" />
     <ClCompile Include="Item.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Network.cpp" />

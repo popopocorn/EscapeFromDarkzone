@@ -1,0 +1,357 @@
+#include "stdafx.h"
+#include "InventoryManager.h"
+#include "Shader.h"
+#include "EnemyObject.h"
+#include "Player.h"
+#include "Object.h"
+
+//인벤토리 3개(플레이어, 루팅, 제작) 초기화
+void InventoryManager::Initialize(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pUIShader)
+{
+	Release();
+
+	m_pPlayerInventory = std::make_unique<Inventory>(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		pUIShader
+	);
+
+	m_pLootInventory = std::make_unique<Inventory>(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		pUIShader
+	);
+
+	m_pCraftInventory = std::make_unique<Inventory>(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		pUIShader
+	);
+
+	m_pPlayerInventory->SetPosition(-0.25f, 0.0f);
+	m_pLootInventory->SetPosition(0.25f, 0.0f);
+	m_pCraftInventory->SetPosition(0.0f, 0.0f);
+
+	m_pPlayerInventory->isOpen = false;
+	m_pLootInventory->isOpen = false;
+	m_pCraftInventory->isOpen = false;
+
+	m_pOpenedLoot = nullptr;
+	m_bTabInventoryHold = false;
+
+	m_pPlayer = nullptr;
+	m_pLootShader = nullptr;
+	m_pDebugShader = nullptr;
+}
+
+void InventoryManager::Release()
+{
+	m_pOpenedLoot = nullptr;
+	m_bTabInventoryHold = false;
+
+	m_pPlayer = nullptr;
+	m_pLootShader = nullptr;
+	m_pDebugShader = nullptr;
+
+	m_pCraftInventory.reset();
+	m_pLootInventory.reset();
+	m_pPlayerInventory.reset();
+}
+
+void InventoryManager::BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader)
+{
+	m_pPlayer = pPlayer;
+	m_pLootShader = pLootShader;
+	m_pDebugShader = pDebugShader;
+}
+
+//열린 루팅창 갱신
+void InventoryManager::Update(float fTimeElapsed)
+{
+	UNREFERENCED_PARAMETER(fTimeElapsed);
+
+	if (m_pOpenedLoot && !m_pOpenedLoot->IsAlive())
+	{
+		CloseLootInventory();
+	}
+}
+
+void InventoryManager::UpdateLootWorld(float fTimeElapsed)
+{
+	if (!m_pLootShader) return;
+
+	auto* lootObjs = m_pLootShader->GetObj();
+	if (!lootObjs) return;
+
+	for (auto& obj : *lootObjs)
+	{
+		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
+		if (pLoot)
+		{
+			pLoot->UpdateLifetime(fTimeElapsed);
+		}
+	}
+}
+
+void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
+{
+	if (!pEnemyShader) return;
+
+	auto* enemyObjs = pEnemyShader->GetObj();
+	if (!enemyObjs) return;
+
+	for (auto& obj : *enemyObjs)
+	{
+		CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+		if (!pEnemy) continue;
+
+		if (pEnemy->ConsumeLootSpawnRequest())
+		{
+			SpawnLootContainerFromEnemy(pEnemy);
+			pEnemy->MarkDeadForRemoval();
+		}
+	}
+}
+
+void InventoryManager::SubmitToShader(UIObjectShader* shader)
+{
+	if (!shader) return;
+
+	if (m_pPlayerInventory)
+		m_pPlayerInventory->SubmitToShader(shader);
+
+	if (m_pLootInventory)
+		m_pLootInventory->SubmitToShader(shader);
+
+	if (m_pCraftInventory)
+		m_pCraftInventory->SubmitToShader(shader);
+}
+
+bool InventoryManager::ProcessClick(POINT mouse)
+{
+	if (m_pLootInventory && m_pLootInventory->isOpen)
+	{
+		if (m_pLootInventory->ProcessClick(mouse))
+			return true;
+	}
+
+	if (m_pCraftInventory && m_pCraftInventory->isOpen)
+	{
+		if (m_pCraftInventory->ProcessClick(mouse))
+			return true;
+	}
+
+	if (m_pPlayerInventory && m_pPlayerInventory->isOpen)
+	{
+		if (m_pPlayerInventory->ProcessClick(mouse))
+			return true;
+	}
+
+	return false;
+}
+
+void InventoryManager::OpenPlayerInventory()
+{
+	if (m_pPlayerInventory)
+		m_pPlayerInventory->isOpen = true;
+}
+
+void InventoryManager::ClosePlayerInventory()
+{
+	if (m_pPlayerInventory)
+		m_pPlayerInventory->isOpen = false;
+}
+
+void InventoryManager::TogglePlayerInventory()
+{
+	if (!m_pPlayerInventory) return;
+	m_pPlayerInventory->isOpen = !m_pPlayerInventory->isOpen;
+}
+
+void InventoryManager::OpenLootContainer(CLootContainerObject* pLoot)
+{
+	if (!pLoot || !m_pLootInventory) return;
+
+	m_pLootInventory->ClearItems();
+	pLoot->FillInventoryUI(m_pLootInventory.get());
+	m_pLootInventory->isOpen = true;
+	m_pOpenedLoot = pLoot;
+}
+
+void InventoryManager::CloseLootInventory()
+{
+	if (m_pLootInventory)
+	{
+		m_pLootInventory->isOpen = false;
+		m_pLootInventory->ClearItems();
+	}
+	m_pOpenedLoot = nullptr;
+}
+
+void InventoryManager::OpenCraftInventory()
+{
+	if (m_pCraftInventory)
+		m_pCraftInventory->isOpen = true;
+}
+
+void InventoryManager::CloseCraftInventory()
+{
+	if (m_pCraftInventory)
+	{
+		m_pCraftInventory->isOpen = false;
+		m_pCraftInventory->ClearItems();
+	}
+}
+
+void InventoryManager::ToggleCraftInventory()
+{
+	if (!m_pCraftInventory) return;
+	m_pCraftInventory->isOpen = !m_pCraftInventory->isOpen;
+}
+
+CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDistance) const
+{
+	if (!m_pPlayer) return nullptr;
+	if (!m_pLootShader) return nullptr;
+
+	auto* objs = m_pLootShader->GetObj();
+	if (!objs) return nullptr;
+
+	const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+	const float maxDistSq = fMaxDistance * fMaxDistance;
+
+	CLootContainerObject* pNearest = nullptr;
+	float nearestDistSq = maxDistSq;
+
+	for (const auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
+		if (!pLoot) continue;
+		if (!pLoot->IsAlive()) continue;
+
+		float distSq = pLoot->GetDistanceSq(playerPos);
+		if (distSq <= nearestDistSq)
+		{
+			nearestDistSq = distSq;
+			pNearest = pLoot;
+		}
+	}
+
+	return pNearest;
+}
+
+void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
+{
+	if (!pEnemy) return;
+	if (!m_pLootShader) return;
+
+	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
+
+	XMFLOAT3 pos = pEnemy->GetPosition();
+	pLoot->SetPosition(pos);
+
+	BoundingOrientedBox obb;
+	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
+	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
+	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
+	pLoot->SetOOBB(obb);
+
+	// 임시 기본 루팅 아이템
+	//pLoot->AddLoot(std::make_shared<WeaponItem>(ItemGrade::GRADE_1, WeaponCategory::PISTOL), 1);
+	//pLoot->AddLoot(std::make_shared<ArmorItem>(), 1);
+
+	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
+
+	if (m_pDebugShader)
+	{
+		m_pDebugShader->AddObject(pLoot);
+	}
+}
+
+void InventoryManager::HandleIKeyToggle(float fLootInteractDistance)
+{
+	if (IsAnyInventoryOpen())
+	{
+		CloseAll();
+		return;
+	}
+
+	OpenPlayerInventory();
+
+	CLootContainerObject* pNearestLoot = FindNearestLootContainer(fLootInteractDistance);
+	if (pNearestLoot)
+	{
+		OpenLootContainer(pNearestLoot);
+	}
+	else
+	{
+		CloseLootInventory();
+	}
+}
+
+void InventoryManager::HandleTabPressed(float fLootInteractDistance)
+{
+	if (m_bTabInventoryHold)
+		return;
+
+	OpenPlayerInventory();
+
+	CLootContainerObject* pNearestLoot = FindNearestLootContainer(fLootInteractDistance);
+	if (pNearestLoot)
+	{
+		OpenLootContainer(pNearestLoot);
+	}
+	else
+	{
+		CloseLootInventory();
+	}
+
+	m_bTabInventoryHold = true;
+}
+
+void InventoryManager::HandleTabReleased()
+{
+	if (!m_bTabInventoryHold)
+		return;
+
+	ClosePlayerInventory();
+	CloseLootInventory();
+	m_bTabInventoryHold = false;
+}
+
+void InventoryManager::CloseAll()
+{
+	ClosePlayerInventory();
+	CloseLootInventory();
+	CloseCraftInventory();
+	m_bTabInventoryHold = false;
+}
+
+bool InventoryManager::IsAnyInventoryOpen() const
+{
+	return IsPlayerInventoryOpen() || IsLootInventoryOpen() || IsCraftInventoryOpen();
+}
+
+bool InventoryManager::IsPlayerInventoryOpen() const
+{
+	return (m_pPlayerInventory && m_pPlayerInventory->isOpen);
+}
+
+bool InventoryManager::IsLootInventoryOpen() const
+{
+	return (m_pLootInventory && m_pLootInventory->isOpen);
+}
+
+bool InventoryManager::IsCraftInventoryOpen() const
+{
+	return (m_pCraftInventory && m_pCraftInventory->isOpen);
+}
