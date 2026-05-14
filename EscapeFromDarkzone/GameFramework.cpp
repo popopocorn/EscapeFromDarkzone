@@ -920,7 +920,8 @@ void CGameFramework::ProcessNetworkPackets()
 			CEnemyObject* pNpc = new CEnemyObject(
 				m_pd3dDevice,
 				m_pd3dCommandList,
-				m_pScene->GetGraphicsRootSignature()
+				m_pScene->GetGraphicsRootSignature(), 
+				NULL
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치

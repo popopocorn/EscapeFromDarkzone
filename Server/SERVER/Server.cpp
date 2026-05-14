@@ -755,7 +755,7 @@ static void npc_thread()
 	using clock = std::chrono::steady_clock;
 	constexpr auto TICK = std::chrono::milliseconds(33);	// 30Hz
 	constexpr float DT = 1.0f / 30.0f;
-	constexpr int   BROADCAST_EVERY = 6;					// 5Hz
+	constexpr int   BROADCAST_EVERY = 3;					// 5Hz 의 절반?
 
 	std::vector<NpcInputEvent>            events;
 	events.reserve(32);
