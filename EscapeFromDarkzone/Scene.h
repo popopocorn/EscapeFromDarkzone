@@ -43,18 +43,18 @@ struct LIGHTS
 
 class ShadowMap;
 
-enum SHADERIDX : size_t {
+enum SHADERIDX
+{
 	MAP = 0,
 	VIEW = 1,
-	LASER = 2,
-	ENEMY = 3,
-	LOOT = 4,
+	ENEMY = 2,
+	LOOT = 3
 };
-
 struct ColResult;
 class CollisionManager;
 class Inventory;
 class AstarNavigation;
+class EffectManager;
 
 class CScene
 {
@@ -139,48 +139,35 @@ public:
 	
 	std::unique_ptr<CBoundingBoxShader> m_pDebugShader = nullptr;
 
-	std::array<std::vector<std::unique_ptr<CEffect>>, EFFECT_MAX> m_vEffectPools;
+	// 이펙트/레이저 렌더링은 EffectManager가 담당
+	EffectManager* m_pEffectManager = nullptr;
+	EffectManager* GetEffectManager() { return m_pEffectManager; }
 
-	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
-	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
-	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
-
-	std::array<std::unique_ptr<CMaterial>, EFFECT_MAX> m_pEffectMaterials;
-	std::unique_ptr<CParticleMesh> m_pEffectMesh = nullptr;
-
-	class CEffectShader* m_pEffectShader = NULL;
-
-	//레이저 관련 멤버 변수
+	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
 	CGameObject* m_pLaserMuzzle = nullptr;
 	float m_fLaserLength = 15.0f;
 
-	//스파크 효과 관련 멤버 변수
 	bool m_bSparkFireActive = false;
 	float m_fSparkSpawnTimer = 0.0f;
 	float m_fSparkSpawnInterval = 0.03f;
 
 	CGameObject* m_pWeaponMuzzle = nullptr;
-
 	CGameObject* m_pWeaponObject = nullptr;
 
 	unique_ptr<UIObjectShader> UIShader;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
-	CGameObject* m_pLaserObject = NULL;
 	unique_ptr<CollisionManager> colManager;
-	unique_ptr<Inventory> inventory;
-	unique_ptr<Inventory> corpseInventory = nullptr;
+	std::unique_ptr<Inventory> inventory;
+	std::unique_ptr<Inventory> corpseInventory;
 	CLootContainerObject* m_pOpenedLoot = nullptr;
 	float m_fLootInteractDistance = 3.0f;
 	bool m_bTabInventoryHold = false;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 public:
-
-	void PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);
-
 	void SetPlayer(CPlayer* p);
 
 	CCamera* GetLightCamera(int idx);

@@ -633,6 +633,11 @@ void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 	{
 		ApplyWeaponPose(WEAPON_POSE::SHOOT);
 	}
+	else if (IsReloading())
+	{
+		// reload 중에는 run pose를 덮지 않게 idle 기준 유지
+		ApplyWeaponPose(WEAPON_POSE::IDLE);
+	}
 	else
 	{
 		const float moveLenSq = MoveDir.x * MoveDir.x + MoveDir.y * MoveDir.y + MoveDir.z * MoveDir.z;

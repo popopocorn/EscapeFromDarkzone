@@ -141,6 +141,7 @@
     <ClInclude Include="DDSTextureLoader12.h" />
     <ClInclude Include="DebugObject.h" />
     <ClInclude Include="Effect.h" />
+    <ClInclude Include="EffectManager.h" />
     <ClInclude Include="EffectShader.h" />
     <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
@@ -170,6 +171,7 @@
     <ClCompile Include="DDSTextureLoader12.cpp" />
     <ClCompile Include="DebugObject.cpp" />
     <ClCompile Include="Effect.cpp" />
+    <ClCompile Include="EffectManager.cpp" />
     <ClCompile Include="EffectShader.cpp" />
     <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
