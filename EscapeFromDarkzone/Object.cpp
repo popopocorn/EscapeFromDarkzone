@@ -293,7 +293,7 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 			(*ppTexture)->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pwstrTextureName, RESOURCE_TEXTURE2D, 0);
 			if (*ppTexture) (*ppTexture)->AddRef();
 
-			CScene::CreateShaderResourceViews(pd3dDevice, *ppTexture, 0, nRootParameter);
+			MainScene::CreateShaderResourceViews(pd3dDevice, *ppTexture, 0, nRootParameter);
 		}
 		else
 		{
@@ -840,6 +840,18 @@ CGameObject::CGameObject(int nMaterials) : CGameObject()
 
 CGameObject::~CGameObject()
 {
+	if (m_pChild)
+	{
+		m_pChild->Release();
+		m_pChild = nullptr;
+	}
+
+	if (m_pSibling)
+	{
+		m_pSibling->Release();
+		m_pSibling = nullptr;
+	}
+
 	if (m_pMesh) m_pMesh->Release();
 
 	if (m_nMaterials > 0)
@@ -852,6 +864,7 @@ CGameObject::~CGameObject()
 	if (m_ppMaterials) delete[] m_ppMaterials;
 
 	if (m_pSkinnedAnimationController) delete m_pSkinnedAnimationController;
+
 }
 
 void CGameObject::init()
@@ -868,9 +881,6 @@ void CGameObject::AddRef()
 
 void CGameObject::Release() 
 { 
-	if (m_pChild) m_pChild->Release();
-	if (m_pSibling) m_pSibling->Release();
-
 	if (--m_nReferences <= 0) delete this; 
 }
 
@@ -1689,7 +1699,7 @@ CSkyBox::CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dComman
 	pSkyBoxShader->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	pSkyBoxShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	CScene::CreateShaderResourceViews(pd3dDevice, pSkyBoxTexture, 0, 10);
+	MainScene::CreateShaderResourceViews(pd3dDevice, pSkyBoxTexture, 0, 10);
 
 	CMaterial *pSkyBoxMaterial = new CMaterial(1);
 	pSkyBoxMaterial->SetTexture(pSkyBoxTexture);
@@ -1755,7 +1765,7 @@ void ViewObject::Animate(float fTimeElapsed)
 		XMFLOAT4X4 localRot;
 		XMStoreFloat4x4(&localRot, mRot);
 
-		localRot._42 = 0.001f;
+		localRot._42 = 0.001f; 
 		m_pConeObject->m_xmf4x4ToParent = localRot;
 	}
 }

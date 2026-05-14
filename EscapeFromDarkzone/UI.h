@@ -20,7 +20,7 @@ public:
 	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist);
 	~UIMesh();
 	virtual void ReleaseUploadBuffers();
-
+	virtual void LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName);
 	virtual void OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext);
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet = 0, int nInstances = 1);
 

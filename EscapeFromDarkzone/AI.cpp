@@ -117,7 +117,6 @@ void AstarNavigation::LoadNavMeshFromFile(const char* file)
 	{
 		int foundIndex = -1;
 
-		// 이미 등록된 고유 정점들 중에 지금 정점과 위치가 같은게 있는지 검사
 		for (int j = 0; j < uniqueVertices.size(); ++j)
 		{
 			if (IsSamePosition(temp.vertices[i], uniqueVertices[j]))
@@ -129,22 +128,22 @@ void AstarNavigation::LoadNavMeshFromFile(const char* file)
 
 		if (foundIndex != -1)
 		{
-			// 같은 위치의 정점이 이미 존재한다면, 기존 정점 번호로 덮어씌움 (공유)
+
 			indexRemap[i] = foundIndex;
 		}
 		else
 		{
-			// 처음 보는 위치의 정점이라면 새 번호를 부여하고 목록에 추가
+
 			indexRemap[i] = uniqueVertices.size();
 			uniqueVertices.push_back(temp.vertices[i]);
 		}
 	}
 
-	// 압축된 고유 정점 배열로 교체
+	
 	temp.vertices = uniqueVertices;
 	temp.vertexCnt = uniqueVertices.size();
 
-	// 모든 인덱스 버퍼를 새로 매핑된 번호로 업데이트
+	
 	for (int i = 0; i < temp.idx.size(); ++i)
 	{
 		temp.idx[i] = indexRemap[temp.idx[i]];
@@ -178,29 +177,22 @@ float TriArea2D(const XMFLOAT3& a, const XMFLOAT3& b, const XMFLOAT3& c)
 vector<XMFLOAT3> AstarNavigation::FindPathPoint(vector<int> polyidx, XMFLOAT3 start, XMFLOAT3 end)
 {
 	vector<XMFLOAT3> waypoints;
-	if (polyidx.empty())return waypoints;
-	if (polyidx.size() == 1)
-	{
-		waypoints.push_back(end);
-		return waypoints;
-	}
+	if (polyidx.empty()) return waypoints;
+	if (polyidx.size() == 1) { waypoints.push_back(end); return waypoints; }
 
 	vector<Portal> pts;
-
 	pts.push_back({ start, start });
+
 
 	for (int i = 0; i < polyidx.size() - 1; ++i)
 	{
 		int curID = polyidx[i];
 		int nextID = polyidx[i + 1];
 
-		vector<XMFLOAT3>shared;
-		for (int j = 0; j < 3; ++j)
-		{
-			for (int k = 0; k < 3; ++k)
-			{
-				if (mesh[curID].vindex[j] == mesh[nextID].vindex[k])
-				{
+		vector<XMFLOAT3> shared;
+		for (int j = 0; j < 3; ++j) {
+			for (int k = 0; k < 3; ++k) {
+				if (mesh[curID].vindex[j] == mesh[nextID].vindex[k]) {
 					shared.push_back(mesh[curID].positions[j]);
 				}
 			}
@@ -211,81 +203,58 @@ vector<XMFLOAT3> AstarNavigation::FindPathPoint(vector<int> polyidx, XMFLOAT3 st
 			XMFLOAT3 p1 = shared[0];
 			XMFLOAT3 p2 = shared[1];
 			
-			if (TriArea2D(mesh[curID].centroid, mesh[nextID].centroid, p1) < 0.0f)
-			{
-				pts.push_back({ p1,p2 });
-			}
-			else
-			{
-				pts.push_back({ p2,p1 });
-			}
+			// 찌그러진 폴리곤에서도 시선이 벗어나지 않도록 '문지방의 정중앙(mid)'을 바라봅니다.
+			XMFLOAT3 mid;
+			mid.x = (p1.x + p2.x) * 0.5f;
+			mid.y = (p1.y + p2.y) * 0.5f;
+			mid.z = (p1.z + p2.z) * 0.5f;
 
+			if (TriArea2D(mesh[curID].centroid, mid, p1) > 0.0f) {
+				pts.push_back({ p1, p2 }); // p1이 왼쪽
+			} else {
+				pts.push_back({ p2, p1 }); // p2가 왼쪽
+			}
 		}
-
 	}
 	pts.push_back({ end, end });
-	
-
 
 	waypoints.push_back(start);
+	if (pts.size() <= 2) { waypoints.push_back(end); return waypoints; }
+
 	XMFLOAT3 Apex = pts[0].left;
 	XMFLOAT3 Left = pts[0].left;
 	XMFLOAT3 Right = pts[0].right;
-
-	int AIdx = 0;
-	int LIdx = 0;
-	int RIdx = 0;
+	int AIdx = 0, LIdx = 0, RIdx = 0;
 
 	for (int i = 1; i < pts.size(); ++i)
 	{
 		XMFLOAT3 l = pts[i].left;
 		XMFLOAT3 r = pts[i].right;
 
-
-		if (TriArea2D(Apex, Right, r) <= 0.0f)
+		if (TriArea2D(Apex, Right, r) >= 0.0f) 
 		{
-			if (IsSamePosition(Apex, Right) || TriArea2D(Apex, Left, r) > 0.0f)
-			{
-				Right = r;
-				RIdx = i;
-			}
-			else
-			{
+			if (IsSamePosition(Apex, Right) || TriArea2D(Apex, Left, r) < 0.0f) {
+				Right = r; RIdx = i;
+			} else {
 				waypoints.push_back(Left);
-				Apex = Left;
-				AIdx = LIdx;
-
-				Left = Apex;
-				Right = Apex;
-
-				i = AIdx;
-				continue;
-
+				Apex = Left; AIdx = LIdx;
+				Left = Apex; Right = Apex;
+				i = AIdx; continue;
 			}
 		}
-		if (TriArea2D(Apex, Left, l) <= 0.0f)
+
+		if (TriArea2D(Apex, Left, l) <= 0.0f) 
 		{
-			if (IsSamePosition(Apex, Left) || TriArea2D(Apex, Right, l) < 0.0f)
-			{
-				Left = l;
-				LIdx = i;
-			}
-			else
-			{
+			if (IsSamePosition(Apex, Left) || TriArea2D(Apex, Right, l) > 0.0f) {
+				Left = l; LIdx = i;
+			} else {
+				
 				waypoints.push_back(Right);
-				Apex = Right;
-				AIdx = RIdx;
-
-				Left = Apex;
-				Right = Apex;
-
-				i = AIdx;
-				continue;
-
+				Apex = Right; AIdx = RIdx;
+				Left = Apex; Right = Apex;
+				i = AIdx; continue;
 			}
 		}
-
-
 	}
 
 	waypoints.push_back(end);
@@ -301,9 +270,8 @@ vector<XMFLOAT3> AstarNavigation::FindPath(XMFLOAT3 start, XMFLOAT3 end)
 	int endID = FindPolyID(end);
 
 
-
 	if (startID == -1 || endID == -1)
-		return vector<XMFLOAT3>();
+		return { start, end };
 
 	priority_queue<AStarNode, vector<AStarNode>, greater<AStarNode>> openList;
 
@@ -373,11 +341,6 @@ vector<XMFLOAT3> AstarNavigation::FindPath(XMFLOAT3 start, XMFLOAT3 end)
 	}
 	else
 	{
-		wchar_t szDebugMsg[256];
-
-		swprintf_s(szDebugMsg, L"p1:%d p2: %d\n", startID, endID);
-
-		OutputDebugString(szDebugMsg);
 		return vector<XMFLOAT3>();
 	}
 

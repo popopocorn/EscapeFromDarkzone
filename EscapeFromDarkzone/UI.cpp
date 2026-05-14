@@ -1,6 +1,7 @@
 
 #include"stdafx.h"
 #include "UI.h"
+#include"Scene.h"
 
 UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 {
@@ -33,7 +34,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 		D3D12_HEAP_TYPE_DEFAULT, 
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
 		&m_pd3dPositionUploadBuffer);
-
+	
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
 	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
 	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_pxmf3Positions.size();
@@ -51,20 +52,59 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	UVBufferView.BufferLocation = UVBuffer->GetGPUVirtualAddress();
 	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
 	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
+	
+	/*m_pd3dPositionBuffer->SetName(L"uivbuffer");
+	m_pd3dPositionBuffer->SetName(L"uivupuffer");
+	UVBuffer->SetName(L"uiuvbuffer");
+	UVUploadBuffer->SetName(L"uiuvupbuffer");*/
+	LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
 {
+
+	if (m_pd3dPositionBuffer)
+	{
+		m_pd3dPositionBuffer->Release();
+		m_pd3dPositionBuffer = nullptr;
+	}
+
+	if (UVBuffer)
+	{
+		UVBuffer->Release();
+		UVBuffer = nullptr;
+	}
+
+	if (m_pd3dPositionUploadBuffer)
+	{
+		m_pd3dPositionUploadBuffer->Release();
+		m_pd3dPositionUploadBuffer = nullptr;
+	}
+
+	if (UVUploadBuffer)
+	{
+		UVUploadBuffer->Release();
+		UVUploadBuffer = nullptr;
+	}
+	if(texture) texture->Release();
 }
 
 void UIMesh::ReleaseUploadBuffers()
 {
 }
 
+void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName)
+{
+	texture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	texture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pszFileName, RESOURCE_TEXTURE2D, 0);
+	MainScene::CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
+}
+
 void UIMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)
 {
 	D3D12_VERTEX_BUFFER_VIEW b[] = { m_d3dPositionBufferView, UVBufferView };
 	pd3dCommandList->IASetVertexBuffers(0, 2, b);
+	if (texture)texture->UpdateShaderVariables(pd3dCommandList);
 }
 
 void UIMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet, int nInstances)

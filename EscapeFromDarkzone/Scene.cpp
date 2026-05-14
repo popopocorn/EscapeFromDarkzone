@@ -8,24 +8,26 @@
 #include "EnemyObject.h"
 #include "Shader.h"
 #include "InputManager.h"
-#include"ShadowMap.h"
+#include "ShadowMap.h"
 #include "EffectShader.h"
-#include"Collision.h"
+#include "Collision.h"
 #include "UI.h"
-#include"Item.h"
-#include"AI.h"
+#include "Item.h"
+#include "AI.h"
+#include "EffectManager.h"
+#include "InventoryManager.h"
 
-ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
+ID3D12DescriptorHeap *MainScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
-D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorStartHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorStartHandle;
-D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorStartHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorStartHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorStartHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorStartHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorStartHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorStartHandle;
 
-D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorNextHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorNextHandle;
-D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorNextHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorNextHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorNextHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorNextHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorNextHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorNextHandle;
 
 static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
 {
@@ -158,45 +160,48 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
-static CStandardObjectsShader* GetLootShaderFromSceneShaders(const std::vector<std::unique_ptr<CShader>>& shaders)
-{
-	if (shaders.size() <= SHADERIDX::LOOT) return nullptr;
-	return dynamic_cast<CStandardObjectsShader*>(shaders[SHADERIDX::LOOT].get());
-}
 
-CScene::CScene()
+MainScene::MainScene()
 {
 	colManager = std::make_unique<CollisionManager>();
 
-	for (int i = 0; i < EFFECT_MAX; ++i)
-	{
-		m_pd3dInstBufferEffect[i] = nullptr;
-		m_pMappedInstBufferEffect[i] = nullptr;
-		ZeroMemory(&m_d3dInstBufferViewEffect[i], sizeof(D3D12_VERTEX_BUFFER_VIEW));
+	m_pPlayer = nullptr;
 
-		m_pEffectMaterials[i] = nullptr;
-		m_vEffectPools[i].clear();
-	}
+	m_pd3dGraphicsRootSignature = nullptr;
+	m_pd3dcbLights = nullptr;
+	m_pcbMappedLights = nullptr;
 
-	m_pEffectMesh = nullptr;
-	m_pEffectShader = nullptr;
+	m_pSkyBox = nullptr;
+	m_pFogOverlayShader = nullptr;
+	UIShader = nullptr;
+	m_pDebugShader = nullptr;
 
-	m_pLaserObject = nullptr;
 	m_pLaserMuzzle = nullptr;
 	m_pWeaponMuzzle = nullptr;
 	m_pWeaponObject = nullptr;
 
-	m_pDebugShader = nullptr;
+	m_pEffectManager = nullptr;
+	m_pInventoryManager = nullptr;
+
 	inventory = nullptr;
 	corpseInventory = nullptr;
-	m_pOpenedLoot = nullptr;
+	craftInventory = nullptr;
+
+	m_bLaserActive = false;
+	m_bSparkFireActive = false;
+	m_fSparkSpawnTimer = 0.0f;
+	m_fSparkSpawnInterval = 0.03f;
+	m_fLaserLength = 15.0f;
+
+	m_nLights = 0;
+	m_fElapsedTime = 0.0f;
 }
 
-CScene::~CScene()
+MainScene::~MainScene()
 {
 }
 
-void CScene::BuildDefaultLightsAndMaterials()
+void MainScene::BuildDefaultLightsAndMaterials()
 {
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
@@ -212,11 +217,11 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);		// 04.24 추가: 임시로 넉넉하게 잡음. 
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
@@ -230,19 +235,25 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
 	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	inventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
-	corpseInventory = std::make_unique<Inventory>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, UIShader.get());
-	corpseInventory->isOpen = false;
+	m_pInventoryManager = new InventoryManager();
+	m_pInventoryManager->Initialize(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		UIShader.get()
+	);
 
-	inventory->SetPosition(-0.25f, 0.0f);
-	corpseInventory->SetPosition(0.25f, 0.0f);
+	// Scene에는 비소유 포인터만 연결
+	inventory = m_pInventoryManager->GetPlayerInventory();
+	corpseInventory = m_pInventoryManager->GetLootInventory();
+	craftInventory = m_pInventoryManager->GetCraftInventory();
 
+	// 맵 쉐이더
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	// 시야 blocker용 맵 조각 참조 목록 초기화
 	m_vVisionMapChunks.clear();
 	m_vVisionMapChunks.reserve(64);
 
@@ -298,10 +309,9 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 					NULL, fileName, stdshader.get(), 0
 				)
 			);
-			map->SetPosition(-150, -0.5f, -150);
+			map->SetPosition(-150, 0.0f, -150);
 			map->SetOOBB(NULL);
 
-			// block 계열만 시야 blocker 후보에 저장
 			m_vVisionMapChunks.push_back(map.get());
 
 			stdshader->addObjects(std::move(map));
@@ -321,15 +331,15 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 		auto pCircleObj = std::make_unique<CGameObject>();
 		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
-		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 1.0f, 72));
+		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 3.0f, 72));
 		pCircleObj->SetShader(view.get());
-		pCircleObj->SetPosition(0.0f, 0.0f, 0.0f);
+		pCircleObj->SetPosition(0.0f, 0.7f, 0.0f);
 
 		auto pConeObj = std::make_unique<CGameObject>();
 		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
-		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 15.0f, 60.0f, 72));
+		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 20.0f, 75.0f, 72));
 		pConeObj->SetShader(view.get());
-		pConeObj->SetPosition(0.0f, 0.001f, 0.0f);
+		pConeObj->SetPosition(0.0f, 0.7f, 0.0f);
 
 		viewobj->SetCircleObject(pCircleObj.get());
 		viewobj->SetConeObject(pConeObj.get());
@@ -342,28 +352,14 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 
 		view->addObjects(std::move(viewobj));
 	}
-
 	m_ppShaders.push_back(std::move(view));
 
-	// 레이저 오브젝트
-	auto pLaserShader = std::make_unique<CLaserShader>();
-
-	pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pLaserShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	m_pLaserObject = new CGameObject();
-	m_pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
-	m_pLaserObject->SetShader(pLaserShader.get());
-
-	pLaserShader->addObjects(std::unique_ptr<CGameObject>(m_pLaserObject));
-
-	XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
-	m_pLaserObject->UpdateTransform(NULL);
-
-	m_ppShaders.push_back(std::move(pLaserShader));
-
 	// 디버그 쉐이더
-	m_pDebugShader = std::make_unique<CBoundingBoxShader>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature
+	);
 
 	// 적 쉐이더
 	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
@@ -372,14 +368,12 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-
-
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 
 	//적 오브젝트
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->SetOOBB(NULL);
@@ -393,86 +387,19 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
+
 	m_ppShaders.push_back(std::move(pLootShader));
 
-	// 이펙트 쉐이더
-	auto pEffectShader = std::make_unique<CEffectShader>();
-	CEffectShader* pRawEffectShader = pEffectShader.get();
-
-	m_pEffectShader = pRawEffectShader;
-
-	pRawEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pRawEffectShader->CreateGraphicsPipelineState(pd3dDevice, m_pd3dGraphicsRootSignature, 0);
-
-	m_ppShaders.push_back(std::move(pEffectShader));
-
-	float effectWidth = 1.0f;
-	float effectHeight = 1.0f * (180.0f / 182.0f);
-
-	m_pEffectMesh = std::make_unique<CParticleMesh>(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
-
-	// bomb effect
-	CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-	CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
-
-	m_pEffectMaterials[EFFECT_BOMB] = std::make_unique<CMaterial>(1);
-	m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
-	m_pEffectMaterials[EFFECT_BOMB]->SetShader(pRawEffectShader);
-
-	// spark effect
-	CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
-	CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
-
-	m_pEffectMaterials[EFFECT_SPARK] = std::make_unique<CMaterial>(1);
-	m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
-	m_pEffectMaterials[EFFECT_SPARK]->SetShader(pRawEffectShader);
-
-	// blood effect
-	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-	CScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
-
-	m_pEffectMaterials[EFFECT_BLOOD] = std::make_unique<CMaterial>(1);
-	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
-	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(pRawEffectShader);
-
-	for (int i = 0; i < EFFECT_MAX; i++)
+	if (m_pInventoryManager)
 	{
-		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
-
-		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(
-			pd3dDevice,
-			pd3dCommandList,
-			NULL,
-			nBufferSize,
-			D3D12_HEAP_TYPE_UPLOAD,
-			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
-			NULL
-		);
-
-		m_pMappedInstBufferEffect[i] = nullptr;
-		ZeroMemory(&m_d3dInstBufferViewEffect[i], sizeof(D3D12_VERTEX_BUFFER_VIEW));
-
-		if (m_pd3dInstBufferEffect[i])
-		{
-			HRESULT hr = m_pd3dInstBufferEffect[i]->Map(0, NULL, (void**)&m_pMappedInstBufferEffect[i]);
-			if (SUCCEEDED(hr) && m_pMappedInstBufferEffect[i])
-			{
-				m_d3dInstBufferViewEffect[i].BufferLocation = m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
-				m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
-				m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
-			}
-		}
+		m_pInventoryManager->BindLootWorld(nullptr, pLootShaderRaw, m_pDebugShader.get());
 	}
 
-	for (int i = 0; i < MAX_BOMB_EFFECTS; i++)
-	{
-		m_vEffectPools[EFFECT_BOMB].push_back(std::make_unique<CEffect>(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK].push_back(std::make_unique<CEffect>(EFFECT_SPARK, 0.1f));
-		m_vEffectPools[EFFECT_BLOOD].push_back(std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
-	}
+	// EffectManager 생성
+	m_pEffectManager = new EffectManager();
+	m_pEffectManager->Initialize(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	for (const auto& shader : m_ppShaders)
 	{
@@ -486,36 +413,46 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 		}
 	}
 
-
-
 	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
-void CScene::ReleaseObjects()
+void MainScene::ReleaseObjects()
 {
-	corpseInventory.reset();
-	inventory.reset();
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->Release();
+		delete m_pInventoryManager;
+		m_pInventoryManager = nullptr;
+	}
 
-	m_pOpenedLoot = nullptr;
-	m_vVisionMapChunks.clear();
+	inventory = nullptr;
+	corpseInventory = nullptr;
+	craftInventory = nullptr;
 
-	m_pEffectMesh.reset();
-	m_pDebugShader.reset();
-	m_pFogOverlayShader.reset();
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->Release();
+		delete m_pEffectManager;
+		m_pEffectManager = nullptr;
+	}
+
+	for (auto& s : m_ppShaders)
+	{
+		s->ReleaseObjects();
+	}
+	m_ppShaders.clear();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
-
-	m_ppShaders.clear();
 
 	ReleaseShaderVariables();
 
 	m_pLights.clear();
 }
 
-ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevice)
+ID3D12RootSignature *MainScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevice)
 {
 	ID3D12RootSignature *pd3dGraphicsRootSignature = NULL;
 
@@ -741,20 +678,20 @@ ID3D12RootSignature *CScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevic
 	return(pd3dGraphicsRootSignature);
 }
 
-void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
+void MainScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
 	m_pd3dcbLights = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 
 	m_pd3dcbLights->Map(0, NULL, (void **)&m_pcbMappedLights);
 }
-void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
+void MainScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	::memcpy(m_pcbMappedLights->m_pLights, m_pLights.data(), sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
 }
-void CScene::ReleaseShaderVariables()
+void MainScene::ReleaseShaderVariables()
 {
 	if (m_pd3dcbLights)
 	{
@@ -762,17 +699,23 @@ void CScene::ReleaseShaderVariables()
 		m_pd3dcbLights->Release();
 	}
 }
-void CScene::ReleaseUploadBuffers()
+void MainScene::ReleaseUploadBuffers()
 {
 	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
-
-	for (int i = 0; i < m_ppShaders.size(); i++) 
+	for (int i = 0; i < m_ppShaders.size(); i++)
+	{
 		if (m_ppShaders[i])
 			m_ppShaders[i]->ReleaseUploadBuffers();
+	}
+
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->ReleaseUploadBuffers();
+	}
 }
 
-void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
+void MainScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
 	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews; //CBVs + SRVs 
@@ -786,7 +729,7 @@ void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstant
 	m_d3dSrvCPUDescriptorNextHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 	m_d3dSrvGPUDescriptorNextHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 }
-D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride)
+D3D12_GPU_DESCRIPTOR_HANDLE MainScene::CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride)
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle = m_d3dCbvGPUDescriptorNextHandle;
 	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress = pd3dConstantBuffers->GetGPUVirtualAddress();
@@ -801,29 +744,50 @@ D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device *pd3d
 	}
 	return(d3dCbvGPUDescriptorHandle);
 }
-void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+void MainScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
-	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
-	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
+	if (!pd3dDevice || !pTexture)
+		return;
 
-	if (pTexture)
+	// nDescriptorHeapIndex가 0이 아니면 "시작 위치" 기준으로 강제 재배치
+	if (nDescriptorHeapIndex > 0)
 	{
-		int nTextures = pTexture->GetTextures();
-		for (int i = 0; i < nTextures; i++)
-		{
-			ID3D12Resource* pShaderResource = pTexture->GetResource(i);
-			D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc = pTexture->GetShaderResourceViewDesc(i);
-			pd3dDevice->CreateShaderResourceView(pShaderResource, &d3dShaderResourceViewDesc, m_d3dSrvCPUDescriptorNextHandle);
-			m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
-			pTexture->SetGpuDescriptorHandle(i, m_d3dSrvGPUDescriptorNextHandle);
-			m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
-		}
+		m_d3dSrvCPUDescriptorNextHandle.ptr =
+			m_d3dSrvCPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
+
+		m_d3dSrvGPUDescriptorNextHandle.ptr =
+			m_d3dSrvGPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
 	}
+
+	int nTextures = pTexture->GetTextures();
+	for (int i = 0; i < nTextures; i++)
+	{
+		ID3D12Resource* pShaderResource = pTexture->GetResource(i);
+		if (!pShaderResource)
+			continue;
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC d3dShaderResourceViewDesc = pTexture->GetShaderResourceViewDesc(i);
+
+		pd3dDevice->CreateShaderResourceView(
+			pShaderResource,
+			&d3dShaderResourceViewDesc,
+			m_d3dSrvCPUDescriptorNextHandle
+		);
+
+		pTexture->SetGpuDescriptorHandle(i, m_d3dSrvGPUDescriptorNextHandle);
+
+		m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+		m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+	}
+
 	int nRootParameters = pTexture->GetRootParameters();
-	for (int j = 0; j < nRootParameters; j++) pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	for (int j = 0; j < nRootParameters; j++)
+	{
+		pTexture->SetRootParameterIndex(j, nRootParameterStartIndex + j);
+	}
 }
 
-void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+void MainScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
 	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
 	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
@@ -834,32 +798,7 @@ void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shad
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-void CScene::PlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up)
-{
-	for (auto& pEffect : m_vEffectPools[type])
-	{
-		if (pEffect && pEffect->IsDead())
-		{
-			pEffect->Play(pos, right, up);
-			return;
-		}
-	}
-
-	float lifeTime = 0.5f;
-
-	switch (type)
-	{
-	case EFFECT_BOMB:  lifeTime = 1.0f; break;
-	case EFFECT_SPARK: lifeTime = 0.1f; break;
-	case EFFECT_BLOOD: lifeTime = 0.8f; break;
-	}
-
-	auto pNewEffect = std::make_unique<CEffect>(type, lifeTime);
-	pNewEffect->Play(pos, right, up);
-	m_vEffectPools[type].push_back(std::move(pNewEffect));
-}
-
-void CScene::SetPlayer(CPlayer* p)
+void MainScene::SetPlayer(CPlayer* p)
 {
 	m_pPlayer = p;
 
@@ -897,140 +836,74 @@ void CScene::SetPlayer(CPlayer* p)
 	{
 		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
 	}
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->SetPlayer(m_pPlayer);
+	}
 }
 
-CCamera* CScene::GetLightCamera(int idx)
+CCamera* MainScene::GetLightCamera(int idx)
 {
 	return &ShadowCameraManager.GetCameras()[idx];
 }
 
-void CScene::DeleteDeadObject(UINT64 Fence)
+void MainScene::DeleteDeadObject(UINT64 Fence)
 {
 	for (auto& shader : m_ppShaders) {
 		shader->DeleteObject(Fence);
 	}
 }
 
-void CScene::DeleteTrash(UINT64 Fence)
+void MainScene::DeleteTrash(UINT64 Fence)
 {
 	for (auto& shader : m_ppShaders) {
 		shader->ProcessingGarbageQueue(Fence);
 	}
 }
 
-bool CScene::IsAnyInventoryOpen() const
+bool MainScene::IsAnyInventoryOpen() const
 {
-	return (inventory && inventory->isOpen) || (corpseInventory && corpseInventory->isOpen);
+	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
 }
 
-void CScene::CloseCorpseInventory()
+void MainScene::CloseCorpseInventory()
 {
-	if (corpseInventory)
+	if (m_pInventoryManager)
 	{
-		corpseInventory->isOpen = false;
-		corpseInventory->ClearItems();
-	}
-	m_pOpenedLoot = nullptr;
-}
-
-void CScene::OpenLootContainer(CLootContainerObject* pLoot)
-{
-	if (!pLoot || !corpseInventory) return;
-
-	corpseInventory->ClearItems();
-	pLoot->FillInventoryUI(corpseInventory.get());
-	corpseInventory->isOpen = true;
-	m_pOpenedLoot = pLoot;
-}
-
-CLootContainerObject* CScene::FindNearestLootContainer(float fMaxDistance) const
-{
-	if (!m_pPlayer) return nullptr;
-	if (m_ppShaders.size() <= SHADERIDX::LOOT) return nullptr;
-	if (!m_ppShaders[SHADERIDX::LOOT]) return nullptr;
-
-	auto* objs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
-	if (!objs) return nullptr;
-
-	const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-	const float maxDistSq = fMaxDistance * fMaxDistance;
-
-	CLootContainerObject* pNearest = nullptr;
-	float nearestDistSq = maxDistSq;
-
-	for (const auto& obj : *objs)
-	{
-		if (!obj) continue;
-
-		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
-		if (!pLoot) continue;
-		if (!pLoot->IsAlive()) continue;
-
-		float distSq = pLoot->GetDistanceSq(playerPos);
-		if (distSq <= nearestDistSq)
-		{
-			nearestDistSq = distSq;
-			pNearest = pLoot;
-		}
-	}
-
-	return pNearest;
-}
-
-void CScene::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
-{
-	if (!pEnemy) return;
-
-	auto* pLootShader = GetLootShaderFromSceneShaders(m_ppShaders);
-	if (!pLootShader) return;
-
-	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
-
-	XMFLOAT3 pos = pEnemy->GetPosition();
-	pLoot->SetPosition(pos);
-
-	BoundingOrientedBox obb;
-	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
-	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
-	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
-	pLoot->SetOOBB(obb);
-
-	// 임시 기본 루팅 아이템
-	//pLoot->AddLoot(std::make_shared<WeaponItem>(ItemGrade::GRADE_1, WeaponCategory::PISTOL), 1);
-	//pLoot->AddLoot(std::make_shared<ArmorItem>(), 1);
-
-	pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
-
-	if (m_pDebugShader)
-	{
-		m_pDebugShader->AddObject(pLoot);
+		m_pInventoryManager->CloseLootInventory();
 	}
 }
 
-void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
+{
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->OpenLootContainer(pLoot);
+	}
+}
+
+void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	switch (nMessageID)
 	{
 	case WM_LBUTTONDOWN:
 	{
-		// 인벤토리가 열려 있으면 UI 클릭만 처리하고 발사는 막음
 		if (IsAnyInventoryOpen())
 		{
-			POINT mousePos = InputManager::Instance().GetMousePos();
-
-			if (inventory && inventory->isOpen)
+			if (m_pInventoryManager)
 			{
-				inventory->ProcessClick(mousePos);
-			}
-
-			if (corpseInventory && corpseInventory->isOpen)
-			{
-				corpseInventory->ProcessClick(mousePos);
+				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
 			}
 
 			m_bSparkFireActive = false;
 			m_bLaserActive = false;
 			m_fSparkSpawnTimer = 0.0f;
+
+			if (m_pEffectManager)
+			{
+				m_pEffectManager->HideLaser(0);
+			}
 			return;
 		}
 
@@ -1050,6 +923,8 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		{
 			return;
 		}
+
+		m_pPlayer->NotifyWeaponFired();
 
 		XMFLOAT3 sparkPos;
 		XMFLOAT3 sparkRight;
@@ -1091,7 +966,10 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 			sparkUp = flatLook;
 		}
 
-		PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+		if (m_pEffectManager)
+		{
+			m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+		}
 
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
@@ -1140,6 +1018,11 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
 		m_fSparkSpawnTimer = 0.0f;
+
+		if (m_pEffectManager)
+		{
+			m_pEffectManager->HideLaser(0);
+		}
 		break;
 
 	default:
@@ -1147,7 +1030,7 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 	}
 }
 
-bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (!m_pPlayer) return false;
 
@@ -1211,45 +1094,18 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (wasDownBefore) return true;
 
-			if (IsAnyInventoryOpen())
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = false;
-				CloseCorpseInventory();
-				m_bTabInventoryHold = false;
-				return true;
-			}
-
-			if (inventory) inventory->isOpen = true;
-
-			CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
-			if (pNearestLoot)
-			{
-				OpenLootContainer(pNearestLoot);
-			}
-			else
-			{
-				CloseCorpseInventory();
+				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
 			}
 			return true;
 		}
 
 		case VK_TAB:
 		{
-			if (!m_bTabInventoryHold)
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = true;
-
-				CLootContainerObject* pNearestLoot = FindNearestLootContainer(m_fLootInteractDistance);
-				if (pNearestLoot)
-				{
-					OpenLootContainer(pNearestLoot);
-				}
-				else
-				{
-					CloseCorpseInventory();
-				}
-
-				m_bTabInventoryHold = true;
+				m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
 			}
 			return true;
 		}
@@ -1274,11 +1130,9 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	{
 		if (wParam == VK_TAB)
 		{
-			if (m_bTabInventoryHold)
+			if (m_pInventoryManager)
 			{
-				if (inventory) inventory->isOpen = false;
-				CloseCorpseInventory();
-				m_bTabInventoryHold = false;
+				m_pInventoryManager->HandleTabReleased();
 			}
 			return true;
 		}
@@ -1293,7 +1147,7 @@ bool CScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	return false;
 }
 
-void CScene::DumpMapOOBBToCSV(const char* filename)
+void MainScene::DumpMapOOBBToCSV(const char* filename)
 {
 	if (m_ppShaders.size() <= SHADERIDX::MAP) return;
 	if (!m_ppShaders[SHADERIDX::MAP]) return;
@@ -1343,12 +1197,12 @@ void CScene::DumpMapOOBBToCSV(const char* filename)
 	OutputDebugStringA(msg);
 }
 
-bool CScene::ProcessInput(UCHAR *pKeysBuffer)
+bool MainScene::ProcessInput(UCHAR *pKeysBuffer)
 {
 	return(false);
 }
 
-void CScene::AnimateObjects(float fTimeElapsed)
+void MainScene::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;
 
@@ -1357,6 +1211,23 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		if (m_ppShaders[i]) m_ppShaders[i]->AnimateObjects(fTimeElapsed);
 	}
 
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->UpdateLootWorld(fTimeElapsed);
+
+		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+		{
+			m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());
+		}
+
+		m_pInventoryManager->Update(fTimeElapsed);
+	}
+
+	if (m_pPlayer && m_pLights.size() > 1)
+	{
+		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
+		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
+	}
 	// 시야 객체 blocker 갱신
 	{
 		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
@@ -1387,67 +1258,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		}
 	}
 
-	// 루팅 오브젝트 수명 업데이트
-	if (m_ppShaders.size() > SHADERIDX::LOOT && m_ppShaders[SHADERIDX::LOOT])
-	{
-		auto* lootObjs = m_ppShaders[SHADERIDX::LOOT]->GetObj();
-		if (lootObjs)
-		{
-			for (auto& obj : *lootObjs)
-			{
-				CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
-				if (pLoot)
-				{
-					pLoot->UpdateLifetime(fTimeElapsed);
-				}
-			}
-		}
-	}
-
-	// 적 death 애니메이션 종료 후 루팅 오브젝트 생성
-	if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
-	{
-		auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-		if (enemyObjs)
-		{
-			for (auto& obj : *enemyObjs)
-			{
-				CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-				if (!pEnemy) continue;
-
-				if (pEnemy->ConsumeLootSpawnRequest())
-				{
-					SpawnLootContainerFromEnemy(pEnemy);
-					pEnemy->MarkDeadForRemoval();
-				}
-			}
-		}
-	}
-
-	if (m_pOpenedLoot)
-	{
-		if (!m_pOpenedLoot->IsAlive())
-		{
-			CloseCorpseInventory();
-		}
-		else if (m_pPlayer)
-		{
-			float distSq = m_pOpenedLoot->GetDistanceSq(m_pPlayer->GetPosition());
-			float maxDistSq = m_fLootInteractDistance * m_fLootInteractDistance;
-
-			if (distSq > maxDistSq)
-			{
-				CloseCorpseInventory();
-			}
-		}
-	}
-
-	if (m_pPlayer && m_pLights.size() > 1)
-	{
-		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
-		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
-	}
-
 	// 연사 처리
 	if (m_bSparkFireActive && m_pPlayer && !IsAnyInventoryOpen())
 	{
@@ -1466,6 +1276,8 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				m_fSparkSpawnTimer = 0.0f;
 				break;
 			}
+
+			m_pPlayer->NotifyWeaponFired();
 
 			XMFLOAT3 sparkPos;
 			XMFLOAT3 sparkRight;
@@ -1507,7 +1319,10 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				sparkUp = flatLook;
 			}
 
-			PlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			if (m_pEffectManager)
+			{
+				m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			}
 
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
@@ -1558,84 +1373,65 @@ void CScene::AnimateObjects(float fTimeElapsed)
 		m_fSparkSpawnTimer = 0.0f;
 	}
 
-	for (int type = 0; type < EFFECT_MAX; type++)
+	if (m_pEffectManager)
 	{
-		for (auto& pEffect : m_vEffectPools[type])
-		{
-			if (pEffect && !pEffect->IsDead())
-			{
-				pEffect->Animate(fTimeElapsed);
-			}
-		}
+		m_pEffectManager->Update(fTimeElapsed);
 	}
 
-	if (m_bLaserActive && m_pLaserObject && m_pPlayer && !IsAnyInventoryOpen())
+	// 레이저 transform 갱신
+	if (m_bLaserActive && m_pPlayer && !IsAnyInventoryOpen() && m_pEffectManager)
 	{
 		if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
 		{
 			m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
 		}
 
-		XMVECTOR rayOrigin;
-		XMVECTOR rayDir;
-		XMVECTOR vRight;
-		XMVECTOR vUp;
+		XMFLOAT3 origin;
+		XMFLOAT3 right;
+		XMFLOAT3 up;
+		XMFLOAT3 dir;
 
 		if (m_pLaserMuzzle)
 		{
-			XMFLOAT3 pos = m_pLaserMuzzle->GetPosition();
-			XMFLOAT3 look = m_pLaserMuzzle->GetLook();
-			XMFLOAT3 right = m_pLaserMuzzle->GetRight();
-			XMFLOAT3 up = m_pLaserMuzzle->GetUp();
-
-			rayOrigin = XMLoadFloat3(&pos);
-			rayDir = XMVector3Normalize(XMLoadFloat3(&look));
-			vRight = XMVector3Normalize(XMLoadFloat3(&right));
-			vUp = XMVector3Normalize(XMLoadFloat3(&up));
+			origin = m_pLaserMuzzle->GetPosition();
+			dir = Vector3::Normalize(m_pLaserMuzzle->GetLook());
+			right = Vector3::Normalize(m_pLaserMuzzle->GetRight());
+			up = Vector3::Normalize(m_pLaserMuzzle->GetUp());
 		}
 		else
 		{
-			XMVECTOR vPos = XMLoadFloat3(&m_pPlayer->GetPosition());
-			XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
-			XMVECTOR vRightPlayer = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetRightVector()));
-			XMVECTOR vUpPlayer = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetUpVector()));
+			XMFLOAT3 pos = m_pPlayer->GetPosition();
+			XMFLOAT3 look = Vector3::Normalize(m_pPlayer->GetLookVector());
+			XMFLOAT3 rightVec = Vector3::Normalize(m_pPlayer->GetRightVector());
+			XMFLOAT3 upVec = Vector3::Normalize(m_pPlayer->GetUpVector());
 
-			vRight = vRightPlayer;
-			vUp = vUpPlayer;
+			origin.x = pos.x + upVec.x * 1.2f + rightVec.x * 0.3f + look.x * 0.5f;
+			origin.y = pos.y + upVec.y * 1.2f + rightVec.y * 0.3f + look.y * 0.5f;
+			origin.z = pos.z + upVec.z * 1.2f + rightVec.z * 0.3f + look.z * 0.5f;
 
-			rayOrigin = vPos + vUp * 1.2f + vRightPlayer * 0.3f + vLook * 0.5f;
-			rayDir = vLook;
+			dir = look;
+			right = rightVec;
+			up = upVec;
 		}
 
-		XMMATRIX matScale = XMMatrixScaling(0.05f, 0.05f, m_fLaserLength);
-
-		XMMATRIX matRotation = XMMatrixIdentity();
-		matRotation.r[0] = XMVectorSetW(vRight, 0.0f);
-		matRotation.r[1] = XMVectorSetW(vUp, 0.0f);
-		matRotation.r[2] = XMVectorSetW(rayDir, 0.0f);
-		matRotation.r[3] = XMVectorSet(0, 0, 0, 1);
-
-		XMMATRIX matTranslation = XMMatrixTranslationFromVector(rayOrigin);
-		XMMATRIX matWorld = matScale * matRotation * matTranslation;
-
-		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, matWorld);
-		m_pLaserObject->UpdateTransform(NULL);
+		m_pEffectManager->UpdateLaser(0, origin, right, up, dir, m_fLaserLength);
 	}
-	else if (m_pLaserObject)
+	else if (m_pEffectManager)
 	{
-		XMStoreFloat4x4(&m_pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
-		m_pLaserObject->UpdateTransform(NULL);
+		m_pEffectManager->HideLaser(0);
 	}
 
 	ShadowCameraManager.Update();
 
-	if (inventory) inventory->SubmitToShader(UIShader.get());
-	if (corpseInventory) corpseInventory->SubmitToShader(UIShader.get());
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->SubmitToShader(UIShader.get());
+	}
 
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
-void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	if (m_pd3dCbvSrvDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvDescriptorHeap);
@@ -1647,7 +1443,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 
-	pd3dCommandList->OMSetStencilRef(0x01);
+	pd3dCommandList->OMSetStencilRef(0xff);
 
 	if (nPipelineState == SHADOW)
 	{
@@ -1668,59 +1464,10 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	// 2. 이펙트
-	if (m_pEffectShader) m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
-
-	for (int type = 0; type < EFFECT_MAX; type++)
+	// 2. 이펙트 매니저 렌더
+	if (m_pEffectManager)
 	{
-		if (!m_pMappedInstBufferEffect[type] || !m_pd3dInstBufferEffect[type])
-			continue;
-
-		int activeCount = 0;
-
-		for (auto& pEffect : m_vEffectPools[type])
-		{
-			if (!pEffect) continue;
-
-			if (!pEffect->IsDead())
-			{
-				m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-				m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
-
-				switch (type)
-				{
-				case EFFECT_BOMB:
-					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
-					break;
-
-				case EFFECT_SPARK:
-					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.2f, 1.2f);
-					break;
-
-				case EFFECT_BLOOD:
-					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
-					break;
-
-				default:
-					m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.0f, 1.0f);
-					break;
-				}
-
-				m_pMappedInstBufferEffect[type][activeCount].vRight = pEffect->GetRight();
-				m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
-
-				activeCount++;
-				if (activeCount >= 100) break;
-			}
-		}
-
-		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
-		{
-			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
-
-			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
-			m_pEffectMesh->Render(pd3dCommandList, activeCount);
-		}
+		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 
 	// 3. 시야 바깥
@@ -1746,8 +1493,24 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSta
 #endif
 }
 
-void CScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-	if (m_ppShaders[1]) m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, THROUGH);
-}
+	if (!m_pPlayer || !pCamera) return;
 
+	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	if (m_pd3dCbvSrvDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvDescriptorHeap);
+
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pd3dcbLights)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	}
+
+	pd3dCommandList->OMSetStencilRef(0xff);
+
+	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+}

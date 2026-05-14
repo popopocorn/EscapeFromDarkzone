@@ -46,6 +46,7 @@ void ItemModelLibrary::ReleaseAll()
 {
 	for (auto& pair : s_ModelPool)
 	{
+
 		if (pair.second)
 		{
 			pair.second->Release();
@@ -60,21 +61,21 @@ CGameObject* Item::CreateModelInstance() const
 	return CGameObject::CreateModelInstance(model);
 }
 
-WeaponItem::WeaponItem(ItemGrade grade, WeaponCategory category)
+WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)
 {
-	type = ItemType::WEAPON;
+	type = ItemType::PISTOL;
 	m_Spec = BuildSpec(category, grade);
 }
 
 //무기 수치
-WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
+WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 {
 	WeaponSpec spec;
 
 	switch (category)
 	{
-	case WeaponCategory::PISTOL:
+	case ItemType::PISTOL:
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
 		spec.dps = 64.166667f;
@@ -82,7 +83,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		spec.reloadTime = 1.2f;
 		break;
 
-	case WeaponCategory::ASSAULT_RIFLE:
+	case ItemType::ASSAULT_RIFLE:
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
 		spec.magazineSize = 30;
@@ -111,7 +112,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		}
 		break;
 
-	case WeaponCategory::SMG:
+	case ItemType::SMG:
 		spec.rpm = 900.0f;
 		spec.maxDistanceDamageReductionRatio = 0.50f;
 		spec.magazineSize = 35;
@@ -140,7 +141,7 @@ WeaponSpec WeaponItem::BuildSpec(WeaponCategory category, ItemGrade grade)
 		}
 		break;
 
-	case WeaponCategory::SHOTGUN:
+	case ItemType::SHOTGUN:
 		spec.rpm = 200.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
 		spec.magazineSize = 8;
@@ -181,7 +182,7 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
 {
 	auto pItem = std::make_shared<WeaponItem>(
 		ItemGrade::GRADE_1,
-		WeaponCategory::ASSAULT_RIFLE
+		ItemType::ASSAULT_RIFLE
 	);
 
 	pItem->SetModelPrototype(
@@ -197,7 +198,6 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
 	return pItem;
 }
 
-
 Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
 {
 	box.maxY = 0.5f;
@@ -212,24 +212,101 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	m_slotH = totalH / static_cast<float>(MAX_SLOTS);
 	m_slotGap = 0.025f;
 
-	UIMesh* m = new UIMesh(pd3dDevice, pd3dCommandList);
+	m_pSharedMesh = std::make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+
+	BuildSlotViews();
+	SetPosition(0.0f, 0.0f);
+}
+
+void Inventory::BuildSlotViews()
+{
+	const float rowH = m_slotH - m_slotGap;
+
+	const float iconW = m_slotW * m_iconRatio;
+	const float textW = m_slotW * m_textRatio;
+	const float countW = m_slotW * m_countRatio;
+
+	const float innerGap = 0.01f;
+
+	const float iconRenderW = iconW - innerGap;
+	const float textRenderW = textW - innerGap;
+	const float countRenderW = countW - innerGap;
+	const float renderH = rowH - 0.005f;
 
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		if (!slots[i].ui)
+		if (!slotViews[i].hitBox)
 		{
-			slots[i].ui = std::make_unique<UIObject>();
+			slotViews[i].hitBox = std::make_unique<UIObject>();
+			slotViews[i].hitBox->SetFunc([this, i]() {
+				this->SlotClicked(i);
+				});
+			slotViews[i].hitBox->SetScale(m_slotW, rowH, 1.0f);
 		}
 
-		auto* ui = slots[i].ui.get();
-		ui->SetFunc([this, i]() {
-			this->SlotClicked(i);
-			});
-		ui->SetUIMesh(m);
-		ui->SetScale(m_slotW, m_slotH - m_slotGap, 1.0f);
-	}
+		if (!slotViews[i].iconCell)
+		{
+			slotViews[i].iconCell = std::make_unique<UIObject>();
+			slotViews[i].iconCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].iconCell->SetScale(iconRenderW, renderH, 1.0f);
+		}
 
-	SetPosition(0.0f, 0.0f);
+		if (!slotViews[i].textCell)
+		{
+			slotViews[i].textCell = std::make_unique<UIObject>();
+			slotViews[i].textCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].textCell->SetScale(textRenderW, renderH, 1.0f);
+		}
+
+		if (!slotViews[i].countCell)
+		{
+			slotViews[i].countCell = std::make_unique<UIObject>();
+			slotViews[i].countCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].countCell->SetScale(countRenderW, renderH, 1.0f);
+		}
+	}
+}
+
+void Inventory::LayoutSlotViews()
+{
+	const float iconW = m_slotW * m_iconRatio;
+	const float textW = m_slotW * m_textRatio;
+	const float countW = m_slotW * m_countRatio;
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		float posY = m_baseY + (0.5f - (m_slotH * 0.5f) - (i * m_slotH));
+
+		float rowLeft = m_baseX - (m_slotW * 0.5f);
+
+		float iconCenterX = rowLeft + (iconW * 0.5f);
+		float textCenterX = rowLeft + iconW + (textW * 0.5f);
+		float countCenterX = rowLeft + iconW + textW + (countW * 0.5f);
+
+		if (slotViews[i].hitBox)
+		{
+			slotViews[i].hitBox->SetLocate(m_baseX, posY, 0.5f);
+			slotViews[i].hitBox->setAABB();
+		}
+
+		if (slotViews[i].iconCell)
+		{
+			slotViews[i].iconCell->SetLocate(iconCenterX, posY, 0.5f);
+			slotViews[i].iconCell->setAABB();
+		}
+
+		if (slotViews[i].textCell)
+		{
+			slotViews[i].textCell->SetLocate(textCenterX, posY, 0.5f);
+			slotViews[i].textCell->setAABB();
+		}
+
+		if (slotViews[i].countCell)
+		{
+			slotViews[i].countCell->SetLocate(countCenterX, posY, 0.5f);
+			slotViews[i].countCell->setAABB();
+		}
+	}
 }
 
 void Inventory::SubmitToShader(UIObjectShader* shader)
@@ -238,9 +315,17 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		if (slots[i].ui)
+		if (slotViews[i].iconCell)
 		{
-			shader->addObjects(slots[i].ui.get());
+			shader->addObjects(slotViews[i].iconCell.get());
+		}
+		if (slotViews[i].textCell)
+		{
+			shader->addObjects(slotViews[i].textCell.get());
+		}
+		if (slotViews[i].countCell)
+		{
+			shader->addObjects(slotViews[i].countCell.get());
 		}
 	}
 }
@@ -258,21 +343,21 @@ void Inventory::SlotClicked(int slotidx)
 	}
 }
 
-void Inventory::ProcessClick(POINT mouse)
+bool Inventory::ProcessClick(POINT mouse)
 {
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		auto* ui = slots[i].ui.get();
-		if (!ui) continue;
+		auto* hitBox = slotViews[i].hitBox.get();
+		if (!hitBox) continue;
 
-		if (ui->GetBox().Intersects(mouse))
+		if (hitBox->GetBox().Intersects(mouse))
 		{
-			ui->HandleClick();
+			hitBox->HandleClick();
+			return true; // UI 클릭 소비됨
 		}
-		//여기에 드래그 앤 드롭 처리 추가
-
-
 	}
+
+	return false; // UI 클릭 아님
 }
 
 void Inventory::SetPosition(float x, float y)
@@ -280,30 +365,63 @@ void Inventory::SetPosition(float x, float y)
 	m_baseX = x;
 	m_baseY = y;
 
-	for (int i = 0; i < MAX_SLOTS; ++i)
-	{
-		if (!slots[i].ui) continue;
+	LayoutSlotViews();
+}
 
-		float posY = m_baseY + (0.5f - (m_slotH * 0.5f) - (i * m_slotH));
-		slots[i].ui->SetLocate(m_baseX, posY, 0.5f);
-		slots[i].ui->setAABB();
+int Inventory::GetItemCnt(ItemID id) const
+{
+	
+	for (const auto& slot : slots)
+	{
+		if (slot.item != ItemID::NONE && slot.item == id)
+		{
+			return slot.count;
+		}
+	}
+	
+}
+
+void Inventory::ConsumeItem(ItemID id, int cnt)
+{
+	for (auto& s : slots)
+	{
+		if (s.item != ItemID::NONE && s.item == id)
+		{
+			s.count -= cnt;
+			if (s.count == 0)
+			{
+				s.item = ItemID::NONE;
+			}
+			break;
+		}
 	}
 }
 
-bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
+bool Inventory::AddItem(ItemID item, int count)
 {
-	if (!item || count <= 0) return false;
+	if (item != ItemID::NONE || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
-		if (!slot.item)
+		if (slot.item != ItemID::NONE && slot.item == item)
 		{
-			slot.item = std::move(item);
-			slot.count = count;
+			slot.count += count;
+
 			return true;
 		}
+		
 	}
+	for (auto& slot : slots)
+	{
+		if (slot.item == ItemID::NONE)
+		{
+			slot.item = item;
+			slot.count = count;
 
+			return true;
+		}
+		
+	}
 	return false;
 }
 
@@ -311,7 +429,7 @@ void Inventory::ClearItems()
 {
 	for (auto& slot : slots)
 	{
-		slot.item.reset();
+		slot.item = ItemID::NONE;
 		slot.count = 0;
 	}
 }
@@ -320,4 +438,29 @@ ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
 	return &slots[idx];
+}
+
+void CraftBox::Init()
+{
+
+}
+
+bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
+{
+	auto it = recipeTable.find(target);
+	if (it == recipeTable.end())return false;
+
+	const Recipe& r = it->second;
+
+	for (const auto& req : r.ingredients)
+	{
+		if (playerinventory->GetItemCnt(req.itemID) < req.reuireCnt)
+			return false;
+	}
+	for (const auto& req : r.ingredients)
+	{
+		playerinventory->ConsumeItem(req.itemID, req.reuireCnt);
+	}
+	//playerinventory 아이템 추가
+	return true;
 }

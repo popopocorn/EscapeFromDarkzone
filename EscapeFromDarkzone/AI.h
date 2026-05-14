@@ -118,7 +118,3 @@ public:
 private:
 	vector<BehaviorNode*>children;
 };
-
-class BehaviorTree {
-
-};

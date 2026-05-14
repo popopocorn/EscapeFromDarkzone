@@ -4,10 +4,10 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 
-CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* model)
 {
 	CLoadedModelInfo* pEnemyModel
-		= CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
+		= CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Swat.bin", NULL);
 
 	if (!pEnemyModel->m_pAnimationSets) pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
 
@@ -29,6 +29,7 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 CEnemyObject::~CEnemyObject()
 {
+
 }
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
@@ -54,12 +55,20 @@ void CEnemyObject::HandleHP(float value)
 	{
 		hp = 0.0f;
 		m_bDying = true;
-		m_bLootSpawnRequested = false;
+		m_bLootSpawnRequested = true;
+		m_bDeadRemoveRequested = false;
 		m_fDieElapsed = 0.0f;
 
 		ChangeState(std::make_unique<EnemyDie>());
 		OutputDebugString(L"Enemy Die Start\n");
 	}
+}
+
+bool CEnemyObject::ConsumeDeadRemovalRequest()
+{
+	if (!m_bDeadRemoveRequested) return false;
+	m_bDeadRemoveRequested = false;
+	return true;
 }
 
 bool CEnemyObject::ConsumeLootSpawnRequest()
@@ -249,9 +258,9 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	
 	pEnemy->updateTimer += fTimeElapsed;
-	if (pEnemy->updateTimer >= 1.0f)
+	if (pEnemy->updateTimer >= pEnemy->findTime)
 	{
-		pEnemy->updateTimer -= 1.0f;
+		pEnemy->updateTimer -= pEnemy->findTime;
 		pEnemy->ways = pEnemy->GetNav()->FindPath(xmf3MyPos, xmf3PlayerPos);
 		pEnemy->wayIdx = 0;
 	}
@@ -292,6 +301,7 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	float fAngleDeg = XMConvertToDegrees(fAngleRad);
 	pEnemy->m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
 }
+
 void EnemyRun::Exit(CEnemyObject* pEnemy)
 {
 }
@@ -302,7 +312,6 @@ bool EnemyDie::Enter(CEnemyObject* pEnemy)
 	if (!pController) return false;
 
 	pEnemy->m_bDying = true;
-	pEnemy->m_bLootSpawnRequested = false;
 	pEnemy->m_fDieElapsed = 0.0f;
 
 	pController->SetTrackType(0, ANIMATION_TYPE_ONCE);
@@ -318,9 +327,9 @@ void EnemyDie::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	pEnemy->m_fDieElapsed += fTimeElapsed;
 
-	if (!pEnemy->m_bLootSpawnRequested && pEnemy->m_fDieElapsed >= pEnemy->m_fDieDuration)
+	if (!pEnemy->m_bDeadRemoveRequested && pEnemy->m_fDieElapsed >= pEnemy->m_fDieDuration)
 	{
-		pEnemy->m_bLootSpawnRequested = true;
+		pEnemy->m_bDeadRemoveRequested = true;
 	}
 }
 

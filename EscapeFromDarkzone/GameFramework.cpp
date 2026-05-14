@@ -5,6 +5,7 @@
 #include "stdafx.h"
 #include "GameFramework.h"
 #include "InputManager.h"
+#include "EffectManager.h"
 
 CGameFramework::CGameFramework()
 {
@@ -404,7 +405,10 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				bombFlatLook.y = 0.0f;
 				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				m_pScene->PlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
+				if (m_pScene && m_pScene->GetEffectManager())
+				{
+					m_pScene->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
+				}
 			}
 			break;
 		}
@@ -486,9 +490,11 @@ void CGameFramework::OnDestroy()
 #if defined(_DEBUG)
 	IDXGIDebug1* pdxgiDebug = NULL;
 	DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), (void**)&pdxgiDebug);
-	HRESULT hResult = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+	HRESULT hResult = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, 
+		(DXGI_DEBUG_RLO_FLAGS)(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 	pdxgiDebug->Release();
 #endif
+
 }
 
 //#define _WITH_TERRAIN_PLAYER
@@ -497,7 +503,7 @@ void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
-	m_pScene = new CScene();
+	m_pScene = new MainScene();
 	
 	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 

@@ -132,7 +132,7 @@ float4 PSUI(VS_UI_OUTPUT input) : SV_Target
 {
     float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
     
-    //cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
+    cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
     
     return cAlbedoColor;
 }
@@ -160,7 +160,7 @@ VS_FOG_OVERLAY_OUTPUT VSFogOverlay(uint nVertexID : SV_VertexID)
 
 float4 PSFogOverlay(VS_FOG_OVERLAY_OUTPUT input) : SV_TARGET
 {
-    return float4(0.0f, 0.0f, 0.0f, 0.75f);
+    return float4(0.0f, 0.0f, 0.0f, 0.5f);
 }
 
 VS_SKYBOX_CUBEMAP_OUTPUT VSSkyBox(VS_SKYBOX_CUBEMAP_INPUT input)
