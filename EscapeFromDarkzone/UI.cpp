@@ -34,7 +34,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 		D3D12_HEAP_TYPE_DEFAULT, 
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
 		&m_pd3dPositionUploadBuffer);
-	m_pd3dPositionBuffer->SetName(L"fdsa");
+	
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
 	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
 	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_pxmf3Positions.size();
@@ -53,8 +53,11 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
 	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
 	
-	
-	//LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
+	/*m_pd3dPositionBuffer->SetName(L"uivbuffer");
+	m_pd3dPositionBuffer->SetName(L"uivupuffer");
+	UVBuffer->SetName(L"uiuvbuffer");
+	UVUploadBuffer->SetName(L"uiuvupbuffer");*/
+	LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
