@@ -111,7 +111,7 @@ void CEnemyObject::Update(float fTimeElapsed)
 	// 05.10 추가 (보간)
 	if (m_bUseServerLerp) {
 		//constexpr float ALPHA = 0.15f;  // 60FPS 기준 매 프레임 15% 보정
-		constexpr float ALPHA = 0.5f;  // 60FPS 기준 매 프레임 15% 보정
+		constexpr float ALPHA = 0.04f;
 		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * ALPHA;
 		m_xmf3Position.y += (m_xmf3ServerPosition.y - m_xmf3Position.y) * ALPHA;
 		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * ALPHA;
@@ -390,4 +390,20 @@ void CEnemyObject::SetServerPosition(const XMFLOAT3& pos)
 {
 	m_xmf3ServerPosition = pos;
 	m_bUseServerLerp = true;
+}
+
+void CEnemyObject::SetServerYaw(float yawRad)
+{
+	float yawDeg = XMConvertToDegrees(yawRad);
+
+	m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, yawDeg, 0.0f);
+}
+
+void CEnemyObject::SnapToServerPosition()
+{
+	m_xmf3Position = m_xmf3ServerPosition;
+
+	m_xmf4x4ToParent._41 = m_xmf3Position.x;
+	m_xmf4x4ToParent._42 = m_xmf3Position.y;
+	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 }

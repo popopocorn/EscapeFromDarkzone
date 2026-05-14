@@ -918,7 +918,7 @@ void CGameFramework::ProcessNetworkPackets()
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
-			// TODO (4단계): yaw 적용, npc_kind 분기, hp/max_hp 적용
+			pNpc->SetServerYaw(p->yaw);
 
 			if (!AddNpc(p->npc_id, pNpc)) {
 				OutputDebugString(L"[Network] NPC slot full.\n");
@@ -947,7 +947,31 @@ void CGameFramework::ProcessNetworkPackets()
 
 			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
 				pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
-				// TODO (4단계): yaw lerp 처리
+				pNpc->SetServerYaw(p->yaw);
+			}
+
+			break;
+		}
+		case SC_NPC_STATE_CHANGE: {
+			SC_NPC_STATE_CHANGE_PACKET* p = reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				switch (p->state) {
+				case NPC_STATE_IDLE:
+					pNpc->ChangeState(std::make_unique<EnemyIdle>());
+					pNpc->SnapToServerPosition();
+					break;
+				case NPC_STATE_RUN:
+					pNpc->ChangeState(std::make_unique<EnemyRun>());
+					break;
+				case NPC_STATE_DIE:
+					// EnemyDie::Enter가 m_bDying / m_fDieElapsed 설정
+					// Scene::AnimateObjects가 1.2초 후 자체 루팅 박스 생성.
+					// 서버는 같은 1.2초 후 SC_REMOVE_NPC 송신 → NPC 객체 자체 제거.
+					// (루팅 박스는 별도 컨테이너로 남아 있음)
+					pNpc->ChangeState(std::make_unique<EnemyDie>());
+					break;
+				}
 			}
 
 			break;

@@ -484,11 +484,79 @@ static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
 	normals.clear();
 }
 
-static void HandleNpcEvent(const NpcInputEvent& e)
+static short WeaponDamage(char weapon_id)
+{
+	switch (weapon_id) {
+	case 0:  
+		return 10;
+	default: 
+		return 0;
+	}
+}
+
+static float WeaponRange(char weapon_id)
+{
+	switch (weapon_id) {
+	case 0:  
+		return 100.0f;
+	default: 
+		return 0.0f;
+	}
+}
+
+static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	if (NPC_STATE_DIE == npc.state) return;
+
+	npc.hp -= damage;
+
+	{
+		SC_NPC_HP_UPDATE_PACKET p;
+		p.size = sizeof(SC_NPC_HP_UPDATE_PACKET);
+		p.type = SC_NPC_HP_UPDATE;
+		p.npc_id = npc.id;
+		p.hp = npc.hp;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+			clients[i].do_send(&p);
+		}
+	}
+
+	if (npc.hp <= 0) {
+		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+	}
+}
+
+static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	switch (e.type) {
 	case NpcInputEvent::HIT:
-		// TODO (6단계): ray vs OOBB 교차, HP 차감
+	{
+		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
+		XMVECTOR dir = XMVector3Normalize(XMVectorSet(e.ray_direction.x, e.ray_direction.y, e.ray_direction.z, 0.0f));
+
+		float max_range = WeaponRange(e.weapon_id);
+		if (max_range <= 0.0f) return;
+
+		short best_id = -1;
+		float best_t = max_range;
+		for (auto& npc : g_npcs) {
+			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
+			BoundingOrientedBox oobb = MakeNpcOOBB(npc.position, npc.yaw);
+			float t;
+			if (oobb.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_id = npc.id;
+			}
+		}
+
+		if (best_id >= 0) {
+			short damage = WeaponDamage(e.weapon_id);
+			ApplyDamage(g_npcs[best_id], damage, player_snapshot);
+		}
+	}
+
 		break;
 	case NpcInputEvent::NEW_CLIENT_JOINED:
 	{
@@ -699,17 +767,17 @@ static void npc_thread()
 	while (true) {
 		next += TICK;
 
-		{
-			//static int debug_tick = 0;
-			//if (++debug_tick % 30 == 0) {
-			//	std::cout << "[NPC] tick " << debug_tick << "\n";
-			//}
+		/*
+		static int debug_tick = 0;
+		if (++debug_tick % 30 == 0) {
+			std::cout << "[NPC] tick " << debug_tick << "\n";
 		}
+		*/
 
 		// 워커가 보낸 입력 처리
 		g_npc_input_queue.DrainTo(events);
 		for (auto& e : events) {
-			HandleNpcEvent(e);
+			HandleNpcEvent(e, player_snapshot);
 		}
 
 		// 플레이어 위치 스냅샷
@@ -853,6 +921,23 @@ void process_packet(int c_id, char* packet)
 			<< " slot:" << p->slotidx << "\n";
 		break;
 	}
+	case CS_HIT_NPC: {
+		CS_HIT_NPC_PACKET* p = 
+			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
+
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::HIT;
+		ev.attacker_client_id = c_id;
+		ev.ray_origin = { p->ray_ox, p->ray_oy, p->ray_oz };
+		ev.ray_direction = { p->ray_dx, p->ray_dy, p->ray_dz };
+		ev.weapon_id = p->weapon_id;
+		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
+
+		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+
 	}
 }
 

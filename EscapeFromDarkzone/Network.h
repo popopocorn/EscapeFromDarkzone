@@ -5,6 +5,8 @@
 #include <vector>
 #include "protocol.h"
 
+#include <DirectXMath.h>
+
 #pragma comment(lib, "WS2_32.lib")
 
 constexpr char SERVER_ADDR[] = "127.0.0.1";
@@ -48,4 +50,5 @@ public:
     bool SendLogin(const char* name);
     bool SendMove(char inputs, float yaw, unsigned int move_time);
     bool SendInventoryClick(char action, short slotidx);
+    bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId);
 };

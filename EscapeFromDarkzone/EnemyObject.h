@@ -69,6 +69,10 @@ public:
 	float m_fDieDuration = 1.2f;
 
 	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
+
+	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
+
+	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
 };
 
 class EnemyIdle : public State<CEnemyObject>

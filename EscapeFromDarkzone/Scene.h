@@ -9,6 +9,7 @@
 #include "EnemyObject.h"
 #include "Effect.h"
 
+#include "Network.h"	// 05.14 추가: 네트워크 피격
 
 #define MAX_LIGHTS						16 
 

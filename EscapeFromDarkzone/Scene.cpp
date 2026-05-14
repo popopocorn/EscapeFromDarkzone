@@ -1095,30 +1095,43 @@ void CScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam,
 
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
-			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-			XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-			XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+			if (NetworkManager::Instance().IsConnected()) {
+				XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
+				XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
 
-			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-			for (auto& obj : *objs)
-			{
-				const auto& oobbs = obj->GetOOBB();
+				XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
+				XMFLOAT3 rayDirection;
+				XMStoreFloat3(&rayDirection, dirVec);
 
-				for (BoundingOrientedBox* pOOBB : oobbs)
+				NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+			}
+			else {
+				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+				for (auto& obj : *objs)
 				{
-					float fDist = 0.0f;
+					const auto& oobbs = obj->GetOOBB();
 
-					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					for (BoundingOrientedBox* pOOBB : oobbs)
 					{
-						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-						if (pEnemy)
+						float fDist = 0.0f;
+
+						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 						{
-							pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+							if (pEnemy)
+							{
+								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+							}
+							break;
 						}
-						break;
 					}
 				}
 			}
+
 		}
 		break;
 	}
@@ -1498,30 +1511,43 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
-				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+				if (NetworkManager::Instance().IsConnected()) {
+					XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
+					XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
 
-				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-				for (auto& obj : *objs)
-				{
-					const auto& oobbs = obj->GetOOBB();
+					XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
+					XMFLOAT3 rayDirection;
+					XMStoreFloat3(&rayDirection, dirVec);
 
-					for (BoundingOrientedBox* pOOBB : oobbs)
+					NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+				}
+				else {
+					XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+					XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+					auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+					for (auto& obj : *objs)
 					{
-						float fDist = 0.0f;
+						const auto& oobbs = obj->GetOOBB();
 
-						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+						for (BoundingOrientedBox* pOOBB : oobbs)
 						{
-							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-							if (pEnemy)
+							float fDist = 0.0f;
+
+							if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 							{
-								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+								CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+								if (pEnemy)
+								{
+									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+								}
+								break;
 							}
-							break;
 						}
 					}
 				}
+				
 			}
 
 			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
