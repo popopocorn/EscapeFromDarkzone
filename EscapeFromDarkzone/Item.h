@@ -74,22 +74,6 @@ class UIObject;
 class UIObjectShader;
 class CShader;
 
-//모델 원본
-class ItemModelLibrary
-{
-public:
-	static CGameObject* GetOrLoadPrototype(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		const char* modelPath,
-		CShader* pShader);
-
-	static void ReleaseAll();
-
-private:
-	static std::unordered_map<std::string, CGameObject*> s_ModelPool;
-};
 
 
 class Item {
@@ -198,11 +182,7 @@ public:
 
 	static WeaponSpec BuildSpec(ItemType category, ItemGrade grade);
 
-	static std::shared_ptr<WeaponItem> CreateDefaultPlayerRifle(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pShader);
+	static std::shared_ptr<WeaponItem> CreateDefaultPlayerRifle(CGameObject* pPrototype);
 
 private:
 	ItemGrade m_Grade = ItemGrade::BASIC;

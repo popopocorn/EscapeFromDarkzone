@@ -311,7 +311,13 @@ enum PLAYER_ANIM {
 class CTerrainPlayer : public CPlayer
 {
 public:
-	CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* shader);
+	CTerrainPlayer(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* shader,
+		CGameObject* pDefaultWeaponPrototype
+	);
 	virtual ~CTerrainPlayer();
 
 public:

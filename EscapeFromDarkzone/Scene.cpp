@@ -29,6 +29,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorNextHandle;
 
+
 static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
 {
 	if (!pWeapon) return nullptr;
@@ -199,6 +200,79 @@ MainScene::MainScene()
 
 MainScene::~MainScene()
 {
+}
+
+bool MainScene::LoadAndRegisterModelPrototype(
+	SceneModel key,
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const char* modelPath,
+	CShader* pShader)
+{
+	if (!pd3dDevice) return false;
+	if (!pd3dCommandList) return false;
+	if (!modelPath) return false;
+	if (!pShader) return false;
+	if (!m_pd3dGraphicsRootSignature) return false;
+
+	if (m_ModelPrototypes.find(key) != m_ModelPrototypes.end())
+	{
+		return true;
+	}
+
+	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		nullptr,
+		modelPath,
+		pShader,
+		nullptr
+	);
+
+	if (!pPrototype)
+		return false;
+
+	RegisterModelPrototype(key, pPrototype);
+	return true;
+}
+
+void MainScene::RegisterModelPrototype(SceneModel key, CGameObject* pPrototype)
+{
+	if (!pPrototype) return;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		if (it->second)
+			it->second->Release();
+
+		it->second = pPrototype;
+		return;
+	}
+
+	m_ModelPrototypes.emplace(key, pPrototype);
+}
+
+CGameObject* MainScene::GetModelPrototype(SceneModel key) const
+{
+	auto it = m_ModelPrototypes.find(key);
+	if (it == m_ModelPrototypes.end())
+		return nullptr;
+
+	return it->second;
+}
+
+void MainScene::ReleaseModelPrototypes()
+{
+	for (auto& pair : m_ModelPrototypes)
+	{
+		if (pair.second)
+		{
+			pair.second->Release();
+		}
+	}
+	m_ModelPrototypes.clear();
 }
 
 void MainScene::BuildDefaultLightsAndMaterials()
@@ -447,6 +521,7 @@ void MainScene::ReleaseObjects()
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
 
+	ReleaseModelPrototypes();
 	ReleaseShaderVariables();
 
 	m_pLights.clear();
