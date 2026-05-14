@@ -1162,6 +1162,35 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
+	// 시야 객체 blocker 갱신
+	{
+		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
+		{
+			std::vector<CGameObject*> visionBlockers;
+			visionBlockers.reserve(32);
+
+			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+
+			if (!m_vVisionMapChunks.empty())
+			{
+				GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, 18.0f, visionBlockers);
+			}
+			else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+			{
+				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP].get(), visionBlockers);
+			}
+
+			auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+			if (viewObjs && !viewObjs->empty())
+			{
+				ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0).get());
+				if (pViewObj)
+				{
+					pViewObj->UpdateClippedMeshes(visionBlockers);
+				}
+			}
+		}
+	}
 
 	// 연사 처리
 	if (m_bSparkFireActive && m_pPlayer && !IsAnyInventoryOpen())
