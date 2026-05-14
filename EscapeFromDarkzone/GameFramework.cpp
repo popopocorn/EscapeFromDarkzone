@@ -534,6 +534,13 @@ void CGameFramework::BuildObjects()
 
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
 
+	pPlayer->InitializeInventory(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		m_pScene->GetGraphicsRootSignature(),
+		nullptr
+	);
+
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
 

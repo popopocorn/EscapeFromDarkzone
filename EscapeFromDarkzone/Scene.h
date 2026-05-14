@@ -207,7 +207,6 @@ public:
 		const char* modelPath,
 		CShader* pShader
 	);
-
 	void RegisterModelPrototype(ModelName key, CGameObject* pPrototype);
 	CGameObject* GetModelPrototype(ModelName key) const;
 	void ReleaseModelPrototypes();
