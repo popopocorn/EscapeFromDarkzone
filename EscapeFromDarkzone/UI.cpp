@@ -34,7 +34,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 		D3D12_HEAP_TYPE_DEFAULT, 
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
 		&m_pd3dPositionUploadBuffer);
-
+	m_pd3dPositionBuffer->SetName(L"fdsa");
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
 	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
 	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_pxmf3Positions.size();
@@ -59,6 +59,31 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 
 UIMesh::~UIMesh()
 {
+
+	if (m_pd3dPositionBuffer)
+	{
+		m_pd3dPositionBuffer->Release();
+		m_pd3dPositionBuffer = nullptr;
+	}
+
+	if (UVBuffer)
+	{
+		UVBuffer->Release();
+		UVBuffer = nullptr;
+	}
+
+	if (m_pd3dPositionUploadBuffer)
+	{
+		m_pd3dPositionUploadBuffer->Release();
+		m_pd3dPositionUploadBuffer = nullptr;
+	}
+
+	if (UVUploadBuffer)
+	{
+		UVUploadBuffer->Release();
+		UVUploadBuffer = nullptr;
+	}
+	texture->Release();
 }
 
 void UIMesh::ReleaseUploadBuffers()

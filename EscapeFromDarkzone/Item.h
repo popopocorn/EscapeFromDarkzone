@@ -114,9 +114,10 @@ protected:
 
 //아이템 슬롯
 struct ItemSlot {
-	std::unique_ptr<Item> item = NULL;
+	ItemID item;
 	int count = 0;
 	std::unique_ptr<UIObject> ui;
+	UIObject* ItemUI = NULL;
 };
 
 const int MAX_SLOTS = 10;
@@ -142,7 +143,7 @@ public:
 	void SlotClicked(int slotidx);
 	void ProcessClick(POINT mouse);
 	//드래그 앤 드롭 처리 함수 추가
-	bool AddItem(unique_ptr<Item> item, int count = 1);
+	bool AddItem(ItemID item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화

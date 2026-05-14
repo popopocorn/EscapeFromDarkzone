@@ -241,6 +241,10 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 		{
 			shader->addObjects(slots[i].ui.get());
 		}
+		if (slots[i].ItemUI)
+		{
+			shader->addObjects(slots[i].ItemUI);
+		}
 	}
 }
 
@@ -262,8 +266,6 @@ void Inventory::ProcessClick(POINT mouse)
 		{
 			ui->HandleClick();
 		}
-		//여기에 드래그 앤 드롭 처리 추가
-
 
 	}
 }
@@ -288,7 +290,7 @@ int Inventory::GetItemCnt(ItemID id) const
 	
 	for (const auto& slot : slots)
 	{
-		if (slot.item != nullptr && slot.item->GetID() == id)
+		if (slot.item != ItemID::NONE && slot.item == id)
 		{
 			return slot.count;
 		}
@@ -300,37 +302,39 @@ void Inventory::ConsumeItem(ItemID id, int cnt)
 {
 	for (auto& s : slots)
 	{
-		if (s.item != nullptr && s.item->GetID() == id)
+		if (s.item != ItemID::NONE && s.item == id)
 		{
 			s.count -= cnt;
 			if (s.count == 0)
 			{
-				s.item.reset();
+				s.item = ItemID::NONE;
 			}
 			break;
 		}
 	}
 }
 
-bool Inventory::AddItem(std::unique_ptr<Item> item, int count)
+bool Inventory::AddItem(ItemID item, int count)
 {
-	if (!item || count <= 0) return false;
+	if (item != ItemID::NONE || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
-		if (slot.item!=nullptr && slot.item->GetID() == item->GetID())
+		if (slot.item != ItemID::NONE && slot.item == item)
 		{
 			slot.count += count;
+
 			return true;
 		}
 		
 	}
 	for (auto& slot : slots)
 	{
-		if (slot.item == nullptr)
+		if (slot.item == ItemID::NONE)
 		{
-			slot.item = std::move(item);
+			slot.item = item;
 			slot.count = count;
+
 			return true;
 		}
 		
@@ -342,7 +346,7 @@ void Inventory::ClearItems()
 {
 	for (auto& slot : slots)
 	{
-		slot.item.reset();
+		slot.item = ItemID::NONE;
 		slot.count = 0;
 	}
 }
@@ -375,5 +379,5 @@ bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
 		playerinventory->ConsumeItem(req.itemID, req.reuireCnt);
 	}
 	//playerinventory 아이템 추가
-
+	return true;
 }

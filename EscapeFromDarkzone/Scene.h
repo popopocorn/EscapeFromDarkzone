@@ -56,6 +56,9 @@ class CollisionManager;
 class Inventory;
 class AstarNavigation;
 
+
+
+
 class MainScene
 {
 public:
@@ -199,4 +202,5 @@ public:
 
 	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
+
 };
