@@ -15,11 +15,23 @@
 
 #include "Server_Collision.h"
 #include "Server_Npc.h"
+#include "Server_AI.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
 
 std::vector<BoundingOrientedBox> g_mapOOBBs;
+
+constexpr float NPC_MOVE_SPEED = 7.0f;
+constexpr float NPC_DETECTION_RANGE = 10.0f;
+constexpr float NPC_ATTACK_RANGE = 3.0f;
+constexpr float NPC_DIE_DURATION = 1.2f;
+constexpr float NPC_WAYPOINT_REACH_DIST = 1.0f;
+constexpr float NPC_PATH_UPDATE_INTERVAL = 1.0f;
+
+constexpr float NPC_DETECTION_RANGE_SQ = NPC_DETECTION_RANGE * NPC_DETECTION_RANGE;
+constexpr float NPC_ATTACK_RANGE_SQ = NPC_ATTACK_RANGE * NPC_ATTACK_RANGE;
+constexpr float NPC_WAYPOINT_REACH_DIST_SQ = NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 class OVER_EXP {
@@ -116,10 +128,44 @@ public:
 		p.type = SC_REMOVE_PLAYER;
 		do_send(&p);
 	}
+
+	void send_add_npc_packet(short npc_id, char kind, float x, float y, float z, float yaw, short hp)
+	{
+		SC_ADD_NPC_PACKET p;
+		p.size = sizeof(SC_ADD_NPC_PACKET);
+		p.type = SC_ADD_NPC;
+		p.npc_id = npc_id;
+		p.npc_kind = kind;
+		p.x = x; p.y = y; p.z = z;
+		p.yaw = yaw;
+		p.hp = hp;
+		do_send(&p);
+	}
+
+	void send_move_npc_packet(short npc_id, float x, float y, float z, float yaw)
+	{
+		SC_MOVE_NPC_PACKET p;
+		p.size = sizeof(SC_MOVE_NPC_PACKET);
+		p.type = SC_MOVE_NPC;
+		p.npc_id = npc_id;
+		p.x = x; p.y = y; p.z = z;
+		p.yaw = yaw;
+		do_send(&p);
+	}
+
+	void send_remove_npc_packet(short npc_id)
+	{
+		SC_REMOVE_NPC_PACKET p;
+		p.size = sizeof(SC_REMOVE_NPC_PACKET);
+		p.type = SC_REMOVE_NPC;
+		p.npc_id = npc_id;
+		do_send(&p);
+	}
 };
 
 std::array<SESSION, MAX_USER> clients;
 
+AstarNavigation g_astar;
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
@@ -313,6 +359,131 @@ static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
 	}
 }
 
+static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapshot, MAX_USER>& snapshot, float& out_dist_sq)
+{
+	int   best_id = -1;
+	float best_sq = 0.0f;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!snapshot[i].in_game) continue;
+
+		float dx = snapshot[i].x - pos.x;
+		float dy = snapshot[i].y - pos.y;
+		float dz = snapshot[i].z - pos.z;
+		float d_sq = dx * dx + dy * dy + dz * dz;
+
+		if (best_id == -1 || d_sq < best_sq) {
+			best_id = i;
+			best_sq = d_sq;
+		}
+	}
+
+	if (best_id >= 0) {
+		out_dist_sq = best_sq;
+	}
+	return best_id;
+}
+
+static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	if (npc.state == new_state) return;
+
+	npc.state = new_state;
+
+	if (new_state == NPC_STATE_DIE) {
+		npc.die_timer = 0.0f;
+	}
+
+	// 디버그용 로그
+	std::cout << "[NPC " << npc.id << "] -> state " << (int)new_state << "\n";
+
+
+	// 모든 ST_INGAME 클라에 즉시 송신
+	SC_NPC_STATE_CHANGE_PACKET p;
+	p.size = sizeof(SC_NPC_STATE_CHANGE_PACKET);
+	p.type = SC_NPC_STATE_CHANGE;
+	p.npc_id = npc.id;
+	p.state = new_state;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&p);
+	}
+}
+
+static void ResolveNpcCollision(SERVER_NPC& npc, float yawRad)
+{
+	for (const auto& mapOOBB : g_mapOOBBs)
+	{
+		// 매 검사마다 보정된 최신 위치로 NPC OOBB 재생성
+		BoundingOrientedBox npcOOBB = MakeNpcOOBB(npc.position, yawRad);
+
+		ColResult res = CalcCollision(npcOOBB, mapOOBB);
+		if (!res.isCollide) continue;
+
+		// 충돌 노멀 누적 (다음 틱 ApplyNpcSlide에서 사용)
+		npc.coll_normals.push_back(res.normal);
+
+		// mtv로 위치 보정 — 플레이어 패턴과 동일
+		// (vBackPos -= vNormal * 0.001f 로 벽에서 미세하게 더 떨어뜨림)
+		XMVECTOR vMtv = XMLoadFloat3(&res.mtv);
+		XMVECTOR vNormal = XMLoadFloat3(&res.normal);
+		vMtv -= vNormal * 0.001f;
+
+		XMFLOAT3 finalBack;
+		XMStoreFloat3(&finalBack, vMtv);
+
+		npc.position.x += finalBack.x;
+		npc.position.z += finalBack.z;
+		// Y는 건드리지 않음 (XZ 평면 충돌)
+	}
+}
+
+static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
+{
+	auto& normals = npc.coll_normals;
+
+	// 이동 방향이 0이면 누적 노멀만 클리어하고 종료
+	if (move_dir.x == 0.0f && move_dir.z == 0.0f)
+	{
+		normals.clear();
+		return;
+	}
+
+	// XZ 평면 계산
+	XMVECTOR currentDirVec = XMVectorSet(move_dir.x, 0.0f, move_dir.z, 0.0f);
+
+	for (const XMFLOAT3& normal : normals)
+	{
+		XMVECTOR normalVec = XMLoadFloat3(&normal);
+
+		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
+		float dot = XMVectorGetX(dotVec);
+
+		// 벽을 향해 들어가는 성분만 제거 (dot < 0이면 침투 방향)
+		if (dot < 0.0f)
+		{
+			currentDirVec = currentDirVec - (normalVec * dot);
+		}
+	}
+
+	// 길이가 거의 0이면 제로로 처리 (반대 방향 벽 두 개 사이에 끼인 경우)
+	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
+	{
+		currentDirVec = XMVectorZero();
+	}
+
+	// 결과 추출
+	XMFLOAT3 result;
+	XMStoreFloat3(&result, currentDirVec);
+	move_dir.x = result.x;
+	move_dir.z = result.z;
+	// Y는 건드리지 않음
+
+	// 이번 틱에서 한 번 사용했으니 누적 노멀 클리어
+	normals.clear();
+}
+
 static void HandleNpcEvent(const NpcInputEvent& e)
 {
 	switch (e.type) {
@@ -320,22 +491,195 @@ static void HandleNpcEvent(const NpcInputEvent& e)
 		// TODO (6단계): ray vs OOBB 교차, HP 차감
 		break;
 	case NpcInputEvent::NEW_CLIENT_JOINED:
-		//std::cout << "[NPC] NEW_CLIENT_JOINED received, client " << e.new_client_id << "\n";
-		// TODO (2.5단계): 모든 살아있는 NPC의 SC_ADD_NPC를 e.new_client_id에 송신
+	{
+		std::cout << "[NPC] NEW_CLIENT_JOINED received, client "
+			<< e.new_client_id << "\n";
+
+		// 새 클라가 정말 ST_INGAME인지 확인 (미세한 disconnect 타이밍 가드)
+		{
+			std::lock_guard<std::mutex> lk(clients[e.new_client_id]._s_lock);
+			if (clients[e.new_client_id]._state != ST_INGAME) {
+				break;
+			}
+		}
+
+		// 살아있는 모든 NPC를 그 클라에 SC_ADD_NPC 송신
+		for (const auto& npc : g_npcs) {
+			if (!npc.alive) continue;
+			clients[e.new_client_id].send_add_npc_packet(
+				npc.id, npc.kind,
+				npc.position.x, npc.position.y, npc.position.z,
+				npc.yaw, npc.hp
+			);
+		}
+
+		break;
+	}
+	}
+}
+
+static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	float dist_sq;
+	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	if (player_id < 0) return;  // 게임 중인 플레이어 없음
+
+	// 감지 범위 안 + 공격 범위 밖일 때만 추적 시작
+	if (dist_sq <= NPC_DETECTION_RANGE_SQ && dist_sq > NPC_ATTACK_RANGE_SQ) {
+		ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+	}
+}
+
+static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+{
+	// 1. 가장 가까운 플레이어 검색
+	float dist_sq;
+	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	if (player_id < 0) {
+		// 접속 중인 클라이언트 없으면 Idle 복귀
+		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		return;
+	}
+
+	// 2. 거리 체크 (XZ 평면, Y 무시) — 사거리 밖 또는 공격 거리 안이면 Idle 전환
+	XMFLOAT3 player_pos = {
+		player_snapshot[player_id].x,
+		player_snapshot[player_id].y,
+		player_snapshot[player_id].z
+	};
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	float dist_xz_sq = dx * dx + dz * dz;
+
+	if (dist_xz_sq > NPC_DETECTION_RANGE_SQ || dist_xz_sq <= NPC_ATTACK_RANGE_SQ) {
+		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		return;
+	}
+
+	// 3. 1초 주기 A* 재탐색
+	npc.path_update_timer += dt;
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
+		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
+		npc.waypoints = g_astar.FindPath(npc.position, player_pos);
+		npc.way_idx = 0;
+	}
+
+	// 디버그용 로그
+	std::cout << "[NPC " << npc.id << "] pos=("
+		<< npc.position.x << "," << npc.position.z
+		<< ") -> target=(" << player_pos.x << "," << player_pos.z
+		<< ") path size=" << npc.waypoints.size() << "\n";
+
+	// 4. waypoint 따라가기
+	XMFLOAT3 look = { 0.0f, 0.0f, 1.0f };  // 기본 정면
+	XMFLOAT3 move_dir = { 0.0f, 0.0f, 0.0f };
+	bool is_moving = false;
+
+	while (npc.way_idx < (int)npc.waypoints.size()) {
+		const XMFLOAT3& wp = npc.waypoints[npc.way_idx];
+		float wdx = wp.x - npc.position.x;
+		float wdz = wp.z - npc.position.z;
+		float wd_sq = wdx * wdx + wdz * wdz;
+
+		if (wd_sq < NPC_WAYPOINT_REACH_DIST_SQ) {
+			// 현재 waypoint 도달 --> 다음
+			npc.way_idx++;
+		}
+		else {
+			// 정규화하여 이동 방향 결정
+			float wd = std::sqrt(wd_sq);
+			look.x = wdx / wd;
+			look.y = 0.0f;
+			look.z = wdz / wd;
+			move_dir = look;
+			is_moving = true;
+			break;
+		}
+	}
+
+	// 5. 경로 없거나 모든 waypoint 도달 --> 정지하되 플레이어 방향으로는 향함
+	if (!is_moving) {
+		// move_dir 유지: (0,0,0) → 위치 적분에서 안 움직임
+		if (dist_xz_sq > 0.01f) {  // 클라는 0.1f, 거리 비교라 제곱은 0.01f
+			float d = std::sqrt(dist_xz_sq);
+			look.x = dx / d;
+			look.y = 0.0f;
+			look.z = dz / d;
+		}
+	}
+
+	// 6. yaw 갱신 (라디안 보관)
+	//    서버는 yaw 자체만 보관하면 충분. 송신 시 그대로 전송. (추후 yaw 전송 시 변경)
+	npc.yaw = std::atan2(look.x, look.z);
+
+	// 7. 직전 틱 누적 노멀로 벽 슬라이드 보정
+	ApplyNpcSlide(npc, move_dir);
+
+	// 8. 위치 적분 (XZ 평면만)
+	npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+	npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+
+	// 9. 충돌 검사 + 보정 + 이번 틱 노멀 누적
+	ResolveNpcCollision(npc, npc.yaw);
+}
+
+static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+{
+	npc.die_timer += dt;
+	if (npc.die_timer < NPC_DIE_DURATION) return;
+
+	// 1.2초 경과 — NPC 제거
+
+	// 1. 모든 ST_INGAME 클라에 SC_REMOVE_NPC 송신
+	//    alive=false 처리 전에 보내야 함 (NEW_CLIENT_JOINED와의 race 고려).
+	SC_REMOVE_NPC_PACKET p;
+	p.size = sizeof(SC_REMOVE_NPC_PACKET);
+	p.type = SC_REMOVE_NPC;
+	p.npc_id = npc.id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&p);
+	}
+
+	// 2. NPC 슬롯 해제
+	npc.alive = false;
+
+	// 다음 틱부터 UpdateNpc 분기에서 !npc.alive로 걸러져 더 이상 호출되지 않음.
+	// npc.state는 그대로 DIE로 유지하지만 의미 없음.
+	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
+}
+
+static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	switch (npc.state) {
+	case NPC_STATE_IDLE: 
+		UpdateNpcIdle(npc, dt, player_snapshot); 
+		break;
+	case NPC_STATE_RUN:  
+		UpdateNpcRun(npc, dt, player_snapshot); 
+		break;
+	case NPC_STATE_DIE:  
+		UpdateNpcDie(npc, dt, player_snapshot); 
 		break;
 	}
 }
 
-static void UpdateNpc(SERVER_NPC& npc, float dt,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
-	// TODO (4단계): Idle/Run/Die 상태 머신, A* 추적
-	// TODO (5단계): NPC vs 맵 충돌 보정
-}
+	for (const auto& npc : g_npcs) {
+		if (!npc.alive) continue;
 
-static void BroadcastNpcPositions()
-{
-	// TODO (2.5단계): for each alive NPC → for each ST_INGAME client → SC_MOVE_NPC 송신
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+
+			clients[i].send_move_npc_packet(
+				npc.id,
+				npc.position.x, npc.position.y, npc.position.z,
+				npc.yaw
+			);
+		}
+	}
 }
 
 static void npc_thread()
@@ -381,7 +725,7 @@ static void npc_thread()
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
 			tick_count = 0;
-			BroadcastNpcPositions();
+			BroadcastNpcPositions(player_snapshot);
 		}
 
 		std::this_thread::sleep_until(next);
@@ -628,28 +972,83 @@ int main()
 	}
 
 	// 테스트용 코드 (주석처리됨)
+	/*
 	{
-		//// 케이스 1: 맵 안전한 곳 (충돌 없을 거라 예상)
-		//XMFLOAT3 testPos = { 0.0f, 0.1f, 0.0f };
-		//auto playerOOBB = MakePlayerOOBB(testPos, 0.0f);
-		//auto results = CheckCollisionWithMap(playerOOBB, g_mapOOBBs);
-		//std::cout << "[Test1] pos=(0,0.1,0) yaw=0: collisions=" << results.size() << std::endl;
+		// 케이스 1: 맵 안전한 곳 (충돌 없을 거라 예상)
+		XMFLOAT3 testPos = { 0.0f, 0.1f, 0.0f };
+		auto playerOOBB = MakePlayerOOBB(testPos, 0.0f);
+		auto results = CheckCollisionWithMap(playerOOBB, g_mapOOBBs);
+		std::cout << "[Test1] pos=(0,0.1,0) yaw=0: collisions=" << results.size() << std::endl;
 
-		//// 케이스 2: 맵 청크 위치 근처 (충돌 있을 거라 예상)
-		//// CSV 두번째 줄 첫 번째 청크 center=(37.82, 7.54, -103.29) extents=(4.08, 8.04, 8.72)
-		//// 이 청크 중심에 플레이어 박으면 무조건 충돌
-		//XMFLOAT3 testPos2 = { 37.82f, 0.1f, -103.29f };
-		//auto playerOOBB2 = MakePlayerOOBB(testPos2, 0.0f);
-		//auto results2 = CheckCollisionWithMap(playerOOBB2, g_mapOOBBs);
-		//std::cout << "[Test2] pos=(37.82,0.1,-103.29) yaw=0: collisions=" << results2.size() << std::endl;
-		//if (!results2.empty()) {
-		//	const auto& r = results2[0];
-		//	std::cout << "  normal=(" << r.normal.x << "," << r.normal.y << "," << r.normal.z
-		//		<< ") mtv=(" << r.mtv.x << "," << r.mtv.y << "," << r.mtv.z << ")" << std::endl;
-		//}
+		// 케이스 2: 맵 청크 위치 근처 (충돌 있을 거라 예상)
+		// CSV 두번째 줄 첫 번째 청크 center=(37.82, 7.54, -103.29) extents=(4.08, 8.04, 8.72)
+		// 이 청크 중심에 플레이어 박으면 무조건 충돌
+		XMFLOAT3 testPos2 = { 37.82f, 0.1f, -103.29f };
+		auto playerOOBB2 = MakePlayerOOBB(testPos2, 0.0f);
+		auto results2 = CheckCollisionWithMap(playerOOBB2, g_mapOOBBs);
+		std::cout << "[Test2] pos=(37.82,0.1,-103.29) yaw=0: collisions=" << results2.size() << std::endl;
+		if (!results2.empty()) {
+			const auto& r = results2[0];
+			std::cout << "  normal=(" << r.normal.x << "," << r.normal.y << "," << r.normal.z
+				<< ") mtv=(" << r.mtv.x << "," << r.mtv.y << "," << r.mtv.z << ")" << std::endl;
+		}
 	}
+	*/
+
+	g_astar.LoadNavMeshFromFile("Model/NavMeshData.bin");
+	std::cout << "NavMesh loaded from Model / NavMeshData.bin\n";
 
 	init_npcs();
+
+	{
+		// NPC 1개 — id 0, (7, 0, -14) 위치
+		SERVER_NPC& npc = g_npcs[0];
+		npc.alive = true;
+		npc.kind = 0;
+		npc.state = NPC_STATE_IDLE;
+		npc.position = { 7.0f, 0.0f, -14.0f };
+		npc.yaw = 0.0f;
+		npc.hp = 100;
+		npc.max_hp = 100;
+		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
+	}
+
+	/*
+	{
+		// 케이스 A: 가까운 두 점 — waypoint 1~2개 기대
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 5.0f, 0.0f, -5.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test A] (0,0,0)->(5,0,-5): " << path.size() << " waypoints\n";
+			for (size_t i = 0; i < path.size(); ++i) {
+				std::cout << "    [" << i << "] (" << path[i].x << ", "
+					<< path[i].y << ", " << path[i].z << ")\n";
+			}
+		}
+
+		// 케이스 B: 떨어진 두 점 — 여러 waypoint 기대
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 7.0f, 0.0f, -14.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test B] (0,0,0)->(7,0,-14): " << path.size() << " waypoints\n";
+			for (size_t i = 0; i < path.size(); ++i) {
+				std::cout << "    [" << i << "] (" << path[i].x << ", "
+					<< path[i].y << ", " << path[i].z << ")\n";
+			}
+		}
+
+		// 케이스 C: 의도적 실패 — 맵 밖. "[AI] FindPath failed" 로그가 떠야 정상.
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 10000.0f, 0.0f, 10000.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test C] (0,0,0)->(10000,0,10000): " << path.size()
+				<< " waypoints (expected 0 + failure log)\n";
+		}
+	}
+	*/
 
 	HANDLE h_iocp;
 

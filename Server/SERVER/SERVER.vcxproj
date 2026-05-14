@@ -132,13 +132,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="protocol.h" />
+    <ClInclude Include="Server_AI.h" />
     <ClInclude Include="Server_Collision.h" />
     <ClInclude Include="Server_Npc.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Server.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="Server.cpp" />
+    <ClCompile Include="Server_AI.cpp" />
     <ClCompile Include="Server_Collision.cpp" />
     <ClCompile Include="Server_Npc.cpp" />
   </ItemGroup>

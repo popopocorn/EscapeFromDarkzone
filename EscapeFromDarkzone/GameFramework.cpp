@@ -900,6 +900,58 @@ void CGameFramework::ProcessNetworkPackets()
 
 			break;
 		}
+		case SC_ADD_NPC: 
+		{
+
+			SC_ADD_NPC_PACKET* p = reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data());
+
+			// 중복 방지
+			if (FindNpc(p->npc_id)) {
+				break;
+			}
+
+			// CEnemyObject 동적 스폰 (생성자 시그니처는 BuildObjects의 고정 스폰과 동일)
+			CEnemyObject* pNpc = new CEnemyObject(
+				m_pd3dDevice,
+				m_pd3dCommandList,
+				m_pScene->GetGraphicsRootSignature()
+			);
+			pNpc->SetPosition(p->x, p->y, p->z);
+			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
+			// TODO (4단계): yaw 적용, npc_kind 분기, hp/max_hp 적용
+
+			if (!AddNpc(p->npc_id, pNpc)) {
+				OutputDebugString(L"[Network] NPC slot full.\n");
+				pNpc->Kill();
+				break;
+			}
+
+			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
+
+			break;
+		}
+		case SC_REMOVE_NPC:
+		{
+			SC_REMOVE_NPC_PACKET* p = reinterpret_cast<SC_REMOVE_NPC_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				pNpc->Kill();
+				RemoveNpc(p->npc_id);
+			}
+
+			break;
+		}
+		case SC_MOVE_NPC:
+		{
+			SC_MOVE_NPC_PACKET* p = reinterpret_cast<SC_MOVE_NPC_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
+				// TODO (4단계): yaw lerp 처리
+			}
+
+			break;
+		}
 		default:
 			break;
 		}
@@ -926,6 +978,32 @@ void CGameFramework::RemoveOtherPlayer(short id)
 	for (auto& s : m_otherPlayers) {
 		if (s.id == id) {
 			s.id = -1; s.pPlayer = nullptr;
+			return;
+		}
+	}
+}
+
+CEnemyObject* CGameFramework::FindNpc(short id)
+{
+	for (auto& s : m_npcs)
+		if (s.id == id) return s.pNpc;
+	return nullptr;
+}
+
+bool CGameFramework::AddNpc(short id, CEnemyObject* p)
+{
+	for (auto& s : m_npcs) {
+		if (s.id == -1) { s.id = id; s.pNpc = p; return true; }
+	}
+	return false;
+}
+
+void CGameFramework::RemoveNpc(short id)
+{
+	for (auto& s : m_npcs) {
+		if (s.id == id) {
+			s.id = -1;
+			s.pNpc = nullptr;
 			return;
 		}
 	}

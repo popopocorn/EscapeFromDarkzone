@@ -4,8 +4,7 @@
 #include <limits>
 #include <cmath>
 
-ColResult CalcCollision(
-	const BoundingOrientedBox& main, const BoundingOrientedBox& target)
+ColResult CalcCollision(const BoundingOrientedBox& main, const BoundingOrientedBox& target)
 {
 	XMVECTOR centerA = XMLoadFloat3(&main.Center);
 	XMVECTOR centerB = XMLoadFloat3(&target.Center);
@@ -112,6 +111,26 @@ BoundingOrientedBox MakePlayerOOBB(const XMFLOAT3& position, float yawRad)
 
 	// Extents는 로컬값 그대로
 	obb.Extents = PLAYER_OOBB_EXTENTS;
+
+	// yaw를 Y축 회전 쿼터니언으로
+	XMVECTOR q = XMQuaternionRotationAxis(
+		XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), yawRad);
+	XMStoreFloat4(&obb.Orientation, q);
+
+	return obb;
+}
+
+BoundingOrientedBox MakeNpcOOBB(const XMFLOAT3& position, float yawRad)
+{
+	BoundingOrientedBox obb;
+
+	// 로컬 center를 위치만큼 평행이동
+	obb.Center.x = position.x + NPC_OOBB_CENTER.x;
+	obb.Center.y = position.y + NPC_OOBB_CENTER.y;
+	obb.Center.z = position.z + NPC_OOBB_CENTER.z;
+
+	// Extents는 로컬값 그대로
+	obb.Extents = NPC_OOBB_EXTENTS;
 
 	// yaw를 Y축 회전 쿼터니언으로
 	XMVECTOR q = XMQuaternionRotationAxis(

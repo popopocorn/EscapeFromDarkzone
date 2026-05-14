@@ -13,6 +13,17 @@
 #include "OtherPlayer.h"	// 03.30 추가
 #include <array>			// 05.08 추가
 
+struct OtherPlayerSlot {
+	short id = -1;
+	OtherPlayer* pPlayer = nullptr;
+};
+
+struct NpcSlot {
+	short id;
+	CEnemyObject* pNpc;
+	NpcSlot() : id(-1), pNpc(nullptr) {}
+};
+
 class CGameFramework
 {
 public:
@@ -49,6 +60,10 @@ public:
 	LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
 	void ProcessNetworkPackets();	// 03.27 추가
+
+	CEnemyObject* FindNpc(short id);		// 05.10 추가
+	bool AddNpc(short id, CEnemyObject* p);	// 05.10 추가
+	void RemoveNpc(short id);				// 05.10 추가
 
 private:
 	HINSTANCE					m_hInstance;
@@ -103,16 +118,15 @@ private:
 
 
 	// 05.05 추가: unordered_map에서 array로, 최대 32
-	struct OtherPlayerSlot {
-		short id = -1;
-		OtherPlayer* pPlayer = nullptr;
-	};
-
 	short m_myId = -1;
 	std::array<OtherPlayerSlot, 32> m_otherPlayers;	
 
 	OtherPlayer* FindOtherPlayer(short id);
 	bool AddOtherPlayer(short id, OtherPlayer* p);
 	void RemoveOtherPlayer(short id);
+	
+	// 05.10 추가: 서버로부터 받아올 NPC 정보 관리
+	
+	std::array<NpcSlot, 32> m_npcs;	// MAX_NPC(128) 로 했을 때 간헐적으로 메모리오염 발생 -> 64로 줄였음.
 };
 

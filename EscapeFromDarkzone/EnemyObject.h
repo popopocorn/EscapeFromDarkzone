@@ -52,7 +52,8 @@ public:
 	vector<XMFLOAT3>			ways;
 	int							wayIdx = 0;
 
-
+	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
+	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
 	float m_fMoveSpeed = 7.0f;
 	float m_fDetectionRange = 10.0f;
@@ -66,6 +67,8 @@ public:
 	bool m_bLootSpawnRequested = false;
 	float m_fDieElapsed = 0.0f;
 	float m_fDieDuration = 1.2f;
+
+	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
 };
 
 class EnemyIdle : public State<CEnemyObject>

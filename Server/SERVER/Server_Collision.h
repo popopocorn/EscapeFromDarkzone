@@ -9,6 +9,9 @@ using namespace DirectX;
 constexpr XMFLOAT3 PLAYER_OOBB_CENTER = { 0.0f, 0.90f, 0.0f }; // 플레이어 OOBB의 중심 (로컬 좌표계)
 constexpr XMFLOAT3 PLAYER_OOBB_EXTENTS = { 0.89f, 0.91f, 0.20f }; // 플레이어 OOBB의 Extents (로컬 좌표계)
 
+constexpr XMFLOAT3 NPC_OOBB_CENTER = { 0.0f, 0.90f, 0.0f };
+constexpr XMFLOAT3 NPC_OOBB_EXTENTS = { 0.89f, 0.91f, 0.20f };
+
 struct ColResult {
 	bool isCollide;	//충돌 여부
 	XMFLOAT3 normal; //충돌 평면 노멀벡터
@@ -23,3 +26,4 @@ ColResult CalcCollision(
 	const BoundingOrientedBox& main, const BoundingOrientedBox& target);
 
 BoundingOrientedBox MakePlayerOOBB(const XMFLOAT3& position, float yawRad);
+BoundingOrientedBox MakeNpcOOBB(const XMFLOAT3& position, float yawRad);
