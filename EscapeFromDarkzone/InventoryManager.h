@@ -80,6 +80,8 @@ public:
 	bool IsCraftInventoryOpen() const;
 	bool IsTabHold() const { return m_bTabInventoryHold; }
 
+	bool ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, int slotIndex);
+
 	Inventory* GetLootInventory() const { return m_pLootInventory.get(); }
 	Inventory* GetCraftInventory() const { return m_pCraftInventory.get(); }
 

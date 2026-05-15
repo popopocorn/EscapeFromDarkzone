@@ -115,6 +115,15 @@ Inventory* InventoryManager::GetPlayerInventoryPtr() const
 	return (m_pPlayer) ? m_pPlayer->GetInventory() : nullptr;
 }
 
+//패킷으로 플레이어 인벤토리 슬롯 업데이트
+bool InventoryManager::ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, int slotIndex)
+{
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (!pPlayerInventory) return false;
+
+	return pPlayerInventory->ApplyServerSlotUpdate(slotIndex, itemId, count);
+}
+
 void InventoryManager::SubmitToShader(UIObjectShader* shader)
 {
 	if (!shader) return;

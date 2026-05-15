@@ -149,6 +149,8 @@ public:
 	bool AddItem(ItemID item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 
+	bool ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count);
+
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
 	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동
 	void SetId(int x) { ID = x; }

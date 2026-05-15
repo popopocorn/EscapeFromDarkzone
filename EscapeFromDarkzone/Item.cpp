@@ -304,7 +304,6 @@ void Inventory::SetPosition(float x, float y)
 
 int Inventory::GetItemCnt(ItemID id) const
 {
-	
 	for (const auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == id)
@@ -312,7 +311,8 @@ int Inventory::GetItemCnt(ItemID id) const
 			return slot.count;
 		}
 	}
-	
+
+	return 0;
 }
 
 void Inventory::ConsumeItem(ItemID id, int cnt)
@@ -333,29 +333,27 @@ void Inventory::ConsumeItem(ItemID id, int cnt)
 
 bool Inventory::AddItem(ItemID item, int count)
 {
-	if (item != ItemID::NONE || count <= 0) return false;
+	if (item == ItemID::NONE || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == item)
 		{
 			slot.count += count;
-
 			return true;
 		}
-		
 	}
+
 	for (auto& slot : slots)
 	{
 		if (slot.item == ItemID::NONE)
 		{
 			slot.item = item;
 			slot.count = count;
-
 			return true;
 		}
-		
 	}
+
 	return false;
 }
 
@@ -372,6 +370,32 @@ ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
 	return &slots[idx];
+}
+
+//슬롯 규칙
+bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
+{
+	ItemSlot* pSlot = GetSlot(slotIndex);
+	if (!pSlot) return false;
+
+	// 서버가 이름 NONE이나 수량 0이면 슬롯 비우기
+	if (itemId == ItemID::NONE || count <= 0)
+	{
+		pSlot->item = ItemID::NONE;
+		pSlot->count = 0;
+		return true;
+	}
+
+	// 슬롯에 이미 뭐가 있으면 수정하지 않음
+	if (pSlot->item != ItemID::NONE || pSlot->count > 0)
+	{
+		return false;
+	}
+
+	// 빈 슬롯일 때만 서버 값으로 채움
+	pSlot->item = itemId;
+	pSlot->count = count;
+	return true;
 }
 
 void CraftBox::Init()
