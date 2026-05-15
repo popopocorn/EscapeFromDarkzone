@@ -13,7 +13,6 @@ class CShader;
 class InventoryManager
 {
 private:
-	std::unique_ptr<Inventory> m_pPlayerInventory;
 	std::unique_ptr<Inventory> m_pLootInventory;
 	std::unique_ptr<Inventory> m_pCraftInventory;
 
@@ -24,6 +23,8 @@ private:
 	CPlayer* m_pPlayer = nullptr;
 	CStandardObjectsShader* m_pLootShader = nullptr;
 	CBoundingBoxShader* m_pDebugShader = nullptr;
+
+	Inventory* GetPlayerInventoryPtr() const;
 
 public:
 	InventoryManager() = default;
@@ -79,7 +80,6 @@ public:
 	bool IsCraftInventoryOpen() const;
 	bool IsTabHold() const { return m_bTabInventoryHold; }
 
-	Inventory* GetPlayerInventory() const { return m_pPlayerInventory.get(); }
 	Inventory* GetLootInventory() const { return m_pLootInventory.get(); }
 	Inventory* GetCraftInventory() const { return m_pCraftInventory.get(); }
 

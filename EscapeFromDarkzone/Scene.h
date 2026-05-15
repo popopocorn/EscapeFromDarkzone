@@ -50,6 +50,7 @@ enum SHADERIDX
 	ENEMY = 2,
 	LOOT = 3
 };
+
 struct ColResult;
 class CollisionManager;
 class Inventory;
@@ -57,7 +58,14 @@ class AstarNavigation;
 class EffectManager;
 class InventoryManager;
 
-
+enum class ModelName
+{
+	PLAYER = 0,
+	ENEMY,
+	RIFLE,
+	PISTOL,
+	SHOTGUN
+};
 
 
 class MainScene
@@ -175,6 +183,8 @@ private:
 	float m_fLootInteractDistance = 3.0f;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
+
+	std::unordered_map<ModelName, CGameObject*> m_ModelPrototypes;
 public:
 	void SetPlayer(CPlayer* p);
 
@@ -189,6 +199,22 @@ public:
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+
+	bool LoadAndRegisterModelPrototype(
+		ModelName key,
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		const char* modelPath,
+		CShader* pShader
+	);
+	void RegisterModelPrototype(ModelName key, CGameObject* pPrototype);
+	CGameObject* GetModelPrototype(ModelName key) const;
+	void ReleaseModelPrototypes();
+	void BuildModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		CShader* pPlayerShader
+	);
 
 	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
 	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }

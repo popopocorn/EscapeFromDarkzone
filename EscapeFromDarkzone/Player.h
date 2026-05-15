@@ -39,6 +39,7 @@ enum class WEAPON_POSE
 class PlayerState;
 class CPlayerAnimationController;
 class WeaponItem;
+class Inventory;
 
 class CPlayer : public CGameObject
 {
@@ -133,6 +134,7 @@ protected:
 	bool  m_bFireHeld = false;
 	bool  m_bShotAnimRequest = false;
 
+	std::unique_ptr<Inventory> m_pInventory;
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -262,6 +264,15 @@ public:
 
 	bool IsShootState() const;
 
+	void InitializeInventory(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* pUIShader
+	);
+
+	Inventory* GetInventory() const { return m_pInventory.get(); }
+
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 };
@@ -311,7 +322,13 @@ enum PLAYER_ANIM {
 class CTerrainPlayer : public CPlayer
 {
 public:
-	CTerrainPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* shader);
+	CTerrainPlayer(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* shader,
+		CGameObject* pDefaultWeaponPrototype
+	);
 	virtual ~CTerrainPlayer();
 
 public:

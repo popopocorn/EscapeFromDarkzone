@@ -4,55 +4,7 @@
 #include "Shader.h"
 #include "Object.h"
 
-//모델 원본 풀
-std::unordered_map<std::string, CGameObject*> ItemModelLibrary::s_ModelPool;
 
-CGameObject* ItemModelLibrary::GetOrLoadPrototype(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	const char* modelPath,
-	CShader* pShader)
-{
-	if (!modelPath) return nullptr;
-
-	auto it = s_ModelPool.find(modelPath);
-	if (it != s_ModelPool.end())
-	{
-		return it->second;
-	}
-
-	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		nullptr,
-		modelPath,
-		pShader,
-		nullptr
-	);
-
-	if (!pPrototype)
-		return nullptr;
-
-	pPrototype->AddRef();
-	s_ModelPool.emplace(modelPath, pPrototype);
-
-	return pPrototype;
-}
-
-void ItemModelLibrary::ReleaseAll()
-{
-	for (auto& pair : s_ModelPool)
-	{
-
-		if (pair.second)
-		{
-			pair.second->Release();
-		}
-	}
-	s_ModelPool.clear();
-}
 
 CGameObject* Item::CreateModelInstance() const
 {
@@ -173,27 +125,16 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 	return spec;
 }
 
-std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pShader)
+std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pPrototype)
 {
+	if (!pPrototype) return nullptr;
+
 	auto pItem = std::make_shared<WeaponItem>(
 		ItemGrade::GRADE_1,
 		ItemType::ASSAULT_RIFLE
 	);
 
-	pItem->SetModelPrototype(
-		ItemModelLibrary::GetOrLoadPrototype(
-			pd3dDevice,
-			pd3dCommandList,
-			pd3dGraphicsRootSignature,
-			"Model/Classic_M4_1.bin",
-			pShader
-		)
-	);
-
+	pItem->SetModelPrototype(pPrototype);
 	return pItem;
 }
 

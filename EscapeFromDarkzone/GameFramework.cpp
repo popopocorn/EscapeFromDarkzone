@@ -515,8 +515,31 @@ void CGameFramework::BuildObjects()
 	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
 	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
 
-	CTerrainPlayer* pPlayer = new CTerrainPlayer(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), pshader);
+	if (m_pScene)
+	{
+		m_pScene->BuildModelPrototypes(
+			m_pd3dDevice,
+			m_pd3dCommandList,
+			pshader
+		);
+	}
+
+	CTerrainPlayer* pPlayer = new CTerrainPlayer(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		m_pScene->GetGraphicsRootSignature(),
+		pshader,
+		(m_pScene) ? m_pScene->GetModelPrototype(ModelName::RIFLE) : nullptr
+	);
+
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
+
+	pPlayer->InitializeInventory(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		m_pScene->GetGraphicsRootSignature(),
+		nullptr
+	);
 
 	m_pPlayer = pPlayer;
 	m_pScene->SetPlayer(m_pPlayer);
