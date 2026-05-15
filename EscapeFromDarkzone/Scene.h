@@ -165,7 +165,6 @@ public:
 	float m_fSparkSpawnInterval = 0.03f;
 
 	CGameObject* m_pWeaponMuzzle = nullptr;
-	CGameObject* m_pWeaponObject = nullptr;
 
 	unique_ptr<UIObjectShader> UIShader;
 
@@ -174,11 +173,6 @@ private:
 	unique_ptr<CollisionManager> colManager;
 
 	InventoryManager* m_pInventoryManager = nullptr;
-	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
-
-	Inventory* inventory = nullptr;
-	Inventory* corpseInventory = nullptr;
-	Inventory* craftInventory = nullptr;
 
 	float m_fLootInteractDistance = 3.0f;
 
@@ -199,6 +193,7 @@ public:
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
 	bool LoadAndRegisterModelPrototype(
 		ModelName key,
@@ -215,8 +210,4 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		CShader* pPlayerShader
 	);
-
-	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
-	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
-
 };

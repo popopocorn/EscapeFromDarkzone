@@ -179,14 +179,9 @@ MainScene::MainScene()
 
 	m_pLaserMuzzle = nullptr;
 	m_pWeaponMuzzle = nullptr;
-	m_pWeaponObject = nullptr;
 
 	m_pEffectManager = nullptr;
 	m_pInventoryManager = nullptr;
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	m_bLaserActive = false;
 	m_bSparkFireActive = false;
@@ -330,11 +325,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		m_pd3dGraphicsRootSignature,
 		UIShader.get()
 	);
-
-	// Scene에는 비소유 포인터만 연결
-	inventory = nullptr;
-	corpseInventory = m_pInventoryManager->GetLootInventory();
-	craftInventory = m_pInventoryManager->GetCraftInventory();
 
 	// 맵 쉐이더
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
@@ -514,10 +504,6 @@ void MainScene::ReleaseObjects()
 		delete m_pInventoryManager;
 		m_pInventoryManager = nullptr;
 	}
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	if (m_pEffectManager)
 	{
@@ -929,15 +915,6 @@ void MainScene::SetPlayer(CPlayer* p)
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->SetPlayer(m_pPlayer);
-	}
-
-	if (m_pPlayer)
-	{
-		inventory = m_pPlayer->GetInventory();
-	}
-	else
-	{
-		inventory = nullptr;
 	}
 }
 
