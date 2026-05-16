@@ -29,6 +29,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorNextHandle;
 D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorNextHandle;
 D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorNextHandle;
 
+
 static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
 {
 	if (!pWeapon) return nullptr;
@@ -201,6 +202,93 @@ MainScene::~MainScene()
 {
 }
 
+
+void MainScene::BuildModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	CShader* pPlayerShader)
+{
+	if (!pPlayerShader) return;
+
+	LoadAndRegisterModelPrototype(
+		ModelName::RIFLE,
+		pd3dDevice,
+		pd3dCommandList,
+		"Model/Classic_M4_1.bin",
+		pPlayerShader
+	);
+}
+bool MainScene::LoadAndRegisterModelPrototype(
+	ModelName key,
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const char* modelPath,
+	CShader* pShader)
+{
+	if (!pd3dDevice) return false;
+	if (!pd3dCommandList) return false;
+	if (!modelPath) return false;
+	if (!pShader) return false;
+	if (!m_pd3dGraphicsRootSignature) return false;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		return true;
+	}
+
+	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		nullptr,
+		modelPath,
+		pShader,
+		nullptr
+	);
+
+	if (!pPrototype)
+		return false;
+
+	RegisterModelPrototype(key, pPrototype);
+	return true;
+}
+void MainScene::RegisterModelPrototype(ModelName key, CGameObject* pPrototype)
+{
+	if (!pPrototype) return;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		if (it->second)
+			it->second->Release();
+
+		it->second = pPrototype;
+		return;
+	}
+
+	m_ModelPrototypes.emplace(key, pPrototype);
+}
+CGameObject* MainScene::GetModelPrototype(ModelName key) const
+{
+	auto it = m_ModelPrototypes.find(key);
+	if (it == m_ModelPrototypes.end())
+		return nullptr;
+
+	return it->second;
+}
+void MainScene::ReleaseModelPrototypes()
+{
+	for (auto& pair : m_ModelPrototypes)
+	{
+		if (pair.second)
+		{
+			pair.second->Release();
+		}
+	}
+	m_ModelPrototypes.clear();
+}
+
 void MainScene::BuildDefaultLightsAndMaterials()
 {
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
@@ -244,7 +332,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	);
 
 	// Scene에는 비소유 포인터만 연결
-	inventory = m_pInventoryManager->GetPlayerInventory();
+	inventory = nullptr;
 	corpseInventory = m_pInventoryManager->GetLootInventory();
 	craftInventory = m_pInventoryManager->GetCraftInventory();
 
@@ -447,6 +535,7 @@ void MainScene::ReleaseObjects()
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
 	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
 
+	ReleaseModelPrototypes();
 	ReleaseShaderVariables();
 
 	m_pLights.clear();
@@ -840,6 +929,15 @@ void MainScene::SetPlayer(CPlayer* p)
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->SetPlayer(m_pPlayer);
+	}
+
+	if (m_pPlayer)
+	{
+		inventory = m_pPlayer->GetInventory();
+	}
+	else
+	{
+		inventory = nullptr;
 	}
 }
 

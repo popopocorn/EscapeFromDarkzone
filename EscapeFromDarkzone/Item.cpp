@@ -5,55 +5,7 @@
 #include "Object.h"
 #include "Network.h"	// 05.08 추가: 아이템 클릭 패킷 전송
 
-//모델 원본 풀
-std::unordered_map<std::string, CGameObject*> ItemModelLibrary::s_ModelPool;
 
-CGameObject* ItemModelLibrary::GetOrLoadPrototype(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	const char* modelPath,
-	CShader* pShader)
-{
-	if (!modelPath) return nullptr;
-
-	auto it = s_ModelPool.find(modelPath);
-	if (it != s_ModelPool.end())
-	{
-		return it->second;
-	}
-
-	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		nullptr,
-		modelPath,
-		pShader,
-		nullptr
-	);
-
-	if (!pPrototype)
-		return nullptr;
-
-	pPrototype->AddRef();
-	s_ModelPool.emplace(modelPath, pPrototype);
-
-	return pPrototype;
-}
-
-void ItemModelLibrary::ReleaseAll()
-{
-	for (auto& pair : s_ModelPool)
-	{
-
-		if (pair.second)
-		{
-			pair.second->Release();
-		}
-	}
-	s_ModelPool.clear();
-}
 
 CGameObject* Item::CreateModelInstance() const
 {
@@ -174,27 +126,16 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 	return spec;
 }
 
-std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pShader)
+std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pPrototype)
 {
+	if (!pPrototype) return nullptr;
+
 	auto pItem = std::make_shared<WeaponItem>(
 		ItemGrade::GRADE_1,
 		ItemType::ASSAULT_RIFLE
 	);
 
-	pItem->SetModelPrototype(
-		ItemModelLibrary::GetOrLoadPrototype(
-			pd3dDevice,
-			pd3dCommandList,
-			pd3dGraphicsRootSignature,
-			"Model/Classic_M4_1.bin",
-			pShader
-		)
-	);
-
+	pItem->SetModelPrototype(pPrototype);
 	return pItem;
 }
 
@@ -370,7 +311,6 @@ void Inventory::SetPosition(float x, float y)
 
 int Inventory::GetItemCnt(ItemID id) const
 {
-	
 	for (const auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == id)
@@ -378,7 +318,8 @@ int Inventory::GetItemCnt(ItemID id) const
 			return slot.count;
 		}
 	}
-	
+
+	return 0;
 }
 
 void Inventory::ConsumeItem(ItemID id, int cnt)
@@ -399,29 +340,27 @@ void Inventory::ConsumeItem(ItemID id, int cnt)
 
 bool Inventory::AddItem(ItemID item, int count)
 {
-	if (item != ItemID::NONE || count <= 0) return false;
+	if (item == ItemID::NONE || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == item)
 		{
 			slot.count += count;
-
 			return true;
 		}
-		
 	}
+
 	for (auto& slot : slots)
 	{
 		if (slot.item == ItemID::NONE)
 		{
 			slot.item = item;
 			slot.count = count;
-
 			return true;
 		}
-		
 	}
+
 	return false;
 }
 
@@ -438,6 +377,32 @@ ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
 	return &slots[idx];
+}
+
+//슬롯 규칙
+bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
+{
+	ItemSlot* pSlot = GetSlot(slotIndex);
+	if (!pSlot) return false;
+
+	// 서버가 이름 NONE이나 수량 0이면 슬롯 비우기
+	if (itemId == ItemID::NONE || count <= 0)
+	{
+		pSlot->item = ItemID::NONE;
+		pSlot->count = 0;
+		return true;
+	}
+
+	// 슬롯에 이미 뭐가 있으면 수정하지 않음
+	if (pSlot->item != ItemID::NONE || pSlot->count > 0)
+	{
+		return false;
+	}
+
+	// 빈 슬롯일 때만 서버 값으로 채움
+	pSlot->item = itemId;
+	pSlot->count = count;
+	return true;
 }
 
 void CraftBox::Init()

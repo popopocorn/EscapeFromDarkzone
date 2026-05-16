@@ -14,13 +14,6 @@ void InventoryManager::Initialize(
 {
 	Release();
 
-	m_pPlayerInventory = std::make_unique<Inventory>(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		pUIShader
-	);
-
 	m_pLootInventory = std::make_unique<Inventory>(
 		pd3dDevice,
 		pd3dCommandList,
@@ -35,11 +28,9 @@ void InventoryManager::Initialize(
 		pUIShader
 	);
 
-	m_pPlayerInventory->SetPosition(-0.25f, 0.0f);
 	m_pLootInventory->SetPosition(0.25f, 0.0f);
 	m_pCraftInventory->SetPosition(0.0f, 0.0f);
 
-	m_pPlayerInventory->isOpen = false;
 	m_pLootInventory->isOpen = false;
 	m_pCraftInventory->isOpen = false;
 
@@ -62,7 +53,6 @@ void InventoryManager::Release()
 
 	m_pCraftInventory.reset();
 	m_pLootInventory.reset();
-	m_pPlayerInventory.reset();
 }
 
 void InventoryManager::BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader)
@@ -120,12 +110,27 @@ void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
 	}
 }
 
+Inventory* InventoryManager::GetPlayerInventoryPtr() const
+{
+	return (m_pPlayer) ? m_pPlayer->GetInventory() : nullptr;
+}
+
+//패킷으로 플레이어 인벤토리 슬롯 업데이트
+bool InventoryManager::ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, int slotIndex)
+{
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (!pPlayerInventory) return false;
+
+	return pPlayerInventory->ApplyServerSlotUpdate(slotIndex, itemId, count);
+}
+
 void InventoryManager::SubmitToShader(UIObjectShader* shader)
 {
 	if (!shader) return;
 
-	if (m_pPlayerInventory)
-		m_pPlayerInventory->SubmitToShader(shader);
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (pPlayerInventory)
+		pPlayerInventory->SubmitToShader(shader);
 
 	if (m_pLootInventory)
 		m_pLootInventory->SubmitToShader(shader);
@@ -148,9 +153,10 @@ bool InventoryManager::ProcessClick(POINT mouse)
 			return true;
 	}
 
-	if (m_pPlayerInventory && m_pPlayerInventory->isOpen)
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (pPlayerInventory && pPlayerInventory->isOpen)
 	{
-		if (m_pPlayerInventory->ProcessClick(mouse))
+		if (pPlayerInventory->ProcessClick(mouse))
 			return true;
 	}
 
@@ -159,20 +165,24 @@ bool InventoryManager::ProcessClick(POINT mouse)
 
 void InventoryManager::OpenPlayerInventory()
 {
-	if (m_pPlayerInventory)
-		m_pPlayerInventory->isOpen = true;
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (pPlayerInventory)
+		pPlayerInventory->isOpen = true;
 }
 
 void InventoryManager::ClosePlayerInventory()
 {
-	if (m_pPlayerInventory)
-		m_pPlayerInventory->isOpen = false;
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (pPlayerInventory)
+		pPlayerInventory->isOpen = false;
 }
 
 void InventoryManager::TogglePlayerInventory()
 {
-	if (!m_pPlayerInventory) return;
-	m_pPlayerInventory->isOpen = !m_pPlayerInventory->isOpen;
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (!pPlayerInventory) return;
+
+	pPlayerInventory->isOpen = !pPlayerInventory->isOpen;
 }
 
 void InventoryManager::OpenLootContainer(CLootContainerObject* pLoot)
@@ -343,7 +353,8 @@ bool InventoryManager::IsAnyInventoryOpen() const
 
 bool InventoryManager::IsPlayerInventoryOpen() const
 {
-	return (m_pPlayerInventory && m_pPlayerInventory->isOpen);
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	return (pPlayerInventory && pPlayerInventory->isOpen);
 }
 
 bool InventoryManager::IsLootInventoryOpen() const
