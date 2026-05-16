@@ -436,7 +436,16 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
 		pd3dDevice,
 		pd3dCommandList,
-		m_pd3dGraphicsRootSignature
+		m_pd3dGraphicsRootSignature,
+		false
+	);
+
+	// 시체박스 전용 솔리드 큐브
+	m_pLootBoxShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		true
 	);
 
 	// 적 쉐이더
@@ -472,7 +481,12 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	if (m_pInventoryManager)
 	{
-		m_pInventoryManager->BindLootWorld(nullptr, pLootShaderRaw, m_pDebugShader.get());
+		m_pInventoryManager->BindLootWorld(
+			nullptr,
+			pLootShaderRaw,
+			m_pDebugShader.get(),
+			m_pLootBoxShader.get()
+		);
 	}
 
 	// EffectManager 생성
@@ -1487,6 +1501,11 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
+
+	if (m_pLootBoxShader)
+	{
+		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

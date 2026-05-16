@@ -49,7 +49,12 @@ public:
 
 	bool ProcessClick(POINT mouse);
 
-	void BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader);
+	void BindLootWorld(
+		CPlayer* pPlayer,
+		CStandardObjectsShader* pLootShader,
+		CBoundingBoxShader* pDebugShader,
+		CBoundingBoxShader* pLootBoxShader
+	);
 	void SetPlayer(CPlayer* pPlayer) { m_pPlayer = pPlayer; }
 
 	void OpenPlayerInventory();
@@ -86,4 +91,6 @@ public:
 	Inventory* GetCraftInventory() const { return m_pCraftInventory.get(); }
 
 	CLootContainerObject* GetOpenedLoot() const { return m_pOpenedLoot; }
+
+	CBoundingBoxShader* m_pLootBoxShader = nullptr;
 };
