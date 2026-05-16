@@ -1,8 +1,11 @@
 #pragma once
 
+#include "ItemDef.h"
+
 constexpr int PORT_NUM = 4000;
 constexpr int BUF_SIZE = 200;
 constexpr int NAME_SIZE = 20;
+constexpr int INVENTORY_SIZE = 10;
 
 constexpr int MAX_USER = 10000;
 constexpr int MAX_NPC = 128;
@@ -19,17 +22,22 @@ constexpr char SC_ADD_PLAYER = 3;
 constexpr char SC_REMOVE_PLAYER = 4;
 constexpr char SC_MOVE_PLAYER = 5;
 
-constexpr char CS_INVENTORY_CLICK = 6;
-
 // NPC 패킷 S2C
-constexpr char SC_ADD_NPC = 7;
-constexpr char SC_REMOVE_NPC = 8;
-constexpr char SC_MOVE_NPC = 9;
-constexpr char SC_NPC_STATE_CHANGE = 10;
-constexpr char SC_NPC_HP_UPDATE = 11;
+constexpr char SC_ADD_NPC = 6;
+constexpr char SC_REMOVE_NPC = 7;
+constexpr char SC_MOVE_NPC = 8;
+constexpr char SC_NPC_STATE_CHANGE = 9;
+constexpr char SC_NPC_HP_UPDATE = 10;
 
 // NPC 패킷 C2S
-constexpr char CS_HIT_NPC = 12;
+constexpr char CS_HIT_NPC = 11;
+
+// 인벤토리 패킷 C2S
+constexpr char CS_INVENTORY_CLICK = 12;
+
+// 인벤토리 패킷 S2C
+constexpr char SC_INVENTORY_UPDATE = 13;
+constexpr char SC_ADD_LOOT_BOX = 14;
 
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
@@ -141,6 +149,23 @@ struct CS_HIT_NPC_PACKET {
 	float         ray_dx, ray_dy, ray_dz;
 	char          weapon_id;				// 나중에
 	unsigned int  fire_time;				// 나중에
+};
+
+struct SC_INVENTORY_UPDATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         slotidx;
+	ItemID        item_id;   // sizeof = 2 (enum class ItemID : short)
+	int           count;
+};
+
+struct SC_ADD_LOOT_BOX_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;             // = box_id
+	float         x, y, z;            // 사망 위치
+	ItemID        items[INVENTORY_SIZE];
+	int           counts[INVENTORY_SIZE];
 };
 
 #pragma pack (pop)

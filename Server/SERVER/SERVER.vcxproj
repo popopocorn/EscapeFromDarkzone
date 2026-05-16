@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ItemDef.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="Server_AI.h" />
     <ClInclude Include="Server_Collision.h" />

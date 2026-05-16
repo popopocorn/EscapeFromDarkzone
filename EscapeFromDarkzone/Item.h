@@ -3,6 +3,8 @@
 #include "UI.h"
 #include<algorithm>
 
+#include "ItemDef.h"
+
 //아이템 선언
 enum class ItemType {
 	PISTOL,
@@ -40,7 +42,7 @@ struct WeaponSpec
 };
 
 //재료를 위한 구조
-enum class ItemID {
+/*enum class ItemID {
 	NONE = 0,
 	MAT_1,
 	MAT_2,
@@ -54,7 +56,7 @@ enum class ItemID {
 	WEAPON_UPGRADE_3,
 	WEAPON_UPGRADE_4,
 	ARMOR_PLATE,
-};
+};*/
 
 struct RecipeElement {
 	ItemID itemID;
@@ -98,10 +100,10 @@ protected:
 
 //아이템 데이터와 출력 구조체로 나눠서 관리
 //아이템 데이터 슬롯
-struct ItemSlot {
+/*struct ItemSlot {
 	ItemID item;
 	int count = 0;
-};
+};*/
 
 //아이템 출력 슬롯
 struct ItemSlotView {

@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <DirectXMath.h>
+#include <chrono>
 #include "protocol.h"
 
 using namespace DirectX;
@@ -27,6 +28,10 @@ struct SERVER_NPC {
     float                  die_timer;          // Die 상태 진입 후 경과 시간
 
     std::vector<XMFLOAT3>  coll_normals;       // 이번 틱 누적 충돌 노멀 (아직안씀?)
+
+    std::array<ItemSlot, INVENTORY_SIZE>    _inventory;     // 루팅박스 내용물
+    bool                                    loot_active;    // 박스 활성 여부
+    std::chrono::steady_clock::time_point   death_time;     // lifetime 기준
 };
 
 extern std::array<SERVER_NPC, MAX_NPC> g_npcs;

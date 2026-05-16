@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include "protocol.h"
+#include "ItemDef.h"
 
 #include "Server_Collision.h"
 #include "Server_Npc.h"
@@ -71,6 +72,9 @@ public:
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
+
+	std::array<ItemSlot, INVENTORY_SIZE> _inventory{};
+
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
@@ -128,7 +132,6 @@ public:
 		p.type = SC_REMOVE_PLAYER;
 		do_send(&p);
 	}
-
 	void send_add_npc_packet(short npc_id, char kind, float x, float y, float z, float yaw, short hp)
 	{
 		SC_ADD_NPC_PACKET p;
@@ -141,7 +144,6 @@ public:
 		p.hp = hp;
 		do_send(&p);
 	}
-
 	void send_move_npc_packet(short npc_id, float x, float y, float z, float yaw)
 	{
 		SC_MOVE_NPC_PACKET p;
@@ -152,13 +154,22 @@ public:
 		p.yaw = yaw;
 		do_send(&p);
 	}
-
 	void send_remove_npc_packet(short npc_id)
 	{
 		SC_REMOVE_NPC_PACKET p;
 		p.size = sizeof(SC_REMOVE_NPC_PACKET);
 		p.type = SC_REMOVE_NPC;
 		p.npc_id = npc_id;
+		do_send(&p);
+	}
+	void send_inventory_update_packet(short slotidx)
+	{
+		SC_INVENTORY_UPDATE_PACKET p;
+		p.size = sizeof(SC_INVENTORY_UPDATE_PACKET);
+		p.type = SC_INVENTORY_UPDATE;
+		p.slotidx = slotidx;
+		p.item_id = _inventory[slotidx].item;
+		p.count = _inventory[slotidx].count;
 		do_send(&p);
 	}
 };
@@ -392,6 +403,10 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 
 	if (new_state == NPC_STATE_DIE) {
 		npc.die_timer = 0.0f;
+
+		// 죽은 NPC 루트박스 활성화
+		npc.loot_active = true;
+		npc.death_time = std::chrono::steady_clock::now();
 	}
 
 	// 디버그용 로그
@@ -408,6 +423,28 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 	for (int i = 0; i < MAX_USER; ++i) {
 		if (!player_snapshot[i].in_game) continue;
 		clients[i].do_send(&p);
+	}
+
+	// 박스 정보 송신
+	if (new_state == NPC_STATE_DIE) {
+		SC_ADD_LOOT_BOX_PACKET box;
+		box.size = sizeof(SC_ADD_LOOT_BOX_PACKET);
+		box.type = SC_ADD_LOOT_BOX;
+		box.npc_id = npc.id;
+		box.x = npc.position.x;
+		box.y = npc.position.y;
+		box.z = npc.position.z;
+
+		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], ["<< box.npc_id << "]\n";
+
+		for (int i = 0; i < INVENTORY_SIZE; ++i) {
+			box.items[i] = npc._inventory[i].item;
+			box.counts[i] = npc._inventory[i].count;
+		}
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+			clients[i].do_send(&box);
+		}
 	}
 }
 
@@ -789,7 +826,7 @@ static void npc_thread()
 			UpdateNpc(npc, DT, player_snapshot);
 		}
 
-		// 5Hz 위치 브로드캐스트 (6틱마다)
+		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
 			tick_count = 0;
@@ -832,6 +869,17 @@ void process_packet(int c_id, char* packet)
 			ev.type = NpcInputEvent::NEW_CLIENT_JOINED;
 			ev.new_client_id = c_id;
 			g_npc_input_queue.Push(std::move(ev));
+		}
+
+		// 동기화 검증용 테스트 아이템 (05.15)
+		{
+			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1, 5 };
+			clients[c_id].send_inventory_update_packet(0);
+
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2, 3 };
+			clients[c_id].send_inventory_update_packet(1);
 		}
 
 		break;
@@ -915,10 +963,20 @@ void process_packet(int c_id, char* packet)
 		CS_INVENTORY_CLICK_PACKET* p =
 			reinterpret_cast<CS_INVENTORY_CLICK_PACKET*>(packet);
 
+		if (p->slotidx < 0 || p->slotidx >= MAX_SLOTS) {
+			std::cout << "[INVENTORY_CLICK] id:" << c_id
+				<< " (" << clients[c_id]._name << ")"
+				<< " action:" << static_cast<int>(p->action)
+				<< " slot:" << p->slotidx << "\n";
+			break;
+		}
+		//std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+		const ItemSlot& s = clients[c_id]._inventory[p->slotidx];
 		std::cout << "[INVENTORY_CLICK] id:" << c_id
-			<< " (" << clients[c_id]._name << ")"
-			<< " action:" << static_cast<int>(p->action)
-			<< " slot:" << p->slotidx << "\n";
+			<< " slot:" << p->slotidx
+			<< " item:" << static_cast<int>(s.item)
+			<< " count:" << s.count << "\n";
+
 		break;
 	}
 	case CS_HIT_NPC: {
@@ -946,10 +1004,12 @@ void disconnect(int c_id)
 	SOCKET old_socket = INVALID_SOCKET;
 	{
 		std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
-		if (clients[c_id]._state == ST_FREE) return; // 이중 호출 방지
+		if (clients[c_id]._state == ST_FREE) return;	// 이중 호출 방지
 		clients[c_id]._state = ST_FREE;
-		old_socket = clients[c_id]._socket;           // 핸들 저장
-		clients[c_id]._socket = INVALID_SOCKET;       // 슬롯 무효화
+		old_socket = clients[c_id]._socket;				// 핸들 저장
+		clients[c_id]._socket = INVALID_SOCKET;			// 슬롯 무효화
+
+		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
 	}
 	closesocket(old_socket);
 
@@ -1096,6 +1156,16 @@ int main()
 		npc.hp = 100;
 		npc.max_hp = 100;
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
+
+		// NPC 인벤토리 초기화 하드코딩
+		npc._inventory[0] = ItemSlot{ ItemID::MAT_3, 2 };
+		npc._inventory[1] = ItemSlot{ ItemID::MAT_4, 1 };
+
+		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
+			<< "slot0=" << static_cast<int>(npc._inventory[0].item)
+			<< "x" << npc._inventory[0].count
+			<< ", slot1=" << static_cast<int>(npc._inventory[1].item)
+			<< "x" << npc._inventory[1].count << "\n";
 	}
 
 	/*

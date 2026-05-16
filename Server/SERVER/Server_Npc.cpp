@@ -24,6 +24,11 @@ void init_npcs()
         npc.die_timer = 0.0f;
 
         npc.coll_normals.clear();
+
+        // 인벤토리 관련 초기화
+        npc._inventory.fill(ItemSlot{});
+        npc.loot_active = false;
+        npc.death_time = {};
     }
 }
 

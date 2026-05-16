@@ -6,6 +6,7 @@
 #include "GameFramework.h"
 #include "InputManager.h"
 #include "EffectManager.h"
+#include "InventoryManager.h"
 
 CGameFramework::CGameFramework()
 {
@@ -1004,6 +1005,44 @@ void CGameFramework::ProcessNetworkPackets()
 				}
 			}
 
+			break;
+		}
+		case SC_INVENTORY_UPDATE: {
+			SC_INVENTORY_UPDATE_PACKET* p =
+				reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			bool ok = pInvMgr->ApplyPlayerInventorySlotUpdate(
+				p->item_id, p->count, p->slotidx);
+
+			// 서버로부터 받은 패킷을 디버그콘솔에 출력
+			wchar_t buf[128];
+			swprintf_s(buf, L"[INV_APPLY] slot:%d item:%d count:%d %s\n",
+				p->slotidx, static_cast<int>(p->item_id), p->count,
+				ok ? L"OK" : L"REJECTED");
+			OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_ADD_LOOT_BOX: {
+			SC_ADD_LOOT_BOX_PACKET* p =
+				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
+
+			wchar_t buf[256];
+			swprintf_s(buf, L"[LOOT_BOX_ADD] id:%d pos:(%.2f,%.2f,%.2f)\n",
+				p->npc_id, p->x, p->y, p->z);
+			OutputDebugStringW(buf);
+
+			for (int i = 0; i < INVENTORY_SIZE; ++i) {
+				if (p->items[i] != ItemID::NONE && p->counts[i] > 0) {
+					swprintf_s(buf, L"  slot:%d item:%d count:%d\n",
+						i, static_cast<int>(p->items[i]), p->counts[i]);
+					OutputDebugStringW(buf);
+				}
+			}
 			break;
 		}
 		default:

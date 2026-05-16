@@ -392,16 +392,17 @@ bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
 		pSlot->count = 0;
 		return true;
 	}
-
-	// 슬롯에 이미 뭐가 있으면 수정하지 않음
-	if (pSlot->item != ItemID::NONE || pSlot->count > 0)
-	{
-		return false;
+	else {
+		pSlot->item = itemId;
+		pSlot->count = count;
 	}
 
-	// 빈 슬롯일 때만 서버 값으로 채움
-	pSlot->item = itemId;
-	pSlot->count = count;
+	// 슬롯에 이미 뭐가 있으면 수정하지 않음 --> 수정하되 로그 찍기? 나중에 수정
+	//if (pSlot->item != ItemID::NONE || pSlot->count > 0)
+	//{
+	//	return false;
+	//}
+	
 	return true;
 }
 

@@ -149,6 +149,7 @@
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="Item.h" />
+    <ClInclude Include="ItemDef.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="Object.h" />
