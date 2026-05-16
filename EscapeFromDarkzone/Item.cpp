@@ -372,13 +372,12 @@ ItemSlot* Inventory::GetSlot(int idx)
 	return &slots[idx];
 }
 
-//슬롯 규칙
 bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
 {
 	ItemSlot* pSlot = GetSlot(slotIndex);
 	if (!pSlot) return false;
 
-	// 서버가 이름 NONE이나 수량 0이면 슬롯 비우기
+	// 서버가 NONE이나 수량 0을 보내면 슬롯 비우기
 	if (itemId == ItemID::NONE || count <= 0)
 	{
 		pSlot->item = ItemID::NONE;
@@ -386,13 +385,7 @@ bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
 		return true;
 	}
 
-	// 슬롯에 이미 뭐가 있으면 수정하지 않음
-	if (pSlot->item != ItemID::NONE || pSlot->count > 0)
-	{
-		return false;
-	}
-
-	// 빈 슬롯일 때만 서버 값으로 채움
+	// 서버 값으로 해당 슬롯을 그대로 덮어쓰기
 	pSlot->item = itemId;
 	pSlot->count = count;
 	return true;
