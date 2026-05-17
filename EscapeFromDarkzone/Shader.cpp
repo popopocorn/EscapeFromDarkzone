@@ -825,6 +825,17 @@ CBoundingBoxShader::~CBoundingBoxShader()
 	m_DebugInstances.clear();
 }
 
+void CBoundingBoxShader::CleanupDeadInstances()
+{
+	std::erase_if(m_DebugInstances, [](const DebugInstance& instance)
+		{
+			if (!instance.m_pTargetObject)
+				return true;
+
+			return !instance.m_pTargetObject->IsAlive();
+		});
+}
+
 D3D12_INPUT_LAYOUT_DESC CBoundingBoxShader::CreateInputLayout()
 {
 	static D3D12_INPUT_ELEMENT_DESC d3dInputLayoutElements[] =
@@ -943,17 +954,30 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 
 	if (bCanAdd)
 	{
-		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
-		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
+		bool bAlreadyAdded = false;
+		for (const auto& instance : m_DebugInstances)
+		{
+			if (instance.m_pTargetObject == pGameObject)
+			{
+				bAlreadyAdded = true;
+				break;
+			}
+		}
 
-		XMFLOAT4X4 localMatrix;
-		XMStoreFloat4x4(&localMatrix, S * T);
+		if (!bAlreadyAdded)
+		{
+			XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
+			XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
 
-		DebugInstance instance;
-		instance.m_pTargetObject = pGameObject;
-		instance.m_xmf4x4Local = localMatrix;
+			XMFLOAT4X4 localMatrix;
+			XMStoreFloat4x4(&localMatrix, S * T);
 
-		m_DebugInstances.push_back(instance);
+			DebugInstance instance;
+			instance.m_pTargetObject = pGameObject;
+			instance.m_xmf4x4Local = localMatrix;
+
+			m_DebugInstances.push_back(instance);
+		}
 	}
 
 	if (pGameObject->m_pChild)
@@ -968,6 +992,11 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 }
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)
 {
+	UNREFERENCED_PARAMETER(pCamera);
+	UNREFERENCED_PARAMETER(nPipelineState);
+
+	CleanupDeadInstances();
+
 	if (m_DebugInstances.empty()) return;
 
 	pd3dCommandList->SetPipelineState(m_pd3dPipelineState[0]);
@@ -975,12 +1004,11 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 	for (const auto& instance : m_DebugInstances)
 	{
 		if (!instance.m_pTargetObject) continue;
+		if (!instance.m_pTargetObject->IsAlive()) continue;
 
 		XMMATRIX mtxLocal = XMLoadFloat4x4(&instance.m_xmf4x4Local);
-
 		XMMATRIX mtxWorld = XMLoadFloat4x4(&instance.m_pTargetObject->m_xmf4x4World);
-		
-		//최종 변환 행렬 계산
+
 		XMMATRIX mtxFinal = mtxLocal * mtxWorld;
 
 		XMFLOAT4X4 xmf4x4Transform;
@@ -988,7 +1016,8 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 
 		pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4Transform, 0);
 
-		if (m_pDebugObject) m_pDebugObject->Render(pd3dCommandList);
+		if (m_pDebugObject)
+			m_pDebugObject->Render(pd3dCommandList);
 	}
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
