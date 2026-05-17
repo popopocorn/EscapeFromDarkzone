@@ -119,7 +119,7 @@ private:
 
 	// 05.05 추가: unordered_map에서 array로
 	short m_myId = -1;
-	std::array<OtherPlayerSlot, 8> m_otherPlayers;	
+	std::array<OtherPlayerSlot, 16> m_otherPlayers;	
 
 	OtherPlayer* FindOtherPlayer(short id);
 	bool AddOtherPlayer(short id, OtherPlayer* p);
@@ -127,6 +127,6 @@ private:
 	
 	// 05.10 추가: 서버로부터 받아올 NPC 정보 관리
 	
-	std::array<NpcSlot, MAX_NPC> m_npcs;	// MAX_NPC(128) 로 했을 때 간헐적으로 메모리오염 발생 -> 64로 줄였음.
+	std::array<NpcSlot, MAX_NPC> m_npcs;
 };
 

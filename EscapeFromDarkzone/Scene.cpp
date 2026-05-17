@@ -17,6 +17,8 @@
 #include "EffectManager.h"
 #include "InventoryManager.h"
 
+#include "Network.h"
+
 ID3D12DescriptorHeap *MainScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
 D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorStartHandle;
@@ -309,7 +311,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 480);		// 임시, 추후 수정 요망
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
@@ -460,13 +462,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 
-	//적 오브젝트
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
-	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->SetOOBB(NULL);
-	pEnemy->setNav(AStarNav.get());
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+	//적 오브젝트 - 네트워크가 안 될 때에만
+	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
+	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	//pEnemy->SetOOBB(NULL);
+	//pEnemy->setNav(AStarNav.get());
+	//pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
