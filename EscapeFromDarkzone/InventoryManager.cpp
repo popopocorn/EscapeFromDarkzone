@@ -316,8 +316,12 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 
 	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
 
-	if (m_pDebugShader) {
-		m_pDebugShader->AddObject(pLoot);
+	//if (m_pDebugShader) {
+	//	m_pDebugShader->AddObject(pLoot);
+	//}
+	if (m_pLootBoxShader)
+	{
+		m_pLootBoxShader->AddObject(pLoot);
 	}
 }
 

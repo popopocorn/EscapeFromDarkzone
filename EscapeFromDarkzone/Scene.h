@@ -204,7 +204,6 @@ public:
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
-	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
 	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
 
