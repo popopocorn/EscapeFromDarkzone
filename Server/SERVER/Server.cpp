@@ -1297,7 +1297,7 @@ int main()
 		{ -40.0f, 0.0f, -15.0f },
 	};
 
-	for (int i = 0; i < 10; ++i)
+	for (int i = 0; i < 16; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
