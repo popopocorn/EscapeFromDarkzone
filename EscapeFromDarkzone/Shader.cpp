@@ -807,11 +807,15 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //디버그 쉐이더 생성
-CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+CBoundingBoxShader::CBoundingBoxShader(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	bool bSolid)
 {
-	m_pd3dGraphicsRootSignature = pd3dGraphicsRootSignature;
+	m_bSolid = bSolid;
 
-	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList);
+	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList, bSolid);
 
 	CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
@@ -842,17 +846,33 @@ D3D12_SHADER_BYTECODE CBoundingBoxShader::CreateVertexShader()
 
 D3D12_SHADER_BYTECODE CBoundingBoxShader::CreatePixelShader()
 {
-	return CShader::CompileShaderFromFile(L"Debug.hlsli", "PSDebug", "ps_5_1", &m_pd3dPixelShaderBlob);
-}
+	if (m_bSolid)
+	{
+		return CShader::CompileShaderFromFile(
+			L"Debug.hlsli",
+			"PSLootBox",
+			"ps_5_1",
+			&m_pd3dPixelShaderBlob
+		);
+	}
 
+	return CShader::CompileShaderFromFile(
+		L"Debug.hlsli",
+		"PSDebug",
+		"ps_5_1",
+		&m_pd3dPixelShaderBlob
+	);
+}
 D3D12_RASTERIZER_DESC CBoundingBoxShader::CreateRasterizerState()
 {
 	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
 	::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
-	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+
+	d3dRasterizerDesc.FillMode = (m_bSolid) ? D3D12_FILL_MODE_SOLID : D3D12_FILL_MODE_WIREFRAME;
 	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
 	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
 	d3dRasterizerDesc.DepthClipEnable = TRUE;
+
 	return d3dRasterizerDesc;
 }
 
@@ -880,7 +900,8 @@ void CBoundingBoxShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	m_d3dPipelineStateDesc.DepthStencilState = CreateDepthStencilState();
 	m_d3dPipelineStateDesc.InputLayout = CreateInputLayout();
 	m_d3dPipelineStateDesc.SampleMask = UINT_MAX;
-	m_d3dPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	m_d3dPipelineStateDesc.PrimitiveTopologyType =
+		(m_bSolid) ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE : D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
 	m_d3dPipelineStateDesc.NumRenderTargets = 1;
 	m_d3dPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	m_d3dPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;

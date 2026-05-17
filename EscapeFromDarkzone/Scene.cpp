@@ -181,14 +181,9 @@ MainScene::MainScene()
 
 	m_pLaserMuzzle = nullptr;
 	m_pWeaponMuzzle = nullptr;
-	m_pWeaponObject = nullptr;
 
 	m_pEffectManager = nullptr;
 	m_pInventoryManager = nullptr;
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	m_bLaserActive = false;
 	m_bSparkFireActive = false;
@@ -333,11 +328,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		UIShader.get()
 	);
 
-	// Scene에는 비소유 포인터만 연결
-	inventory = nullptr;
-	corpseInventory = m_pInventoryManager->GetLootInventory();
-	craftInventory = m_pInventoryManager->GetCraftInventory();
-
 	// 맵 쉐이더
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -448,7 +438,16 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
 		pd3dDevice,
 		pd3dCommandList,
-		m_pd3dGraphicsRootSignature
+		m_pd3dGraphicsRootSignature,
+		false
+	);
+
+	// 시체박스 전용 솔리드 큐브
+	m_pLootBoxShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		true
 	);
 
 	// 적 쉐이더
@@ -484,7 +483,12 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	if (m_pInventoryManager)
 	{
-		m_pInventoryManager->BindLootWorld(nullptr, pLootShaderRaw, m_pDebugShader.get());
+		m_pInventoryManager->BindLootWorld(
+			nullptr,
+			pLootShaderRaw,
+			m_pDebugShader.get(),
+			m_pLootBoxShader.get()
+		);
 	}
 
 	// EffectManager 생성
@@ -516,10 +520,6 @@ void MainScene::ReleaseObjects()
 		delete m_pInventoryManager;
 		m_pInventoryManager = nullptr;
 	}
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	if (m_pEffectManager)
 	{
@@ -931,15 +931,6 @@ void MainScene::SetPlayer(CPlayer* p)
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->SetPlayer(m_pPlayer);
-	}
-
-	if (m_pPlayer)
-	{
-		inventory = m_pPlayer->GetInventory();
-	}
-	else
-	{
-		inventory = nullptr;
 	}
 }
 
@@ -1591,6 +1582,11 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
+
+	if (m_pLootBoxShader)
+	{
+		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

@@ -49,7 +49,12 @@ public:
 
 	bool ProcessClick(POINT mouse);
 
-	void BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader);
+	void BindLootWorld(
+		CPlayer* pPlayer,
+		CStandardObjectsShader* pLootShader,
+		CBoundingBoxShader* pDebugShader,
+		CBoundingBoxShader* pLootBoxShader
+	);
 	void SetPlayer(CPlayer* pPlayer) { m_pPlayer = pPlayer; }
 
 	void OpenPlayerInventory();
@@ -90,4 +95,6 @@ public:
 	CLootContainerObject* FindLootBoxById(short box_id);
 	void ApplyLootBoxSlotUpdate(short box_id, int slotidx, ItemID item, int count);
 	void DeactivateLootBox(short box_id);
+
+	CBoundingBoxShader* m_pLootBoxShader = nullptr;
 };

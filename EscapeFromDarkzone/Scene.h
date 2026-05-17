@@ -152,7 +152,10 @@ public:
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
+	// 디버그용 바운딩 박스 셰이더
 	std::unique_ptr<CBoundingBoxShader> m_pDebugShader = nullptr;
+	std::unique_ptr<CBoundingBoxShader> m_pLootBoxShader = nullptr;
+	CBoundingBoxShader* GetLootBoxShader() { return m_pLootBoxShader.get(); }
 
 	// 이펙트/레이저 렌더링은 EffectManager가 담당
 	EffectManager* m_pEffectManager = nullptr;
@@ -168,7 +171,6 @@ public:
 	float m_fSparkSpawnInterval = 0.03f;
 
 	CGameObject* m_pWeaponMuzzle = nullptr;
-	CGameObject* m_pWeaponObject = nullptr;
 
 	unique_ptr<UIObjectShader> UIShader;
 
@@ -202,6 +204,7 @@ public:
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
 	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
 
@@ -221,8 +224,4 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		CShader* pPlayerShader
 	);
-
-	CGameObject* GetWeaponObject() { return m_pWeaponObject; }
-	void SetWeaponObject(CGameObject* pWeaponObject) { m_pWeaponObject = pWeaponObject; }
-
 };

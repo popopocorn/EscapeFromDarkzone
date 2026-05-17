@@ -39,6 +39,7 @@ void InventoryManager::Initialize(
 
 	m_pPlayer = nullptr;
 	m_pLootShader = nullptr;
+	m_pLootBoxShader = nullptr;
 	m_pDebugShader = nullptr;
 }
 
@@ -49,17 +50,23 @@ void InventoryManager::Release()
 
 	m_pPlayer = nullptr;
 	m_pLootShader = nullptr;
+	m_pLootBoxShader = nullptr;
 	m_pDebugShader = nullptr;
 
 	m_pCraftInventory.reset();
 	m_pLootInventory.reset();
 }
 
-void InventoryManager::BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader)
+void InventoryManager::BindLootWorld(
+	CPlayer* pPlayer,
+	CStandardObjectsShader* pLootShader,
+	CBoundingBoxShader* pDebugShader,
+	CBoundingBoxShader* pLootBoxShader)
 {
 	m_pPlayer = pPlayer;
 	m_pLootShader = pLootShader;
 	m_pDebugShader = pDebugShader;
+	m_pLootBoxShader = pLootBoxShader;
 }
 
 //열린 루팅창 갱신
@@ -282,9 +289,9 @@ CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDista
 
 	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
 
-	if (m_pDebugShader)
+	if (m_pLootBoxShader)
 	{
-		m_pDebugShader->AddObject(pLoot);
+		m_pLootBoxShader->AddObject(pLoot);
 	}
 }*/
 void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount)

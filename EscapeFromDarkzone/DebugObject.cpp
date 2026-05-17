@@ -1,7 +1,8 @@
 #include "stdafx.h"
 #include "DebugObject.h"
 
-CDebugObject::CDebugObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+CDebugObject::CDebugObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, bool bSolid)
+	: m_bSolid(bSolid)
 {
 	XMFLOAT3 pxmf3Positions[8];
 	float h = 0.5f;
@@ -14,20 +15,68 @@ CDebugObject::CDebugObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 	pxmf3Positions[6] = XMFLOAT3(+h, -h, +h);
 	pxmf3Positions[7] = XMFLOAT3(-h, -h, +h);
 
-	m_pd3dPositionBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pxmf3Positions, sizeof(XMFLOAT3) * 8, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, &m_pd3dPositionUploadBuffer);
+	m_pd3dPositionBuffer = ::CreateBufferResource(
+		pd3dDevice,
+		pd3dCommandList,
+		pxmf3Positions,
+		sizeof(XMFLOAT3) * 8,
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dPositionUploadBuffer
+	);
 
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
 	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
 	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * 8;
 
-	m_nIndices = 24;
-	UINT pIndices[] = {
-		0,1, 1,2, 2,3, 3,0, 
-		4,5, 5,6, 6,7, 7,4, 
-		0,4, 1,5, 2,6, 3,7
-	};
+	if (m_bSolid)
+	{
+		m_nIndices = 36;
+		UINT pIndices[] =
+		{
+			0, 1, 2,  0, 2, 3,
 
-	m_pd3dIndexBuffer = ::CreateBufferResource(pd3dDevice, pd3dCommandList, pIndices, sizeof(UINT) * m_nIndices, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER, &m_pd3dIndexUploadBuffer);
+			4, 6, 5,  4, 7, 6,
+
+			3, 2, 6,  3, 6, 7,
+
+			0, 5, 1,  0, 4, 5,
+
+			0, 3, 7,  0, 7, 4,
+
+			1, 5, 6,  1, 6, 2
+		};
+
+		m_pd3dIndexBuffer = ::CreateBufferResource(
+			pd3dDevice,
+			pd3dCommandList,
+			pIndices,
+			sizeof(UINT) * m_nIndices,
+			D3D12_HEAP_TYPE_DEFAULT,
+			D3D12_RESOURCE_STATE_INDEX_BUFFER,
+			&m_pd3dIndexUploadBuffer
+		);
+	}
+	else
+	{
+		m_nIndices = 24;
+		UINT pIndices[] =
+		{
+			0,1, 1,2, 2,3, 3,0,
+			4,5, 5,6, 6,7, 7,4,
+			0,4, 1,5, 2,6, 3,7
+		};
+
+		m_pd3dIndexBuffer = ::CreateBufferResource(
+			pd3dDevice,
+			pd3dCommandList,
+			pIndices,
+			sizeof(UINT) * m_nIndices,
+			D3D12_HEAP_TYPE_DEFAULT,
+			D3D12_RESOURCE_STATE_INDEX_BUFFER,
+			&m_pd3dIndexUploadBuffer
+		);
+	}
 
 	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
@@ -47,7 +96,10 @@ void CDebugObject::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 	pd3dCommandList->IASetVertexBuffers(0, 1, &m_d3dPositionBufferView);
 	pd3dCommandList->IASetIndexBuffer(&m_d3dIndexBufferView);
 
-	pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+	if (m_bSolid)
+		pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	else
+		pd3dCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
 	pd3dCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
 }
