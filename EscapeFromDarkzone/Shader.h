@@ -104,6 +104,7 @@ protected:
 	std::unique_ptr<CDebugObject> m_pDebugObject;
 	std::vector<DebugInstance> m_DebugInstances;
 
+	void CleanupDeadInstances();
 public:
 	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout() override;
 	virtual D3D12_SHADER_BYTECODE CreateVertexShader() override;
