@@ -55,7 +55,7 @@ void CEnemyObject::HandleHP(float value)
 	{
 		hp = 0.0f;
 		m_bDying = true;
-		m_bLootSpawnRequested = true;
+		m_bLootSpawnRequested = true;				// 서버 권위 구조로 바꾸면서 안씀
 		m_bDeadRemoveRequested = false;
 		m_fDieElapsed = 0.0f;
 
@@ -71,7 +71,7 @@ bool CEnemyObject::ConsumeDeadRemovalRequest()
 	return true;
 }
 
-bool CEnemyObject::ConsumeLootSpawnRequest()
+bool CEnemyObject::ConsumeLootSpawnRequest()		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!m_bLootSpawnRequested) return false;
 	m_bLootSpawnRequested = false;
@@ -343,7 +343,7 @@ CLootContainerObject::CLootContainerObject(float fLifeTime)
 	m_fRemainTime = fLifeTime;
 }
 
-void CLootContainerObject::UpdateLifetime(float fTimeElapsed)
+void CLootContainerObject::UpdateLifetime(float fTimeElapsed)		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!IsAlive()) return;
 
@@ -354,7 +354,7 @@ void CLootContainerObject::UpdateLifetime(float fTimeElapsed)
 	}
 }
 
-bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
+/*bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
 {
 	if (!item || count <= 0) return false;
 
@@ -369,9 +369,28 @@ bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
 	}
 
 	return false;
+}*/
+
+void CLootContainerObject::SetSlotData(int idx, ItemID item, int count)
+{
+	if (idx < 0 || idx >= MAX_LOOT_SLOTS) return;
+	m_slots[idx].item = item;
+	m_slots[idx].count = count;
 }
 
 void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
+{
+	if (!pInventory) return;
+	pInventory->ClearItems();
+
+	for (int i = 0; i < MAX_LOOT_SLOTS; ++i) {
+		if (m_slots[i].item != ItemID::NONE && m_slots[i].count > 0) {
+			pInventory->ApplyServerSlotUpdate(i, m_slots[i].item, m_slots[i].count);
+		}
+	}
+}
+
+/*void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
 {
 	if (!pInventory) return;
 
@@ -384,7 +403,7 @@ void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
 			//pInventory->AddItem(std::move(m_LootItems[i]), m_LootCounts[i]);
 		}
 	}
-}
+}*/
 
 float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
 {

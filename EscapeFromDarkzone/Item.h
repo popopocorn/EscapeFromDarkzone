@@ -131,7 +131,7 @@ private:
 	float m_textRatio = 0.60f;
 	float m_countRatio = 0.20f;
 
-	int ID;
+	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
 
 	std::unique_ptr<UIMesh> m_pSharedMesh; // UI 공용 메쉬
 

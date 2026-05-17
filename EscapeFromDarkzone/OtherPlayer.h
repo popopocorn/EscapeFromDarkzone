@@ -30,6 +30,7 @@ public:
 		float x, float y, float z);
 
 	void UpdatePosition(float x, float y, float z);
+	void SetServerYaw(float yawRad);
 	void Kill() { CGameObject::Kill(); }
 };
 

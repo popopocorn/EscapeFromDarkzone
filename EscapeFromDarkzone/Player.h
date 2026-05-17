@@ -134,6 +134,8 @@ protected:
 	bool  m_bFireHeld = false;
 	bool  m_bShotAnimRequest = false;
 
+	bool m_bWasRunning = false;			// 이동이 끝나는 시점에 서버로 패킷을 전송하기
+
 	std::unique_ptr<Inventory> m_pInventory;
 public:
 	CPlayer();

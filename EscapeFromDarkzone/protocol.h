@@ -39,6 +39,13 @@ constexpr char CS_INVENTORY_CLICK = 12;
 constexpr char SC_INVENTORY_UPDATE = 13;
 constexpr char SC_ADD_LOOT_BOX = 14;
 
+// 루트박스 누르기 15, 루트박스 업데이트 16
+constexpr char CS_LOOT_PICKUP = 15;
+constexpr char SC_LOOT_BOX_SLOT_UPDATE = 16;
+constexpr char SC_DEACTIVATE_LOOT_BOX = 17;
+
+constexpr char SC_PLAYER_STATE_CHANGE = 18;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -46,6 +53,9 @@ constexpr char MOVE_A = 0x04;
 constexpr char MOVE_D = 0x08;
 
 constexpr char INV_ACTION_CLICK = 0;
+
+constexpr char PLAYER_STATE_IDLE = 0;
+constexpr char PLAYER_STATE_RUN = 1;
 
 constexpr char NPC_STATE_IDLE = 0;
 constexpr char NPC_STATE_RUN = 1;
@@ -77,7 +87,9 @@ struct SC_ADD_PLAYER_PACKET {
 	unsigned char size;
 	char          type;
 	short         id;
-	float         x, y, z;        // short → float
+	float         x, y, z;
+	float         yaw;
+	char          state;
 	char          name[NAME_SIZE];
 };
 
@@ -91,7 +103,8 @@ struct SC_MOVE_PLAYER_PACKET {
 	unsigned char size;
 	char          type;
 	short         id;
-	float         x, y, z;        // short → float
+	float         x, y, z;
+	float         yaw;
 	unsigned int  move_time;
 };
 
@@ -166,6 +179,35 @@ struct SC_ADD_LOOT_BOX_PACKET {
 	float         x, y, z;            // 사망 위치
 	ItemID        items[INVENTORY_SIZE];
 	int           counts[INVENTORY_SIZE];
+};
+
+struct CS_LOOT_PICKUP_PACKET {
+	unsigned char size;
+	char          type;
+	short         box_id;     // = NPC id
+	short         slotidx;
+};
+
+struct SC_LOOT_BOX_SLOT_UPDATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         box_id;
+	short         slotidx;
+	ItemID        item_id;
+	int           count;
+};
+
+struct SC_DEACTIVATE_LOOT_BOX_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+};
+
+struct SC_PLAYER_STATE_CHANGE_PACKET {
+	unsigned char size;
+	char          type;
+	short         id;
+	char          state;
 };
 
 #pragma pack (pop)

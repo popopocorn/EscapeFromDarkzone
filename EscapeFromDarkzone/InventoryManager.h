@@ -43,7 +43,7 @@ public:
 
 	void UpdateLootWorld(float fTimeElapsed);
 
-	void ProcessEnemyLootSpawnRequests(CShader* pEnemyShader);
+	/*void ProcessEnemyLootSpawnRequests(CShader* pEnemyShader);*/
 
 	void SubmitToShader(UIObjectShader* shader);
 
@@ -72,7 +72,8 @@ public:
 
 	CLootContainerObject* FindNearestLootContainer(float fMaxDistance) const;
 
-	void SpawnLootContainerFromEnemy(CEnemyObject* pEnemy);
+	//void SpawnLootContainerFromEnemy(CEnemyObject* pEnemy);
+	void SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount);	// 서버로부터 받은 정보로 루트박스 즉시 생성
 
 	bool IsAnyInventoryOpen() const;
 	bool IsPlayerInventoryOpen() const;
@@ -86,4 +87,7 @@ public:
 	Inventory* GetCraftInventory() const { return m_pCraftInventory.get(); }
 
 	CLootContainerObject* GetOpenedLoot() const { return m_pOpenedLoot; }
+	CLootContainerObject* FindLootBoxById(short box_id);
+	void ApplyLootBoxSlotUpdate(short box_id, int slotidx, ItemID item, int count);
+	void DeactivateLootBox(short box_id);
 };

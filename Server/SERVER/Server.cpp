@@ -67,8 +67,9 @@ public:
 	S_STATE _state;
 	int _id;
 	SOCKET _socket;
-	//short	x, y;
 	float x, y, z;
+	float yaw;
+	char  player_state;
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -85,9 +86,10 @@ public:
 	{
 		_id = -1;
 		_socket = 0;
-		//x = y = 0;
 		x = z = 0.0f;
 		y = 0.1f;
+		yaw = 0.0f;
+		player_state = PLAYER_STATE_IDLE;
 		_name[0] = 0;
 		_state = ST_FREE;
 		_prev_remain = 0;
@@ -172,6 +174,7 @@ public:
 		p.count = _inventory[slotidx].count;
 		do_send(&p);
 	}
+	void send_player_state_change_packet(int c_id);
 };
 
 std::array<SESSION, MAX_USER> clients;
@@ -189,6 +192,7 @@ void SESSION::send_move_packet(int c_id)
 	p.x = clients[c_id].x;
 	p.y = clients[c_id].y;
 	p.z = clients[c_id].z;
+	p.yaw = clients[c_id].yaw;
 	p.move_time = clients[c_id]._last_move_time;
 	do_send(&p);
 }
@@ -203,7 +207,18 @@ void SESSION::send_add_player_packet(int c_id)
 	add_packet.x = clients[c_id].x;
 	add_packet.y = clients[c_id].y;
 	add_packet.z = clients[c_id].z;
+	add_packet.yaw = clients[c_id].yaw;
+	add_packet.state = clients[c_id].player_state;
 	do_send(&add_packet);
+}
+
+void SESSION::send_player_state_change_packet(int c_id) {
+	SC_PLAYER_STATE_CHANGE_PACKET p;
+	p.size = sizeof(SC_PLAYER_STATE_CHANGE_PACKET);
+	p.type = SC_PLAYER_STATE_CHANGE;
+	p.id = c_id;
+	p.state = clients[c_id].player_state;
+	do_send(&p);
 }
 
 bool load_mapOOBB_from_CSV(const char* filename)
@@ -670,10 +685,10 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	}
 
 	// 디버그용 로그
-	std::cout << "[NPC " << npc.id << "] pos=("
-		<< npc.position.x << "," << npc.position.z
-		<< ") -> target=(" << player_pos.x << "," << player_pos.z
-		<< ") path size=" << npc.waypoints.size() << "\n";
+	//std::cout << "[NPC " << npc.id << "] pos=("
+	//	<< npc.position.x << "," << npc.position.z
+	//	<< ") -> target=(" << player_pos.x << "," << player_pos.z
+	//	<< ") path size=" << npc.waypoints.size() << "\n";
 
 	// 4. waypoint 따라가기
 	XMFLOAT3 look = { 0.0f, 0.0f, 1.0f };  // 기본 정면
@@ -787,6 +802,29 @@ static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& pl
 	}
 }
 
+/* 인벤 추가 — 클라 Inventory::AddItem과 동일 로직 + 갱신된 슬롯 인덱스 반환
+   반환: 성공 시 갱신된 슬롯 인덱스 (>=0), 실패 시 -1 */
+static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv,
+	ItemID item, int count)
+{
+	if (item == ItemID::NONE || count <= 0) return -1;
+
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		if (inv[i].item != ItemID::NONE && inv[i].item == item) {
+			inv[i].count += count;
+			return i;
+		}
+	}
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		if (inv[i].item == ItemID::NONE) {
+			inv[i].item = item;
+			inv[i].count = count;
+			return i;
+		}
+	}
+	return -1;
+}
+
 static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
@@ -824,6 +862,32 @@ static void npc_thread()
 		for (auto& npc : g_npcs) {
 			if (!npc.alive) continue;
 			UpdateNpc(npc, DT, player_snapshot);
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		for (auto& npc : g_npcs) {
+			if (false == npc.loot_active) continue;
+
+			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
+			if (elapsed < 30) continue;
+
+			// 만료 — 비활성화 + 브로드캐스트
+			npc.loot_active = false;
+
+			SC_DEACTIVATE_LOOT_BOX_PACKET dp;
+			dp.size = sizeof(dp);
+			dp.type = SC_DEACTIVATE_LOOT_BOX;
+			dp.npc_id = npc.id;
+
+			for (auto& pl : clients) {
+				{
+					std::lock_guard<std::mutex> ll(pl._s_lock);
+					if (ST_INGAME != pl._state) continue;
+				}
+				pl.do_send(&dp);
+			}
+
+			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
 		}
 
 		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
@@ -902,10 +966,22 @@ void process_packet(int c_id, char* packet)
 
 		// yaw(도) → 라디안 변환 후 Look/Right 벡터 계산
 		float fYawRad = p->yaw * (3.14159265f / 180.0f);
+		clients[c_id].yaw = fYawRad;
+
 		float lookX = sinf(fYawRad);
 		float lookZ = cosf(fYawRad);
 		float rightX = cosf(fYawRad);
 		float rightZ = -sinf(fYawRad);
+
+		char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
+		if (clients[c_id].player_state != new_state) {
+			clients[c_id].player_state = new_state;
+			for (auto& cl : clients) {
+				if (cl._state != ST_INGAME) continue;
+				if (cl._id == c_id) continue;
+				cl.send_player_state_change_packet(c_id);
+			}
+		}
 
 		// inputs 비트 플래그로 이동 방향 계산
 		float dirX = 0.0f, dirZ = 0.0f;
@@ -995,7 +1071,66 @@ void process_packet(int c_id, char* packet)
 
 		break;
 	}
+	case CS_LOOT_PICKUP: {
+		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
 
+		// 박스 유효성
+		if (p->box_id < 0 || p->box_id >= MAX_NPC) break;
+		SERVER_NPC& box = g_npcs[p->box_id];
+		if (!box.loot_active) break;
+
+		// 슬롯 범위
+		if (p->slotidx < 0 || p->slotidx >= INVENTORY_SIZE) break;
+
+		ItemSlot& boxSlot = box._inventory[p->slotidx];
+		if (boxSlot.item == ItemID::NONE || boxSlot.count <= 0) break;
+
+		const ItemID pickItem = boxSlot.item;
+		const int    pickCount = boxSlot.count;
+
+		// 플레이어 인벤에 추가 + 갱신 송신 (한 락 안에서)
+		int playerSlotIdx = -1;
+		{
+			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+			playerSlotIdx = AddInventoryItem(
+				clients[c_id]._inventory, pickItem, pickCount);
+			if (playerSlotIdx >= 0) {
+				clients[c_id].send_inventory_update_packet(
+					static_cast<short>(playerSlotIdx));
+			}
+		}
+		if (playerSlotIdx < 0) break;  // 인벤 가득 — 박스 그대로
+
+		// 박스 슬롯 비우기
+		boxSlot.item = ItemID::NONE;
+		boxSlot.count = 0;
+
+		// 박스 슬롯 변경 브로드캐스트
+		SC_LOOT_BOX_SLOT_UPDATE_PACKET bp;
+		bp.size = sizeof(bp);
+		bp.type = SC_LOOT_BOX_SLOT_UPDATE;
+		bp.box_id = p->box_id;
+		bp.slotidx = p->slotidx;
+		bp.item_id = ItemID::NONE;
+		bp.count = 0;
+
+		for (auto& pl : clients) {
+			{
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (ST_INGAME != pl._state) continue;
+			}
+			pl.do_send(&bp);
+		}
+
+		std::cout << "[LOOT_PICKUP] client:" << c_id
+			<< " box:" << p->box_id
+			<< " slot:" << p->slotidx
+			<< " item:" << static_cast<int>(pickItem)
+			<< " count:" << pickCount
+			<< " -> playerSlot:" << playerSlotIdx << "\n";
+
+		break;
+	}
 	}
 }
 
@@ -1145,13 +1280,31 @@ int main()
 
 	init_npcs();
 
+	XMFLOAT3 tmp_position_list[16] = {
+		{ 7.0f, 0.0f, -14.0f },
+		{ 3.5f, 0.0f, 20.0f },
+		{ -12.0f, 0.0f, -24.0f },
+		{ -40.0f, 0.1f, 30.0f },
+		{ -43.0f, 0.0f, 8.0f },
+		{ -35.0f, 0.0f, -5.0f },
+		{ -22.0f, 0.0f, -5.0f },
+		{ -34.0f, 0.0f, -40.0f },
+		{ -3.5f, 0.0f, -36.0f },
+		{ 3.0f, 0.0f, -65.0f },
+		{ -20.0f, 0.0f, -89.0f },
+		{ -68.0f, 0.0f, -66.0f },
+		{ -45.0f, 0.0f, -55.0f },
+		{ -40.0f, 0.0f, -15.0f },
+	};
+
+	for (int i = 0; i < 10; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
-		SERVER_NPC& npc = g_npcs[0];
+		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
 		npc.kind = 0;
 		npc.state = NPC_STATE_IDLE;
-		npc.position = { 7.0f, 0.0f, -14.0f };
+		npc.position = tmp_position_list[i];
 		npc.yaw = 0.0f;
 		npc.hp = 100;
 		npc.max_hp = 100;
@@ -1169,7 +1322,6 @@ int main()
 	}
 
 	/*
-	{
 		// 케이스 A: 가까운 두 점 — waypoint 1~2개 기대
 		{
 			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };

@@ -51,4 +51,6 @@ public:
     bool SendMove(char inputs, float yaw, unsigned int move_time);
     bool SendInventoryClick(char action, short slotidx);
     bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId);
+
+    bool SendLootPickup(short box_id, short slotidx);
 };

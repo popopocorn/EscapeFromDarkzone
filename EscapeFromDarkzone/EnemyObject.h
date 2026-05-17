@@ -41,7 +41,7 @@ public:
 	void HandleHP(float value);
 
 	bool ConsumeDeadRemovalRequest();
-	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비
+	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비			// 서버 권위 구조로 바꾸면서 안씀
 	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시
 	void setNav(AstarNavigation* nav) { AStarNav = nav; }
 	AstarNavigation* GetNav() { return AStarNav; }
@@ -107,17 +107,24 @@ public:
 class CLootContainerObject : public CGameObject
 {
 public:
-	CLootContainerObject(float fLifeTime = 30.0f);
+	CLootContainerObject(float fLifeTime = 30.0f);						// 서버 권위 구조로 바꾸면서 안씀 (생성자가 fLifeTime 초기화만 함)
 	virtual ~CLootContainerObject() = default;
 
 	void UpdateLifetime(float fTimeElapsed);							// 남은 유지 시간 갱신 후 만료 시 삭제 처리
-	bool AddLoot(unique_ptr<Item> item, int count = 1);		// 루팅 슬롯에 아이템 추가
+	//bool AddLoot(unique_ptr<Item> item, int count = 1);					// 루팅 슬롯에 아이템 추가
 	void FillInventoryUI(Inventory* pInventory) const;					// 시체 인벤토리 UI에 현재 루팅 아이템 복사
 
 	float GetDistanceSq(const XMFLOAT3& pos);							// 플레이어와의 거리 제곱값 계산
 
+	// 루팅 박스 서버화 
+	void SetBoxId(short id) { m_npc_id = id; };
+	short GetBoxId() const { return m_npc_id; };
+	void SetSlotData(int idx, ItemID item, int count);
+
 private:
-	std::array<unique_ptr<Item>, MAX_LOOT_SLOTS> m_LootItems;
-	std::array<int, MAX_LOOT_SLOTS> m_LootCounts{};
-	float m_fRemainTime = 30.0f;
+	//std::array<unique_ptr<Item>, MAX_LOOT_SLOTS> m_LootItems;
+	//std::array<int, MAX_LOOT_SLOTS> m_LootCounts{};
+	std::array<ItemSlot, MAX_LOOT_SLOTS> m_slots;
+	short m_npc_id = -1;	// 서버에서 루팅 박스 식별용 ID (NPC ID와 동일)
+	float m_fRemainTime = 30.0f;		// 서버 권위 구조로 바꾸면서 안씀
 };

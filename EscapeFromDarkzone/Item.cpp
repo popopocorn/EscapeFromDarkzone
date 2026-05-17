@@ -277,7 +277,16 @@ void Inventory::SlotClicked(int slotidx)
 	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
 	OutputDebugStringW(debugBuf);
 
-	if (NetworkManager::Instance().IsConnected()) {
+	if (false == NetworkManager::Instance().IsConnected()) {
+		return;
+	}
+
+	if (ID >= 0) {
+		NetworkManager::Instance().SendLootPickup(
+			static_cast<short>(ID),
+			static_cast<short>(slotidx));
+	}
+	else {
 		NetworkManager::Instance().SendInventoryClick(
 			INV_ACTION_CLICK,
 			static_cast<short>(slotidx));

@@ -287,3 +287,14 @@ bool NetworkManager::SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const Direct
 
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendLootPickup(short box_id, short slotidx)
+{
+	CS_LOOT_PICKUP_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_LOOT_PICKUP_PACKET);
+	pkt.type = CS_LOOT_PICKUP;
+	pkt.box_id = box_id;
+	pkt.slotidx = slotidx;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}

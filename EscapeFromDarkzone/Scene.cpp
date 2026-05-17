@@ -1311,11 +1311,11 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 	if (m_pInventoryManager)
 	{
-		m_pInventoryManager->UpdateLootWorld(fTimeElapsed);
+		//m_pInventoryManager->UpdateLootWorld(fTimeElapsed);	// 루트박스 만료 서버로 옮겼음
 
 		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
 		{
-			m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());
+			//m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());	// 루트박스를 서버 권위로 바꾸면서 자체스폰 삭제
 		}
 
 		m_pInventoryManager->Update(fTimeElapsed);

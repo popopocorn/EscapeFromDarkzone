@@ -882,9 +882,18 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), 
-				p->x, p->y, p->z);
+			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), p->x, p->y, p->z);
+			pOther->SetServerYaw(p->yaw);
 
+			// 상태 변경
+			switch (p->state) {
+			case PLAYER_STATE_IDLE:
+				pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
+				break;
+			case PLAYER_STATE_RUN:
+				pOther->ChangeState(std::make_unique<OtherPlayerRun>());
+				break;
+			}
 			
 			if (!AddOtherPlayer(p->id, pOther)) {	// 슬롯 부족 — 생성 취소
 				OutputDebugString(L"[Network] OtherPlayer slot full.\n");
@@ -926,8 +935,28 @@ void CGameFramework::ProcessNetworkPackets()
 
 			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
 				pOther->UpdatePosition(p->x, p->y, p->z);
+				pOther->SetServerYaw(p->yaw);
 			}
 
+			break;
+		}
+		case SC_PLAYER_STATE_CHANGE:
+		{
+			SC_PLAYER_STATE_CHANGE_PACKET* p =
+				reinterpret_cast<SC_PLAYER_STATE_CHANGE_PACKET*>(packet.data());
+
+			if (p->id == m_myId) break;		// 서버에서 한 번 거르긴 했는데, 혹시 모르니까
+
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				switch (p->state) {
+				case PLAYER_STATE_IDLE:
+					pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
+					break;
+				case PLAYER_STATE_RUN:
+					pOther->ChangeState(std::make_unique<OtherPlayerRun>());
+					break;
+				}
+			}
 			break;
 		}
 		case SC_ADD_NPC: 
@@ -1019,11 +1048,10 @@ void CGameFramework::ProcessNetworkPackets()
 				p->item_id, p->count, p->slotidx);
 
 			// 서버로부터 받은 패킷을 디버그콘솔에 출력
-			wchar_t buf[128];
-			swprintf_s(buf, L"[INV_APPLY] slot:%d item:%d count:%d %s\n",
-				p->slotidx, static_cast<int>(p->item_id), p->count,
-				ok ? L"OK" : L"REJECTED");
-			OutputDebugStringW(buf);
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[INV_APPLY] slot:%d item:%d count:%d %s\n",
+			//	p->slotidx, static_cast<int>(p->item_id), p->count);
+			//OutputDebugStringW(buf);
 
 			break;
 		}
@@ -1031,18 +1059,45 @@ void CGameFramework::ProcessNetworkPackets()
 			SC_ADD_LOOT_BOX_PACKET* p =
 				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
 
-			wchar_t buf[256];
-			swprintf_s(buf, L"[LOOT_BOX_ADD] id:%d pos:(%.2f,%.2f,%.2f)\n",
-				p->npc_id, p->x, p->y, p->z);
-			OutputDebugStringW(buf);
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
 
-			for (int i = 0; i < INVENTORY_SIZE; ++i) {
-				if (p->items[i] != ItemID::NONE && p->counts[i] > 0) {
-					swprintf_s(buf, L"  slot:%d item:%d count:%d\n",
-						i, static_cast<int>(p->items[i]), p->counts[i]);
-					OutputDebugStringW(buf);
-				}
-			}
+			pInvMgr->SpawnLootContainer(p->npc_id,
+				XMFLOAT3(p->x, p->y, p->z),
+				p->items, p->counts, INVENTORY_SIZE);
+
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[LOOT_BOX_ADD] id:%d pos:(%.2f,%.2f,%.2f)\n",
+			//	p->npc_id, p->x, p->y, p->z);
+			//OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_LOOT_BOX_SLOT_UPDATE: {
+			SC_LOOT_BOX_SLOT_UPDATE_PACKET* p =
+				reinterpret_cast<SC_LOOT_BOX_SLOT_UPDATE_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			pInvMgr->ApplyLootBoxSlotUpdate(p->box_id, p->slotidx, p->item_id, p->count);
+
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[BOX_APPLY] box_id: %d slot:%d item:%d count:%d %s\n",
+			//	p->box_id, p->slotidx, static_cast<int>(p->item_id), p->count);
+			//OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_DEACTIVATE_LOOT_BOX: {
+			SC_DEACTIVATE_LOOT_BOX_PACKET* p =
+				reinterpret_cast<SC_DEACTIVATE_LOOT_BOX_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			pInvMgr->DeactivateLootBox(p->npc_id);
 			break;
 		}
 		default:
@@ -1082,7 +1137,6 @@ CEnemyObject* CGameFramework::FindNpc(short id)
 		if (s.id == id) return s.pNpc;
 	return nullptr;
 }
-
 bool CGameFramework::AddNpc(short id, CEnemyObject* p)
 {
 	for (auto& s : m_npcs) {
@@ -1090,7 +1144,6 @@ bool CGameFramework::AddNpc(short id, CEnemyObject* p)
 	}
 	return false;
 }
-
 void CGameFramework::RemoveNpc(short id)
 {
 	for (auto& s : m_npcs) {

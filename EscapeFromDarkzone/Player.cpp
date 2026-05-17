@@ -224,23 +224,34 @@ void CPlayer::Update(float fTimeElapsed)
 	}
 
 	// 03.27 추가: 플레이어가 움직이는 경우 서버에 이동 패킷 전송
-	if (NetworkManager::Instance().IsConnected() && (state && typeid(*state) == typeid(PlayerRun)))
+	if (NetworkManager::Instance().IsConnected())
 	{
-		char inputs = 0;
-		auto& input = InputManager::Instance();
-		if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) inputs |= MOVE_W;
-		if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) inputs |= MOVE_S;
-		if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) inputs |= MOVE_A;
-		if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) inputs |= MOVE_D;
+		bool bIsRunning = (state && typeid(*state) == typeid(PlayerRun));
 
-		if (inputs != 0)
-		{
+		if (bIsRunning) {
+			char inputs = 0;
+			auto& input = InputManager::Instance();
+			if (input.KeyDown(INPUT_KEY::W) || input.KeyHold(INPUT_KEY::W)) inputs |= MOVE_W;
+			if (input.KeyDown(INPUT_KEY::S) || input.KeyHold(INPUT_KEY::S)) inputs |= MOVE_S;
+			if (input.KeyDown(INPUT_KEY::A) || input.KeyHold(INPUT_KEY::A)) inputs |= MOVE_A;
+			if (input.KeyDown(INPUT_KEY::D) || input.KeyHold(INPUT_KEY::D)) inputs |= MOVE_D;
+
+			if (inputs != 0)
+			{
+				NetworkManager::Instance().SendMove(
+					inputs, m_fYaw,
+					static_cast<unsigned int>(GetTickCount())
+				);
+			}
+		}
+		else if (m_bWasRunning) {
 			NetworkManager::Instance().SendMove(
-				inputs,
-				m_fYaw,
+				0, m_fYaw,
 				static_cast<unsigned int>(GetTickCount())
 			);
 		}
+
+		m_bWasRunning = bIsRunning;
 	}
 }
 
