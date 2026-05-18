@@ -39,6 +39,7 @@ void InventoryManager::Initialize(
 
 	m_pPlayer = nullptr;
 	m_pLootShader = nullptr;
+	m_pLootBoxShader = nullptr;
 	m_pDebugShader = nullptr;
 }
 
@@ -49,17 +50,23 @@ void InventoryManager::Release()
 
 	m_pPlayer = nullptr;
 	m_pLootShader = nullptr;
+	m_pLootBoxShader = nullptr;
 	m_pDebugShader = nullptr;
 
 	m_pCraftInventory.reset();
 	m_pLootInventory.reset();
 }
 
-void InventoryManager::BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader)
+void InventoryManager::BindLootWorld(
+	CPlayer* pPlayer,
+	CStandardObjectsShader* pLootShader,
+	CBoundingBoxShader* pDebugShader,
+	CBoundingBoxShader* pLootBoxShader)
 {
 	m_pPlayer = pPlayer;
 	m_pLootShader = pLootShader;
 	m_pDebugShader = pDebugShader;
+	m_pLootBoxShader = pLootBoxShader;
 }
 
 //열린 루팅창 갱신
@@ -73,7 +80,7 @@ void InventoryManager::Update(float fTimeElapsed)
 	}
 }
 
-void InventoryManager::UpdateLootWorld(float fTimeElapsed)
+void InventoryManager::UpdateLootWorld(float fTimeElapsed)		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!m_pLootShader) return;
 
@@ -90,7 +97,7 @@ void InventoryManager::UpdateLootWorld(float fTimeElapsed)
 	}
 }
 
-void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
+/*void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
 {
 	if (!pEnemyShader) return;
 
@@ -108,11 +115,20 @@ void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
 			pEnemy->MarkDeadForRemoval();
 		}
 	}
-}
+}*/
 
 Inventory* InventoryManager::GetPlayerInventoryPtr() const
 {
 	return (m_pPlayer) ? m_pPlayer->GetInventory() : nullptr;
+}
+
+//패킷으로 플레이어 인벤토리 슬롯 업데이트
+bool InventoryManager::ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, int slotIndex)
+{
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+	if (!pPlayerInventory) return false;
+
+	return pPlayerInventory->ApplyServerSlotUpdate(slotIndex, itemId, count);
 }
 
 void InventoryManager::SubmitToShader(UIObjectShader* shader)
@@ -183,6 +199,7 @@ void InventoryManager::OpenLootContainer(CLootContainerObject* pLoot)
 	m_pLootInventory->ClearItems();
 	pLoot->FillInventoryUI(m_pLootInventory.get());
 	m_pLootInventory->isOpen = true;
+	m_pLootInventory->SetId(pLoot->GetBoxId());
 	m_pOpenedLoot = pLoot;
 }
 
@@ -250,7 +267,7 @@ CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDista
 	return pNearest;
 }
 
-void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
+/*void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
 {
 	if (!pEnemy) return;
 	if (!m_pLootShader) return;
@@ -272,9 +289,39 @@ void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
 
 	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
 
-	if (m_pDebugShader)
+	if (m_pLootBoxShader)
 	{
-		m_pDebugShader->AddObject(pLoot);
+		m_pLootBoxShader->AddObject(pLoot);
+	}
+}*/
+void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount)
+{
+	if (!m_pLootShader) return;
+
+	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
+	pLoot->SetBoxId(npc_id);
+	pLoot->SetPosition(pos);
+
+	BoundingOrientedBox obb;
+	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
+	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
+	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
+	pLoot->SetOOBB(obb);
+
+	for (int i = 0; i < slotCount; ++i) {
+		if (items[i] != ItemID::NONE && counts[i] > 0) {
+			pLoot->SetSlotData(i, items[i], counts[i]);
+		}
+	}
+
+	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
+
+	//if (m_pDebugShader) {
+	//	m_pDebugShader->AddObject(pLoot);
+	//}
+	if (m_pLootBoxShader)
+	{
+		m_pLootBoxShader->AddObject(pLoot);
 	}
 }
 
@@ -356,4 +403,51 @@ bool InventoryManager::IsLootInventoryOpen() const
 bool InventoryManager::IsCraftInventoryOpen() const
 {
 	return (m_pCraftInventory && m_pCraftInventory->isOpen);
+}
+
+CLootContainerObject* InventoryManager::FindLootBoxById(short box_id)
+{
+	if (!m_pLootShader) return nullptr;
+	auto* objs = m_pLootShader->GetObj();
+	if (!objs) return nullptr;
+
+	for (const auto& obj : *objs) {
+		if (!obj) continue;
+		CLootContainerObject* pLoot = dynamic_cast<CLootContainerObject*>(obj.get());
+		if (!pLoot) continue;
+		if (pLoot->GetBoxId() == box_id) return pLoot;
+	}
+	return nullptr;
+}
+
+void InventoryManager::ApplyLootBoxSlotUpdate(short box_id, int slotidx,
+	ItemID item, int count)
+{
+	CLootContainerObject* pLoot = FindLootBoxById(box_id);
+	if (!pLoot) return;
+
+	pLoot->SetSlotData(slotidx, item, count);
+
+	if (m_pOpenedLoot == pLoot && m_pLootInventory) {
+		m_pLootInventory->ApplyServerSlotUpdate(slotidx, item, count);
+	}
+}
+
+void InventoryManager::DeactivateLootBox(short box_id)
+{
+	CLootContainerObject* pLoot = FindLootBoxById(box_id);
+	if (!pLoot) return;
+
+	// 박스가 열려있다면 UI 닫기
+	if (m_pOpenedLoot == pLoot) {
+		m_pOpenedLoot = nullptr;
+		if (m_pLootInventory) {
+			m_pLootInventory->ClearItems();
+			m_pLootInventory->isOpen = false;
+			m_pLootInventory->SetId(-1);
+		}
+	}
+
+	// 박스 객체 시각 표시 종료 (이거 이렇게 처리해도 되는 건가요?)
+	pLoot->Kill();
 }

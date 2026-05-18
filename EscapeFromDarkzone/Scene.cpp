@@ -17,6 +17,8 @@
 #include "EffectManager.h"
 #include "InventoryManager.h"
 
+#include "Network.h"
+
 ID3D12DescriptorHeap *MainScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
 D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorStartHandle;
@@ -179,14 +181,9 @@ MainScene::MainScene()
 
 	m_pLaserMuzzle = nullptr;
 	m_pWeaponMuzzle = nullptr;
-	m_pWeaponObject = nullptr;
 
 	m_pEffectManager = nullptr;
 	m_pInventoryManager = nullptr;
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	m_bLaserActive = false;
 	m_bSparkFireActive = false;
@@ -309,7 +306,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 {
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 120);
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 480);		// 임시, 추후 수정 요망
 
 	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
@@ -331,11 +328,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		UIShader.get()
 	);
 
-	// Scene에는 비소유 포인터만 연결
-	inventory = nullptr;
-	corpseInventory = m_pInventoryManager->GetLootInventory();
-	craftInventory = m_pInventoryManager->GetCraftInventory();
-
 	// 맵 쉐이더
 	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
 	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -349,10 +341,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		std::unique_ptr<CGameObject> floorObj(
 			CGameObject::LoadGeometryModelByName(
 				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-				NULL, "Model/floor_01.bin", stdshader.get(), 0
+				NULL, "Model/floor.bin", stdshader.get(), 0
 			)
 		);
-		floorObj->SetPosition(0, 0.0f, 0);
+		floorObj->SetPosition(-150, -0.5f, -150);
 		floorObj->SetOOBB(NULL);
 		stdshader->addObjects(std::move(floorObj));
 
@@ -446,7 +438,16 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
 		pd3dDevice,
 		pd3dCommandList,
-		m_pd3dGraphicsRootSignature
+		m_pd3dGraphicsRootSignature,
+		false
+	);
+
+	// 시체박스 전용 솔리드 큐브
+	m_pLootBoxShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		true
 	);
 
 	// 적 쉐이더
@@ -460,13 +461,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 
-	//적 오브젝트
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
-	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->SetOOBB(NULL);
-	pEnemy->setNav(AStarNav.get());
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+	//적 오브젝트 - 네트워크가 안 될 때에만
+	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
+	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	//pEnemy->SetOOBB(NULL);
+	//pEnemy->setNav(AStarNav.get());
+	//pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
@@ -482,7 +483,12 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	if (m_pInventoryManager)
 	{
-		m_pInventoryManager->BindLootWorld(nullptr, pLootShaderRaw, m_pDebugShader.get());
+		m_pInventoryManager->BindLootWorld(
+			nullptr,
+			pLootShaderRaw,
+			m_pDebugShader.get(),
+			m_pLootBoxShader.get()
+		);
 	}
 
 	// EffectManager 생성
@@ -514,10 +520,6 @@ void MainScene::ReleaseObjects()
 		delete m_pInventoryManager;
 		m_pInventoryManager = nullptr;
 	}
-
-	inventory = nullptr;
-	corpseInventory = nullptr;
-	craftInventory = nullptr;
 
 	if (m_pEffectManager)
 	{
@@ -930,15 +932,6 @@ void MainScene::SetPlayer(CPlayer* p)
 	{
 		m_pInventoryManager->SetPlayer(m_pPlayer);
 	}
-
-	if (m_pPlayer)
-	{
-		inventory = m_pPlayer->GetInventory();
-	}
-	else
-	{
-		inventory = nullptr;
-	}
 }
 
 CCamera* MainScene::GetLightCamera(int idx)
@@ -1071,30 +1064,43 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
-			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-			XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-			XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+			if (NetworkManager::Instance().IsConnected()) {
+				XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
+				XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
 
-			auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-			for (auto& obj : *objs)
-			{
-				const auto& oobbs = obj->GetOOBB();
+				XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
+				XMFLOAT3 rayDirection;
+				XMStoreFloat3(&rayDirection, dirVec);
 
-				for (BoundingOrientedBox* pOOBB : oobbs)
+				NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+			}
+			else {
+				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+				for (auto& obj : *objs)
 				{
-					float fDist = 0.0f;
+					const auto& oobbs = obj->GetOOBB();
 
-					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					for (BoundingOrientedBox* pOOBB : oobbs)
 					{
-						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-						if (pEnemy)
+						float fDist = 0.0f;
+
+						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 						{
-							pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+							if (pEnemy)
+							{
+								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+							}
+							break;
 						}
-						break;
 					}
 				}
 			}
+
 		}
 		break;
 	}
@@ -1197,6 +1203,9 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		default:
 			break;
+		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
+			DumpMapOOBBToCSV("map_oobb.csv");
+			break;
 		}
 
 		if (IsAnyInventoryOpen())
@@ -1229,6 +1238,56 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 	return false;
 }
 
+void MainScene::DumpMapOOBBToCSV(const char* filename)
+{
+	if (m_ppShaders.size() <= SHADERIDX::MAP) return;
+	if (!m_ppShaders[SHADERIDX::MAP]) return;
+
+	auto* objs = m_ppShaders[SHADERIDX::MAP]->GetObj();
+	if (!objs) return;
+
+	FILE* fp = nullptr;
+	fopen_s(&fp, filename, "w");
+	if (!fp)
+	{
+		OutputDebugStringA("DumpMapOOBBToCSV: failed to open file\n");
+		return;
+	}
+
+	// 헤더 주석
+	fprintf(fp, "# center_x,center_y,center_z,ext_x,ext_y,ext_z,quat_x,quat_y,quat_z,quat_w\n");
+
+	int count = 0;
+	for (const auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		const auto& oobbs = obj->GetOOBB();
+		for (const BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			// 쿼터니언 정규화 (단위 쿼터니언 보장)
+			XMVECTOR q = XMLoadFloat4(&pOOBB->Orientation);
+			q = XMQuaternionNormalize(q);
+			XMFLOAT4 quat;
+			XMStoreFloat4(&quat, q);
+
+			fprintf(fp, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+				pOOBB->Center.x, pOOBB->Center.y, pOOBB->Center.z,
+				pOOBB->Extents.x, pOOBB->Extents.y, pOOBB->Extents.z,
+				quat.x, quat.y, quat.z, quat.w);
+			++count;
+		}
+	}
+
+	fclose(fp);
+
+	char msg[128];
+	sprintf_s(msg, "DumpMapOOBBToCSV: dumped %d OOBBs to %s\n", count, filename);
+	OutputDebugStringA(msg);
+}
+
 bool MainScene::ProcessInput(UCHAR *pKeysBuffer)
 {
 	return(false);
@@ -1245,11 +1304,11 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 	if (m_pInventoryManager)
 	{
-		m_pInventoryManager->UpdateLootWorld(fTimeElapsed);
+		//m_pInventoryManager->UpdateLootWorld(fTimeElapsed);	// 루트박스 만료 서버로 옮겼음
 
 		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
 		{
-			m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());
+			//m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());	// 루트박스를 서버 권위로 바꾸면서 자체스폰 삭제
 		}
 
 		m_pInventoryManager->Update(fTimeElapsed);
@@ -1358,30 +1417,43 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
-				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+				if (NetworkManager::Instance().IsConnected()) {
+					XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
+					XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
 
-				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-				for (auto& obj : *objs)
-				{
-					const auto& oobbs = obj->GetOOBB();
+					XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
+					XMFLOAT3 rayDirection;
+					XMStoreFloat3(&rayDirection, dirVec);
 
-					for (BoundingOrientedBox* pOOBB : oobbs)
+					NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+				}
+				else {
+					XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+					XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
+					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+
+					auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+					for (auto& obj : *objs)
 					{
-						float fDist = 0.0f;
+						const auto& oobbs = obj->GetOOBB();
 
-						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+						for (BoundingOrientedBox* pOOBB : oobbs)
 						{
-							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-							if (pEnemy)
+							float fDist = 0.0f;
+
+							if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 							{
-								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+								CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+								if (pEnemy)
+								{
+									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
+								}
+								break;
 							}
-							break;
 						}
 					}
 				}
+				
 			}
 
 			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
@@ -1447,7 +1519,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
 
-	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());
+	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
 void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -1510,6 +1582,11 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
+
+	if (m_pLootBoxShader)
+	{
+		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

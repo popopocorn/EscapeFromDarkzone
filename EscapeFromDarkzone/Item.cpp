@@ -3,6 +3,7 @@
 #include "Item.h"
 #include "Shader.h"
 #include "Object.h"
+#include "Network.h"	// 05.08 추가: 아이템 클릭 패킷 전송
 
 
 
@@ -275,6 +276,21 @@ void Inventory::SlotClicked(int slotidx)
 	wchar_t debugBuf[256];
 	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
 	OutputDebugStringW(debugBuf);
+
+	if (false == NetworkManager::Instance().IsConnected()) {
+		return;
+	}
+
+	if (ID >= 0) {
+		NetworkManager::Instance().SendLootPickup(
+			static_cast<short>(ID),
+			static_cast<short>(slotidx));
+	}
+	else {
+		NetworkManager::Instance().SendInventoryClick(
+			INV_ACTION_CLICK,
+			static_cast<short>(slotidx));
+	}
 }
 
 bool Inventory::ProcessClick(POINT mouse)
@@ -304,7 +320,6 @@ void Inventory::SetPosition(float x, float y)
 
 int Inventory::GetItemCnt(ItemID id) const
 {
-	
 	for (const auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == id)
@@ -312,7 +327,8 @@ int Inventory::GetItemCnt(ItemID id) const
 			return slot.count;
 		}
 	}
-	
+
+	return 0;
 }
 
 void Inventory::ConsumeItem(ItemID id, int cnt)
@@ -333,29 +349,27 @@ void Inventory::ConsumeItem(ItemID id, int cnt)
 
 bool Inventory::AddItem(ItemID item, int count)
 {
-	if (item != ItemID::NONE || count <= 0) return false;
+	if (item == ItemID::NONE || count <= 0) return false;
 
 	for (auto& slot : slots)
 	{
 		if (slot.item != ItemID::NONE && slot.item == item)
 		{
 			slot.count += count;
-
 			return true;
 		}
-		
 	}
+
 	for (auto& slot : slots)
 	{
 		if (slot.item == ItemID::NONE)
 		{
 			slot.item = item;
 			slot.count = count;
-
 			return true;
 		}
-		
 	}
+
 	return false;
 }
 
@@ -372,6 +386,32 @@ ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
 	return &slots[idx];
+}
+
+bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
+{
+	ItemSlot* pSlot = GetSlot(slotIndex);
+	if (!pSlot) return false;
+
+	// 서버가 NONE이나 수량 0을 보내면 슬롯 비우기
+	if (itemId == ItemID::NONE || count <= 0)
+	{
+		pSlot->item = ItemID::NONE;
+		pSlot->count = 0;
+		return true;
+	}
+	else {
+		pSlot->item = itemId;
+		pSlot->count = count;
+	}
+
+	// 슬롯에 이미 뭐가 있으면 수정하지 않음 --> 수정하되 로그 찍기? 나중에 수정
+	//if (pSlot->item != ItemID::NONE || pSlot->count > 0)
+	//{
+	//	return false;
+	//}
+
+	return true;
 }
 
 void CraftBox::Init()

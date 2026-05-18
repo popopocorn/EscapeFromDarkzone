@@ -807,11 +807,15 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //디버그 쉐이더 생성
-CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+CBoundingBoxShader::CBoundingBoxShader(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	bool bSolid)
 {
-	m_pd3dGraphicsRootSignature = pd3dGraphicsRootSignature;
+	m_bSolid = bSolid;
 
-	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList);
+	m_pDebugObject = std::make_unique<CDebugObject>(pd3dDevice, pd3dCommandList, bSolid);
 
 	CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
@@ -819,6 +823,17 @@ CBoundingBoxShader::CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 CBoundingBoxShader::~CBoundingBoxShader()
 {
 	m_DebugInstances.clear();
+}
+
+void CBoundingBoxShader::CleanupDeadInstances()
+{
+	std::erase_if(m_DebugInstances, [](const DebugInstance& instance)
+		{
+			if (!instance.m_pTargetObject)
+				return true;
+
+			return !instance.m_pTargetObject->IsAlive();
+		});
 }
 
 D3D12_INPUT_LAYOUT_DESC CBoundingBoxShader::CreateInputLayout()
@@ -842,17 +857,33 @@ D3D12_SHADER_BYTECODE CBoundingBoxShader::CreateVertexShader()
 
 D3D12_SHADER_BYTECODE CBoundingBoxShader::CreatePixelShader()
 {
-	return CShader::CompileShaderFromFile(L"Debug.hlsli", "PSDebug", "ps_5_1", &m_pd3dPixelShaderBlob);
-}
+	if (m_bSolid)
+	{
+		return CShader::CompileShaderFromFile(
+			L"Debug.hlsli",
+			"PSLootBox",
+			"ps_5_1",
+			&m_pd3dPixelShaderBlob
+		);
+	}
 
+	return CShader::CompileShaderFromFile(
+		L"Debug.hlsli",
+		"PSDebug",
+		"ps_5_1",
+		&m_pd3dPixelShaderBlob
+	);
+}
 D3D12_RASTERIZER_DESC CBoundingBoxShader::CreateRasterizerState()
 {
 	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
 	::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
-	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+
+	d3dRasterizerDesc.FillMode = (m_bSolid) ? D3D12_FILL_MODE_SOLID : D3D12_FILL_MODE_WIREFRAME;
 	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
 	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
 	d3dRasterizerDesc.DepthClipEnable = TRUE;
+
 	return d3dRasterizerDesc;
 }
 
@@ -880,7 +911,8 @@ void CBoundingBoxShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	m_d3dPipelineStateDesc.DepthStencilState = CreateDepthStencilState();
 	m_d3dPipelineStateDesc.InputLayout = CreateInputLayout();
 	m_d3dPipelineStateDesc.SampleMask = UINT_MAX;
-	m_d3dPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	m_d3dPipelineStateDesc.PrimitiveTopologyType =
+		(m_bSolid) ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE : D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
 	m_d3dPipelineStateDesc.NumRenderTargets = 1;
 	m_d3dPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	m_d3dPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -922,17 +954,30 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 
 	if (bCanAdd)
 	{
-		XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
-		XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
+		bool bAlreadyAdded = false;
+		for (const auto& instance : m_DebugInstances)
+		{
+			if (instance.m_pTargetObject == pGameObject)
+			{
+				bAlreadyAdded = true;
+				break;
+			}
+		}
 
-		XMFLOAT4X4 localMatrix;
-		XMStoreFloat4x4(&localMatrix, S * T);
+		if (!bAlreadyAdded)
+		{
+			XMMATRIX S = XMMatrixScaling(extents.x * 2.0f, extents.y * 2.0f, extents.z * 2.0f);
+			XMMATRIX T = XMMatrixTranslation(center.x, center.y, center.z);
 
-		DebugInstance instance;
-		instance.m_pTargetObject = pGameObject;
-		instance.m_xmf4x4Local = localMatrix;
+			XMFLOAT4X4 localMatrix;
+			XMStoreFloat4x4(&localMatrix, S * T);
 
-		m_DebugInstances.push_back(instance);
+			DebugInstance instance;
+			instance.m_pTargetObject = pGameObject;
+			instance.m_xmf4x4Local = localMatrix;
+
+			m_DebugInstances.push_back(instance);
+		}
 	}
 
 	if (pGameObject->m_pChild)
@@ -947,6 +992,11 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 }
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)
 {
+	UNREFERENCED_PARAMETER(pCamera);
+	UNREFERENCED_PARAMETER(nPipelineState);
+
+	CleanupDeadInstances();
+
 	if (m_DebugInstances.empty()) return;
 
 	pd3dCommandList->SetPipelineState(m_pd3dPipelineState[0]);
@@ -954,12 +1004,11 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 	for (const auto& instance : m_DebugInstances)
 	{
 		if (!instance.m_pTargetObject) continue;
+		if (!instance.m_pTargetObject->IsAlive()) continue;
 
 		XMMATRIX mtxLocal = XMLoadFloat4x4(&instance.m_xmf4x4Local);
-
 		XMMATRIX mtxWorld = XMLoadFloat4x4(&instance.m_pTargetObject->m_xmf4x4World);
-		
-		//최종 변환 행렬 계산
+
 		XMMATRIX mtxFinal = mtxLocal * mtxWorld;
 
 		XMFLOAT4X4 xmf4x4Transform;
@@ -967,7 +1016,8 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 
 		pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4Transform, 0);
 
-		if (m_pDebugObject) m_pDebugObject->Render(pd3dCommandList);
+		if (m_pDebugObject)
+			m_pDebugObject->Render(pd3dCommandList);
 	}
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

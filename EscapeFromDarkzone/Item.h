@@ -3,6 +3,8 @@
 #include "UI.h"
 #include<algorithm>
 
+#include "ItemDef.h"
+
 //아이템 선언
 enum class ItemType {
 	PISTOL,
@@ -40,7 +42,7 @@ struct WeaponSpec
 };
 
 //재료를 위한 구조
-enum class ItemID {
+/*enum class ItemID {
 	NONE = 0,
 	MAT_1,
 	MAT_2,
@@ -54,7 +56,7 @@ enum class ItemID {
 	WEAPON_UPGRADE_3,
 	WEAPON_UPGRADE_4,
 	ARMOR_PLATE,
-};
+};*/
 
 struct RecipeElement {
 	ItemID itemID;
@@ -98,10 +100,10 @@ protected:
 
 //아이템 데이터와 출력 구조체로 나눠서 관리
 //아이템 데이터 슬롯
-struct ItemSlot {
+/*struct ItemSlot {
 	ItemID item;
 	int count = 0;
-};
+};*/
 
 //아이템 출력 슬롯
 struct ItemSlotView {
@@ -129,7 +131,7 @@ private:
 	float m_textRatio = 0.60f;
 	float m_countRatio = 0.20f;
 
-	int ID;
+	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
 
 	std::unique_ptr<UIMesh> m_pSharedMesh; // UI 공용 메쉬
 
@@ -148,6 +150,8 @@ public:
 	//드래그 앤 드롭 처리 함수 추가
 	bool AddItem(ItemID item, int count = 1);
 	ItemSlot* GetSlot(int idx);
+
+	bool ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count);
 
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
 	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동

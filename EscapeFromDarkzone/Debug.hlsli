@@ -22,5 +22,10 @@ VS_DEBUG_OUTPUT VSDebug(VS_DEBUG_INPUT input)
 
 float4 PSDebug(VS_DEBUG_OUTPUT input) : SV_TARGET
 {
-    return float4(0.0f, 1.0f, 0.0f, 1.0f); // ³ì»ö
+    return float4(0.0f, 1.0f, 0.0f, 1.0f);
+}
+
+float4 PSLootBox(VS_DEBUG_OUTPUT input) : SV_TARGET
+{
+    return float4(0.1f, 0.35f, 1.0f, 1.0f);
 }

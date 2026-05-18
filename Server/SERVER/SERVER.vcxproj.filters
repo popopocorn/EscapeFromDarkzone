@@ -15,12 +15,33 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Server_Collision.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Server_Npc.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="protocol.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Server_AI.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemDef.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="multi_iocp_server_0406.cpp">
+    <ClCompile Include="Server_Collision.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Server_Npc.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Server_AI.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Server.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

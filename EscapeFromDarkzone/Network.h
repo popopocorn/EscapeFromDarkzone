@@ -5,9 +5,11 @@
 #include <vector>
 #include "protocol.h"
 
+#include <DirectXMath.h>
+
 #pragma comment(lib, "WS2_32.lib")
 
-constexpr char SERVER_ADDR[] = "127.0.0.1";
+constexpr char SERVER_ADDR[] = "119.195.220.93";
 
 // 패킷 큐 최대 크기
 constexpr int MAX_PACKET_QUEUE_SIZE = 100;
@@ -46,6 +48,9 @@ public:
     std::vector<char> PopPacket();
 
     bool SendLogin(const char* name);
-    //bool SendMove(float x, float y, float z, unsigned int move_time);
     bool SendMove(char inputs, float yaw, unsigned int move_time);
+    bool SendInventoryClick(char action, short slotidx);
+    bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId);
+
+    bool SendLootPickup(short box_id, short slotidx);
 };

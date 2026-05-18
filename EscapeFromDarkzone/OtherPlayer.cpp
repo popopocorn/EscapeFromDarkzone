@@ -79,7 +79,8 @@ bool OtherPlayerRun::Enter(OtherPlayer* Player)
 
 void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 {
-	int nextAnim = 0;
+	//int nextAnim = 0;
+	int nextAnim = ANIM_RUN_F;
 	
 	//네트워크 전송시 플레이어의 방향(월드좌표가 아닌 화면기준 이동 방향)을 여기의 angle로 사용
 
@@ -130,4 +131,15 @@ OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 void OtherPlayer::UpdatePosition(float x, float y, float z) 
 {
 	SetPosition(XMFLOAT3(x, y, z));
+}
+
+void OtherPlayer::SetServerYaw(float yawRad)
+{
+	float yawDeg = XMConvertToDegrees(yawRad);
+
+	XMFLOAT3 pos = GetPosition();
+	m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, yawDeg, 0.0f);
+	m_xmf4x4ToParent._41 = pos.x;
+	m_xmf4x4ToParent._42 = pos.y;
+	m_xmf4x4ToParent._43 = pos.z;
 }

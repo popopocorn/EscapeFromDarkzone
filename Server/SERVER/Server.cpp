@@ -1,0 +1,1407 @@
+#include <iostream>
+#include <array>
+#include <WS2tcpip.h>
+#include <MSWSock.h>
+#include <thread>
+#include <mutex>
+#include <unordered_set>
+#include <fstream>
+#include <string>
+
+#include <chrono>
+#include <cmath>
+
+#include "protocol.h"
+#include "ItemDef.h"
+
+#include "Server_Collision.h"
+#include "Server_Npc.h"
+#include "Server_AI.h"
+
+#pragma comment(lib, "WS2_32.lib")
+#pragma comment(lib, "MSWSock.lib")
+
+std::vector<BoundingOrientedBox> g_mapOOBBs;
+
+constexpr float NPC_MOVE_SPEED = 7.0f;
+constexpr float NPC_DETECTION_RANGE = 10.0f;
+constexpr float NPC_ATTACK_RANGE = 3.0f;
+constexpr float NPC_DIE_DURATION = 1.2f;
+constexpr float NPC_WAYPOINT_REACH_DIST = 1.0f;
+constexpr float NPC_PATH_UPDATE_INTERVAL = 1.0f;
+
+constexpr float NPC_DETECTION_RANGE_SQ = NPC_DETECTION_RANGE * NPC_DETECTION_RANGE;
+constexpr float NPC_ATTACK_RANGE_SQ = NPC_ATTACK_RANGE * NPC_ATTACK_RANGE;
+constexpr float NPC_WAYPOINT_REACH_DIST_SQ = NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
+
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
+class OVER_EXP {
+public:
+	WSAOVERLAPPED _over;
+	WSABUF _wsabuf;
+	char _buf[BUF_SIZE];
+	COMP_TYPE _comp_type;
+	OVER_EXP()
+	{
+		_wsabuf.len = BUF_SIZE;
+		_wsabuf.buf = _buf;
+		_comp_type = OP_RECV;
+		ZeroMemory(&_over, sizeof(_over));
+	}
+	OVER_EXP(char* packet)
+	{
+		_wsabuf.len = packet[0];
+		_wsabuf.buf = _buf;
+		ZeroMemory(&_over, sizeof(_over));
+		_comp_type = OP_SEND;
+		memcpy(_buf, packet, packet[0]);
+	}
+};
+
+enum S_STATE { ST_FREE, ST_ALLOC, ST_INGAME };
+class SESSION {
+	OVER_EXP _recv_over;
+
+public:
+	std::mutex _s_lock;
+	S_STATE _state;
+	int _id;
+	SOCKET _socket;
+	float x, y, z;
+	float yaw;
+	char  player_state;
+	char	_name[NAME_SIZE];
+	int		_prev_remain;
+	int		_last_move_time;
+
+	std::array<ItemSlot, INVENTORY_SIZE> _inventory{};
+
+	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
+
+	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
+	std::chrono::steady_clock::time_point _last_move_recv_time;
+
+public:
+	SESSION()
+	{
+		_id = -1;
+		_socket = 0;
+		x = z = 0.0f;
+		y = 0.1f;
+		yaw = 0.0f;
+		player_state = PLAYER_STATE_IDLE;
+		_name[0] = 0;
+		_state = ST_FREE;
+		_prev_remain = 0;
+		_last_move_recv_time = std::chrono::steady_clock::now();
+	}
+
+	~SESSION() {}
+
+	void do_recv()
+	{
+		DWORD recv_flag = 0;
+		memset(&_recv_over._over, 0, sizeof(_recv_over._over));
+		_recv_over._wsabuf.len = BUF_SIZE - _prev_remain;
+		_recv_over._wsabuf.buf = _recv_over._buf + _prev_remain;
+		WSARecv(_socket, &_recv_over._wsabuf, 1, 0, &recv_flag,
+			&_recv_over._over, 0);
+	}
+
+	void do_send(void* packet)
+	{
+		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
+		WSASend(_socket, &sdata->_wsabuf, 1, 0, 0, &sdata->_over, 0);
+	}
+	void send_login_info_packet()
+	{
+		SC_LOGIN_INFO_PACKET p;
+		p.id = _id;
+		p.size = sizeof(SC_LOGIN_INFO_PACKET);
+		p.type = SC_LOGIN_INFO;
+		p.x = x;
+		p.y = y;
+		p.z = z;
+		do_send(&p);
+	}
+	void send_move_packet(int c_id);
+	void send_add_player_packet(int c_id);
+	void send_remove_player_packet(int c_id)
+	{
+		SC_REMOVE_PLAYER_PACKET p;
+		p.id = c_id;
+		p.size = sizeof(p);
+		p.type = SC_REMOVE_PLAYER;
+		do_send(&p);
+	}
+	void send_add_npc_packet(short npc_id, char kind, float x, float y, float z, float yaw, short hp)
+	{
+		SC_ADD_NPC_PACKET p;
+		p.size = sizeof(SC_ADD_NPC_PACKET);
+		p.type = SC_ADD_NPC;
+		p.npc_id = npc_id;
+		p.npc_kind = kind;
+		p.x = x; p.y = y; p.z = z;
+		p.yaw = yaw;
+		p.hp = hp;
+		do_send(&p);
+	}
+	void send_move_npc_packet(short npc_id, float x, float y, float z, float yaw)
+	{
+		SC_MOVE_NPC_PACKET p;
+		p.size = sizeof(SC_MOVE_NPC_PACKET);
+		p.type = SC_MOVE_NPC;
+		p.npc_id = npc_id;
+		p.x = x; p.y = y; p.z = z;
+		p.yaw = yaw;
+		do_send(&p);
+	}
+	void send_remove_npc_packet(short npc_id)
+	{
+		SC_REMOVE_NPC_PACKET p;
+		p.size = sizeof(SC_REMOVE_NPC_PACKET);
+		p.type = SC_REMOVE_NPC;
+		p.npc_id = npc_id;
+		do_send(&p);
+	}
+	void send_inventory_update_packet(short slotidx)
+	{
+		SC_INVENTORY_UPDATE_PACKET p;
+		p.size = sizeof(SC_INVENTORY_UPDATE_PACKET);
+		p.type = SC_INVENTORY_UPDATE;
+		p.slotidx = slotidx;
+		p.item_id = _inventory[slotidx].item;
+		p.count = _inventory[slotidx].count;
+		do_send(&p);
+	}
+	void send_player_state_change_packet(int c_id);
+};
+
+std::array<SESSION, MAX_USER> clients;
+
+AstarNavigation g_astar;
+SOCKET g_s_socket, g_c_socket;
+OVER_EXP g_a_over;
+
+void SESSION::send_move_packet(int c_id)
+{
+	SC_MOVE_PLAYER_PACKET p;
+	p.id = c_id;
+	p.size = sizeof(SC_MOVE_PLAYER_PACKET);
+	p.type = SC_MOVE_PLAYER;
+	p.x = clients[c_id].x;
+	p.y = clients[c_id].y;
+	p.z = clients[c_id].z;
+	p.yaw = clients[c_id].yaw;
+	p.move_time = clients[c_id]._last_move_time;
+	do_send(&p);
+}
+
+void SESSION::send_add_player_packet(int c_id)
+{
+	SC_ADD_PLAYER_PACKET add_packet;
+	add_packet.id = c_id;
+	strcpy_s(add_packet.name, clients[c_id]._name);
+	add_packet.size = sizeof(SC_ADD_PLAYER_PACKET);
+	add_packet.type = SC_ADD_PLAYER;
+	add_packet.x = clients[c_id].x;
+	add_packet.y = clients[c_id].y;
+	add_packet.z = clients[c_id].z;
+	add_packet.yaw = clients[c_id].yaw;
+	add_packet.state = clients[c_id].player_state;
+	do_send(&add_packet);
+}
+
+void SESSION::send_player_state_change_packet(int c_id) {
+	SC_PLAYER_STATE_CHANGE_PACKET p;
+	p.size = sizeof(SC_PLAYER_STATE_CHANGE_PACKET);
+	p.type = SC_PLAYER_STATE_CHANGE;
+	p.id = c_id;
+	p.state = clients[c_id].player_state;
+	do_send(&p);
+}
+
+bool load_mapOOBB_from_CSV(const char* filename)
+{
+	std::ifstream file(filename);
+	if (!file.is_open()) {
+		std::cerr << "Failed to open CSV file: " << filename << std::endl;
+		return false;
+	}
+
+	std::string line;
+	int loaded = 0;
+	int line_no = 0;
+
+	while (std::getline(file, line))
+	{
+		++line_no;
+
+		if (line.empty()) continue;
+		if (line[0] == '#') continue;
+
+		BoundingOrientedBox obb;
+		XMFLOAT4 quat;
+
+		int parsed = sscanf_s(line.c_str(),
+			"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f",
+			&obb.Center.x, &obb.Center.y, &obb.Center.z,
+			&obb.Extents.x, &obb.Extents.y, &obb.Extents.z,
+			&quat.x, &quat.y, &quat.z, &quat.w);
+
+		if (parsed != 10)
+		{
+			std::cerr << "[LoadMapOOBB] parse error at line " << line_no
+				<< ": " << line << std::endl;
+			continue;
+		}
+
+		// 쿼터니언 정규화
+		XMVECTOR q = XMLoadFloat4(&quat);
+		q = XMQuaternionNormalize(q);
+		XMStoreFloat4(&obb.Orientation, q);
+
+		g_mapOOBBs.push_back(obb);
+		++loaded;
+	}
+
+	std::cout << "[LoadMapOOBB] loaded " << loaded << " OOBBs from " << filename << std::endl;
+
+	// 검증용: 처음 1개 OOBB 값 출력
+	if (loaded > 0)
+	{
+		const auto& o = g_mapOOBBs[0];
+		std::cout << "  First OOBB: center=("
+			<< o.Center.x << ", " << o.Center.y << ", " << o.Center.z
+			<< ") extents=("
+			<< o.Extents.x << ", " << o.Extents.y << ", " << o.Extents.z
+			<< ")" << std::endl;
+	}
+
+	return loaded > 0;
+}
+
+void ResolvePlayerCollision(int c_id, float yawRad)
+{
+	for (const auto& mapOOBB : g_mapOOBBs)
+	{
+		// 매 검사마다 보정된 최신 위치로 플레이어 OOBB 재생성
+		XMFLOAT3 pos = { clients[c_id].x, clients[c_id].y, clients[c_id].z };
+		BoundingOrientedBox playerOOBB = MakePlayerOOBB(pos, yawRad);
+
+		ColResult res = CalcCollision(playerOOBB, mapOOBB);
+		if (!res.isCollide) continue;
+
+		// 충돌 노멀 누적
+		clients[c_id]._collNormals.push_back(res.normal);
+
+		// mtv로 위치 보정
+		// 클라의 HandleCollision: vBackPos -= vNormal * 0.001f
+		XMVECTOR vMtv = XMLoadFloat3(&res.mtv);
+		XMVECTOR vNormal = XMLoadFloat3(&res.normal);
+		vMtv -= vNormal * 0.001f;
+
+		XMFLOAT3 finalBack;
+		XMStoreFloat3(&finalBack, vMtv);
+
+		clients[c_id].x += finalBack.x;
+		clients[c_id].z += finalBack.z;
+	}
+}
+
+void ApplySlide(int c_id, float& dirX, float& dirZ)
+{
+	auto& normals = clients[c_id]._collNormals;
+
+	// 이동 방향이 0이면, 누적 노멀만 클리어하고 종료
+	if (dirX == 0.0f && dirZ == 0.0f)
+	{
+		normals.clear();
+		return;
+	}
+
+	// XZ 평면 계산
+	XMVECTOR currentDirVec = XMVectorSet(dirX, 0.0f, dirZ, 0.0f);
+
+	for (const XMFLOAT3& normal : normals)
+	{
+		XMVECTOR normalVec = XMLoadFloat3(&normal);
+
+		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
+		float dot = XMVectorGetX(dotVec);
+
+		if (dot < 0.0f)
+		{
+			currentDirVec = currentDirVec - (normalVec * dot);
+		}
+	}
+
+	// 길이가 거의 0이면 제로로 처리
+	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
+	{
+		currentDirVec = XMVectorZero();
+	}
+
+	// 결과 추출 
+	XMFLOAT3 result;
+	XMStoreFloat3(&result, currentDirVec);
+	dirX = result.x;
+	dirZ = result.z;
+
+	// 이번 패킷에서 한 번 사용했으니 누적 노멀 클리어 
+	normals.clear();
+}
+
+int get_new_client_id()
+{
+	for (int i = 0; i < MAX_USER; ++i) {
+		std::lock_guard<std::mutex> ll{ clients[i]._s_lock };
+		if (clients[i]._state == ST_FREE) {
+			clients[i]._state = ST_ALLOC;
+			return i;
+		}
+	}
+	return -1;
+}
+
+struct PlayerSnapshot {
+	bool  in_game;
+	float x, y, z;
+};
+
+static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
+{
+	for (int i = 0; i < MAX_USER; ++i) {
+		std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+		if (clients[i]._state == ST_INGAME) {
+			out[i].in_game = true;
+			out[i].x = clients[i].x;
+			out[i].y = clients[i].y;
+			out[i].z = clients[i].z;
+		}
+		else {
+			out[i].in_game = false;
+		}
+	}
+}
+
+static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapshot, MAX_USER>& snapshot, float& out_dist_sq)
+{
+	int   best_id = -1;
+	float best_sq = 0.0f;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!snapshot[i].in_game) continue;
+
+		float dx = snapshot[i].x - pos.x;
+		float dy = snapshot[i].y - pos.y;
+		float dz = snapshot[i].z - pos.z;
+		float d_sq = dx * dx + dy * dy + dz * dz;
+
+		if (best_id == -1 || d_sq < best_sq) {
+			best_id = i;
+			best_sq = d_sq;
+		}
+	}
+
+	if (best_id >= 0) {
+		out_dist_sq = best_sq;
+	}
+	return best_id;
+}
+
+static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	if (npc.state == new_state) return;
+
+	npc.state = new_state;
+
+	if (new_state == NPC_STATE_DIE) {
+		npc.die_timer = 0.0f;
+
+		// 죽은 NPC 루트박스 활성화
+		npc.loot_active = true;
+		npc.death_time = std::chrono::steady_clock::now();
+	}
+
+	// 디버그용 로그
+	std::cout << "[NPC " << npc.id << "] -> state " << (int)new_state << "\n";
+
+
+	// 모든 ST_INGAME 클라에 즉시 송신
+	SC_NPC_STATE_CHANGE_PACKET p;
+	p.size = sizeof(SC_NPC_STATE_CHANGE_PACKET);
+	p.type = SC_NPC_STATE_CHANGE;
+	p.npc_id = npc.id;
+	p.state = new_state;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&p);
+	}
+
+	// 박스 정보 송신
+	if (new_state == NPC_STATE_DIE) {
+		SC_ADD_LOOT_BOX_PACKET box;
+		box.size = sizeof(SC_ADD_LOOT_BOX_PACKET);
+		box.type = SC_ADD_LOOT_BOX;
+		box.npc_id = npc.id;
+		box.x = npc.position.x;
+		box.y = npc.position.y;
+		box.z = npc.position.z;
+
+		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], ["<< box.npc_id << "]\n";
+
+		for (int i = 0; i < INVENTORY_SIZE; ++i) {
+			box.items[i] = npc._inventory[i].item;
+			box.counts[i] = npc._inventory[i].count;
+		}
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+			clients[i].do_send(&box);
+		}
+	}
+}
+
+static void ResolveNpcCollision(SERVER_NPC& npc, float yawRad)
+{
+	for (const auto& mapOOBB : g_mapOOBBs)
+	{
+		// 매 검사마다 보정된 최신 위치로 NPC OOBB 재생성
+		BoundingOrientedBox npcOOBB = MakeNpcOOBB(npc.position, yawRad);
+
+		ColResult res = CalcCollision(npcOOBB, mapOOBB);
+		if (!res.isCollide) continue;
+
+		// 충돌 노멀 누적 (다음 틱 ApplyNpcSlide에서 사용)
+		npc.coll_normals.push_back(res.normal);
+
+		// mtv로 위치 보정 — 플레이어 패턴과 동일
+		// (vBackPos -= vNormal * 0.001f 로 벽에서 미세하게 더 떨어뜨림)
+		XMVECTOR vMtv = XMLoadFloat3(&res.mtv);
+		XMVECTOR vNormal = XMLoadFloat3(&res.normal);
+		vMtv -= vNormal * 0.001f;
+
+		XMFLOAT3 finalBack;
+		XMStoreFloat3(&finalBack, vMtv);
+
+		npc.position.x += finalBack.x;
+		npc.position.z += finalBack.z;
+		// Y는 건드리지 않음 (XZ 평면 충돌)
+	}
+}
+
+static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
+{
+	auto& normals = npc.coll_normals;
+
+	// 이동 방향이 0이면 누적 노멀만 클리어하고 종료
+	if (move_dir.x == 0.0f && move_dir.z == 0.0f)
+	{
+		normals.clear();
+		return;
+	}
+
+	// XZ 평면 계산
+	XMVECTOR currentDirVec = XMVectorSet(move_dir.x, 0.0f, move_dir.z, 0.0f);
+
+	for (const XMFLOAT3& normal : normals)
+	{
+		XMVECTOR normalVec = XMLoadFloat3(&normal);
+
+		XMVECTOR dotVec = XMVector3Dot(currentDirVec, normalVec);
+		float dot = XMVectorGetX(dotVec);
+
+		// 벽을 향해 들어가는 성분만 제거 (dot < 0이면 침투 방향)
+		if (dot < 0.0f)
+		{
+			currentDirVec = currentDirVec - (normalVec * dot);
+		}
+	}
+
+	// 길이가 거의 0이면 제로로 처리 (반대 방향 벽 두 개 사이에 끼인 경우)
+	if (XMVectorGetX(XMVector3LengthSq(currentDirVec)) < 0.0001f)
+	{
+		currentDirVec = XMVectorZero();
+	}
+
+	// 결과 추출
+	XMFLOAT3 result;
+	XMStoreFloat3(&result, currentDirVec);
+	move_dir.x = result.x;
+	move_dir.z = result.z;
+	// Y는 건드리지 않음
+
+	// 이번 틱에서 한 번 사용했으니 누적 노멀 클리어
+	normals.clear();
+}
+
+static short WeaponDamage(char weapon_id)
+{
+	switch (weapon_id) {
+	case 0:  
+		return 10;
+	default: 
+		return 0;
+	}
+}
+
+static float WeaponRange(char weapon_id)
+{
+	switch (weapon_id) {
+	case 0:  
+		return 100.0f;
+	default: 
+		return 0.0f;
+	}
+}
+
+static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	if (NPC_STATE_DIE == npc.state) return;
+
+	npc.hp -= damage;
+
+	{
+		SC_NPC_HP_UPDATE_PACKET p;
+		p.size = sizeof(SC_NPC_HP_UPDATE_PACKET);
+		p.type = SC_NPC_HP_UPDATE;
+		p.npc_id = npc.id;
+		p.hp = npc.hp;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+			clients[i].do_send(&p);
+		}
+	}
+
+	if (npc.hp <= 0) {
+		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+	}
+}
+
+static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	switch (e.type) {
+	case NpcInputEvent::HIT:
+	{
+		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
+		XMVECTOR dir = XMVector3Normalize(XMVectorSet(e.ray_direction.x, e.ray_direction.y, e.ray_direction.z, 0.0f));
+
+		float max_range = WeaponRange(e.weapon_id);
+		if (max_range <= 0.0f) return;
+
+		short best_id = -1;
+		float best_t = max_range;
+		for (auto& npc : g_npcs) {
+			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
+			BoundingOrientedBox oobb = MakeNpcOOBB(npc.position, npc.yaw);
+			float t;
+			if (oobb.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_id = npc.id;
+			}
+		}
+
+		if (best_id >= 0) {
+			short damage = WeaponDamage(e.weapon_id);
+			ApplyDamage(g_npcs[best_id], damage, player_snapshot);
+		}
+	}
+
+		break;
+	case NpcInputEvent::NEW_CLIENT_JOINED:
+	{
+		std::cout << "[NPC] NEW_CLIENT_JOINED received, client "
+			<< e.new_client_id << "\n";
+
+		// 새 클라가 정말 ST_INGAME인지 확인 (미세한 disconnect 타이밍 가드)
+		{
+			std::lock_guard<std::mutex> lk(clients[e.new_client_id]._s_lock);
+			if (clients[e.new_client_id]._state != ST_INGAME) {
+				break;
+			}
+		}
+
+		// 살아있는 모든 NPC를 그 클라에 SC_ADD_NPC 송신
+		for (const auto& npc : g_npcs) {
+			if (!npc.alive) continue;
+			clients[e.new_client_id].send_add_npc_packet(
+				npc.id, npc.kind,
+				npc.position.x, npc.position.y, npc.position.z,
+				npc.yaw, npc.hp
+			);
+		}
+
+		break;
+	}
+	}
+}
+
+static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	float dist_sq;
+	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	if (player_id < 0) return;  // 게임 중인 플레이어 없음
+
+	// 감지 범위 안 + 공격 범위 밖일 때만 추적 시작
+	if (dist_sq <= NPC_DETECTION_RANGE_SQ && dist_sq > NPC_ATTACK_RANGE_SQ) {
+		ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+	}
+}
+
+static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+{
+	// 1. 가장 가까운 플레이어 검색
+	float dist_sq;
+	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	if (player_id < 0) {
+		// 접속 중인 클라이언트 없으면 Idle 복귀
+		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		return;
+	}
+
+	// 2. 거리 체크 (XZ 평면, Y 무시) — 사거리 밖 또는 공격 거리 안이면 Idle 전환
+	XMFLOAT3 player_pos = {
+		player_snapshot[player_id].x,
+		player_snapshot[player_id].y,
+		player_snapshot[player_id].z
+	};
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	float dist_xz_sq = dx * dx + dz * dz;
+
+	if (dist_xz_sq > NPC_DETECTION_RANGE_SQ || dist_xz_sq <= NPC_ATTACK_RANGE_SQ) {
+		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		return;
+	}
+
+	// 3. 1초 주기 A* 재탐색
+	npc.path_update_timer += dt;
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
+		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
+		npc.waypoints = g_astar.FindPath(npc.position, player_pos);
+		npc.way_idx = 0;
+	}
+
+	// 디버그용 로그
+	//std::cout << "[NPC " << npc.id << "] pos=("
+	//	<< npc.position.x << "," << npc.position.z
+	//	<< ") -> target=(" << player_pos.x << "," << player_pos.z
+	//	<< ") path size=" << npc.waypoints.size() << "\n";
+
+	// 4. waypoint 따라가기
+	XMFLOAT3 look = { 0.0f, 0.0f, 1.0f };  // 기본 정면
+	XMFLOAT3 move_dir = { 0.0f, 0.0f, 0.0f };
+	bool is_moving = false;
+
+	while (npc.way_idx < (int)npc.waypoints.size()) {
+		const XMFLOAT3& wp = npc.waypoints[npc.way_idx];
+		float wdx = wp.x - npc.position.x;
+		float wdz = wp.z - npc.position.z;
+		float wd_sq = wdx * wdx + wdz * wdz;
+
+		if (wd_sq < NPC_WAYPOINT_REACH_DIST_SQ) {
+			// 현재 waypoint 도달 --> 다음
+			npc.way_idx++;
+		}
+		else {
+			// 정규화하여 이동 방향 결정
+			float wd = std::sqrt(wd_sq);
+			look.x = wdx / wd;
+			look.y = 0.0f;
+			look.z = wdz / wd;
+			move_dir = look;
+			is_moving = true;
+			break;
+		}
+	}
+
+	// 5. 경로 없거나 모든 waypoint 도달 --> 정지하되 플레이어 방향으로는 향함
+	if (!is_moving) {
+		// move_dir 유지: (0,0,0) → 위치 적분에서 안 움직임
+		if (dist_xz_sq > 0.01f) {  // 클라는 0.1f, 거리 비교라 제곱은 0.01f
+			float d = std::sqrt(dist_xz_sq);
+			look.x = dx / d;
+			look.y = 0.0f;
+			look.z = dz / d;
+		}
+	}
+
+	// 6. yaw 갱신 (라디안 보관)
+	//    서버는 yaw 자체만 보관하면 충분. 송신 시 그대로 전송. (추후 yaw 전송 시 변경)
+	npc.yaw = std::atan2(look.x, look.z);
+
+	// 7. 직전 틱 누적 노멀로 벽 슬라이드 보정
+	ApplyNpcSlide(npc, move_dir);
+
+	// 8. 위치 적분 (XZ 평면만)
+	npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+	npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+
+	// 9. 충돌 검사 + 보정 + 이번 틱 노멀 누적
+	ResolveNpcCollision(npc, npc.yaw);
+}
+
+static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+{
+	npc.die_timer += dt;
+	if (npc.die_timer < NPC_DIE_DURATION) return;
+
+	// 1.2초 경과 — NPC 제거
+
+	// 1. 모든 ST_INGAME 클라에 SC_REMOVE_NPC 송신
+	//    alive=false 처리 전에 보내야 함 (NEW_CLIENT_JOINED와의 race 고려).
+	SC_REMOVE_NPC_PACKET p;
+	p.size = sizeof(SC_REMOVE_NPC_PACKET);
+	p.type = SC_REMOVE_NPC;
+	p.npc_id = npc.id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&p);
+	}
+
+	// 2. NPC 슬롯 해제
+	npc.alive = false;
+
+	// 다음 틱부터 UpdateNpc 분기에서 !npc.alive로 걸러져 더 이상 호출되지 않음.
+	// npc.state는 그대로 DIE로 유지하지만 의미 없음.
+	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
+}
+
+static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	switch (npc.state) {
+	case NPC_STATE_IDLE: 
+		UpdateNpcIdle(npc, dt, player_snapshot); 
+		break;
+	case NPC_STATE_RUN:  
+		UpdateNpcRun(npc, dt, player_snapshot); 
+		break;
+	case NPC_STATE_DIE:  
+		UpdateNpcDie(npc, dt, player_snapshot); 
+		break;
+	}
+}
+
+static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	for (const auto& npc : g_npcs) {
+		if (!npc.alive) continue;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+
+			clients[i].send_move_npc_packet(
+				npc.id,
+				npc.position.x, npc.position.y, npc.position.z,
+				npc.yaw
+			);
+		}
+	}
+}
+
+/* 인벤 추가 — 클라 Inventory::AddItem과 동일 로직 + 갱신된 슬롯 인덱스 반환
+   반환: 성공 시 갱신된 슬롯 인덱스 (>=0), 실패 시 -1 */
+static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID item, int count)
+{
+	if (item == ItemID::NONE || count <= 0) return -1;
+
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		if (inv[i].item != ItemID::NONE && inv[i].item == item) {
+			inv[i].count += count;
+			return i;
+		}
+	}
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		if (inv[i].item == ItemID::NONE) {
+			inv[i].item = item;
+			inv[i].count = count;
+			return i;
+		}
+	}
+	return -1;
+}
+
+static void npc_thread()
+{
+	using clock = std::chrono::steady_clock;
+	constexpr auto TICK = std::chrono::milliseconds(33);	// 30Hz
+	//constexpr auto TICK = std::chrono::milliseconds(16);	// 60Hz
+	constexpr float DT = 1.0f / 30.0f;
+	//constexpr float DT = 1.0f / 60.0f;
+	constexpr int   BROADCAST_EVERY = 3;
+
+	std::vector<NpcInputEvent>            events;
+	events.reserve(32);
+	std::array<PlayerSnapshot, MAX_USER>  player_snapshot;
+
+	auto next = clock::now();
+	int  tick_count = 0;
+
+	while (true) {
+		next += TICK;
+
+		/*
+		static int debug_tick = 0;
+		if (++debug_tick % 30 == 0) {
+			std::cout << "[NPC] tick " << debug_tick << "\n";
+		}
+		*/
+
+		// 워커가 보낸 입력 처리
+		g_npc_input_queue.DrainTo(events);
+		for (auto& e : events) {
+			HandleNpcEvent(e, player_snapshot);
+		}
+
+		// 플레이어 위치 스냅샷
+		SnapshotPlayers(player_snapshot);
+
+		// 각 살아있는 NPC 갱신
+		for (auto& npc : g_npcs) {
+			if (!npc.alive) continue;
+			UpdateNpc(npc, DT, player_snapshot);
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		for (auto& npc : g_npcs) {
+			if (false == npc.loot_active) continue;
+
+			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
+			if (elapsed < 30) continue;
+
+			// 만료 — 비활성화 + 브로드캐스트
+			npc.loot_active = false;
+
+			SC_DEACTIVATE_LOOT_BOX_PACKET dp;
+			dp.size = sizeof(dp);
+			dp.type = SC_DEACTIVATE_LOOT_BOX;
+			dp.npc_id = npc.id;
+
+			for (auto& pl : clients) {
+				{
+					std::lock_guard<std::mutex> ll(pl._s_lock);
+					if (ST_INGAME != pl._state) continue;
+				}
+				pl.do_send(&dp);
+			}
+
+			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
+		}
+
+		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
+		++tick_count;
+		if (tick_count >= BROADCAST_EVERY) {
+			tick_count = 0;
+			BroadcastNpcPositions(player_snapshot);
+		}
+
+		std::this_thread::sleep_until(next);
+	}
+}
+
+void process_packet(int c_id, char* packet)
+{
+	switch (packet[1]) {
+	case CS_LOGIN: {
+		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
+		strcpy_s(clients[c_id]._name, p->name);
+
+		std::cout << "LOGIN " << clients[c_id]._name << ", ID " << clients[c_id]._id << "\n";
+
+		clients[c_id].send_login_info_packet();
+		{
+			std::lock_guard<std::mutex> ll{ clients[c_id]._s_lock };
+			clients[c_id]._state = ST_INGAME;
+		}
+
+		for (auto& pl : clients) {
+			{
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (ST_INGAME != pl._state) continue;
+			}
+			if (pl._id == c_id) continue;
+			pl.send_add_player_packet(c_id);
+			printf("ADD_PLAYER: %d, SEND TO %d\n", c_id, pl._id);
+			clients[c_id].send_add_player_packet(pl._id);
+			printf("ADD_PLAYER: %d, SEND TO %d\n", pl._id, c_id);
+		}
+
+		{
+			NpcInputEvent ev{};
+			ev.type = NpcInputEvent::NEW_CLIENT_JOINED;
+			ev.new_client_id = c_id;
+			g_npc_input_queue.Push(std::move(ev));
+		}
+
+		// 동기화 검증용 테스트 아이템 (05.15)
+		{
+			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1, 5 };
+			clients[c_id].send_inventory_update_packet(0);
+
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2, 3 };
+			clients[c_id].send_inventory_update_packet(1);
+		}
+
+		break;
+	}
+	case CS_MOVE: {
+		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
+
+		// 패킷 순서 보정: 이미 더 최신 패킷을 처리했으면 무시
+		if (p->move_time < (unsigned int)clients[c_id]._last_move_time) break;
+		clients[c_id]._last_move_time = p->move_time;
+
+		// 서버 deltaTime 계산
+		auto now = std::chrono::steady_clock::now();
+		float fDeltaTime = std::chrono::duration<float>(
+			now - clients[c_id]._last_move_recv_time).count();
+		clients[c_id]._last_move_recv_time = now;
+
+		// deltaTime 상한 (프레임 스파이크 방지 - 최대 100ms)
+		if (fDeltaTime > 0.1f) fDeltaTime = 0.1f;
+
+		// yaw(도) → 라디안 변환 후 Look/Right 벡터 계산
+		float fYawRad = p->yaw * (3.14159265f / 180.0f);
+		clients[c_id].yaw = fYawRad;
+
+		float lookX = sinf(fYawRad);
+		float lookZ = cosf(fYawRad);
+		float rightX = cosf(fYawRad);
+		float rightZ = -sinf(fYawRad);
+
+		char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
+		if (clients[c_id].player_state != new_state) {
+			clients[c_id].player_state = new_state;
+			for (auto& cl : clients) {
+				if (cl._state != ST_INGAME) continue;
+				if (cl._id == c_id) continue;
+				cl.send_player_state_change_packet(c_id);
+			}
+		}
+
+		// inputs 비트 플래그로 이동 방향 계산
+		float dirX = 0.0f, dirZ = 0.0f;
+		if (p->inputs & MOVE_W) { dirX += lookX;  dirZ += lookZ; }
+		if (p->inputs & MOVE_S) { dirX -= lookX;  dirZ -= lookZ; }
+		if (p->inputs & MOVE_D) { dirX += rightX; dirZ += rightZ; }
+		if (p->inputs & MOVE_A) { dirX -= rightX; dirZ -= rightZ; }
+
+		// 이동이 없으면 중계만 하고 종료
+		if (dirX == 0.0f && dirZ == 0.0f) {
+			for (auto& cl : clients) {
+				if (cl._state != ST_INGAME) continue;
+				cl.send_move_packet(c_id);
+			}
+			break;
+		}
+
+		// 방향 정규화
+		float len = sqrtf(dirX * dirX + dirZ * dirZ);
+		dirX /= len;
+		dirZ /= len;
+
+		ApplySlide(c_id, dirX, dirZ);
+
+		// 이동 속도 (클라이언트와 동일하게 8.0f)
+		constexpr float MOVE_SPEED = 8.0f;
+		clients[c_id].x += dirX * MOVE_SPEED * fDeltaTime;
+		clients[c_id].z += dirZ * MOVE_SPEED * fDeltaTime;
+
+		// 충돌 처리: 위치 보정 + 노멀 누적
+		ResolvePlayerCollision(c_id, fYawRad);
+
+
+		//// 맵 범위 클램핑
+		//constexpr float MAP_MIN = -150.0f;
+		//constexpr float MAP_MAX =   50.0f;
+		//if (clients[c_id].x < MAP_MIN) clients[c_id].x = MAP_MIN;
+		//if (clients[c_id].x > MAP_MAX) clients[c_id].x = MAP_MAX;
+		//if (clients[c_id].z < MAP_MIN) clients[c_id].z = MAP_MIN;
+		//if (clients[c_id].z > MAP_MAX) clients[c_id].z = MAP_MAX;
+
+
+		// 계산된 좌표 전체 중계
+		for (auto& cl : clients) {
+			if (cl._state != ST_INGAME) continue;
+			cl.send_move_packet(c_id);
+			/*printf("[MOVE] id:%d inputs:0x%02X yaw:%.1f dt:%.4f -> (%.2f, %.2f, %.2f) SEND TO %d\n",
+				c_id, (unsigned char)p->inputs, p->yaw, fDeltaTime,
+				clients[c_id].x, clients[c_id].y, clients[c_id].z, cl._id);*/
+		}
+
+		break;
+	}
+	case CS_INVENTORY_CLICK: {
+		CS_INVENTORY_CLICK_PACKET* p =
+			reinterpret_cast<CS_INVENTORY_CLICK_PACKET*>(packet);
+
+		if (p->slotidx < 0 || p->slotidx >= MAX_SLOTS) {
+			std::cout << "[INVENTORY_CLICK] id:" << c_id
+				<< " (" << clients[c_id]._name << ")"
+				<< " action:" << static_cast<int>(p->action)
+				<< " slot:" << p->slotidx << "\n";
+			break;
+		}
+		//std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+		const ItemSlot& s = clients[c_id]._inventory[p->slotidx];
+		std::cout << "[INVENTORY_CLICK] id:" << c_id
+			<< " slot:" << p->slotidx
+			<< " item:" << static_cast<int>(s.item)
+			<< " count:" << s.count << "\n";
+
+		break;
+	}
+	case CS_HIT_NPC: {
+		CS_HIT_NPC_PACKET* p = 
+			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
+
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::HIT;
+		ev.attacker_client_id = c_id;
+		ev.ray_origin = { p->ray_ox, p->ray_oy, p->ray_oz };
+		ev.ray_direction = { p->ray_dx, p->ray_dy, p->ray_dz };
+		ev.weapon_id = p->weapon_id;
+		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
+
+		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+	case CS_LOOT_PICKUP: {
+		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
+
+		// 박스 유효성
+		if (p->box_id < 0 || p->box_id >= MAX_NPC) break;
+		SERVER_NPC& box = g_npcs[p->box_id];
+		if (!box.loot_active) break;
+
+		// 슬롯 범위
+		if (p->slotidx < 0 || p->slotidx >= INVENTORY_SIZE) break;
+
+		ItemSlot& boxSlot = box._inventory[p->slotidx];
+		if (boxSlot.item == ItemID::NONE || boxSlot.count <= 0) break;
+
+		const ItemID pickItem = boxSlot.item;
+		const int    pickCount = boxSlot.count;
+
+		// 플레이어 인벤에 추가 + 갱신 송신 (한 락 안에서)
+		int playerSlotIdx = -1;
+		{
+			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+			playerSlotIdx = AddInventoryItem(
+				clients[c_id]._inventory, pickItem, pickCount);
+			if (playerSlotIdx >= 0) {
+				clients[c_id].send_inventory_update_packet(
+					static_cast<short>(playerSlotIdx));
+			}
+		}
+		if (playerSlotIdx < 0) break;  // 인벤 가득 — 박스 그대로
+
+		// 박스 슬롯 비우기
+		boxSlot.item = ItemID::NONE;
+		boxSlot.count = 0;
+
+		// 박스 슬롯 변경 브로드캐스트
+		SC_LOOT_BOX_SLOT_UPDATE_PACKET bp;
+		bp.size = sizeof(bp);
+		bp.type = SC_LOOT_BOX_SLOT_UPDATE;
+		bp.box_id = p->box_id;
+		bp.slotidx = p->slotidx;
+		bp.item_id = ItemID::NONE;
+		bp.count = 0;
+
+		for (auto& pl : clients) {
+			{
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (ST_INGAME != pl._state) continue;
+			}
+			pl.do_send(&bp);
+		}
+
+		std::cout << "[LOOT_PICKUP] client:" << c_id
+			<< " box:" << p->box_id
+			<< " slot:" << p->slotidx
+			<< " item:" << static_cast<int>(pickItem)
+			<< " count:" << pickCount
+			<< " -> playerSlot:" << playerSlotIdx << "\n";
+
+		break;
+	}
+	}
+}
+
+void disconnect(int c_id)
+{
+	SOCKET old_socket = INVALID_SOCKET;
+	{
+		std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+		if (clients[c_id]._state == ST_FREE) return;	// 이중 호출 방지
+		clients[c_id]._state = ST_FREE;
+		old_socket = clients[c_id]._socket;				// 핸들 저장
+		clients[c_id]._socket = INVALID_SOCKET;			// 슬롯 무효화
+
+		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
+	}
+	closesocket(old_socket);
+
+	std::cout << "LOGOUT " << clients[c_id]._name << ", ID " << clients[c_id]._id << "\n";
+
+	for (auto& pl : clients) {
+		{
+			std::lock_guard<std::mutex> ll(pl._s_lock);
+			if (ST_INGAME != pl._state) continue;
+		}
+		if (pl._id == c_id) continue;
+		pl.send_remove_player_packet(c_id);
+	}
+
+}
+
+void worker_thread(HANDLE h_iocp)
+{
+	while (true) {
+		DWORD num_bytes;
+		ULONG_PTR key;
+		WSAOVERLAPPED* over = nullptr;
+		BOOL ret = GetQueuedCompletionStatus(h_iocp, &num_bytes, &key, &over, INFINITE);
+		OVER_EXP* ex_over = reinterpret_cast<OVER_EXP*>(over);
+		if (FALSE == ret) {
+			if (ex_over->_comp_type == OP_ACCEPT) std::cout << "Accept Error";
+			else {
+				std::cout << "GQCS Error on client[" << key << "]\n";
+				disconnect(static_cast<int>(key));
+				if (ex_over->_comp_type == OP_SEND) delete ex_over;
+				continue;
+			}
+		}
+
+		if ((0 == num_bytes) && ((ex_over->_comp_type == OP_RECV) || (ex_over->_comp_type == OP_SEND))) {
+			disconnect(static_cast<int>(key));
+			if (ex_over->_comp_type == OP_SEND) delete ex_over;
+			continue;
+		}
+
+		switch (ex_over->_comp_type) {
+		case OP_ACCEPT: {
+			int client_id = get_new_client_id();
+			if (client_id != -1) {
+				//{
+				//	lock_guard<mutex> ll(clients[client_id]._s_lock);
+				//	clients[client_id]._state = ST_ALLOC;
+				//}
+				//clients[client_id].x = 0;
+				//clients[client_id].y = 0;
+				clients[client_id].x = 0.0f;
+				clients[client_id].y = 0.1f;
+				clients[client_id].z = 0.0f;
+				clients[client_id]._id = client_id;
+				clients[client_id]._name[0] = 0;
+				clients[client_id]._prev_remain = 0;
+
+				clients[client_id]._collNormals.clear();
+				
+				clients[client_id]._socket = g_c_socket;
+				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket),
+					h_iocp, client_id, 0);
+				clients[client_id].do_recv();
+				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+			}
+			else {
+				std::cout << "Max user exceeded.\n";
+			}
+			ZeroMemory(&g_a_over._over, sizeof(g_a_over._over));
+			int addr_size = sizeof(SOCKADDR_IN);
+			AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
+			break;
+		}
+		case OP_RECV: {
+			int remain_data = num_bytes + clients[key]._prev_remain;
+			char* p = ex_over->_buf;
+			while (remain_data > 0) {
+				int packet_size = static_cast<unsigned char>(p[0]);
+				if (packet_size <= remain_data) {
+					process_packet(static_cast<int>(key), p);
+					p = p + packet_size;
+					remain_data = remain_data - packet_size;
+				}
+				else break;
+			}
+			clients[key]._prev_remain = remain_data;
+			if (remain_data > 0) {
+				memcpy(ex_over->_buf, p, remain_data);
+			}
+			clients[key].do_recv();
+			break;
+		}
+		case OP_SEND:
+			delete ex_over;
+			break;
+		}
+	}
+}
+
+int main()
+{
+	if (!load_mapOOBB_from_CSV("map_oobb.csv")) {
+		std::cerr << "Failed to load map OOBBs. Exiting.\n";
+		return 1;
+	}
+
+	// 테스트용 코드 (주석처리됨)
+	/*
+	{
+		// 케이스 1: 맵 안전한 곳 (충돌 없을 거라 예상)
+		XMFLOAT3 testPos = { 0.0f, 0.1f, 0.0f };
+		auto playerOOBB = MakePlayerOOBB(testPos, 0.0f);
+		auto results = CheckCollisionWithMap(playerOOBB, g_mapOOBBs);
+		std::cout << "[Test1] pos=(0,0.1,0) yaw=0: collisions=" << results.size() << std::endl;
+
+		// 케이스 2: 맵 청크 위치 근처 (충돌 있을 거라 예상)
+		// CSV 두번째 줄 첫 번째 청크 center=(37.82, 7.54, -103.29) extents=(4.08, 8.04, 8.72)
+		// 이 청크 중심에 플레이어 박으면 무조건 충돌
+		XMFLOAT3 testPos2 = { 37.82f, 0.1f, -103.29f };
+		auto playerOOBB2 = MakePlayerOOBB(testPos2, 0.0f);
+		auto results2 = CheckCollisionWithMap(playerOOBB2, g_mapOOBBs);
+		std::cout << "[Test2] pos=(37.82,0.1,-103.29) yaw=0: collisions=" << results2.size() << std::endl;
+		if (!results2.empty()) {
+			const auto& r = results2[0];
+			std::cout << "  normal=(" << r.normal.x << "," << r.normal.y << "," << r.normal.z
+				<< ") mtv=(" << r.mtv.x << "," << r.mtv.y << "," << r.mtv.z << ")" << std::endl;
+		}
+	}
+	*/
+
+	g_astar.LoadNavMeshFromFile("Model/NavMeshData.bin");
+	std::cout << "NavMesh loaded from Model / NavMeshData.bin\n";
+
+	init_npcs();
+
+	XMFLOAT3 tmp_position_list[27] = {
+		{ 7.0f, 0.0f, -14.0f },
+		{ 3.5f, 0.0f, 20.0f },
+		{ -12.0f, 0.0f, -24.0f },
+		{ -40.0f, 0.1f, 30.0f },
+		{ -43.0f, 0.0f, 8.0f },
+		{ -35.0f, 0.0f, -5.0f },
+		{ -22.0f, 0.0f, -5.0f },
+		{ -34.0f, 0.0f, -40.0f },
+		{ -3.5f, 0.0f, -36.0f },
+		{ 3.0f, 0.0f, -65.0f },
+		{ -20.0f, 0.0f, -89.0f },
+		{ -68.0f, 0.0f, -66.0f },
+		{ -40.0f, 0.0f, -15.0f },
+		{ -66.0f, 0.0f, -27.0f },
+		{ 17.0f, 0.0f, -33.0f },
+		{ 38.0f, 0.0f, -65.0f },
+		{ 37.0f, 0.0f, -89.0f },
+		{ 1.0f, 0.0f, -81.0f },
+		{ -57.0f, 0.0f, 104.0f },
+		{ -73.0f, 0.0f, -70.0f },
+		{ -79.0f, 0.0f, -35.0f },
+		{ -82.0f, 0.0f, 1.0f },
+		{ -59.0f, 0.0f, 23.0f },
+		{ -28.0f, 0.0f, -20.0f },
+		{ 26.0f, 0.0f, 37.0f },
+		{ 26.0f, 0.0f, 2.0f },
+		{ 37.0f, 0.0f, -90.0f },
+	};
+
+	for (int i = 0; i < 27; ++i)
+	{
+		// NPC 1개 — id 0, (7, 0, -14) 위치
+		SERVER_NPC& npc = g_npcs[i];
+		npc.alive = true;
+		npc.kind = 0;
+		npc.state = NPC_STATE_IDLE;
+		npc.position = tmp_position_list[i];
+		npc.yaw = 0.0f;
+		npc.hp = 100;
+		npc.max_hp = 100;
+		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
+
+		// NPC 인벤토리 초기화 하드코딩
+		npc._inventory[0] = ItemSlot{ ItemID::MAT_3, 2 };
+		npc._inventory[1] = ItemSlot{ ItemID::MAT_4, 1 };
+
+		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
+			<< "slot0=" << static_cast<int>(npc._inventory[0].item)
+			<< "x" << npc._inventory[0].count
+			<< ", slot1=" << static_cast<int>(npc._inventory[1].item)
+			<< "x" << npc._inventory[1].count << "\n";
+	}
+
+	/*
+		// 케이스 A: 가까운 두 점 — waypoint 1~2개 기대
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 5.0f, 0.0f, -5.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test A] (0,0,0)->(5,0,-5): " << path.size() << " waypoints\n";
+			for (size_t i = 0; i < path.size(); ++i) {
+				std::cout << "    [" << i << "] (" << path[i].x << ", "
+					<< path[i].y << ", " << path[i].z << ")\n";
+			}
+		}
+
+		// 케이스 B: 떨어진 두 점 — 여러 waypoint 기대
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 7.0f, 0.0f, -14.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test B] (0,0,0)->(7,0,-14): " << path.size() << " waypoints\n";
+			for (size_t i = 0; i < path.size(); ++i) {
+				std::cout << "    [" << i << "] (" << path[i].x << ", "
+					<< path[i].y << ", " << path[i].z << ")\n";
+			}
+		}
+
+		// 케이스 C: 의도적 실패 — 맵 밖. "[AI] FindPath failed" 로그가 떠야 정상.
+		{
+			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
+			XMFLOAT3 end = { 10000.0f, 0.0f, 10000.0f };
+			auto path = g_astar.FindPath(start, end);
+			std::cout << "[AI Test C] (0,0,0)->(10000,0,10000): " << path.size()
+				<< " waypoints (expected 0 + failure log)\n";
+		}
+	}
+	*/
+
+	HANDLE h_iocp;
+
+	WSADATA WSAData;
+	WSAStartup(MAKEWORD(2, 2), &WSAData);
+	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	SOCKADDR_IN server_addr;
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(PORT_NUM);
+	server_addr.sin_addr.S_un.S_addr = INADDR_ANY;
+	bind(g_s_socket, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
+	listen(g_s_socket, SOMAXCONN);
+	SOCKADDR_IN cl_addr;
+	int addr_size = sizeof(cl_addr);
+	h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
+	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_s_socket), h_iocp, 9999, 0);
+	g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	g_a_over._comp_type = OP_ACCEPT;
+	AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
+
+	std::vector<std::thread> worker_threads;
+	int num_threads = std::thread::hardware_concurrency() - 1;
+	if (num_threads < 1) num_threads = 1;
+	for (int i = 0; i < num_threads; ++i)
+		worker_threads.emplace_back(worker_thread, h_iocp);
+
+	std::thread npc_th(npc_thread);
+
+	for (auto& th : worker_threads)
+		th.join();
+	npc_th.join();
+	closesocket(g_s_socket);
+	WSACleanup();
+}

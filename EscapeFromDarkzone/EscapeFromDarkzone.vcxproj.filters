@@ -167,16 +167,17 @@
     <ClInclude Include="Network.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="protocol.h">
+    <ClInclude Include="AI.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="AI.h">
+    <ClInclude Include="protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="EffectManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="InventoryManager.h">
+    <ClInclude Include="InventoryManager.h" />
+    <ClInclude Include="ItemDef.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

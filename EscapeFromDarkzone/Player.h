@@ -134,6 +134,8 @@ protected:
 	bool  m_bFireHeld = false;
 	bool  m_bShotAnimRequest = false;
 
+	bool m_bWasMoving = false;			// 이동이 끝나는 시점에 서버로 패킷을 전송하기
+
 	std::unique_ptr<Inventory> m_pInventory;
 public:
 	CPlayer();
@@ -311,8 +313,8 @@ enum PLAYER_ANIM {
 	ANIM_IDLE = 0,
 	ANIM_RUN_F,
 	ANIM_RUN_L,
-	ANIM_RUN_R,
 	ANIM_RUN_B,
+	ANIM_RUN_R,
 	ANIM_GRENADE,
 	ANIM_SHOOT,
 	ANIM_RELOAD,

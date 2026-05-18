@@ -8,12 +8,21 @@
 #include "Scene.h"
 #include "ShadowMap.h"
 
-/*
 #include "Network.h"	// 03.27 추가
 
 #include "OtherPlayer.h"	// 03.30 추가
-#include <unordered_map>	// 03.30 추가
-*/
+#include <array>			// 05.08 추가
+
+struct OtherPlayerSlot {
+	short id = -1;
+	OtherPlayer* pPlayer = nullptr;
+};
+
+struct NpcSlot {
+	short id;
+	CEnemyObject* pNpc;
+	NpcSlot() : id(-1), pNpc(nullptr) {}
+};
 
 class CGameFramework
 {
@@ -50,9 +59,11 @@ public:
 	void OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	LRESULT CALLBACK OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	/*
 	void ProcessNetworkPackets();	// 03.27 추가
-	*/
+
+	CEnemyObject* FindNpc(short id);		// 05.10 추가
+	bool AddNpc(short id, CEnemyObject* p);	// 05.10 추가
+	void RemoveNpc(short id);				// 05.10 추가
 
 private:
 	HINSTANCE					m_hInstance;
@@ -105,10 +116,17 @@ private:
 
 	_TCHAR						m_pszFrameRate[70];
 
-	/*
-	// 03.30 추가: 내 ID 저장용 (OtherPlayer와 구분 용도)
+
+	// 05.05 추가: unordered_map에서 array로
 	short m_myId = -1;
-	std::unordered_map<short, OtherPlayer*> m_otherPlayers;
-	*/
+	std::array<OtherPlayerSlot, 16> m_otherPlayers;	
+
+	OtherPlayer* FindOtherPlayer(short id);
+	bool AddOtherPlayer(short id, OtherPlayer* p);
+	void RemoveOtherPlayer(short id);
+	
+	// 05.10 추가: 서버로부터 받아올 NPC 정보 관리
+	
+	std::array<NpcSlot, MAX_NPC> m_npcs;
 };
 

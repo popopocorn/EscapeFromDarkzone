@@ -55,7 +55,7 @@ void CEnemyObject::HandleHP(float value)
 	{
 		hp = 0.0f;
 		m_bDying = true;
-		m_bLootSpawnRequested = true;
+		m_bLootSpawnRequested = true;				// 서버 권위 구조로 바꾸면서 안씀
 		m_bDeadRemoveRequested = false;
 		m_fDieElapsed = 0.0f;
 
@@ -71,7 +71,7 @@ bool CEnemyObject::ConsumeDeadRemovalRequest()
 	return true;
 }
 
-bool CEnemyObject::ConsumeLootSpawnRequest()
+bool CEnemyObject::ConsumeLootSpawnRequest()		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!m_bLootSpawnRequested) return false;
 	m_bLootSpawnRequested = false;
@@ -116,6 +116,15 @@ void CEnemyObject::Update(float fTimeElapsed)
 
 	XMFLOAT3 shift = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	m_xmf3Position = Vector3::Add(m_xmf3Position, shift);
+
+	// 05.10 추가 (보간)
+	if (m_bUseServerLerp) {
+		//constexpr float ALPHA = 0.15f;  // 60FPS 기준 매 프레임 15% 보정
+		constexpr float ALPHA = 0.08f;
+		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * ALPHA;
+		m_xmf3Position.y += (m_xmf3ServerPosition.y - m_xmf3Position.y) * ALPHA;
+		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * ALPHA;
+	}
 
 	m_xmf4x4ToParent._41 = m_xmf3Position.x;
 	m_xmf4x4ToParent._42 = m_xmf3Position.y;
@@ -334,7 +343,7 @@ CLootContainerObject::CLootContainerObject(float fLifeTime)
 	m_fRemainTime = fLifeTime;
 }
 
-void CLootContainerObject::UpdateLifetime(float fTimeElapsed)
+void CLootContainerObject::UpdateLifetime(float fTimeElapsed)		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!IsAlive()) return;
 
@@ -345,7 +354,7 @@ void CLootContainerObject::UpdateLifetime(float fTimeElapsed)
 	}
 }
 
-bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
+/*bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
 {
 	if (!item || count <= 0) return false;
 
@@ -360,9 +369,28 @@ bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
 	}
 
 	return false;
+}*/
+
+void CLootContainerObject::SetSlotData(int idx, ItemID item, int count)
+{
+	if (idx < 0 || idx >= MAX_LOOT_SLOTS) return;
+	m_slots[idx].item = item;
+	m_slots[idx].count = count;
 }
 
 void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
+{
+	if (!pInventory) return;
+	pInventory->ClearItems();
+
+	for (int i = 0; i < MAX_LOOT_SLOTS; ++i) {
+		if (m_slots[i].item != ItemID::NONE && m_slots[i].count > 0) {
+			pInventory->ApplyServerSlotUpdate(i, m_slots[i].item, m_slots[i].count);
+		}
+	}
+}
+
+/*void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
 {
 	if (!pInventory) return;
 
@@ -375,7 +403,7 @@ void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
 			//pInventory->AddItem(std::move(m_LootItems[i]), m_LootCounts[i]);
 		}
 	}
-}
+}*/
 
 float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
 {
@@ -384,4 +412,26 @@ float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
 	float dy = myPos.y - pos.y;
 	float dz = myPos.z - pos.z;
 	return dx * dx + dy * dy + dz * dz;
+}
+
+void CEnemyObject::SetServerPosition(const XMFLOAT3& pos)
+{
+	m_xmf3ServerPosition = pos;
+	m_bUseServerLerp = true;
+}
+
+void CEnemyObject::SetServerYaw(float yawRad)
+{
+	float yawDeg = XMConvertToDegrees(yawRad);
+
+	m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, yawDeg, 0.0f);
+}
+
+void CEnemyObject::SnapToServerPosition()
+{
+	m_xmf3Position = m_xmf3ServerPosition;
+
+	m_xmf4x4ToParent._41 = m_xmf3Position.x;
+	m_xmf4x4ToParent._42 = m_xmf3Position.y;
+	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 }

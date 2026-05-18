@@ -91,29 +91,30 @@ struct DebugInstance
 class CBoundingBoxShader : public CShader
 {
 public:
-	CBoundingBoxShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	CBoundingBoxShader(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		bool bSolid = false
+	);
 	virtual ~CBoundingBoxShader();
 
-	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
-	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
-	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
-	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
-	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
-
-	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
-
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
-
-	void AddObject(CGameObject* pGameObject);
-
-	void ClearObjects() { m_DebugInstances.clear(); }
-
 protected:
-	ID3D12RootSignature* m_pd3dGraphicsRootSignature = NULL;
-
+	bool m_bSolid = false;
 	std::unique_ptr<CDebugObject> m_pDebugObject;
-
 	std::vector<DebugInstance> m_DebugInstances;
+
+	void CleanupDeadInstances();
+public:
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout() override;
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader() override;
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader() override;
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState() override;
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState() override;
+
+	void CreateShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
+	void AddObject(CGameObject* pGameObject);
+	void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

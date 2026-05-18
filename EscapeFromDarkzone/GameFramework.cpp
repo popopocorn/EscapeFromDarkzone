@@ -6,6 +6,7 @@
 #include "GameFramework.h"
 #include "InputManager.h"
 #include "EffectManager.h"
+#include "InventoryManager.h"
 
 CGameFramework::CGameFramework()
 {
@@ -72,13 +73,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 
-	/*
 	// 03.27 추가: 네트워크 초기화 및 연결
 	if (!NetworkManager::Instance().Init("Player"))
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
-	*/
 
 	return(true);
 }
@@ -454,9 +453,9 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
-	/*
-	NetworkManager::Instance().Shutdown();
-	*/
+	if (NetworkManager::Instance().IsConnected()) {
+		NetworkManager::Instance().Shutdown();
+	}
 
 	WaitForGpuComplete();
 	ReleaseObjects();
@@ -687,13 +686,11 @@ void CGameFramework::FrameAdvance()
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
-	/*
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())
 	{
 		ProcessNetworkPackets();
 	}
-	*/
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
@@ -837,7 +834,6 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
-/*
 // 03.27 추가
 void CGameFramework::ProcessNetworkPackets()
 {
@@ -876,14 +872,29 @@ void CGameFramework::ProcessNetworkPackets()
 			if (p->id == m_myId) {
 				break;
 			}
+			if (FindOtherPlayer(p->id)) {
+				break;
+			}
 
-			//03.30 추가: OtherPlayer 생성, 04.07 수정: 함수 래핑
-			if (m_otherPlayers.count(p->id)) break;		// 이미 있으면 넘기기 (오면 안되는 패킷)
+			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), p->x, p->y, p->z);
+			pOther->SetServerYaw(p->yaw);
 
-			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), 
-				p->x, p->y, p->z);
+			// 상태 변경
+			switch (p->state) {
+			case PLAYER_STATE_IDLE:
+				pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
+				break;
+			case PLAYER_STATE_RUN:
+				pOther->ChangeState(std::make_unique<OtherPlayerRun>());
+				break;
+			}
+			
+			if (!AddOtherPlayer(p->id, pOther)) {	// 슬롯 부족 — 생성 취소
+				OutputDebugString(L"[Network] OtherPlayer slot full.\n");
+				pOther->Kill();
+				break;
+			}
 
-			m_otherPlayers[p->id] = pOther;
 			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
 
 			break;
@@ -896,10 +907,9 @@ void CGameFramework::ProcessNetworkPackets()
 			//OutputDebugStringW(szLog);
 
 			// 03.30 추가: OtherPlayer 제거
-			auto it = m_otherPlayers.find(p->id);
-			if (it != m_otherPlayers.end()) {
-				it->second->Kill();			// 임시 삭제, 추후 수정 필요
-				m_otherPlayers.erase(it);
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				pOther->Kill();
+				RemoveOtherPlayer(p->id);
 			}
 
 			break;
@@ -917,11 +927,171 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			auto it = m_otherPlayers.find(p->id);
-			if (it != m_otherPlayers.end()) {
-				it->second->UpdatePosition(p->x, p->y, p->z);
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				pOther->UpdatePosition(p->x, p->y, p->z);
+				pOther->SetServerYaw(p->yaw);
 			}
 
+			break;
+		}
+		case SC_PLAYER_STATE_CHANGE:
+		{
+			SC_PLAYER_STATE_CHANGE_PACKET* p =
+				reinterpret_cast<SC_PLAYER_STATE_CHANGE_PACKET*>(packet.data());
+
+			if (p->id == m_myId) break;		// 서버에서 한 번 거르긴 했는데, 혹시 모르니까
+
+			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
+				switch (p->state) {
+				case PLAYER_STATE_IDLE:
+					pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
+					break;
+				case PLAYER_STATE_RUN:
+					pOther->ChangeState(std::make_unique<OtherPlayerRun>());
+					break;
+				}
+			}
+			break;
+		}
+		case SC_ADD_NPC: 
+		{
+
+			SC_ADD_NPC_PACKET* p = reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data());
+
+			// 중복 방지
+			if (FindNpc(p->npc_id)) {
+				break;
+			}
+
+			// CEnemyObject 동적 스폰 (생성자 시그니처는 BuildObjects의 고정 스폰과 동일)
+			CEnemyObject* pNpc = new CEnemyObject(
+				m_pd3dDevice,
+				m_pd3dCommandList,
+				m_pScene->GetGraphicsRootSignature(), 
+				NULL
+			);
+			pNpc->SetPosition(p->x, p->y, p->z);
+			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
+			pNpc->SetServerYaw(p->yaw);
+
+			if (!AddNpc(p->npc_id, pNpc)) {
+				OutputDebugString(L"[Network] NPC slot full.\n");
+				pNpc->Kill();
+				break;
+			}
+
+			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
+
+			break;
+		}
+		case SC_REMOVE_NPC:
+		{
+			SC_REMOVE_NPC_PACKET* p = reinterpret_cast<SC_REMOVE_NPC_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				pNpc->Kill();
+				RemoveNpc(p->npc_id);
+			}
+
+			break;
+		}
+		case SC_MOVE_NPC:
+		{
+			SC_MOVE_NPC_PACKET* p = reinterpret_cast<SC_MOVE_NPC_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
+				pNpc->SetServerYaw(p->yaw);
+			}
+
+			break;
+		}
+		case SC_NPC_STATE_CHANGE: {
+			SC_NPC_STATE_CHANGE_PACKET* p = reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data());
+
+			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
+				switch (p->state) {
+				case NPC_STATE_IDLE:
+					pNpc->ChangeState(std::make_unique<EnemyIdle>());
+					pNpc->SnapToServerPosition();
+					break;
+				case NPC_STATE_RUN:
+					pNpc->ChangeState(std::make_unique<EnemyRun>());
+					break;
+				case NPC_STATE_DIE:
+					// EnemyDie::Enter가 m_bDying / m_fDieElapsed 설정
+					// Scene::AnimateObjects가 1.2초 후 자체 루팅 박스 생성.
+					// 서버는 같은 1.2초 후 SC_REMOVE_NPC 송신 → NPC 객체 자체 제거.
+					// (루팅 박스는 별도 컨테이너로 남아 있음)
+					pNpc->ChangeState(std::make_unique<EnemyDie>());
+					break;
+				}
+			}
+
+			break;
+		}
+		case SC_INVENTORY_UPDATE: {
+			SC_INVENTORY_UPDATE_PACKET* p =
+				reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			bool ok = pInvMgr->ApplyPlayerInventorySlotUpdate(
+				p->item_id, p->count, p->slotidx);
+
+			// 서버로부터 받은 패킷을 디버그콘솔에 출력
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[INV_APPLY] slot:%d item:%d count:%d %s\n",
+			//	p->slotidx, static_cast<int>(p->item_id), p->count);
+			//OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_ADD_LOOT_BOX: {
+			SC_ADD_LOOT_BOX_PACKET* p =
+				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
+
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+
+			pInvMgr->SpawnLootContainer(p->npc_id,
+				XMFLOAT3(p->x, p->y, p->z),
+				p->items, p->counts, INVENTORY_SIZE);
+
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[LOOT_BOX_ADD] id:%d pos:(%.2f,%.2f,%.2f)\n",
+			//	p->npc_id, p->x, p->y, p->z);
+			//OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_LOOT_BOX_SLOT_UPDATE: {
+			SC_LOOT_BOX_SLOT_UPDATE_PACKET* p =
+				reinterpret_cast<SC_LOOT_BOX_SLOT_UPDATE_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			pInvMgr->ApplyLootBoxSlotUpdate(p->box_id, p->slotidx, p->item_id, p->count);
+
+			//wchar_t buf[256];
+			//swprintf_s(buf, L"[BOX_APPLY] box_id: %d slot:%d item:%d count:%d %s\n",
+			//	p->box_id, p->slotidx, static_cast<int>(p->item_id), p->count);
+			//OutputDebugStringW(buf);
+
+			break;
+		}
+		case SC_DEACTIVATE_LOOT_BOX: {
+			SC_DEACTIVATE_LOOT_BOX_PACKET* p =
+				reinterpret_cast<SC_DEACTIVATE_LOOT_BOX_PACKET*>(packet.data());
+
+			if (!m_pScene) break;
+			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (!pInvMgr) break;
+
+			pInvMgr->DeactivateLootBox(p->npc_id);
 			break;
 		}
 		default:
@@ -929,4 +1099,52 @@ void CGameFramework::ProcessNetworkPackets()
 		}
 	}
 }
-*/
+
+// 05.08 추가: unordered_map에서 array로, 함수 추가
+
+OtherPlayer* CGameFramework::FindOtherPlayer(short id)
+{
+	for (auto& s : m_otherPlayers)
+		if (s.id == id) return s.pPlayer;
+	return nullptr;
+}
+bool CGameFramework::AddOtherPlayer(short id, OtherPlayer* p)
+{
+	for (auto& s : m_otherPlayers) {
+		if (s.id == -1) { s.id = id; s.pPlayer = p; return true; }
+	}
+	return false;
+}
+void CGameFramework::RemoveOtherPlayer(short id)
+{
+	for (auto& s : m_otherPlayers) {
+		if (s.id == id) {
+			s.id = -1; s.pPlayer = nullptr;
+			return;
+		}
+	}
+}
+
+CEnemyObject* CGameFramework::FindNpc(short id)
+{
+	for (auto& s : m_npcs)
+		if (s.id == id) return s.pNpc;
+	return nullptr;
+}
+bool CGameFramework::AddNpc(short id, CEnemyObject* p)
+{
+	for (auto& s : m_npcs) {
+		if (s.id == -1) { s.id = id; s.pNpc = p; return true; }
+	}
+	return false;
+}
+void CGameFramework::RemoveNpc(short id)
+{
+	for (auto& s : m_npcs) {
+		if (s.id == id) {
+			s.id = -1;
+			s.pNpc = nullptr;
+			return;
+		}
+	}
+}
