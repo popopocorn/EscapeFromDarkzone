@@ -495,7 +495,6 @@ void CGameFramework::OnDestroy()
 		(DXGI_DEBUG_RLO_FLAGS)(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 	pdxgiDebug->Release();
 #endif
-
 }
 
 //#define _WITH_TERRAIN_PLAYER

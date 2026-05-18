@@ -176,8 +176,10 @@
     <ClInclude Include="EffectManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="ItemDef.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
