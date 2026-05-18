@@ -804,8 +804,7 @@ static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& pl
 
 /* 인벤 추가 — 클라 Inventory::AddItem과 동일 로직 + 갱신된 슬롯 인덱스 반환
    반환: 성공 시 갱신된 슬롯 인덱스 (>=0), 실패 시 -1 */
-static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv,
-	ItemID item, int count)
+static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID item, int count)
 {
 	if (item == ItemID::NONE || count <= 0) return -1;
 
@@ -829,8 +828,10 @@ static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
 	constexpr auto TICK = std::chrono::milliseconds(33);	// 30Hz
+	//constexpr auto TICK = std::chrono::milliseconds(16);	// 60Hz
 	constexpr float DT = 1.0f / 30.0f;
-	constexpr int   BROADCAST_EVERY = 3;					// 5Hz 의 절반?
+	//constexpr float DT = 1.0f / 60.0f;
+	constexpr int   BROADCAST_EVERY = 3;
 
 	std::vector<NpcInputEvent>            events;
 	events.reserve(32);
@@ -1280,7 +1281,7 @@ int main()
 
 	init_npcs();
 
-	XMFLOAT3 tmp_position_list[16] = {
+	XMFLOAT3 tmp_position_list[27] = {
 		{ 7.0f, 0.0f, -14.0f },
 		{ 3.5f, 0.0f, 20.0f },
 		{ -12.0f, 0.0f, -24.0f },
@@ -1293,11 +1294,24 @@ int main()
 		{ 3.0f, 0.0f, -65.0f },
 		{ -20.0f, 0.0f, -89.0f },
 		{ -68.0f, 0.0f, -66.0f },
-		{ -45.0f, 0.0f, -55.0f },
 		{ -40.0f, 0.0f, -15.0f },
+		{ -66.0f, 0.0f, -27.0f },
+		{ 17.0f, 0.0f, -33.0f },
+		{ 38.0f, 0.0f, -65.0f },
+		{ 37.0f, 0.0f, -89.0f },
+		{ 1.0f, 0.0f, -81.0f },
+		{ -57.0f, 0.0f, 104.0f },
+		{ -73.0f, 0.0f, -70.0f },
+		{ -79.0f, 0.0f, -35.0f },
+		{ -82.0f, 0.0f, 1.0f },
+		{ -59.0f, 0.0f, 23.0f },
+		{ -28.0f, 0.0f, -20.0f },
+		{ 26.0f, 0.0f, 37.0f },
+		{ 26.0f, 0.0f, 2.0f },
+		{ 37.0f, 0.0f, -90.0f },
 	};
 
-	for (int i = 0; i < 16; ++i)
+	for (int i = 0; i < 27; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
