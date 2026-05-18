@@ -169,8 +169,6 @@ public:
 };
 
 
-
-
 //무기 선언
 class WeaponItem : public Item
 {
@@ -197,4 +195,13 @@ public:
 	{
 		type = ItemType::ARMOR;
 	}
+};
+
+class EquipUI {
+private:
+	CPlayer* player;
+
+
+
+public:
 };

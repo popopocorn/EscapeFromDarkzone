@@ -28,7 +28,7 @@ void InventoryManager::Initialize(
 		pUIShader
 	);
 
-	m_pLootInventory->SetPosition(0.25f, 0.0f);
+	m_pLootInventory->SetPosition(-0.7f, 0.0f);
 	m_pCraftInventory->SetPosition(0.0f, 0.0f);
 
 	m_pLootInventory->isOpen = false;

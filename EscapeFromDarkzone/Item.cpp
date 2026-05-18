@@ -142,7 +142,7 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 {
 	box.maxY = 0.5f;
 	box.minY = -0.5f;
-	box.minX = -0.5f;
+	box.minX = -0.4f;
 	box.maxX = 0.0f;
 
 	float totalW = box.maxX - box.minX;
