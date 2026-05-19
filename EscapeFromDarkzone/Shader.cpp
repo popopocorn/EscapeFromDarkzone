@@ -787,6 +787,7 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_ppObjects[j])
 		{
+			
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->UpdateTransform(NULL);
 		}

@@ -69,14 +69,14 @@ enum class ModelName
 };
 
 
-class MainScene
+class CScene
 {
 public:
-    MainScene();
-    virtual ~MainScene();
+    CScene();
+    virtual ~CScene();
 
-	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
-	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam) {};
+	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam) { return false; }
 
 	void DumpMapOOBBToCSV(const char* filename);
 
@@ -85,18 +85,17 @@ public:
 	virtual void ReleaseShaderVariables();
 
 	virtual void BuildDefaultLightsAndMaterials();
-	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
-	void ReleaseObjects();
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) {};
+	void ReleaseObjects() {};
 
-	ID3D12RootSignature* CreateGraphicsRootSignature(ID3D12Device *pd3dDevice);
-	ID3D12RootSignature *GetGraphicsRootSignature() { return(m_pd3dGraphicsRootSignature); }
+	void SetRoot(ID3D12RootSignature* root) { m_pd3dGraphicsRootSignature = root; }
 
-	bool ProcessInput(UCHAR *pKeysBuffer);
-    void AnimateObjects(float fTimeElapsed);
-    void Render(ID3D12GraphicsCommandList *pd3dCommandList, int nPipelineState, CCamera *pCamera=NULL);
-    void ThroughRender(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera=NULL);
+	virtual bool ProcessInput(UCHAR *pKeysBuffer);
+	virtual void AnimateObjects(float fTimeElapsed) {};
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
+	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
 
-	void ReleaseUploadBuffers();
+	virtual void ReleaseUploadBuffers() {};
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
 
@@ -117,7 +116,6 @@ protected:
 	static D3D12_GPU_DESCRIPTOR_HANDLE	m_d3dSrvGPUDescriptorNextHandle;
 
 	LightCameraManager ShadowCameraManager;
-	unique_ptr<AstarNavigation> AStarNav;
 
 
 public:
@@ -152,14 +150,58 @@ public:
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
-	// 디버그용 바운딩 박스 셰이더
+
+	unique_ptr<UIObjectShader> UIShader;
+private:
+	
+public:
+	virtual void SetPlayer(CPlayer* p) {};
+
+	CCamera* GetLightCamera(int idx);
+
+	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
+	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
+	void DeleteDeadObject(UINT64 Fence);
+	void DeleteTrash(UINT64 Fence);
+	virtual EffectManager* GetEffectManager() { return NULL; }
+	virtual InventoryManager* GetInventoryManager() { return NULL; }
+	virtual CGameObject* GetModelPrototype(ModelName key) const { return NULL; }
+	virtual void BuildModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		CShader* pPlayerShader
+	) {}
+};
+
+
+class MainScene : public CScene{
+public:
+	MainScene();
+	virtual ~MainScene();
+
+	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+	
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual void ReleaseObjects();
+
+	virtual bool ProcessInput(UCHAR* pKeysBuffer);
+	virtual void AnimateObjects(float fTimeElapsed);
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL);
+
+	virtual void ReleaseUploadBuffers();
+protected:
+	unique_ptr<AstarNavigation> AStarNav;
+public:
 	std::unique_ptr<CBoundingBoxShader> m_pDebugShader = nullptr;
 	std::unique_ptr<CBoundingBoxShader> m_pLootBoxShader = nullptr;
 	CBoundingBoxShader* GetLootBoxShader() { return m_pLootBoxShader.get(); }
 
 	// 이펙트/레이저 렌더링은 EffectManager가 담당
 	EffectManager* m_pEffectManager = nullptr;
-	EffectManager* GetEffectManager() { return m_pEffectManager; }
+	virtual EffectManager* GetEffectManager() { return m_pEffectManager; }
 
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
@@ -171,8 +213,6 @@ public:
 	float m_fSparkSpawnInterval = 0.03f;
 
 	CGameObject* m_pWeaponMuzzle = nullptr;
-
-	unique_ptr<UIObjectShader> UIShader;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
@@ -193,19 +233,17 @@ private:
 public:
 	void SetPlayer(CPlayer* p);
 
-	CCamera* GetLightCamera(int idx);
-
 	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
-	void DeleteDeadObject(UINT64 Fence);
-	void DeleteTrash(UINT64 Fence);
+	void DeleteDeadObject(UINT64 Fence) {};
+	void DeleteTrash(UINT64 Fence) {};
 
 	//인벤토리용 함수
 	bool IsAnyInventoryOpen() const;
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
 
-	InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
+	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
 
 
 	bool LoadAndRegisterModelPrototype(
@@ -223,4 +261,5 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		CShader* pPlayerShader
 	);
+
 };

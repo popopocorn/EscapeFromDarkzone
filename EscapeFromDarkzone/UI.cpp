@@ -97,7 +97,7 @@ void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 {
 	texture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 	texture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pszFileName, RESOURCE_TEXTURE2D, 0);
-	MainScene::CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
+	CScene::CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
 }
 
 void UIMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)

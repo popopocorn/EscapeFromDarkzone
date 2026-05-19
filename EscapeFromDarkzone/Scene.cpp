@@ -19,17 +19,17 @@
 
 #include "Network.h"
 
-ID3D12DescriptorHeap *MainScene::m_pd3dCbvSrvDescriptorHeap = NULL;
+ID3D12DescriptorHeap *CScene::m_pd3dCbvSrvDescriptorHeap = NULL;
 
-D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorStartHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorStartHandle;
-D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorStartHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorStartHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorStartHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorStartHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorStartHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorStartHandle;
 
-D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvCPUDescriptorNextHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dCbvGPUDescriptorNextHandle;
-D3D12_CPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvCPUDescriptorNextHandle;
-D3D12_GPU_DESCRIPTOR_HANDLE	MainScene::m_d3dSrvGPUDescriptorNextHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvCPUDescriptorNextHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dCbvGPUDescriptorNextHandle;
+D3D12_CPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvCPUDescriptorNextHandle;
+D3D12_GPU_DESCRIPTOR_HANDLE	CScene::m_d3dSrvGPUDescriptorNextHandle;
 
 
 static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
@@ -164,9 +164,9 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 	}
 }
 
-MainScene::MainScene()
+CScene::CScene()
 {
-	colManager = std::make_unique<CollisionManager>();
+	
 
 	m_pPlayer = nullptr;
 
@@ -175,118 +175,19 @@ MainScene::MainScene()
 	m_pcbMappedLights = nullptr;
 
 	m_pSkyBox = nullptr;
-	m_pFogOverlayShader = nullptr;
+	
 	UIShader = nullptr;
-	m_pDebugShader = nullptr;
-
-	m_pLaserMuzzle = nullptr;
-	m_pWeaponMuzzle = nullptr;
-
-	m_pEffectManager = nullptr;
-	m_pInventoryManager = nullptr;
-
-	m_bLaserActive = false;
-	m_bSparkFireActive = false;
-	m_fSparkSpawnTimer = 0.0f;
-	m_fSparkSpawnInterval = 0.03f;
-	m_fLaserLength = 15.0f;
 
 	m_nLights = 0;
 	m_fElapsedTime = 0.0f;
 }
 
-MainScene::~MainScene()
+CScene::~CScene()
 {
 }
 
 
-void MainScene::BuildModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	CShader* pPlayerShader)
-{
-	if (!pPlayerShader) return;
-
-	LoadAndRegisterModelPrototype(
-		ModelName::RIFLE,
-		pd3dDevice,
-		pd3dCommandList,
-		"Model/Classic_M4_1.bin",
-		pPlayerShader
-	);
-}
-bool MainScene::LoadAndRegisterModelPrototype(
-	ModelName key,
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	const char* modelPath,
-	CShader* pShader)
-{
-	if (!pd3dDevice) return false;
-	if (!pd3dCommandList) return false;
-	if (!modelPath) return false;
-	if (!pShader) return false;
-	if (!m_pd3dGraphicsRootSignature) return false;
-
-	auto it = m_ModelPrototypes.find(key);
-	if (it != m_ModelPrototypes.end())
-	{
-		return true;
-	}
-
-	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		nullptr,
-		modelPath,
-		pShader,
-		nullptr
-	);
-
-	if (!pPrototype)
-		return false;
-
-	RegisterModelPrototype(key, pPrototype);
-	return true;
-}
-void MainScene::RegisterModelPrototype(ModelName key, CGameObject* pPrototype)
-{
-	if (!pPrototype) return;
-
-	auto it = m_ModelPrototypes.find(key);
-	if (it != m_ModelPrototypes.end())
-	{
-		if (it->second)
-			it->second->Release();
-
-		it->second = pPrototype;
-		return;
-	}
-
-	m_ModelPrototypes.emplace(key, pPrototype);
-}
-CGameObject* MainScene::GetModelPrototype(ModelName key) const
-{
-	auto it = m_ModelPrototypes.find(key);
-	if (it == m_ModelPrototypes.end())
-		return nullptr;
-
-	return it->second;
-}
-void MainScene::ReleaseModelPrototypes()
-{
-	for (auto& pair : m_ModelPrototypes)
-	{
-		if (pair.second)
-		{
-			pair.second->Release();
-		}
-	}
-	m_ModelPrototypes.clear();
-}
-
-void MainScene::BuildDefaultLightsAndMaterials()
+void CScene::BuildDefaultLightsAndMaterials()
 {
 	m_xmf4GlobalAmbient = XMFLOAT4(0.15f, 0.15f, 0.15f, 1.0f);
 
@@ -302,487 +203,20 @@ void MainScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
-{
-	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
-
-	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 480);		// 임시, 추후 수정 요망
-
-	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	BuildDefaultLightsAndMaterials();
-
-	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	UIShader = make_unique<UIObjectShader>();
-	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
-	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	m_pInventoryManager = new InventoryManager();
-	m_pInventoryManager->Initialize(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		UIShader.get()
-	);
-
-	// 맵 쉐이더
-	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
-	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	m_vVisionMapChunks.clear();
-	m_vVisionMapChunks.reserve(64);
-
-	{
-		std::unique_ptr<CGameObject> floorObj(
-			CGameObject::LoadGeometryModelByName(
-				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-				NULL, "Model/floor.bin", stdshader.get(), 0
-			)
-		);
-		floorObj->SetPosition(-150, -0.5f, -150);
-		floorObj->SetOOBB(NULL);
-		stdshader->addObjects(std::move(floorObj));
-
-		static const char* s_mapFiles[] = {
-			"Model/block1.bin",
-			"Model/block3.bin",
-			"Model/block4.bin",
-			"Model/block5.bin",
-			"Model/block6.bin",
-			"Model/block10.bin",
-			"Model/block11.bin",
-			"Model/block12.bin",
-			"Model/block13.bin",
-			"Model/block14.bin",
-			"Model/block15.bin",
-			"Model/block16.bin",
-			"Model/block17.bin",
-			"Model/block18.bin",
-			"Model/block19.bin",
-			"Model/block20.bin",
-			"Model/block21.bin",
-			"Model/block22.bin",
-			"Model/block23.bin",
-			"Model/block24.bin",
-			"Model/block30.bin",
-			"Model/block31.bin",
-			"Model/block32.bin",
-			"Model/block33.bin",
-			"Model/block34.bin",
-			"Model/block35.bin",
-			"Model/block36.bin",
-			"Model/block37.bin",
-			"Model/block38.bin",
-			"Model/block40.bin"
-		};
-
-		for (const char* fileName : s_mapFiles)
-		{
-			std::unique_ptr<CGameObject> map(
-				CGameObject::LoadGeometryModelByName(
-					pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-					NULL, fileName, stdshader.get(), 0
-				)
-			);
-			map->SetPosition(-150, 0.0f, -150);
-			map->SetOOBB(NULL);
-
-			m_vVisionMapChunks.push_back(map.get());
-
-			stdshader->addObjects(std::move(map));
-		}
-	}
-	m_ppShaders.push_back(std::move(stdshader));
-
-	// 시야 객체 생성
-	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
-	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	{
-		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
-		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
-
-		auto pCircleObj = std::make_unique<CGameObject>();
-		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
-		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 3.0f, 72));
-		pCircleObj->SetShader(view.get());
-		pCircleObj->SetPosition(0.0f, 0.7f, 0.0f);
-
-		auto pConeObj = std::make_unique<CGameObject>();
-		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
-		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 20.0f, 75.0f, 72));
-		pConeObj->SetShader(view.get());
-		pConeObj->SetPosition(0.0f, 0.7f, 0.0f);
-
-		viewobj->SetCircleObject(pCircleObj.get());
-		viewobj->SetConeObject(pConeObj.get());
-
-		viewobj->SetChild(pCircleObj.get());
-		viewobj->SetChild(pConeObj.get());
-
-		pCircleObj.release();
-		pConeObj.release();
-
-		view->addObjects(std::move(viewobj));
-	}
-	m_ppShaders.push_back(std::move(view));
-
-	// 디버그 쉐이더
-	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		false
-	);
-
-	// 시체박스 전용 솔리드 큐브
-	m_pLootBoxShader = std::make_unique<CBoundingBoxShader>(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		true
-	);
-
-	// 적 쉐이더
-	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
-
-	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	AStarNav = make_unique<AstarNavigation>();
-	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
-
-
-	//적 오브젝트 - 네트워크가 안 될 때에만
-	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
-	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	//pEnemy->SetOOBB(NULL);
-	//pEnemy->setNav(AStarNav.get());
-	//pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
-
-	m_ppShaders.push_back(std::move(pSkinnedShader));
-
-	// 루팅 전용 쉐이더
-	auto pLootShader = std::make_unique<CStandardObjectsShader>();
-	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
-
-	m_ppShaders.push_back(std::move(pLootShader));
-
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->BindLootWorld(
-			nullptr,
-			pLootShaderRaw,
-			m_pDebugShader.get(),
-			m_pLootBoxShader.get()
-		);
-	}
-
-	// EffectManager 생성
-	m_pEffectManager = new EffectManager();
-	m_pEffectManager->Initialize(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	for (const auto& shader : m_ppShaders)
-	{
-		auto* objs = shader->GetObj();
-		if (objs != nullptr && !objs->empty())
-		{
-			for (auto& obj : *objs)
-			{
-				m_pDebugShader->AddObject(obj.get());
-			}
-		}
-	}
-
-	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
-	CreateShaderVariables(pd3dDevice, pd3dCommandList);
-}
-
-void MainScene::ReleaseObjects()
-{
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->Release();
-		delete m_pInventoryManager;
-		m_pInventoryManager = nullptr;
-	}
-
-	if (m_pEffectManager)
-	{
-		m_pEffectManager->Release();
-		delete m_pEffectManager;
-		m_pEffectManager = nullptr;
-	}
-
-	for (auto& s : m_ppShaders)
-	{
-		s->ReleaseObjects();
-	}
-	m_ppShaders.clear();
-
-	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
-	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
-
-	ReleaseModelPrototypes();
-	ReleaseShaderVariables();
-
-	m_pLights.clear();
-}
-
-ID3D12RootSignature *MainScene::CreateGraphicsRootSignature(ID3D12Device *pd3dDevice)
-{
-	ID3D12RootSignature *pd3dGraphicsRootSignature = NULL;
-
-	D3D12_DESCRIPTOR_RANGE pd3dDescriptorRanges[11];
-
-	pd3dDescriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[0].NumDescriptors = 1;
-	pd3dDescriptorRanges[0].BaseShaderRegister = 6; //t6: gtxtAlbedoTexture
-	pd3dDescriptorRanges[0].RegisterSpace = 0;
-	pd3dDescriptorRanges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[1].NumDescriptors = 1;
-	pd3dDescriptorRanges[1].BaseShaderRegister = 7; //t7: gtxtSpecularTexture
-	pd3dDescriptorRanges[1].RegisterSpace = 0;
-	pd3dDescriptorRanges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[2].NumDescriptors = 1;
-	pd3dDescriptorRanges[2].BaseShaderRegister = 8; //t8: gtxtNormalTexture
-	pd3dDescriptorRanges[2].RegisterSpace = 0;
-	pd3dDescriptorRanges[2].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[3].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[3].NumDescriptors = 1;
-	pd3dDescriptorRanges[3].BaseShaderRegister = 9; //t9: gtxtMetallicTexture
-	pd3dDescriptorRanges[3].RegisterSpace = 0;
-	pd3dDescriptorRanges[3].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[4].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[4].NumDescriptors = 1;
-	pd3dDescriptorRanges[4].BaseShaderRegister = 10; //t10: gtxtEmissionTexture
-	pd3dDescriptorRanges[4].RegisterSpace = 0;
-	pd3dDescriptorRanges[4].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[5].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[5].NumDescriptors = 1;
-	pd3dDescriptorRanges[5].BaseShaderRegister = 11; //t11: gtxtEmissionTexture
-	pd3dDescriptorRanges[5].RegisterSpace = 0;
-	pd3dDescriptorRanges[5].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[6].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[6].NumDescriptors = 1;
-	pd3dDescriptorRanges[6].BaseShaderRegister = 12; //t12: gtxtEmissionTexture
-	pd3dDescriptorRanges[6].RegisterSpace = 0;
-	pd3dDescriptorRanges[6].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[7].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[7].NumDescriptors = 1;
-	pd3dDescriptorRanges[7].BaseShaderRegister = 13; //t13: gtxtSkyBoxTexture
-	pd3dDescriptorRanges[7].RegisterSpace = 0;
-	pd3dDescriptorRanges[7].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[8].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[8].NumDescriptors = 1;
-	pd3dDescriptorRanges[8].BaseShaderRegister = 1; //t1: gtxtTerrainBaseTexture
-	pd3dDescriptorRanges[8].RegisterSpace = 0;
-	pd3dDescriptorRanges[8].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[9].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[9].NumDescriptors = 1;
-	pd3dDescriptorRanges[9].BaseShaderRegister = 2; //t2: gtxtTerrainDetailTexture
-	pd3dDescriptorRanges[9].RegisterSpace = 0;
-	pd3dDescriptorRanges[9].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	pd3dDescriptorRanges[10].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	pd3dDescriptorRanges[10].NumDescriptors = 1;
-	pd3dDescriptorRanges[10].BaseShaderRegister = 14; //t2: gtxtTerrainDetailTexture
-	pd3dDescriptorRanges[10].RegisterSpace = 0;
-	pd3dDescriptorRanges[10].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-
-	D3D12_ROOT_PARAMETER pd3dRootParameters[17 + 1];
-
-	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[0].Descriptor.ShaderRegister = 1; //Camera
-	pd3dRootParameters[0].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	pd3dRootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	pd3dRootParameters[1].Constants.Num32BitValues = 33;
-	pd3dRootParameters[1].Constants.ShaderRegister = 2; //GameObject
-	pd3dRootParameters[1].Constants.RegisterSpace = 0;
-	pd3dRootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	pd3dRootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[2].Descriptor.ShaderRegister = 4; //Lights
-	pd3dRootParameters[2].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	pd3dRootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[3].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[0]);
-	pd3dRootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[4].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[1]);
-	pd3dRootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[5].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[2]);
-	pd3dRootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[6].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[6].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[3]);
-	pd3dRootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[7].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[7].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[4]);
-	pd3dRootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[8].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[8].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[5]);
-	pd3dRootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[9].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[9].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[6]);
-	pd3dRootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[10].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[10].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[7]);
-	pd3dRootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[11].Descriptor.ShaderRegister = 7; //Skinned Bone Offsets
-	pd3dRootParameters[11].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[11].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	pd3dRootParameters[12].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[12].Descriptor.ShaderRegister = 8; //Skinned Bone Transforms
-	pd3dRootParameters[12].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[12].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	pd3dRootParameters[13].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[13].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[13].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[8]);
-	pd3dRootParameters[13].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[14].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[14].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[14].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[9]);
-	pd3dRootParameters[14].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[15].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[15].DescriptorTable.NumDescriptorRanges = 1;
-	pd3dRootParameters[15].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[10]);
-	pd3dRootParameters[15].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[16].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[16].Descriptor.ShaderRegister = 9; // b5
-	pd3dRootParameters[16].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[16].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dRootParameters[17].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	pd3dRootParameters[17].Descriptor.ShaderRegister = 10; // b10
-	pd3dRootParameters[17].Descriptor.RegisterSpace = 0;
-	pd3dRootParameters[17].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	D3D12_STATIC_SAMPLER_DESC pd3dSamplerDescs[3];
-
-	pd3dSamplerDescs[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	pd3dSamplerDescs[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	pd3dSamplerDescs[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	pd3dSamplerDescs[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	pd3dSamplerDescs[0].MipLODBias = 0;
-	pd3dSamplerDescs[0].MaxAnisotropy = 1;
-	pd3dSamplerDescs[0].ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	pd3dSamplerDescs[0].MinLOD = 0;
-	pd3dSamplerDescs[0].MaxLOD = D3D12_FLOAT32_MAX;
-	pd3dSamplerDescs[0].ShaderRegister = 0;
-	pd3dSamplerDescs[0].RegisterSpace = 0;
-	pd3dSamplerDescs[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dSamplerDescs[1].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	pd3dSamplerDescs[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	pd3dSamplerDescs[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	pd3dSamplerDescs[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	pd3dSamplerDescs[1].MipLODBias = 0;
-	pd3dSamplerDescs[1].MaxAnisotropy = 1;
-	pd3dSamplerDescs[1].ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	pd3dSamplerDescs[1].MinLOD = 0;
-	pd3dSamplerDescs[1].MaxLOD = D3D12_FLOAT32_MAX;
-	pd3dSamplerDescs[1].ShaderRegister = 1;
-	pd3dSamplerDescs[1].RegisterSpace = 0;
-	pd3dSamplerDescs[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	pd3dSamplerDescs[2].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
-	pd3dSamplerDescs[2].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	pd3dSamplerDescs[2].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	pd3dSamplerDescs[2].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	pd3dSamplerDescs[2].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE; 
-	pd3dSamplerDescs[2].MipLODBias = 0;
-	pd3dSamplerDescs[2].MaxAnisotropy = 1;
-	pd3dSamplerDescs[2].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; 
-	pd3dSamplerDescs[2].MinLOD = 0;
-	pd3dSamplerDescs[2].MaxLOD = D3D12_FLOAT32_MAX;
-	pd3dSamplerDescs[2].ShaderRegister = 2; 
-	pd3dSamplerDescs[2].RegisterSpace = 0;
-	pd3dSamplerDescs[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
-	D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
-	::ZeroMemory(&d3dRootSignatureDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	d3dRootSignatureDesc.NumParameters = _countof(pd3dRootParameters);
-	d3dRootSignatureDesc.pParameters = pd3dRootParameters;
-	d3dRootSignatureDesc.NumStaticSamplers = _countof(pd3dSamplerDescs);
-	d3dRootSignatureDesc.pStaticSamplers = pd3dSamplerDescs;
-	d3dRootSignatureDesc.Flags = d3dRootSignatureFlags;
-
-	ID3DBlob *pd3dSignatureBlob = NULL;
-	ID3DBlob *pd3dErrorBlob = NULL;
-	D3D12SerializeRootSignature(&d3dRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &pd3dSignatureBlob, &pd3dErrorBlob);
-	pd3dDevice->CreateRootSignature(0, pd3dSignatureBlob->GetBufferPointer(), pd3dSignatureBlob->GetBufferSize(), __uuidof(ID3D12RootSignature), (void **)&pd3dGraphicsRootSignature);
-	if (pd3dSignatureBlob) pd3dSignatureBlob->Release();
-	if (pd3dErrorBlob) pd3dErrorBlob->Release();
-	return(pd3dGraphicsRootSignature);
-}
-
-void MainScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
+void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
 	m_pd3dcbLights = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 
 	m_pd3dcbLights->Map(0, NULL, (void **)&m_pcbMappedLights);
 }
-void MainScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
+void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 {
 	::memcpy(m_pcbMappedLights->m_pLights, m_pLights.data(), sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
 	::memcpy(&m_pcbMappedLights->m_nLights, &m_nLights, sizeof(int));
 }
-void MainScene::ReleaseShaderVariables()
+void CScene::ReleaseShaderVariables()
 {
 	if (m_pd3dcbLights)
 	{
@@ -790,23 +224,8 @@ void MainScene::ReleaseShaderVariables()
 		m_pd3dcbLights->Release();
 	}
 }
-void MainScene::ReleaseUploadBuffers()
-{
-	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
-	for (int i = 0; i < m_ppShaders.size(); i++)
-	{
-		if (m_ppShaders[i])
-			m_ppShaders[i]->ReleaseUploadBuffers();
-	}
-
-	if (m_pEffectManager)
-	{
-		m_pEffectManager->ReleaseUploadBuffers();
-	}
-}
-
-void MainScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
+void CScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConstantBufferViews, int nShaderResourceViews)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
 	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews; //CBVs + SRVs 
@@ -820,7 +239,7 @@ void MainScene::CreateCbvSrvDescriptorHeaps(ID3D12Device *pd3dDevice, int nConst
 	m_d3dSrvCPUDescriptorNextHandle.ptr = m_d3dSrvCPUDescriptorStartHandle.ptr = m_d3dCbvCPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 	m_d3dSrvGPUDescriptorNextHandle.ptr = m_d3dSrvGPUDescriptorStartHandle.ptr = m_d3dCbvGPUDescriptorStartHandle.ptr + (::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
 }
-D3D12_GPU_DESCRIPTOR_HANDLE MainScene::CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride)
+D3D12_GPU_DESCRIPTOR_HANDLE CScene::CreateConstantBufferViews(ID3D12Device *pd3dDevice, int nConstantBufferViews, ID3D12Resource *pd3dConstantBuffers, UINT nStride)
 {
 	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle = m_d3dCbvGPUDescriptorNextHandle;
 	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress = pd3dConstantBuffers->GetGPUVirtualAddress();
@@ -835,7 +254,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE MainScene::CreateConstantBufferViews(ID3D12Device *p
 	}
 	return(d3dCbvGPUDescriptorHandle);
 }
-void MainScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+void CScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pTexture, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
 	if (!pd3dDevice || !pTexture)
 		return;
@@ -878,7 +297,7 @@ void MainScene::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTexture* pT
 	}
 }
 
-void MainScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
+void CScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* shadowmap, UINT nDescriptorHeapIndex, UINT nRootParameterStartIndex)
 {
 	m_d3dSrvCPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
 	m_d3dSrvGPUDescriptorNextHandle.ptr += (::gnCbvSrvDescriptorIncrementSize * nDescriptorHeapIndex);
@@ -889,89 +308,103 @@ void MainScene::CreateshadowResourceViews(ID3D12Device* pd3dDevice, ShadowMap* s
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
-void MainScene::SetPlayer(CPlayer* p)
-{
-	m_pPlayer = p;
-
-	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
-	CGameObject* pGameObj = (*pVector)[0].get();
-	ViewObject* pViewObj = static_cast<ViewObject*>(pGameObj);
-	pViewObj->setPlayer(p);
-
-	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
-
-	ShadowCameraManager.SetPlayer(p->GetCamera());
-	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
-
-	if (m_ppShaders[SHADERIDX::ENEMY])
-	{
-		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-		for (auto& obj : *objs)
-		{
-			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-			if (pEnemy)
-			{
-				pEnemy->SetPlayer(m_pPlayer);
-			}
-		}
-	}
-
-	m_pWeaponMuzzle = nullptr;
-	if (m_pPlayer && m_pPlayer->GetWeapon())
-	{
-		m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
-	}
-
-	m_pLaserMuzzle = nullptr;
-	if (m_pPlayer && m_pPlayer->GetWeapon())
-	{
-		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
-	}
-
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->SetPlayer(m_pPlayer);
-	}
-}
-
-CCamera* MainScene::GetLightCamera(int idx)
+CCamera* CScene::GetLightCamera(int idx)
 {
 	return &ShadowCameraManager.GetCameras()[idx];
 }
 
-void MainScene::DeleteDeadObject(UINT64 Fence)
+void CScene::DeleteDeadObject(UINT64 Fence)
 {
 	for (auto& shader : m_ppShaders) {
 		shader->DeleteObject(Fence);
 	}
 }
 
-void MainScene::DeleteTrash(UINT64 Fence)
+void CScene::DeleteTrash(UINT64 Fence)
 {
 	for (auto& shader : m_ppShaders) {
 		shader->ProcessingGarbageQueue(Fence);
 	}
 }
 
-bool MainScene::IsAnyInventoryOpen() const
+
+void CScene::DumpMapOOBBToCSV(const char* filename)
 {
-	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
+	if (m_ppShaders.size() <= SHADERIDX::MAP) return;
+	if (!m_ppShaders[SHADERIDX::MAP]) return;
+
+	auto* objs = m_ppShaders[SHADERIDX::MAP]->GetObj();
+	if (!objs) return;
+
+	FILE* fp = nullptr;
+	fopen_s(&fp, filename, "w");
+	if (!fp)
+	{
+		OutputDebugStringA("DumpMapOOBBToCSV: failed to open file\n");
+		return;
+	}
+
+	// 헤더 주석
+	fprintf(fp, "# center_x,center_y,center_z,ext_x,ext_y,ext_z,quat_x,quat_y,quat_z,quat_w\n");
+
+	int count = 0;
+	for (const auto& obj : *objs)
+	{
+		if (!obj) continue;
+
+		const auto& oobbs = obj->GetOOBB();
+		for (const BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			// 쿼터니언 정규화 (단위 쿼터니언 보장)
+			XMVECTOR q = XMLoadFloat4(&pOOBB->Orientation);
+			q = XMQuaternionNormalize(q);
+			XMFLOAT4 quat;
+			XMStoreFloat4(&quat, q);
+
+			fprintf(fp, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+				pOOBB->Center.x, pOOBB->Center.y, pOOBB->Center.z,
+				pOOBB->Extents.x, pOOBB->Extents.y, pOOBB->Extents.z,
+				quat.x, quat.y, quat.z, quat.w);
+			++count;
+		}
+	}
+
+	fclose(fp);
+
+	char msg[128];
+	sprintf_s(msg, "DumpMapOOBBToCSV: dumped %d OOBBs to %s\n", count, filename);
+	OutputDebugStringA(msg);
 }
 
-void MainScene::CloseCorpseInventory()
+bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 {
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->CloseLootInventory();
-	}
+	return(false);
 }
 
-void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
+MainScene::MainScene() : CScene()
 {
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->OpenLootContainer(pLoot);
-	}
+	colManager = std::make_unique<CollisionManager>();
+	m_pFogOverlayShader = nullptr;
+	m_pDebugShader = nullptr;
+
+	m_pLaserMuzzle = nullptr;
+	m_pWeaponMuzzle = nullptr;
+
+	m_pEffectManager = nullptr;
+	m_pInventoryManager = nullptr;
+
+	m_bLaserActive = false;
+	m_bSparkFireActive = false;
+	m_fSparkSpawnTimer = 0.0f;
+	m_fSparkSpawnInterval = 0.03f;
+	m_fLaserLength = 15.0f;
+}
+
+MainScene::~MainScene()
+{
+
 }
 
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -1238,59 +671,249 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 	return false;
 }
 
-void MainScene::DumpMapOOBBToCSV(const char* filename)
+void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	if (m_ppShaders.size() <= SHADERIDX::MAP) return;
-	if (!m_ppShaders[SHADERIDX::MAP]) return;
 
-	auto* objs = m_ppShaders[SHADERIDX::MAP]->GetObj();
-	if (!objs) return;
+	CreateCbvSrvDescriptorHeaps(pd3dDevice, 0, 480);		// 임시, 추후 수정 요망
 
-	FILE* fp = nullptr;
-	fopen_s(&fp, filename, "w");
-	if (!fp)
+	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	BuildDefaultLightsAndMaterials();
+
+	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	UIShader = make_unique<UIObjectShader>();
+	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
+	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	m_pInventoryManager = new InventoryManager();
+	m_pInventoryManager->Initialize(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		UIShader.get()
+	);
+
+	// 맵 쉐이더
+	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
+	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	m_vVisionMapChunks.clear();
+	m_vVisionMapChunks.reserve(64);
+
 	{
-		OutputDebugStringA("DumpMapOOBBToCSV: failed to open file\n");
-		return;
+		std::unique_ptr<CGameObject> floorObj(
+			CGameObject::LoadGeometryModelByName(
+				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
+				NULL, "Model/floor.bin", stdshader.get(), 0
+			)
+		);
+		floorObj->SetPosition(-150, -0.5f, -150);
+		floorObj->SetOOBB(NULL);
+		stdshader->addObjects(std::move(floorObj));
+
+		static const char* s_mapFiles[] = {
+			"Model/block1.bin",
+			"Model/block3.bin",
+			"Model/block4.bin",
+			"Model/block5.bin",
+			"Model/block6.bin",
+			"Model/block10.bin",
+			"Model/block11.bin",
+			"Model/block12.bin",
+			"Model/block13.bin",
+			"Model/block14.bin",
+			"Model/block15.bin",
+			"Model/block16.bin",
+			"Model/block17.bin",
+			"Model/block18.bin",
+			"Model/block19.bin",
+			"Model/block20.bin",
+			"Model/block21.bin",
+			"Model/block22.bin",
+			"Model/block23.bin",
+			"Model/block24.bin",
+			"Model/block30.bin",
+			"Model/block31.bin",
+			"Model/block32.bin",
+			"Model/block33.bin",
+			"Model/block34.bin",
+			"Model/block35.bin",
+			"Model/block36.bin",
+			"Model/block37.bin",
+			"Model/block38.bin",
+			"Model/block40.bin"
+		};
+
+		for (const char* fileName : s_mapFiles)
+		{
+			std::unique_ptr<CGameObject> map(
+				CGameObject::LoadGeometryModelByName(
+					pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
+					NULL, fileName, stdshader.get(), 0
+				)
+			);
+			map->SetPosition(-150, 0.0f, -150);
+			map->SetOOBB(NULL);
+
+			m_vVisionMapChunks.push_back(map.get());
+
+			stdshader->addObjects(std::move(map));
+		}
+	}
+	m_ppShaders.push_back(std::move(stdshader));
+
+	// 시야 객체 생성
+	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
+	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	{
+		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
+		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
+
+		auto pCircleObj = std::make_unique<CGameObject>();
+		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
+		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 3.0f, 72));
+		pCircleObj->SetShader(view.get());
+		pCircleObj->SetPosition(0.0f, 0.7f, 0.0f);
+
+		auto pConeObj = std::make_unique<CGameObject>();
+		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
+		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 20.0f, 75.0f, 72));
+		pConeObj->SetShader(view.get());
+		pConeObj->SetPosition(0.0f, 0.7f, 0.0f);
+
+		viewobj->SetCircleObject(pCircleObj.get());
+		viewobj->SetConeObject(pConeObj.get());
+
+		viewobj->SetChild(pCircleObj.get());
+		viewobj->SetChild(pConeObj.get());
+
+		pCircleObj.release();
+		pConeObj.release();
+
+		view->addObjects(std::move(viewobj));
+	}
+	m_ppShaders.push_back(std::move(view));
+
+	// 디버그 쉐이더
+	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		false
+	);
+
+	// 시체박스 전용 솔리드 큐브
+	m_pLootBoxShader = std::make_unique<CBoundingBoxShader>(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		true
+	);
+
+	// 적 쉐이더
+	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
+
+	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	AStarNav = make_unique<AstarNavigation>();
+	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
+
+
+	//적 오브젝트 - 네트워크가 안 될 때에만
+	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
+	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	//pEnemy->SetOOBB(NULL);
+	//pEnemy->setNav(AStarNav.get());
+	//pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+
+	m_ppShaders.push_back(std::move(pSkinnedShader));
+
+	// 루팅 전용 쉐이더
+	auto pLootShader = std::make_unique<CStandardObjectsShader>();
+	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
+
+	m_ppShaders.push_back(std::move(pLootShader));
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->BindLootWorld(
+			nullptr,
+			pLootShaderRaw,
+			m_pDebugShader.get(),
+			m_pLootBoxShader.get()
+		);
 	}
 
-	// 헤더 주석
-	fprintf(fp, "# center_x,center_y,center_z,ext_x,ext_y,ext_z,quat_x,quat_y,quat_z,quat_w\n");
+	// EffectManager 생성
+	m_pEffectManager = new EffectManager();
+	m_pEffectManager->Initialize(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	int count = 0;
-	for (const auto& obj : *objs)
+	for (const auto& shader : m_ppShaders)
 	{
-		if (!obj) continue;
-
-		const auto& oobbs = obj->GetOOBB();
-		for (const BoundingOrientedBox* pOOBB : oobbs)
+		auto* objs = shader->GetObj();
+		if (objs != nullptr && !objs->empty())
 		{
-			if (!pOOBB) continue;
-
-			// 쿼터니언 정규화 (단위 쿼터니언 보장)
-			XMVECTOR q = XMLoadFloat4(&pOOBB->Orientation);
-			q = XMQuaternionNormalize(q);
-			XMFLOAT4 quat;
-			XMStoreFloat4(&quat, q);
-
-			fprintf(fp, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
-				pOOBB->Center.x, pOOBB->Center.y, pOOBB->Center.z,
-				pOOBB->Extents.x, pOOBB->Extents.y, pOOBB->Extents.z,
-				quat.x, quat.y, quat.z, quat.w);
-			++count;
+			for (auto& obj : *objs)
+			{
+				m_pDebugShader->AddObject(obj.get());
+			}
 		}
 	}
 
-	fclose(fp);
+	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	char msg[128];
-	sprintf_s(msg, "DumpMapOOBBToCSV: dumped %d OOBBs to %s\n", count, filename);
-	OutputDebugStringA(msg);
+	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
 
-bool MainScene::ProcessInput(UCHAR *pKeysBuffer)
+void MainScene::ReleaseObjects()
 {
-	return(false);
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->Release();
+		delete m_pInventoryManager;
+		m_pInventoryManager = nullptr;
+	}
+
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->Release();
+		delete m_pEffectManager;
+		m_pEffectManager = nullptr;
+	}
+
+	for (auto& s : m_ppShaders)
+	{
+		s->ReleaseObjects();
+	}
+	m_ppShaders.clear();
+
+	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature->Release();
+	if (m_pd3dCbvSrvDescriptorHeap) m_pd3dCbvSrvDescriptorHeap->Release();
+
+	ReleaseModelPrototypes();
+	ReleaseShaderVariables();
+
+	m_pLights.clear();
+}
+
+bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
+{
+	return false;
 }
 
 void MainScene::AnimateObjects(float fTimeElapsed)
@@ -1319,7 +942,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
-		// 시야 객체 blocker 갱신
+	// 시야 객체 blocker 갱신
 	{
 		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
 		{
@@ -1453,7 +1076,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 						}
 					}
 				}
-				
+
 			}
 
 			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
@@ -1520,9 +1143,10 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	}
 
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
+
 }
 
-void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	if (m_pd3dCbvSrvDescriptorHeap) pd3dCommandList->SetDescriptorHeaps(1, &m_pd3dCbvSrvDescriptorHeap);
@@ -1589,7 +1213,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	}
 }
 
-void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
+void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
 {
 	if (!m_pPlayer || !pCamera) return;
 
@@ -1609,4 +1233,170 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamer
 	pd3dCommandList->OMSetStencilRef(0xff);
 
 	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+}
+
+void MainScene::ReleaseUploadBuffers()
+{
+	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
+
+	for (int i = 0; i < m_ppShaders.size(); i++)
+	{
+		if (m_ppShaders[i])
+			m_ppShaders[i]->ReleaseUploadBuffers();
+	}
+
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->ReleaseUploadBuffers();
+	}
+}
+
+void MainScene::SetPlayer(CPlayer* p)
+{
+	m_pPlayer = p;
+
+	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+	for (auto& obj : *pVector)
+	{
+		ViewObject* pViewObj = static_cast<ViewObject*>(obj.get());
+		pViewObj->setPlayer(p);
+	}
+
+	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
+
+	ShadowCameraManager.SetPlayer(p->GetCamera());
+	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
+
+	if (m_ppShaders[SHADERIDX::ENEMY])
+	{
+		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+		for (auto& obj : *objs)
+		{
+			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+			if (pEnemy)
+			{
+				pEnemy->SetPlayer(m_pPlayer);
+			}
+		}
+	}
+
+	m_pWeaponMuzzle = nullptr;
+	if (m_pPlayer && m_pPlayer->GetWeapon())
+	{
+		m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
+	}
+
+	m_pLaserMuzzle = nullptr;
+	if (m_pPlayer && m_pPlayer->GetWeapon())
+	{
+		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
+	}
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->SetPlayer(m_pPlayer);
+	}
+}
+
+
+bool MainScene::IsAnyInventoryOpen() const
+{
+	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
+}
+
+void MainScene::CloseCorpseInventory()
+{
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->CloseLootInventory();
+	}
+}
+
+void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
+{
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->OpenLootContainer(pLoot);
+	}
+}
+bool MainScene::LoadAndRegisterModelPrototype(ModelName key, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const char* modelPath, CShader* pShader)
+{
+	if (!pd3dDevice) return false;
+	if (!pd3dCommandList) return false;
+	if (!modelPath) return false;
+	if (!pShader) return false;
+	if (!m_pd3dGraphicsRootSignature) return false;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		return true;
+	}
+
+	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		nullptr,
+		modelPath,
+		pShader,
+		nullptr
+	);
+
+	if (!pPrototype)
+		return false;
+
+	RegisterModelPrototype(key, pPrototype);
+	return true;
+}
+
+void MainScene::RegisterModelPrototype(ModelName key, CGameObject* pPrototype)
+{
+	if (!pPrototype) return;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		if (it->second)
+			it->second->Release();
+
+		it->second = pPrototype;
+		return;
+	}
+
+	m_ModelPrototypes.emplace(key, pPrototype);
+}
+
+CGameObject* MainScene::GetModelPrototype(ModelName key) const
+{
+	auto it = m_ModelPrototypes.find(key);
+	if (it == m_ModelPrototypes.end())
+		return nullptr;
+
+	return it->second;
+}
+
+void MainScene::ReleaseModelPrototypes()
+{
+	for (auto& pair : m_ModelPrototypes)
+	{
+		if (pair.second)
+		{
+			pair.second->Release();
+		}
+	}
+	m_ModelPrototypes.clear();
+}
+
+void MainScene::BuildModelPrototypes(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, CShader* pPlayerShader)
+{
+	if (!pPlayerShader) return;
+
+	LoadAndRegisterModelPrototype(
+		ModelName::RIFLE,
+		pd3dDevice,
+		pd3dCommandList,
+		"Model/Classic_M4_1.bin",
+		pPlayerShader
+	);
 }

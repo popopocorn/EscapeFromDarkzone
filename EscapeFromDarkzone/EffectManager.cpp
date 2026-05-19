@@ -45,7 +45,7 @@ void EffectManager::Initialize(
 	{
 		CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 		pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-		MainScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
+		CScene::CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
 
 		m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
 		m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
@@ -56,7 +56,7 @@ void EffectManager::Initialize(
 	{
 		CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 		pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
-		MainScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
+		CScene::CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
 
 		m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
 		m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
@@ -67,7 +67,7 @@ void EffectManager::Initialize(
 	{
 		CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 		pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-		MainScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
+		CScene::CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
 
 		m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
 		m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);

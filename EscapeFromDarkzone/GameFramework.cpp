@@ -51,6 +51,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	InputManager::Instance().init(hMainWnd);
 	CreateDirect3DDevice();
+	root = new RootSignature(m_pd3dDevice);
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
 	CreateSwapChain();
@@ -504,14 +505,15 @@ void CGameFramework::BuildObjects()
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
 	m_pScene = new MainScene();
+	m_pScene->SetRoot(root->GetRoot());
 	
 	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 	PlayerShader* pshader = new PlayerShader();
-	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
-	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
-	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
 	if (m_pScene)
 	{
@@ -525,7 +527,7 @@ void CGameFramework::BuildObjects()
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
-		m_pScene->GetGraphicsRootSignature(),
+		root->GetRoot(),
 		pshader,
 		(m_pScene) ? m_pScene->GetModelPrototype(ModelName::RIFLE) : nullptr
 	);
@@ -535,7 +537,7 @@ void CGameFramework::BuildObjects()
 	pPlayer->InitializeInventory(
 		m_pd3dDevice,
 		m_pd3dCommandList,
-		m_pScene->GetGraphicsRootSignature(),
+		root->GetRoot(),
 		nullptr
 	);
 
@@ -875,7 +877,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), p->x, p->y, p->z);
+			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), p->x, p->y, p->z);
 			pOther->SetServerYaw(p->yaw);
 
 			// 상태 변경
@@ -966,7 +968,7 @@ void CGameFramework::ProcessNetworkPackets()
 			CEnemyObject* pNpc = new CEnemyObject(
 				m_pd3dDevice,
 				m_pd3dCommandList,
-				m_pScene->GetGraphicsRootSignature(), 
+				root->GetRoot(),
 				NULL
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
