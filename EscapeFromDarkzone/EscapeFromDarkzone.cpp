@@ -11,7 +11,7 @@ HINSTANCE						ghAppInstance;
 TCHAR							szTitle[MAX_LOADSTRING];
 TCHAR							szWindowClass[MAX_LOADSTRING];
 
-CGameFramework					gGameFramework;
+unique_ptr<CGameFramework>		gGameFramework;
 
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitInstance(HINSTANCE, int);
@@ -30,6 +30,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	::LoadString(hInstance, IDC_ESCAPEFROMDARKZONE, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
 
+	gGameFramework = make_unique<CGameFramework>();
+
 	if (!InitInstance(hInstance, nCmdShow)) return(FALSE);
 
 	hAccelTable = ::LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_ESCAPEFROMDARKZONE));
@@ -47,10 +49,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 		}
 		else
 		{
-			gGameFramework.FrameAdvance();
+			gGameFramework->FrameAdvance();
 		}
 	}
-	gGameFramework.OnDestroy();
+	gGameFramework->OnDestroy();
 
 	return((int)msg.wParam);
 }
@@ -87,7 +89,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (!hMainWnd) return(FALSE);
 
-	gGameFramework.OnCreate(hInstance, hMainWnd);
+	gGameFramework->OnCreate(hInstance, hMainWnd);
 
 	::ShowCursor(TRUE);		//임시로 커서 보임
 	::ShowWindow(hMainWnd, nCmdShow);
@@ -116,7 +118,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_MOUSEMOVE:
 	case WM_KEYDOWN:
 	case WM_KEYUP:
-		gGameFramework.OnProcessingWindowMessage(hWnd, message, wParam, lParam);
+		gGameFramework->OnProcessingWindowMessage(hWnd, message, wParam, lParam);
 		break;
 	case WM_COMMAND:
 		wmId = LOWORD(wParam);

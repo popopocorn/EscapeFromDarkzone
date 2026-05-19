@@ -1,11 +1,12 @@
 #pragma once
 
+#include <DirectXMath.h>
+
 #include <WS2tcpip.h>
 #include <queue>
 #include <vector>
 #include "protocol.h"
 
-#include <DirectXMath.h>
 
 #pragma comment(lib, "WS2_32.lib")
 
