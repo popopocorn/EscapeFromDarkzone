@@ -669,9 +669,6 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
-
-
-
 	InputManager::Instance().update();
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
@@ -747,10 +744,10 @@ void CGameFramework::FrameAdvance()
 #endif
 
 
-	if (m_pPlayer) 
+	if (m_pPlayer)
 	{
+		m_pd3dCommandList->OMSetStencilRef(0x04);
 		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-		m_pPlayer->Render(m_pd3dCommandList, THROUGH, m_pCamera);
 	}
 	m_pScene->ThroughRender(m_pd3dCommandList, m_pCamera);
 

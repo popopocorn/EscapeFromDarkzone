@@ -184,4 +184,15 @@ float4 PSLaser(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
     return float4(1.0f, 0.0f, 0.0f, 1.0f);
 }
+
+float4 PSThroughPlayer(VS_STANDARD_OUTPUT input) : SV_TARGET
+{
+    float4 c = float4(1.0f, 0.9f, 0.2f, 0.35f);
+
+    float3 normalW = normalize(input.normalW);
+    float ndl = saturate(dot(normalW, normalize(float3(0.3f, 0.8f, 0.2f))));
+    c.rgb *= lerp(0.8f, 1.1f, ndl);
+
+    return c;
+}
 #endif // SHADERS_HLSL
