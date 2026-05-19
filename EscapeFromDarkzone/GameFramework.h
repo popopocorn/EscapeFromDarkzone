@@ -13,6 +13,8 @@
 #include "OtherPlayer.h"	// 03.30 추가
 #include <array>			// 05.08 추가
 
+#include "RootSignature.h"
+
 struct OtherPlayerSlot {
 	short id = -1;
 	OtherPlayer* pPlayer = nullptr;
@@ -98,13 +100,15 @@ private:
 	HANDLE						m_hFenceEvent;
 	bool						mouseMove = false;
 
+	RootSignature*				root=NULL;
+
 #if defined(_DEBUG)
 	ID3D12Debug					*m_pd3dDebugController;
 #endif
 
 	CGameTimer					m_GameTimer;
 
-	MainScene						*m_pScene = NULL;	//소유용
+	CScene						*m_pScene = NULL;	//소유용
 	CPlayer						*m_pPlayer = NULL;	//소유용
 	CCamera						*m_pCamera = NULL;	// 참조용
 	std::unique_ptr<CCamera>	observer;
