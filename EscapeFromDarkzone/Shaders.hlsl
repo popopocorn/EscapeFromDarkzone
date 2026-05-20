@@ -38,44 +38,55 @@ VS_VIEW_OUTPUT VSView(VS_VIEW_INPUT input)
 
 float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
-    float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float4 cAlbedoColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
         cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
-    float4 cSpecularColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    if (gnTexturesMask & MATERIAL_SPECULAR_MAP)
-        cSpecularColor = gtxtSpecularTexture.Sample(gssWrap, input.uv);
-    float4 cNormalColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    float4 cNormalColor = float4(0.5f, 0.5f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_NORMAL_MAP)
         cNormalColor = gtxtNormalTexture.Sample(gssWrap, input.uv);
-    float4 cMetallicColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    if (gnTexturesMask & MATERIAL_METALLIC_MAP)
-        cMetallicColor = gtxtMetallicTexture.Sample(gssWrap, input.uv);
-    float4 cEmissionColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    float4 cEmissionColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
     if (gnTexturesMask & MATERIAL_EMISSION_MAP)
         cEmissionColor = gtxtEmissionTexture.Sample(gssWrap, input.uv);
 
-    float3 normalW;
-    float4 cColor = cAlbedoColor + cSpecularColor + cMetallicColor + cEmissionColor;
+    float3 normalW = normalize(input.normalW);
 
-    normalW = normalize(input.normalW);
-    
-    // 뷰 공간 깊이 계산 (Cascade 선택용)
+    if (gnTexturesMask & MATERIAL_NORMAL_MAP)
+    {
+        float3 tangentW = normalize(input.tangentW);
+        float3 bitangentW = normalize(input.bitangentW);
+        float3 normalT = normalize(cNormalColor.xyz * 2.0f - 1.0f);
+
+        normalW = normalize(
+            normalT.x * tangentW +
+            normalT.y * bitangentW +
+            normalT.z * normalW
+        );
+    }
+
     float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
     float viewDepth = posView.z;
 
-    // 그림자 계수 계산
     float shadowFactor = CalcShadowFactor(input.positionW, viewDepth);
+    float3 lightColor = max(Lighting(input.positionW, normalW, gvCameraPosition).rgb, 0.0f);
 
-    float4 cIllumination = Lighting(input.positionW, normalW, gvCameraPosition);
+    //색상 보정
+    float3 ambient = float3(0.04f, 0.05f, 0.05f);
 
-    // 그림자 적용 (ambient는 그림자 영향 받지 않음)
-    cIllumination.rgb *= shadowFactor;
+    float softenedShadow = lerp(0.45f, 1.0f, shadowFactor);
 
-    return lerp(cColor, cIllumination, 0.5f);
-    //return cColor;
+    float3 lightingTerm = ambient + (lightColor * softenedShadow * 0.72f);
+
+    float luminance = dot(cAlbedoColor.rgb, float3(0.299f, 0.587f, 0.114f));
+    float darkBoost = lerp(1.95f, 1.00f, smoothstep(0.08f, 0.42f, luminance));
+
+    float3 finalColor = cAlbedoColor.rgb * lightingTerm * darkBoost;
+
+    finalColor += cEmissionColor.rgb * 0.08f;
+
+    return float4(saturate(finalColor), cAlbedoColor.a);
 }
-
-
 
 
 VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)

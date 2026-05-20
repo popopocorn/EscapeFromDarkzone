@@ -3,9 +3,11 @@
 #include "Object.h"
 #include "State.h"
 #include "Item.h"
+#include "Shader.h"
 
 class CPlayer;
 class Inventory;
+class CShader;
 
 enum ENEMY_ANIM {
 	ENEMY_ANIM_IDLE = 0,
@@ -24,7 +26,12 @@ protected:
 	
 	
 public:
-	CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* model);
+	CEnemyObject(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* pShader = nullptr
+	);
 	virtual ~CEnemyObject();
 
 	virtual void Animate(float fTimeElapsed) override;

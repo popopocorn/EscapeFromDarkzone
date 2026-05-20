@@ -3,11 +3,17 @@
 #include "Player.h"
 #include "OtherPlayer.h"
 #include "AI.h"
+#include "Shader.h"
 
-CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* model)
+CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
 {
-	CLoadedModelInfo* pEnemyModel
-		= CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Swat.bin", NULL);
+	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SK_Gangster_4.bin",
+		pShader
+	);
 
 	if (!pEnemyModel->m_pAnimationSets) pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
 
