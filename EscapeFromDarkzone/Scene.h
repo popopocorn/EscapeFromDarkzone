@@ -109,7 +109,6 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	vector<std::unique_ptr<CShader>>				m_ppShaders;
 
@@ -124,7 +123,7 @@ public:
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
 
-	unique_ptr<UIObjectShader> UIShader;
+	unique_ptr<UIObjectShader>			UIShader;
 private:
 	
 public:
@@ -144,6 +143,13 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		CShader* pPlayerShader
 	) {}
+};
+
+class LobbyScene : public CScene {
+public:
+
+private:
+
 };
 
 
