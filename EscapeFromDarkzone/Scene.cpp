@@ -1134,7 +1134,7 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCame
 		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 	}
 
-	pd3dCommandList->OMSetStencilRef(0xff);
+	pd3dCommandList->OMSetStencilRef(0x04);
 
 	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
 }
