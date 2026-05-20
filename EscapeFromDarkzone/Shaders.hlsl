@@ -38,15 +38,23 @@ VS_VIEW_OUTPUT VSView(VS_VIEW_INPUT input)
 
 float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
-    float4 cAlbedoColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    float4 cAlbedoColor = float4(1.0f,  1.0f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
         cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
+
+    float4 cSpecularColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (gnTexturesMask & MATERIAL_SPECULAR_MAP)
+        cSpecularColor = gtxtSpecularTexture.Sample(gssWrap, input.uv);
 
     float4 cNormalColor = float4(0.5f, 0.5f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_NORMAL_MAP)
         cNormalColor = gtxtNormalTexture.Sample(gssWrap, input.uv);
 
-    float4 cEmissionColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 cMetallicColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    if (gnTexturesMask & MATERIAL_METALLIC_MAP)
+        cMetallicColor = gtxtMetallicTexture.Sample(gssWrap, input.uv);
+
+    float4 cEmissionColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_EMISSION_MAP)
         cEmissionColor = gtxtEmissionTexture.Sample(gssWrap, input.uv);
 
@@ -67,21 +75,26 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 
     float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
     float viewDepth = posView.z;
-
     float shadowFactor = CalcShadowFactor(input.positionW, viewDepth);
-    float3 lightColor = max(Lighting(input.positionW, normalW, gvCameraPosition).rgb, 0.0f);
 
-    //색상 보정
-    float3 ambient = float3(0.04f, 0.05f, 0.05f);
+    float3 lightColor = max(Lighting(input.positionW, normalW, gvCameraPosition).rgb, 0.0f);
 
     float softenedShadow = lerp(0.45f, 1.0f, shadowFactor);
 
-    float3 lightingTerm = ambient + (lightColor * softenedShadow * 0.72f);
+    float3 ambient = float3(0.035f, 0.04f, 0.04f);
+
+    float3 lightingTerm = ambient + (lightColor * softenedShadow * 0.75f);
 
     float luminance = dot(cAlbedoColor.rgb, float3(0.299f, 0.587f, 0.114f));
     float darkBoost = lerp(1.95f, 1.00f, smoothstep(0.08f, 0.42f, luminance));
 
     float3 finalColor = cAlbedoColor.rgb * lightingTerm * darkBoost;
+
+    float specStrength = dot(cSpecularColor.rgb, float3(0.333f, 0.333f, 0.333f));
+    float metalStrength = dot(cMetallicColor.rgb, float3(0.333f, 0.333f, 0.333f));
+
+    float highlightStrength = saturate(specStrength * 0.12f + metalStrength * 0.08f);
+    finalColor += lightColor * softenedShadow * highlightStrength;
 
     finalColor += cEmissionColor.rgb * 0.08f;
 
