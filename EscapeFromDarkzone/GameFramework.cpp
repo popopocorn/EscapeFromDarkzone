@@ -463,6 +463,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
+	ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -518,21 +519,19 @@ void CGameFramework::BuildObjects()
 	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
 	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
-	if (m_pScene)
-	{
-		m_pScene->BuildModelPrototypes(
-			m_pd3dDevice,
-			m_pd3dCommandList,
-			pshader
-		);
-	}
+	ResourceManager::Instance().BuildModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		pshader
+	);
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
 		pshader,
-		(m_pScene) ? m_pScene->GetModelPrototype(ModelName::RIFLE) : nullptr
+		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));

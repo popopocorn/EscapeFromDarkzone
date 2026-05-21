@@ -8,7 +8,7 @@
 #include "Player.h"
 #include "EnemyObject.h"
 #include "Effect.h"
-
+#include "ResourceManager.h"
 #include "Network.h"	// 05.14 추가: 네트워크 피격
 
 #define MAX_LIGHTS						16 
@@ -58,15 +58,6 @@ class Inventory;
 class AstarNavigation;
 class EffectManager;
 class InventoryManager;
-
-enum class ModelName
-{
-	PLAYER = 0,
-	ENEMY,
-	RIFLE,
-	PISTOL,
-	SHOTGUN
-};
 
 
 class CScene
@@ -138,12 +129,6 @@ public:
 	virtual void DeleteTrash(UINT64 Fence);
 	virtual EffectManager* GetEffectManager() { return NULL; }
 	virtual InventoryManager* GetInventoryManager() { return NULL; }
-	virtual CGameObject* GetModelPrototype(ModelName key) const { return NULL; }
-	virtual void BuildModelPrototypes(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		CShader* pPlayerShader
-	) {}
 };
 
 
@@ -202,7 +187,6 @@ private:
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 
-	std::unordered_map<ModelName, CGameObject*> m_ModelPrototypes;
 public:
 	void SetPlayer(CPlayer* p);
 
@@ -217,22 +201,5 @@ public:
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
 
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
-
-
-	bool LoadAndRegisterModelPrototype(
-		ModelName key,
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		const char* modelPath,
-		CShader* pShader
-	);
-	void RegisterModelPrototype(ModelName key, CGameObject* pPrototype);
-	CGameObject* GetModelPrototype(ModelName key) const;
-	void ReleaseModelPrototypes();
-	void BuildModelPrototypes(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		CShader* pPlayerShader
-	);
 
 };

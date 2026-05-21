@@ -6,13 +6,22 @@ enum class ResourceName {
 
 };
 
-//전방선언
+enum class ModelName
+{
+	PLAYER = 0,
+	ENEMY,
+	RIFLE,
+	PISTOL,
+	SHOTGUN
+};
 
+//전방선언
 class CLoadedModelInfo;
 class CGameObject;
 class UIMesh;
 class CTexture;
 class ShadowMap;
+class CShader;
 
 
 class ResourceManager{
@@ -34,6 +43,7 @@ private:
 	unordered_map<ResourceName, unique_ptr<CGameObject>> Modelpool;
 	unordered_map<ResourceName, unique_ptr<UIMesh>> UIpool;
 
+	unordered_map<ModelName, CGameObject*> m_ModelPrototypes;
 public:
 	void CreateCbvSrvDescriptorHeaps(ID3D12Device* pd3dDevice, int nConstantBufferViews, int nShaderResourceViews);
 
@@ -65,10 +75,22 @@ public:
 	CGameObject* GetModel(ResourceName name);
 	UIMesh* GetUI(ResourceName name);
 
+	// 모델 원본 prototype 관리
+	bool LoadAndRegisterModelPrototype(ModelName key, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* modelPath, CShader* pShader);
+	
+	void RegisterModelPrototype(ModelName key, CGameObject* pPrototype);
+	CGameObject* GetModelPrototype(ModelName key) const;
+	void ReleaseModelPrototypes();
+
+	void BuildModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* pPlayerShader
+	);
 private:
 	ResourceManager() {};
 	ResourceManager(const ResourceManager&) = delete;
 	ResourceManager& operator=(const ResourceManager&) = delete;
-
 };
 

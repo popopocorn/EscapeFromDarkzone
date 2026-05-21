@@ -92,7 +92,13 @@ void ResourceManager::CreateshadowResourceViews(ID3D12Device * pd3dDevice, Shado
 
 void ResourceManager::ReleaseResources()
 {
-	
+	ReleaseModelPrototypes();
+
+	if (m_pd3dCbvSrvDescriptorHeap)
+	{
+		m_pd3dCbvSrvDescriptorHeap->Release();
+		m_pd3dCbvSrvDescriptorHeap = nullptr;
+	}
 }
 
 CLoadedModelInfo* ResourceManager::GetSkinnedModel(ResourceName name)
@@ -132,4 +138,83 @@ UIMesh* ResourceManager::GetUI(ResourceName name)
 	{
 		return nullptr;
 	}
+}
+
+bool ResourceManager::LoadAndRegisterModelPrototype(ModelName key, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* modelPath, CShader* pShader)
+{
+	if (!pd3dDevice) return false;
+	if (!pd3dCommandList) return false;
+	if (!pd3dGraphicsRootSignature) return false;
+	if (!modelPath) return false;
+	if (!pShader) return false;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		return true;
+	}
+
+	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, nullptr, modelPath, pShader, nullptr);
+
+	if (!pPrototype)
+		return false;
+
+	RegisterModelPrototype(key, pPrototype);
+	return true;
+}
+
+void ResourceManager::RegisterModelPrototype(ModelName key, CGameObject* pPrototype)
+{
+	if (!pPrototype) return;
+
+	auto it = m_ModelPrototypes.find(key);
+	if (it != m_ModelPrototypes.end())
+	{
+		if (it->second)
+			it->second->Release();
+
+		it->second = pPrototype;
+		return;
+	}
+
+	m_ModelPrototypes.emplace(key, pPrototype);
+}
+
+CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
+{
+	auto it = m_ModelPrototypes.find(key);
+	if (it == m_ModelPrototypes.end())
+		return nullptr;
+
+	return it->second;
+}
+
+void ResourceManager::ReleaseModelPrototypes()
+{
+	for (auto& pair : m_ModelPrototypes)
+	{
+		if (pair.second)
+		{
+			pair.second->Release();
+		}
+	}
+	m_ModelPrototypes.clear();
+}
+
+void ResourceManager::BuildModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pPlayerShader)
+{
+	if (!pPlayerShader) return;
+
+	LoadAndRegisterModelPrototype(
+		ModelName::RIFLE,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/Classic_M4_1.bin",
+		pPlayerShader
+	);
 }
