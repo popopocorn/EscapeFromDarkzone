@@ -1093,7 +1093,7 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 		pd3dCommandList->OMSetStencilRef(0x00);
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 
-		pd3dCommandList->OMSetStencilRef(0x01);
+		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
 	// 4. UI
@@ -1118,24 +1118,6 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
 {
 	if (!m_pPlayer || !pCamera) return;
-
-	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
-	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
-	pd3dCommandList->SetDescriptorHeaps(1, &heap);
-
-
-	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-	UpdateShaderVariables(pd3dCommandList);
-
-	if (m_pd3dcbLights)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
-		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	}
-
-	pd3dCommandList->OMSetStencilRef(0x04);
-
 	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
 }
 

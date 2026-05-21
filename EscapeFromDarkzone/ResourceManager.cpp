@@ -65,7 +65,6 @@ void ResourceManager::CreateShaderResourceViews(ID3D12Device* pd3dDevice, CTextu
 			&d3dShaderResourceViewDesc,
 			m_d3dSrvCPUDescriptorNextHandle
 		);
-
 		pTexture->SetGpuDescriptorHandle(i, m_d3dSrvGPUDescriptorNextHandle);
 
 		m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
@@ -92,7 +91,7 @@ void ResourceManager::CreateshadowResourceViews(ID3D12Device * pd3dDevice, Shado
 
 void ResourceManager::ReleaseResources()
 {
-	
+
 }
 
 CLoadedModelInfo* ResourceManager::GetSkinnedModel(ResourceName name)
@@ -106,6 +105,7 @@ CLoadedModelInfo* ResourceManager::GetSkinnedModel(ResourceName name)
 	{
 		return nullptr;
 	}
+
 }
 
 CGameObject* ResourceManager::GetModel(ResourceName name)
@@ -119,6 +119,7 @@ CGameObject* ResourceManager::GetModel(ResourceName name)
 	{
 		return nullptr;
 	}
+	
 }
 
 UIMesh* ResourceManager::GetUI(ResourceName name)
