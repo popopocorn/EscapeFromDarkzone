@@ -3,10 +3,12 @@
 //-----------------------------------------------------------------------------
 
 #include "stdafx.h"
-#include "GameFramework.h"
 #include "InputManager.h"
 #include "EffectManager.h"
 #include "InventoryManager.h"
+#include "ResourceManager.h"
+#include "GameFramework.h"
+
 
 CGameFramework::CGameFramework()
 {
@@ -62,10 +64,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
+	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
 
-	m_pScene->CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
+	ResourceManager::Instance().CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
 
 	observer = make_unique<CCamera>();
 	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
