@@ -727,6 +727,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	ResourceManager::Instance().BuildEnemyModelPrototypes(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		pSkinnedShader.get()
+	);
+
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
@@ -736,7 +743,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		pd3dDevice,
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
-		pSkinnedShader.get()
+		pSkinnedShader.get(),
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
@@ -811,7 +819,7 @@ void MainScene::ReleaseObjects()
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
 
-	ResourceManager::Instance().ReleaseModelPrototypes();
+	//ResourceManager::Instance().ReleaseModelPrototypes();
 	ReleaseShaderVariables();
 
 	m_pLights.clear();

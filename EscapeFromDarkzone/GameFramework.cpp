@@ -531,6 +531,7 @@ void CGameFramework::BuildObjects()
 		m_pd3dCommandList,
 		root->GetRoot(),
 		pshader,
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
@@ -968,7 +969,8 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dDevice,
 				m_pd3dCommandList,
 				root->GetRoot(),
-				NULL
+				NULL,
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치

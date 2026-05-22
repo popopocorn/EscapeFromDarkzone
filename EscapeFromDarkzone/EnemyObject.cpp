@@ -5,21 +5,35 @@
 #include "AI.h"
 #include "Shader.h"
 
-CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
+CEnemyObject::CEnemyObject(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pShader,
+	CLoadedModelInfo* pEnemyModel)
 {
-	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SK_Gangster_4.bin",
-		pShader
-	);
+	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
+	UNREFERENCED_PARAMETER(pShader);
 
-	if (!pEnemyModel->m_pAnimationSets) pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
+	if (!pEnemyModel)
+	{
+		OutputDebugString(L"Error: Enemy model instance is null.\n");
+		return;
+	}
+
+	if (!pEnemyModel->m_pAnimationSets)
+	{
+		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
+	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
 
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 1, pEnemyModel);
+	m_pSkinnedAnimationController = new CAnimationController(
+		pd3dDevice,
+		pd3dCommandList,
+		1,
+		pEnemyModel
+	);
 
 	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
 	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
@@ -28,7 +42,16 @@ CEnemyObject::CEnemyObject(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	if (pEnemyModel) delete pEnemyModel;
+	if (pEnemyModel)
+	{
+		if (pEnemyModel->m_pAnimationSets)
+		{
+			pEnemyModel->m_pAnimationSets->Release();
+			pEnemyModel->m_pAnimationSets = nullptr;
+		}
+
+		delete pEnemyModel;
+	}
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }

@@ -229,6 +229,8 @@ public:
 
 	int								m_nBoneFrames = 0; 
 	CGameObject						**m_ppBoneFrameCaches = NULL; //[m_nBoneFrames]
+
+	bool							m_bOwnAnimationSets = true;
 };
 
 class CAnimationTrack
