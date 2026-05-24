@@ -760,6 +760,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	ResourceManager::Instance().BuildLootModelPrototypes(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		pLootShader.get()
+	);
+
 	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
 
 	m_ppShaders.push_back(std::move(pLootShader));
@@ -841,11 +848,29 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 	if (m_pInventoryManager)
 	{
-		//m_pInventoryManager->UpdateLootWorld(fTimeElapsed);	// 루트박스 만료 서버로 옮겼음
-
-		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+		// 서버 없이 혼자 테스트할 때만 로컬 루팅박스 생성
+		if (!NetworkManager::Instance().IsConnected())
 		{
-			//m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());	// 루트박스를 서버 권위로 바꾸면서 자체스폰 삭제
+			if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+			{
+				auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
+				if (enemyObjs)
+				{
+					for (auto& obj : *enemyObjs)
+					{
+						if (!obj) continue;
+
+						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+						if (!pEnemy) continue;
+
+						if (pEnemy->ConsumeLootSpawnRequest())
+						{
+							m_pInventoryManager->SpawnLootContainerFromEnemy(pEnemy);
+						}
+					}
+				}
+			}
 		}
 
 		m_pInventoryManager->Update(fTimeElapsed);

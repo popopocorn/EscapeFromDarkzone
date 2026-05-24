@@ -443,6 +443,18 @@ float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
 	return dx * dx + dy * dy + dz * dz;
 }
 
+bool CLootContainerObject::SetVisualModel(CGameObject* pModelInstance)
+{
+	if (!pModelInstance)
+		return false;
+
+	SetChild(pModelInstance, true);
+
+	SetOOBB(NULL);
+
+	return true;
+}
+
 void CEnemyObject::SetServerPosition(const XMFLOAT3& pos)
 {
 	m_xmf3ServerPosition = pos;

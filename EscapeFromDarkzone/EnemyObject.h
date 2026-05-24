@@ -129,6 +129,7 @@ public:
 	short GetBoxId() const { return m_npc_id; };
 	void SetSlotData(int idx, ItemID item, int count);
 
+	bool SetVisualModel(CGameObject* pModelInstance);
 private:
 	//std::array<unique_ptr<Item>, MAX_LOOT_SLOTS> m_LootItems;
 	//std::array<int, MAX_LOOT_SLOTS> m_LootCounts{};

@@ -14,6 +14,8 @@ enum class ModelName
 	PISTOL,
 	SHOTGUN,
 
+	LOOT_BOX,
+
 	PLAYER = PLAYER_01,
 	ENEMY = ENEMY_01
 };
@@ -142,9 +144,19 @@ public:
 		CShader* pEnemyShader
 	);
 
+	//루팅 모델 원본 등록
+	void BuildLootModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* pLootShader
+	);
+
 	// 정적 모델 원본 가져오기
 	CGameObject* GetModelPrototype(ModelName key) const;
 
 	// 스킨드 모델 인스턴스 생성
 	CLoadedModelInfo* CreateSkinnedModelInstance(ModelName key);
+
+	
 };

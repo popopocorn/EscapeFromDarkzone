@@ -370,6 +370,16 @@ void ResourceManager::BuildModelPrototypes(
 		pPlayerShader
 	);
 	*/
+
+	//루팅 아이템 모델
+	LoadAndRegisterModelPrototype(
+		ModelName::LOOT_BOX,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/LootBox.bin",
+		pPlayerShader
+	);
 }
 
 void ResourceManager::BuildEnemyModelPrototypes(
@@ -409,6 +419,24 @@ void ResourceManager::BuildEnemyModelPrototypes(
 		pEnemyShader
 	);
 	*/
+}
+
+void ResourceManager::BuildLootModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pLootShader)
+{
+	if (!pLootShader) return;
+
+	LoadAndRegisterModelPrototype(
+		ModelName::LOOT_BOX,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/LootBox.bin",
+		pLootShader
+	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
