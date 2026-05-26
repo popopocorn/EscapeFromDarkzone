@@ -147,6 +147,13 @@ public:
 
 class LobbyScene : public CScene {
 public:
+	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual void ReleaseObjects();
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 
 private:
 

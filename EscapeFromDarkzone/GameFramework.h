@@ -66,7 +66,7 @@ public:
 	CEnemyObject* FindNpc(short id);		// 05.10 추가
 	bool AddNpc(short id, CEnemyObject* p);	// 05.10 추가
 	void RemoveNpc(short id);				// 05.10 추가
-
+	CScene*						nextScene;
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
@@ -108,7 +108,8 @@ private:
 
 	CGameTimer					m_GameTimer;
 
-	CScene						*m_pScene = NULL;	//소유용
+	vector<unique_ptr<CScene>>	m_pScene;
+	
 	CPlayer						*m_pPlayer = NULL;	//소유용
 	CCamera						*m_pCamera = NULL;	// 참조용
 	std::unique_ptr<CCamera>	observer;

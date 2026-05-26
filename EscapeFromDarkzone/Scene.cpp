@@ -1286,3 +1286,37 @@ void MainScene::BuildModelPrototypes(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 		pPlayerShader
 	);
 }
+
+void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	switch (nMessageID)
+	{
+	case WM_LBUTTONDOWN:
+	{
+
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+bool LobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	return false;
+}
+
+void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	
+}
+
+void LobbyScene::ReleaseObjects()
+{
+	
+}
+
+void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+{
+	
+}
