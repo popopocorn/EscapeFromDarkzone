@@ -12,6 +12,27 @@ enum EFFECT_TYPE
     EFFECT_BLOOD,
     EFFECT_MAX //ÃÑ °³¼ö
 };
+enum class EffectID : unsigned char
+{
+    NONE = 0,
+
+    GRENADE_EXPLOSION,
+    SPARK,
+
+    BLOOD,
+    HIT
+};
+struct EffectSpawnDesc
+{
+    EffectID id = EffectID::NONE;
+
+    XMFLOAT3 position = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    XMFLOAT3 direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+    int ownerId = 0;
+    float value = 0.0f;
+};
+
 struct EFFECT_INFO
 {
     XMFLOAT3 vPosition;

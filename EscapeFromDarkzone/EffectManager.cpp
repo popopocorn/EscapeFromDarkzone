@@ -105,9 +105,9 @@ void EffectManager::Initialize(
 	// 기본 이펙트 풀 생성
 	for (int i = 0; i < INITIAL_EFFECT_POOL_SIZE; ++i)
 	{
-		m_vEffectPools[EFFECT_BOMB].push_back(new CEffect(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK].push_back(new CEffect(EFFECT_SPARK, 0.1f));
-		m_vEffectPools[EFFECT_BLOOD].push_back(new CEffect(EFFECT_BLOOD, 0.8f));
+		m_vEffectPools[EFFECT_BOMB].push_back(std::make_unique<CEffect>(EFFECT_BOMB, 1.0f));
+		m_vEffectPools[EFFECT_SPARK].push_back(std::make_unique<CEffect>(EFFECT_SPARK, 0.1f));
+		m_vEffectPools[EFFECT_BLOOD].push_back(std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
 	}
 
 	// 레이저 쉐이더 생성
@@ -133,10 +133,6 @@ void EffectManager::Release()
 {
 	for (int type = 0; type < EFFECT_MAX; ++type)
 	{
-		for (CEffect* pEffect : m_vEffectPools[type])
-		{
-			delete pEffect;
-		}
 		m_vEffectPools[type].clear();
 
 		if (m_pd3dInstBufferEffect[type])
@@ -199,9 +195,12 @@ void EffectManager::ReleaseUploadBuffers()
 
 void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up)
 {
-	for (CEffect* pEffect : m_vEffectPools[type])
+	if (type < 0 || type >= EFFECT_MAX)
+		return;
+
+	for (auto& pEffect : m_vEffectPools[type])
 	{
-		if (pEffect->IsDead())
+		if (pEffect && pEffect->IsDead())
 		{
 			pEffect->Play(pos, right, up);
 			return;
@@ -209,6 +208,7 @@ void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 r
 	}
 
 	float lifeTime = 0.5f;
+
 	switch (type)
 	{
 	case EFFECT_BOMB:  lifeTime = 1.0f; break;
@@ -216,16 +216,111 @@ void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 r
 	case EFFECT_BLOOD: lifeTime = 0.8f; break;
 	}
 
-	CEffect* pNewEffect = new CEffect(type, lifeTime);
+	auto pNewEffect = std::make_unique<CEffect>(type, lifeTime);
 	pNewEffect->Play(pos, right, up);
-	m_vEffectPools[type].push_back(pNewEffect);
+
+	m_vEffectPools[type].push_back(std::move(pNewEffect));
+}
+
+void EffectManager::BuildEffectBasis(
+	const XMFLOAT3& direction,
+	XMFLOAT3& outRight,
+	XMFLOAT3& outUp)
+{
+	XMFLOAT3 dir = direction;
+
+	if (Vector3::Length(dir) < 0.0001f)
+	{
+		dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	}
+
+	dir = Vector3::Normalize(dir);
+
+	XMVECTOR vDir = XMLoadFloat3(&dir);
+	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+	XMVECTOR vRight = XMVector3Cross(vWorldUp, vDir);
+
+	if (XMVectorGetX(XMVector3LengthSq(vRight)) < 0.0001f)
+	{
+		vWorldUp = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+		vRight = XMVector3Cross(vWorldUp, vDir);
+	}
+
+	vRight = XMVector3Normalize(vRight);
+
+	XMVECTOR vUp = XMVector3Normalize(XMVector3Cross(vDir, vRight));
+
+	XMStoreFloat3(&outRight, vRight);
+	XMStoreFloat3(&outUp, vUp);
+}
+
+void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
+{
+	if (desc.id == EffectID::NONE)
+		return;
+
+	XMFLOAT3 right;
+	XMFLOAT3 up;
+
+	BuildEffectBasis(desc.direction, right, up);
+
+	switch (desc.id)
+	{
+	case EffectID::GRENADE_EXPLOSION:
+	{
+		RequestPlayEffect(
+			EFFECT_BOMB,
+			desc.position,
+			right,
+			up
+		);
+		break;
+	}
+
+	case EffectID::SPARK:
+	{
+		RequestPlayEffect(
+			EFFECT_SPARK,
+			desc.position,
+			right,
+			up
+		);
+		break;
+	}
+
+	case EffectID::BLOOD:
+	{
+		RequestPlayEffect(
+			EFFECT_BLOOD,
+			desc.position,
+			right,
+			up
+		);
+		break;
+	}
+
+	case EffectID::HIT:
+	{
+		RequestPlayEffect(
+			EFFECT_SPARK,
+			desc.position,
+			right,
+			up
+		);
+		break;
+	}
+
+	default:
+		break;
+	}
 }
 
 void EffectManager::Update(float fTimeElapsed)
 {
 	for (int type = 0; type < EFFECT_MAX; ++type)
 	{
-		for (CEffect* pEffect : m_vEffectPools[type])
+		for (auto& pEffect : m_vEffectPools[type])
 		{
 			if (pEffect && !pEffect->IsDead())
 			{
@@ -312,7 +407,7 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 
 		int activeCount = 0;
 
-		for (CEffect* pEffect : m_vEffectPools[type])
+		for (auto& pEffect : m_vEffectPools[type])
 		{
 			if (!pEffect || pEffect->IsDead()) continue;
 
@@ -342,7 +437,9 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 			m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
 
 			activeCount++;
-			if (activeCount >= 100) break;
+
+			if (activeCount >= 100)
+				break;
 		}
 
 		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])

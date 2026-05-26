@@ -2,7 +2,6 @@
 #include "stdafx.h"
 #include "Effect.h"
 #include "Shader.h"
-#include <unordered_map>
 
 class CCamera;
 class CGameObject;
@@ -10,6 +9,7 @@ class CParticleMesh;
 class CEffectShader;
 class CLaserShader;
 class CMaterial;
+
 
 // 씬에서는 요청만 받고, 실제 이펙트 생성/업데이트/렌더링은 이 매니저가 담당
 class EffectManager
@@ -34,6 +34,8 @@ public:
 
 	void RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up);
 
+	void PlayEffectByID(const EffectSpawnDesc& desc);
+
 	void UpdateLaser(
 		int ownerId,
 		const XMFLOAT3& origin,
@@ -48,6 +50,12 @@ public:
 private:
 	CGameObject* GetOrCreateLaserObject(int ownerId);
 
+	void BuildEffectBasis(
+		const XMFLOAT3& direction,
+		XMFLOAT3& outRight,
+		XMFLOAT3& outUp
+	);
+
 private:
 	ID3D12Device* m_pd3dDevice = nullptr;
 	ID3D12GraphicsCommandList* m_pd3dCommandList = nullptr;
@@ -57,7 +65,7 @@ private:
 	CParticleMesh* m_pEffectMesh = nullptr;
 	CMaterial* m_pEffectMaterials[EFFECT_MAX];
 
-	std::vector<CEffect*> m_vEffectPools[EFFECT_MAX];
+	std::vector<std::unique_ptr<CEffect>> m_vEffectPools[EFFECT_MAX];
 
 	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
 	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
