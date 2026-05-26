@@ -210,7 +210,8 @@ void ResourceManager::CreateshadowResourceViews(
 
 void ResourceManager::ReleaseResources()
 {
-	ReleaseModelPrototypes();
+	m_ModelPrototypes.clear();
+	ReleaseSkinnedModelPrototypes();
 
 	if (m_pd3dCbvSrvDescriptorHeap)
 	{
@@ -290,12 +291,6 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	if (!pLoadedModel->m_pAnimationSets)
 	{
 		pLoadedModel->m_pAnimationSets = new CAnimationSets(0);
-	}
-
-	// ResourceManager가 원본 AnimationSets를 소유하기 위한 참조
-	if (pLoadedModel->m_pAnimationSets)
-	{
-		pLoadedModel->m_pAnimationSets->AddRef();
 	}
 
 	m_SkinnedModelPrototypes.emplace(key, pLoadedModel);
@@ -418,7 +413,7 @@ CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
 	if (it == m_ModelPrototypes.end())
 		return nullptr;
 
-	return it->second;
+	return it->second.get();
 }
 
 CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
@@ -427,7 +422,7 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	if (it == m_SkinnedModelPrototypes.end())
 		return nullptr;
 
-	CLoadedModelInfo* pPrototypeInfo = it->second;
+	CLoadedModelInfo* pPrototypeInfo = it->second.get();
 	if (!pPrototypeInfo) return nullptr;
 	if (!pPrototypeInfo->m_pModelRootObject) return nullptr;
 	if (!pPrototypeInfo->m_pAnimationSets) return nullptr;
@@ -451,12 +446,9 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 
 	if (!pInstanceInfo->m_pAnimationSets)
 	{
-		pRootInstance->Release();
 		delete pInstanceInfo;
 		return nullptr;
 	}
-
-	pInstanceInfo->m_pAnimationSets->AddRef();
 
 	if (pInstanceInfo->m_nSkinnedMeshes > 0)
 	{
@@ -484,37 +476,16 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	return pInstanceInfo;
 }
 
-void ResourceManager::ReleaseModelPrototypes()
-{
-	for (auto& pair : m_ModelPrototypes)
-	{
-		if (pair.second)
-		{
-			pair.second->Release();
-		}
-	}
-
-	m_ModelPrototypes.clear();
-
-	ReleaseSkinnedModelPrototypes();
-}
-
 void ResourceManager::ReleaseSkinnedModelPrototypes()
 {
 	for (auto& pair : m_SkinnedModelPrototypes)
 	{
-		CLoadedModelInfo* pInfo = pair.second;
+		CLoadedModelInfo* pInfo = pair.second.get();
 		if (!pInfo) continue;
-
-		if (pInfo->m_pModelRootObject)
-		{
-			pInfo->m_pModelRootObject->Release();
-			pInfo->m_pModelRootObject = nullptr;
-		}
 
 		if (pInfo->m_pAnimationSets)
 		{
-			pInfo->m_pAnimationSets->Release();
+			//pInfo->m_pAnimationSets->ReleaseUploadBuffers();
 			pInfo->m_pAnimationSets = nullptr;
 		}
 

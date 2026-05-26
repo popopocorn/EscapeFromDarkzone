@@ -1252,6 +1252,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 void LobbyScene::ReleaseObjects()
 {
 	ShadowCameraManager->ReleaseShaderVariables();
+	ReleaseShaderVariables();
 }
 
 void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)

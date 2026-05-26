@@ -41,10 +41,10 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE m_d3dSrvGPUDescriptorNextHandle{};
 
 	// 애니메이션 없는 모델 원본
-	unordered_map<ModelName, CGameObject*> m_ModelPrototypes;
+	unordered_map<ModelName, unique_ptr<CGameObject>> m_ModelPrototypes;
 
 	// 애니메이션 있는 모델 원본
-	unordered_map<ModelName, CLoadedModelInfo*> m_SkinnedModelPrototypes;
+	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
 	//UI 원본
 	//unordered_map<UIName, UI*> m_UIPrototypes;
@@ -123,8 +123,6 @@ public:
 	ID3D12DescriptorHeap* GetDescriptorHeap() const { return m_pd3dCbvSrvDescriptorHeap; }
 
 	void ReleaseResources();
-
-	void ReleaseModelPrototypes();
 
 	// 플레이어 / 무기 / 일반 모델 원본 등록
 	void BuildModelPrototypes(

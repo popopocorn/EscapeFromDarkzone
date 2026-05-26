@@ -462,7 +462,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
-	ResourceManager::Instance().ReleaseResources();
+	//ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -565,7 +565,7 @@ void CGameFramework::BuildObjects()
 
 void CGameFramework::ReleaseObjects()
 {
-	if (m_pPlayer) m_pPlayer->Release();
+	
 
 	if (not m_pScene.empty()) m_pScene.back()->ReleaseObjects();
 }

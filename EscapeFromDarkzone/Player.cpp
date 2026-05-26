@@ -1049,16 +1049,6 @@ CTerrainPlayer::CTerrainPlayer(
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	if (pPlayerModel)
-	{
-		if (pPlayerModel->m_pAnimationSets)
-		{
-			pPlayerModel->m_pAnimationSets->Release();
-			pPlayerModel->m_pAnimationSets = nullptr;
-		}
-
-		delete pPlayerModel;
-	}
 }
 
 CTerrainPlayer::~CTerrainPlayer()
