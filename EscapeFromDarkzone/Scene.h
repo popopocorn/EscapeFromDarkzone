@@ -59,11 +59,13 @@ class AstarNavigation;
 class EffectManager;
 class InventoryManager;
 
+class CGameFramework;
 
 class CScene
 {
 public:
-    CScene();
+	CScene() = default;
+    CScene(CGameFramework* game);
     virtual ~CScene();
 
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam) {};
@@ -86,7 +88,15 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
 
-	virtual void ReleaseUploadBuffers() {};
+	virtual void ReleaseUploadBuffers() {
+		if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
+
+		for (int i = 0; i < m_ppShaders.size(); i++)
+		{
+			if (m_ppShaders[i])
+				m_ppShaders[i]->ReleaseUploadBuffers();
+		}
+	};
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
 
@@ -94,13 +104,13 @@ protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera* m_pCamera = nullptr;	
 	
-	LightCameraManager ShadowCameraManager;
+	LightCameraManager* ShadowCameraManager;
+	CGameFramework*						frame;
 
 public:
 
 	float								m_fElapsedTime = 0.0f;
 
-	XMFLOAT3							m_xmf3RotatePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	vector<std::unique_ptr<CShader>>				m_ppShaders;
 
@@ -115,7 +125,7 @@ public:
 	LIGHTS								*m_pcbMappedLights = NULL;
 	
 
-	unique_ptr<UIObjectShader> UIShader;
+	unique_ptr<UIObjectShader>			UIShader;
 private:
 	
 public:
@@ -123,7 +133,7 @@ public:
 
 	CCamera* GetLightCamera(int idx);
 
-	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
 	virtual void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	virtual void DeleteDeadObject(UINT64 Fence);
 	virtual void DeleteTrash(UINT64 Fence);
@@ -131,10 +141,25 @@ public:
 	virtual InventoryManager* GetInventoryManager() { return NULL; }
 };
 
+class LobbyScene : public CScene {
+public:
+	LobbyScene(CGameFramework* game);
+	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual void ReleaseObjects();
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+
+private:
+
+};
+
 
 class MainScene : public CScene{
 public:
-	MainScene();
+	MainScene(CGameFramework* game);
 	virtual ~MainScene();
 
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
@@ -190,7 +215,7 @@ private:
 public:
 	void SetPlayer(CPlayer* p);
 
-	LightCameraManager GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence) {};
 	void DeleteTrash(UINT64 Fence) {};

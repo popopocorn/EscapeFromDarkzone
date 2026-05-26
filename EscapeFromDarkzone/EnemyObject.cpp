@@ -42,17 +42,6 @@ CEnemyObject::CEnemyObject(
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	if (pEnemyModel)
-	{
-		if (pEnemyModel->m_pAnimationSets)
-		{
-			pEnemyModel->m_pAnimationSets->Release();
-			pEnemyModel->m_pAnimationSets = nullptr;
-		}
-
-		delete pEnemyModel;
-	}
-
 	ChangeState(std::make_unique<EnemyIdle>());
 }
 

@@ -479,7 +479,6 @@ void CStandardObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 		auto& garbage = GarbageQueue.front();
 		if (completed >= garbage.FenceValue)
 		{
-			garbage.obj->Release();
 			GarbageQueue.pop();
 		}
 		else
@@ -636,7 +635,6 @@ void CSkinnedAnimationObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 		auto& garbage = GarbageQueue.front();
 		if (completed >= garbage.FenceValue)
 		{
-			garbage.obj->Release();
 			GarbageQueue.pop();
 		}
 		else

@@ -17,6 +17,7 @@
 #include "EffectManager.h"
 #include "InventoryManager.h"
 #include "ResourceManager.h"
+#include "GameFramework.h"
 
 #include "Network.h"
 
@@ -152,7 +153,7 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 	}
 }
 
-CScene::CScene()
+CScene::CScene(CGameFramework* game)
 {
 	
 
@@ -168,6 +169,8 @@ CScene::CScene()
 
 	m_nLights = 0;
 	m_fElapsedTime = 0.0f;
+	frame = game;
+	ShadowCameraManager = new LightCameraManager();
 }
 
 CScene::~CScene()
@@ -215,7 +218,7 @@ void CScene::ReleaseShaderVariables()
 
 CCamera* CScene::GetLightCamera(int idx)
 {
-	return &ShadowCameraManager.GetCameras()[idx];
+	return &ShadowCameraManager->GetCameras()[idx];
 }
 
 void CScene::DeleteDeadObject(UINT64 Fence)
@@ -288,7 +291,7 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 	return(false);
 }
 
-MainScene::MainScene() : CScene()
+MainScene::MainScene(CGameFramework* game) : CScene(game)
 {
 	colManager = std::make_unique<CollisionManager>();
 	m_pFogOverlayShader = nullptr;
@@ -578,8 +581,6 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	CMaterial::PrepareShaders(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
 	BuildDefaultLightsAndMaterials();
 
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -797,7 +798,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		}
 	}
 
-	ShadowCameraManager.CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 }
@@ -818,17 +819,13 @@ void MainScene::ReleaseObjects()
 		m_pEffectManager = nullptr;
 	}
 
-	for (auto& s : m_ppShaders)
-	{
-		s->ReleaseObjects();
-	}
 	m_ppShaders.clear();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
 
 	//ResourceManager::Instance().ReleaseModelPrototypes();
 	ReleaseShaderVariables();
-
+	ShadowCameraManager->ReleaseShaderVariables();
 	m_pLights.clear();
 }
 
@@ -1074,7 +1071,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pEffectManager->HideLaser(0);
 	}
 
-	ShadowCameraManager.Update();
+	ShadowCameraManager->Update();
 
 	if (m_pInventoryManager)
 	{
@@ -1131,7 +1128,7 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 		pd3dCommandList->OMSetStencilRef(0x00);
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 
-		pd3dCommandList->OMSetStencilRef(0x01);
+		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
 	// 4. UI
@@ -1156,24 +1153,6 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
 {
 	if (!m_pPlayer || !pCamera) return;
-
-	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
-	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
-	pd3dCommandList->SetDescriptorHeaps(1, &heap);
-
-
-	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-	UpdateShaderVariables(pd3dCommandList);
-
-	if (m_pd3dcbLights)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
-		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	}
-
-	pd3dCommandList->OMSetStencilRef(0x04);
-
 	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
 }
 
@@ -1206,8 +1185,8 @@ void MainScene::SetPlayer(CPlayer* p)
 
 	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
 
-	ShadowCameraManager.SetPlayer(p->GetCamera());
-	ShadowCameraManager.SetDir(m_pLights[0].m_xmf3Direction);
+	ShadowCameraManager->SetPlayer(p->GetCamera());
+	ShadowCameraManager->SetDir(m_pLights[0].m_xmf3Direction);
 
 	if (m_ppShaders[SHADERIDX::ENEMY])
 	{
@@ -1260,4 +1239,58 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	{
 		m_pInventoryManager->OpenLootContainer(pLoot);
 	}
+}
+
+LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
+{
+
+}
+
+void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	switch (nMessageID)
+	{
+	case WM_LBUTTONDOWN:
+	{
+		frame->nextScene = new MainScene(frame);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+bool LobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	return false;
+}
+
+void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	
+	BuildDefaultLightsAndMaterials();
+
+	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);
+}
+
+void LobbyScene::ReleaseObjects()
+{
+	ShadowCameraManager->ReleaseShaderVariables();
+	ReleaseShaderVariables();
+}
+
+void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+{
+	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
+	pd3dCommandList->SetDescriptorHeaps(1, &heap);
+
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+
 }
