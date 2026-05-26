@@ -462,6 +462,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
+	ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -517,21 +518,20 @@ void CGameFramework::BuildObjects()
 	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
 	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
-	if (not m_pScene.empty())
-	{
-		m_pScene.back()->BuildModelPrototypes(
-			m_pd3dDevice,
-			m_pd3dCommandList,
-			pshader
-		);
-	}
+	ResourceManager::Instance().BuildModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		pshader
+	);
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
 		pshader,
-		(not m_pScene.empty()) ? m_pScene.back()->GetModelPrototype(ModelName::RIFLE) : nullptr
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
+		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
@@ -967,7 +967,8 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dDevice,
 				m_pd3dCommandList,
 				root->GetRoot(),
-				NULL
+				NULL,
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치

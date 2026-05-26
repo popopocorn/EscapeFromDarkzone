@@ -425,13 +425,21 @@ CAnimationSets::CAnimationSets(int nAnimationSets)
 
 CAnimationSets::~CAnimationSets()
 {
-	for (CAnimationSet* pSet : m_vAnimationSets)
+	if (m_bOwnAnimationSets)
 	{
-		if (pSet) delete pSet;
+		for (CAnimationSet* pSet : m_vAnimationSets)
+		{
+			if (pSet) delete pSet;
+		}
 	}
+
 	m_vAnimationSets.clear();
 
-	if (m_ppBoneFrameCaches) delete[] m_ppBoneFrameCaches;
+	if (m_ppBoneFrameCaches)
+	{
+		delete[] m_ppBoneFrameCaches;
+		m_ppBoneFrameCaches = nullptr;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

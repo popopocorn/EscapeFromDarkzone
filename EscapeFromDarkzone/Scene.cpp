@@ -211,7 +211,7 @@ void CScene::ReleaseShaderVariables()
 		m_pd3dcbLights->Unmap(0, NULL);
 		m_pd3dcbLights->Release();
 	}
-}
+		}
 
 CCamera* CScene::GetLightCamera(int idx)
 {
@@ -727,17 +727,30 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
+	ResourceManager::Instance().BuildEnemyModelPrototypes(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		pSkinnedShader.get()
+	);
+
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
-	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, NULL);
-	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	//pEnemy->SetOOBB(NULL);
-	//pEnemy->setNav(AStarNav.get());
-	//pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+	CEnemyObject* pEnemy = new CEnemyObject(
+		pd3dDevice,
+		pd3dCommandList,
+		m_pd3dGraphicsRootSignature,
+		pSkinnedShader.get(),
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+	);
+	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	pEnemy->SetOOBB(NULL);
+	pEnemy->setNav(AStarNav.get());
+	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
 	m_ppShaders.push_back(std::move(pSkinnedShader));
 
@@ -806,7 +819,7 @@ void MainScene::ReleaseObjects()
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
 
-	ReleaseModelPrototypes();
+	//ResourceManager::Instance().ReleaseModelPrototypes();
 	ReleaseShaderVariables();
 
 	m_pLights.clear();
@@ -1204,87 +1217,6 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	{
 		m_pInventoryManager->OpenLootContainer(pLoot);
 	}
-}
-bool MainScene::LoadAndRegisterModelPrototype(ModelName key, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const char* modelPath, CShader* pShader)
-{
-	if (!pd3dDevice) return false;
-	if (!pd3dCommandList) return false;
-	if (!modelPath) return false;
-	if (!pShader) return false;
-	if (!m_pd3dGraphicsRootSignature) return false;
-
-	auto it = m_ModelPrototypes.find(key);
-	if (it != m_ModelPrototypes.end())
-	{
-		return true;
-	}
-
-	CGameObject* pPrototype = CGameObject::LoadGeometryModelByName(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		nullptr,
-		modelPath,
-		pShader,
-		nullptr
-	);
-
-	if (!pPrototype)
-		return false;
-
-	RegisterModelPrototype(key, pPrototype);
-	return true;
-}
-
-void MainScene::RegisterModelPrototype(ModelName key, CGameObject* pPrototype)
-{
-	if (!pPrototype) return;
-
-	auto it = m_ModelPrototypes.find(key);
-	if (it != m_ModelPrototypes.end())
-	{
-		if (it->second)
-			it->second->Release();
-
-		it->second = pPrototype;
-		return;
-	}
-
-	m_ModelPrototypes.emplace(key, pPrototype);
-}
-
-CGameObject* MainScene::GetModelPrototype(ModelName key) const
-{
-	auto it = m_ModelPrototypes.find(key);
-	if (it == m_ModelPrototypes.end())
-		return nullptr;
-
-	return it->second;
-}
-
-void MainScene::ReleaseModelPrototypes()
-{
-	for (auto& pair : m_ModelPrototypes)
-	{
-		if (pair.second)
-		{
-			pair.second->Release();
-		}
-	}
-	m_ModelPrototypes.clear();
-}
-
-void MainScene::BuildModelPrototypes(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, CShader* pPlayerShader)
-{
-	if (!pPlayerShader) return;
-
-	LoadAndRegisterModelPrototype(
-		ModelName::RIFLE,
-		pd3dDevice,
-		pd3dCommandList,
-		"Model/Classic_M4_1.bin",
-		pPlayerShader
-	);
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
