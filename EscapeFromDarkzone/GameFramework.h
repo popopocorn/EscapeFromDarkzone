@@ -67,6 +67,8 @@ public:
 	bool AddNpc(short id, CEnemyObject* p);	// 05.10 추가
 	void RemoveNpc(short id);				// 05.10 추가
 	CScene*						nextScene;
+	void ChangeScene();
+
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 

@@ -507,9 +507,10 @@ void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
-	m_pScene.push_back(make_unique<MainScene>());
+	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
-	
+	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+
 	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 	PlayerShader* pshader = new PlayerShader();
@@ -676,15 +677,29 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
-	
-	ProcessInput();
-
-	AnimateObjects(fTimeElapsed);
 
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
+	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
+	
+	if (nextScene)
+	{
+		WaitForGpuComplete();
+		ChangeScene();
+		m_pd3dCommandList->Close(); 
+		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
+		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
+		WaitForGpuComplete(); 
+		
+		m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
+		m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
+	}
+	ProcessInput();
+
+	AnimateObjects(fTimeElapsed);
+
+	
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())
 	{
@@ -727,7 +742,7 @@ void CGameFramework::FrameAdvance()
 		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
 	}
 	shadowmap->TransitionToSRV(m_pd3dCommandList);
-	m_pScene.back()->GetLightCameraManager().UpdateShaderVariables(m_pd3dCommandList);
+	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList);
 	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
 	
 	
@@ -1147,4 +1162,16 @@ void CGameFramework::RemoveNpc(short id)
 			return;
 		}
 	}
+}
+
+void CGameFramework::ChangeScene()
+{
+	m_pScene.back()->ReleaseObjects();
+	m_pScene.push_back(unique_ptr<CScene>(nextScene));
+	m_pScene.back()->SetRoot(root->GetRoot());
+	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->SetCamera(m_pCamera);
+
+	nextScene = nullptr;
 }

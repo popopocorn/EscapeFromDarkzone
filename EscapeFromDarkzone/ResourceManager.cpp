@@ -109,13 +109,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE ResourceManager::CreateConstantBufferViews(
 	{
 		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
 
-		m_d3dCbvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+		
 
 		pd3dDevice->CreateConstantBufferView(
 			&d3dCBVDesc,
 			m_d3dCbvCPUDescriptorNextHandle
 		);
 
+		m_d3dCbvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 		m_d3dCbvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 	}
 
