@@ -38,7 +38,7 @@ VS_VIEW_OUTPUT VSView(VS_VIEW_INPUT input)
 
 float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 {
-    float4 cAlbedoColor = float4(1.0f,  1.0f, 1.0f, 1.0f);
+    float4 cAlbedoColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
         cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
 
@@ -73,6 +73,7 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
         );
     }
 
+    /*
     float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
     float viewDepth = posView.z;
     float shadowFactor = CalcShadowFactor(input.positionW, viewDepth);
@@ -98,7 +99,25 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
 
     finalColor += cEmissionColor.rgb * 0.08f;
 
-    return float4(saturate(finalColor), cAlbedoColor.a);
+    return float4(saturate(finalColor), cAlbedoColor.a);//*/
+    
+    
+    ///* 
+    float4 cColor = cAlbedoColor + cSpecularColor + cMetallicColor + cEmissionColor;
+
+
+    float4 posView = mul(float4(input.positionW, 1.0f), gmtxView);
+    float viewDepth = posView.z;
+
+
+    float shadowFactor = CalcShadowFactor(input.positionW, viewDepth);
+
+    float4 cIllumination = Lighting(input.positionW, normalW, gvCameraPosition);
+
+    cIllumination.rgb *= shadowFactor;
+
+    return lerp(cColor, cIllumination, 0.5f);
+    //*/
 }
 
 

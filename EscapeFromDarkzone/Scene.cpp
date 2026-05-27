@@ -1123,6 +1123,12 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 	{
 		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
+
+	if (m_pPlayer)
+	{
+		pd3dCommandList->OMSetStencilRef(0x04);
+		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
@@ -1238,6 +1244,11 @@ void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 bool LobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return false;
+}
+
+void LobbyScene::SetPlayer(CPlayer* player)
+{
+	m_pPlayer = player;
 }
 
 void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)

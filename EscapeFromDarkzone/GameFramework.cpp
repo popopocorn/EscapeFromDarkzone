@@ -762,12 +762,13 @@ void CGameFramework::FrameAdvance()
 #endif
 
 
-	if (m_pPlayer)
+	/*if (m_pPlayer)
 	{
 		m_pd3dCommandList->OMSetStencilRef(0x04);
 		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-	}
+	}*/
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
+
 
 	//compute pipline
 	

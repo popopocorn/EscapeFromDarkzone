@@ -102,15 +102,15 @@ public:
 
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
-	CCamera* m_pCamera = nullptr;	
+	CCamera*							m_pCamera = nullptr;	
 	
-	LightCameraManager* ShadowCameraManager;
+	LightCameraManager*					ShadowCameraManager;
 	CGameFramework*						frame;
+	unique_ptr<HUDManager>				uiManager;
 
 public:
 
 	float								m_fElapsedTime = 0.0f;
-
 
 	vector<std::unique_ptr<CShader>>				m_ppShaders;
 
@@ -147,7 +147,7 @@ public:
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-
+	virtual void SetPlayer(CPlayer* player);
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);

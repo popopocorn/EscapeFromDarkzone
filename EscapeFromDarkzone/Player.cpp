@@ -992,7 +992,6 @@ CTerrainPlayer::CTerrainPlayer(
 	CGameObject* pDefaultWeaponPrototype)
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
-	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
 	if (!pPlayerModel)
 	{

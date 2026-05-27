@@ -273,9 +273,9 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 
 void Inventory::SlotClicked(int slotidx)
 {
-	wchar_t debugBuf[256];
+	/*wchar_t debugBuf[256];
 	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
-	OutputDebugStringW(debugBuf);
+	OutputDebugStringW(debugBuf);*/
 
 	if (false == NetworkManager::Instance().IsConnected()) {
 		return;

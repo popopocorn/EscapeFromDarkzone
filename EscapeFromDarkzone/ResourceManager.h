@@ -17,13 +17,18 @@ enum class ModelName
 	PLAYER = PLAYER_01,
 	ENEMY = ENEMY_01
 };
+enum class UIName {
+	LOBBY_BACKGROUND=0,
+	LOBBY_START_BUTTON,
 
+};
 // 전방 선언
 class CLoadedModelInfo;
 class CGameObject;
 class CTexture;
 class ShadowMap;
 class CShader;
+class UIMesh;
 
 class ResourceManager
 {
@@ -47,7 +52,7 @@ private:
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
 	//UI 원본
-	//unordered_map<UIName, UI*> m_UIPrototypes;
+	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
 private:
 	ResourceManager() = default;
@@ -73,6 +78,8 @@ private:
 		const char* modelPath,
 		CShader* pShader
 	);
+
+
 
 	void ReleaseSkinnedModelPrototypes();
 
@@ -139,10 +146,17 @@ public:
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* pEnemyShader
 	);
+	void BuildUIMesh(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature
+	);
 
 	// 정적 모델 원본 가져오기
 	CGameObject* GetModelPrototype(ModelName key) const;
 
 	// 스킨드 모델 인스턴스 생성
 	CLoadedModelInfo* CreateSkinnedModelInstance(ModelName key);
+
+	UIMesh* GetUIMesh(UIName name);
 };

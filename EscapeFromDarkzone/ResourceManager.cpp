@@ -407,6 +407,16 @@ void ResourceManager::BuildEnemyModelPrototypes(
 	*/
 }
 
+void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+{
+	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
+	
+	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	//m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
+
+}
+
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
 {
 	auto it = m_ModelPrototypes.find(key);
@@ -474,6 +484,13 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	}
 
 	return pInstanceInfo;
+}
+
+UIMesh* ResourceManager::GetUIMesh(UIName name)
+{
+	auto it = m_UIPrototypes.find(name);
+	if (it != m_UIPrototypes.end())return it->second.get();
+	else return nullptr;
 }
 
 void ResourceManager::ReleaseSkinnedModelPrototypes()
