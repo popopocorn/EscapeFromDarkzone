@@ -839,6 +839,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->SetOOBB(NULL);
 	pEnemy->setNav(AStarNav.get());

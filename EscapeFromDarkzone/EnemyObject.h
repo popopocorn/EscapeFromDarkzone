@@ -22,9 +22,9 @@ class CEnemyObject : public CGameObject
 {
 protected:
 	AstarNavigation* AStarNav = NULL;
-	
-	
-	
+
+
+
 public:
 	CEnemyObject(
 		ID3D12Device* pd3dDevice,
@@ -55,20 +55,58 @@ public:
 	AstarNavigation* GetNav() { return AStarNav; }
 	std::unique_ptr<State<CEnemyObject>> m_pState;
 
-	CGameObject*				m_pPlayer = nullptr;
+	CGameObject* m_pPlayer = nullptr;
 	float						hp = 100;
 	float						updateTimer = 0;
 	vector<XMFLOAT3>			ways;
 	int							wayIdx = 0;
-	float						findTime = 0.5f;
+	float						findTime = 0.3f;
 
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
-	float m_fMoveSpeed = 7.0f;
+	float m_fMoveSpeed = 5.0f;
 	float m_fDetectionRange = 20.0f;
-	float m_fAttackRange = 3.0f;
+	float m_fAttackRange = 8.0f;
+	float m_fAttackExitRange = 9.5f;
+	float m_fLeashRange = 25.0f;
+	float m_fReturnStopDistance = 0.5f;
 
+	float m_fThinkTimer = 0.0f;
+	float m_fThinkInterval = 0.2f;
+
+	float m_fAimTimer = 0.0f;
+	float m_fAimDelay = 0.35f;
+	float m_fAttackInterval = 1.0f;
+
+	float m_fAttackCooldown = 0.0f;
+
+	float m_fReturnIgnoreTimer = 0.0f;
+	float m_fReturnIgnoreDuration = 1.0f;
+
+	//거리 유지
+	float m_fPreferredCombatRange = 7.0f;
+	float m_fTooCloseRange = 4.0f;
+
+	//연	사
+	int m_nBurstShotsLeft = 0;
+	int m_nBurstShotMin = 2;
+	int m_nBurstShotMax = 4;
+	int m_nBurstSerial = 0;
+
+	float m_fBurstShotTimer = 0.0f;
+	float m_fBurstShotInterval = 0.15f;
+
+	float m_fBurstRestTimer = 0.0f;
+	float m_fBurstRestDuration = 1.0f;
+
+	//전투 중 좌우 이동
+	float m_fStrafeTimer = 0.0f;
+	float m_fStrafeDuration = 1.2f;
+	float m_fStrafeSign = 1.0f;
+	float m_fCombatMoveSpeedMultiplier = 0.45f;
+
+	XMFLOAT3 m_xmf3SpawnPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 10.0f);
 	XMFLOAT3 m_xmf3MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -84,6 +122,35 @@ public:
 	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
 
 	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+
+public:
+	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
+	XMFLOAT3 GetSpawnPosition() const { return m_xmf3SpawnPosition; }
+
+	//거리 계산 (XZ 평면)
+	float GetDistanceToPlayerXZ() const;
+	float GetDistanceFromSpawnXZ() const;
+	float GetDistanceToSpawnXZ() const;
+
+	//플레이어와의 거리 비교
+	bool IsPlayerInDetectRange() const;
+	bool IsPlayerInAttackRange() const;
+	bool IsPlayerOutOfAttackRange() const;
+	bool IsOutsideLeashRange() const;
+	bool IsNearSpawn() const;
+
+	//이동 및 전투 관련 행동 함수
+	void FaceToPosition(const XMFLOAT3& targetPos);
+	bool UpdatePathToPosition(const XMFLOAT3& targetPos, float fTimeElapsed);
+	bool FollowCurrentPath();
+	void ClearPath();
+	XMFLOAT3 GetDirectionToPlayerXZ() const;
+	XMFLOAT3 GetDirectionToSpawnXZ() const;	
+	void StartNewBurst();
+	void UpdateCombatMove(float fTimeElapsed);
+
+	void FireAtPlayer();
+
 };
 
 class EnemyIdle : public State<CEnemyObject>
@@ -95,6 +162,22 @@ public:
 };
 
 class EnemyRun : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyAttack : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyReturn : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
