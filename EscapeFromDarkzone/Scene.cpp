@@ -615,7 +615,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 				NULL, "Model/floor.bin", stdshader.get(), 0
 			)
 		);
-		floorObj->SetPosition(-150, -0.5f, -150);
+		floorObj->SetPosition(-150, -0.1f, -150);
 		floorObj->SetOOBB(NULL);
 		stdshader->addObjects(std::move(floorObj));
 
@@ -649,7 +649,55 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 			"Model/block36.bin",
 			"Model/block37.bin",
 			"Model/block38.bin",
-			"Model/block40.bin"
+			"Model/block40.bin",
+
+			"Model/block51.bin",
+			"Model/block52.bin",
+			"Model/block53.bin",
+			"Model/block54.bin",
+
+			"Model/green1.bin",
+			"Model/green2.bin",
+
+			"Model/boundary_1.bin",
+			"Model/boundary_2.bin",
+			"Model/boundary_3.bin",
+			"Model/boundary_4.bin",
+
+			"Model/factory1.bin",
+			"Model/factory_wall_1.bin",
+			"Model/factory_wall_2.bin",
+			"Model/factory_wall_3.bin",
+
+			"Model/cont_wall_1.bin",
+			"Model/cont_wall_2.bin",
+			"Model/cont_wall_3.bin",
+
+			"Model/maze_c1.bin",
+			"Model/maze_c2.bin",
+			"Model/maze_c3.bin",
+			"Model/maze_c4.bin",
+			"Model/maze_c5.bin",
+			"Model/maze_c6.bin",
+
+			"Model/block_cb_1.bin",
+			"Model/block_cb_2.bin",
+			"Model/block_cb_3.bin",
+			"Model/block_cb_4.bin",
+			"Model/block_cb_5.bin",
+			"Model/block_cb_6.bin",
+			"Model/block_cb_7.bin",
+			"Model/block_cb_8.bin",
+			"Model/block_cb_9.bin",
+
+			"Model/cars_c1.bin",
+			"Model/cars_c2.bin",
+			"Model/cars_c3.bin",
+			"Model/cars_c4.bin",
+			"Model/cars_c5.bin",
+			"Model/cars_c6.bin",
+
+			"Model/road.bin",
 		};
 
 		for (const char* fileName : s_mapFiles)
