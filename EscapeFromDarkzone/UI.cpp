@@ -59,7 +59,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	m_pd3dPositionBuffer->SetName(L"uivupuffer");
 	UVBuffer->SetName(L"uiuvbuffer");
 	UVUploadBuffer->SetName(L"uiuvupbuffer");*/
-	LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
+	//LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
@@ -165,7 +165,10 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 
 void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
-	
+	for (const auto& o : objs)
+	{
+		shader->addObjects(o.get());
+	}
 }
 
 void HUDManager::release()
@@ -173,12 +176,6 @@ void HUDManager::release()
 	objs.clear();
 }
 
-void HUDManager::BuildLobby()
-{
-
-	 ResourceManager::Instance().GetUIMesh(UIName::LOBBY_BACKGROUND);
-	 ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON);
-}
 
 bool HUDManager::ProcessClick(POINT mouse)
 {

@@ -75,6 +75,5 @@ public:
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
 	void release();
-
-	void BuildLobby();
+	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
 };

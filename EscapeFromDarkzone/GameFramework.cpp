@@ -68,7 +68,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	BuildObjects();
 
 	ResourceManager::Instance().CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
-
+	
 	observer = make_unique<CCamera>();
 	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
 	observer->GenerateViewMatrix(XMFLOAT3(0.0f, 100.0f, 0.0f), XMFLOAT3(0, -1, 0), XMFLOAT3(0, 0, 1));
@@ -510,7 +510,7 @@ void CGameFramework::BuildObjects()
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-
+	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 	PlayerShader* pshader = new PlayerShader();
@@ -551,14 +551,16 @@ void CGameFramework::BuildObjects()
 
 	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
 
+	
+
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
 
-	if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
-	if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
+	//if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
 }

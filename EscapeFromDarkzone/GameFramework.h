@@ -68,7 +68,7 @@ public:
 	void RemoveNpc(short id);				// 05.10 추가
 	CScene*						nextScene;
 	void ChangeScene();
-
+	bool						mouseMove = false;
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
@@ -100,7 +100,7 @@ private:
 	ID3D12Fence					*m_pd3dFence = NULL;
 	UINT64						m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE						m_hFenceEvent;
-	bool						mouseMove = false;
+	
 
 	RootSignature*				root=NULL;
 

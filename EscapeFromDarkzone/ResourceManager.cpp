@@ -366,6 +366,43 @@ void ResourceManager::BuildModelPrototypes(
 		pPlayerShader
 	);
 	*/
+	static const char* s_mapFiles[] = {
+				"Model/block1.bin",
+				"Model/block3.bin",
+				"Model/block4.bin",
+				"Model/block5.bin",
+				"Model/block6.bin",
+				"Model/block10.bin",
+				"Model/block11.bin",
+				"Model/block12.bin",
+				"Model/block13.bin",
+				"Model/block14.bin",
+				"Model/block15.bin",
+				"Model/block16.bin",
+				"Model/block17.bin",
+				"Model/block18.bin",
+				"Model/block19.bin",
+				"Model/block20.bin",
+				"Model/block21.bin",
+				"Model/block22.bin",
+				"Model/block23.bin",
+				"Model/block24.bin",
+				"Model/block30.bin",
+				"Model/block31.bin",
+				"Model/block32.bin",
+				"Model/block33.bin",
+				"Model/block34.bin",
+				"Model/block35.bin",
+				"Model/block36.bin",
+				"Model/block37.bin",
+				"Model/block38.bin",
+				"Model/block40.bin"
+	};
+
+	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
+	{
+		string s = "a";
+	}
 }
 
 void ResourceManager::BuildEnemyModelPrototypes(
@@ -413,7 +450,7 @@ void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
 	
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	//m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
+	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Start_BTN.dds");
 
 }
 
