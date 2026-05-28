@@ -35,7 +35,6 @@ public:
 	virtual ~CTexture();
 
 private:
-	int								m_nReferences = 0;
 
 	UINT							m_nTextureType;
 
@@ -56,9 +55,6 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE* m_pd3dSamplerGpuDescriptorHandles = NULL;
 
 public:
-	void AddRef() { m_nReferences++; }
-	void Release() { if (--m_nReferences <= 0) delete this; }
-
 	void SetSampler(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE d3dSamplerGpuDescriptorHandle);
 
 	void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nParameterIndex, int nTextureIndex);
@@ -105,14 +101,6 @@ class CMaterial
 public:
 	CMaterial(int nTextures);
 	virtual ~CMaterial();
-
-private:
-	int								m_nReferences = 0;
-
-public:
-	void AddRef() { m_nReferences++; }
-	void Release() { if (--m_nReferences <= 0) delete this; }
-
 public:
 	CShader							*m_pShader = NULL;
 
@@ -215,13 +203,6 @@ public:
 	CAnimationSets(int nAnimationSets);
 	~CAnimationSets();
 
-private:
-	int								m_nReferences = 0;
-
-public:
-	void AddRef() { m_nReferences++; }
-	void Release() { if (--m_nReferences <= 0) delete this; }
-
 public:
 	int								m_nAnimationSets = 0;
 	//CAnimationSet					**m_pAnimationSets = NULL;		//벡터나 맵으로 변경해 여러 애니메이션
@@ -229,6 +210,8 @@ public:
 
 	int								m_nBoneFrames = 0; 
 	CGameObject						**m_ppBoneFrameCaches = NULL; //[m_nBoneFrames]
+
+	bool							m_bOwnAnimationSets = true;
 };
 
 class CAnimationTrack
@@ -321,6 +304,7 @@ public:
 
 	virtual void OnRootMotion(CGameObject* pRootGameObject) {}
 	virtual void OnAnimationIK(CGameObject* pRootGameObject) {}
+	void ReleaseUploadBuffers();
 
 public:
 	float m_fTime = 0.0f;
@@ -358,14 +342,8 @@ protected:
 	BoundingOrientedBox				OOBBModel;
 	BoundingOrientedBox				OOBBWorld;
 private:
-	int								m_nReferences = 0;
-
 	bool							Alive = true;
 	std::vector<BoundingOrientedBox*> OOBBs;
-public:
-	void AddRef();
-	void Release();
-
 public:
 	CGameObject();
 	CGameObject(int nMaterials);
@@ -476,7 +454,7 @@ public:
 	void LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, CGameObject *pParent, FILE *pInFile, CShader *pShader);
 
 	static void LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoadedModel);
-	static CGameObject *LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CGameObject *pParent, FILE *pInFile, CShader *pShader, int *pnSkinnedMeshes);
+	static CGameObject *LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CGameObject *pParent, FILE *pInFile, CShader *pShader, int *pnSkinnedMeshes, const char* pstrFileName);
 	static CGameObject* LoadGeometryModelByName(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CGameObject* pParent, const char* name, CShader* pShader, int* pnSkinnedMeshes);
 	static CLoadedModelInfo *LoadGeometryAndAnimationFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, const char *pstrFileName, CShader *pShader);
 

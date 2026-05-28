@@ -479,7 +479,6 @@ void CStandardObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 		auto& garbage = GarbageQueue.front();
 		if (completed >= garbage.FenceValue)
 		{
-			garbage.obj->Release();
 			GarbageQueue.pop();
 		}
 		else
@@ -636,7 +635,6 @@ void CSkinnedAnimationObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 		auto& garbage = GarbageQueue.front();
 		if (completed >= garbage.FenceValue)
 		{
-			garbage.obj->Release();
 			GarbageQueue.pop();
 		}
 		else
@@ -787,6 +785,7 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_ppObjects[j])
 		{
+			
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->UpdateTransform(NULL);
 		}
@@ -1034,7 +1033,12 @@ void PlayerShader::CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsC
 	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 	m_d3dPipelineStateDesc.pRootSignature = pd3dGraphicsRootSignature;
 	m_d3dPipelineStateDesc.VS = CreateVertexShader();
-	m_d3dPipelineStateDesc.PS = CreatePixelShader();
+	m_d3dPipelineStateDesc.PS = CShader::CompileShaderFromFile(
+		L"Shaders.hlsl",
+		"PSThroughPlayer",
+		"ps_5_1",
+		&m_pd3dPixelShaderBlob
+	);
 	m_d3dPipelineStateDesc.RasterizerState = CreateRasterizerState();
 	m_d3dPipelineStateDesc.BlendState = CreateBlendState();
 	m_d3dPipelineStateDesc.DepthStencilState = CreateThroughDepthStencilState();

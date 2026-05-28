@@ -84,7 +84,9 @@
     <ClCompile Include="EffectManager.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
-    <ClCompile Include="InventoryManager.cpp" />
+    <ClCompile Include="InventoryManager.cpp">
+      <Filter>소스파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -174,8 +176,10 @@
     <ClInclude Include="EffectManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="ItemDef.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="InventoryManager.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

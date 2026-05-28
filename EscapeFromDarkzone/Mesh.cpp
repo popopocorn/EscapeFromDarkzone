@@ -239,7 +239,7 @@ void CStandardMesh::ReleaseUploadBuffers()
 	m_pd3dBiTangentUploadBuffer = NULL;
 }
 
-void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile)
+void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName)
 {
 	char pstrToken[64] = { '\0' };
 	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nIndices = 0, nSubMeshes = 0, nSubIndices = 0;
@@ -402,6 +402,47 @@ void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCom
 			break;
 		}
 	}
+
+#ifdef _DEBUG
+
+	int nLen = MultiByteToWideChar(CP_ACP, 0, pstrFileName, -1, NULL, 0);
+	std::wstring wName(nLen, L'\0');
+	MultiByteToWideChar(CP_ACP, 0, pstrFileName, -1, &wName[0], nLen);
+
+	if (!wName.empty() && wName.back() == L'\0') {
+		wName.pop_back();
+	}
+
+	// 2. TextureCoord 0 버퍼
+	if (m_pd3dTextureCoord0Buffer)
+		m_pd3dTextureCoord0Buffer->SetName((wName + L"_TexCoord0_Buffer").c_str());
+	if (m_pd3dTextureCoord0UploadBuffer)
+		m_pd3dTextureCoord0UploadBuffer->SetName((wName + L"_TexCoord0_Upload").c_str());
+
+	// 3. TextureCoord 1 버퍼
+	if (m_pd3dTextureCoord1Buffer)
+		m_pd3dTextureCoord1Buffer->SetName((wName + L"_TexCoord1_Buffer").c_str());
+	if (m_pd3dTextureCoord1UploadBuffer)
+		m_pd3dTextureCoord1UploadBuffer->SetName((wName + L"_TexCoord1_Upload").c_str());
+
+	// 4. Normal 버퍼
+	if (m_pd3dNormalBuffer)
+		m_pd3dNormalBuffer->SetName((wName + L"_Normal_Buffer").c_str());
+	if (m_pd3dNormalUploadBuffer)
+		m_pd3dNormalUploadBuffer->SetName((wName + L"_Normal_Upload").c_str());
+
+	// 5. Tangent 버퍼
+	if (m_pd3dTangentBuffer)
+		m_pd3dTangentBuffer->SetName((wName + L"_Tangent_Buffer").c_str());
+	if (m_pd3dTangentUploadBuffer)
+		m_pd3dTangentUploadBuffer->SetName((wName + L"_Tangent_Upload").c_str());
+
+	// 6. BiTangent 버퍼
+	if (m_pd3dBiTangentBuffer)
+		m_pd3dBiTangentBuffer->SetName((wName + L"_BiTangent_Buffer").c_str());
+	if (m_pd3dBiTangentUploadBuffer)
+		m_pd3dBiTangentUploadBuffer->SetName((wName + L"_BiTangent_Upload").c_str());
+#endif
 }
 
 void CStandardMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext)
@@ -480,7 +521,7 @@ void CSkinnedMesh::PrepareSkinning(CGameObject *pModelRootObject)
 	}
 }
 
-void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile)
+void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName)
 {
 	char pstrToken[64] = { '\0' };
 	UINT nReads = 0;
@@ -570,6 +611,42 @@ void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12Graphics
 			break;
 		}
 	}
+
+#ifdef _DEBUG
+	int nLen = MultiByteToWideChar(CP_ACP, 0, pstrFileName, -1, NULL, 0);
+	std::wstring wstrFileName(nLen, L'\0');
+	MultiByteToWideChar(CP_ACP, 0, pstrFileName, -1, &wstrFileName[0], nLen);
+
+	// (널 문자 제거 - MultiByteToWideChar가 널 문자까지 길이에 포함하므로)
+	if (!wstrFileName.empty()) {
+		wstrFileName.pop_back();
+	}
+
+	// 2. 각 버퍼에 식별하기 쉬운 이름(접미사 포함) 설정
+	if (m_pd3dBoneIndexBuffer)
+	{
+		std::wstring name = wstrFileName + L"_BoneIndexBuffer";
+		m_pd3dBoneIndexBuffer->SetName(name.c_str());
+	}
+
+	if (m_pd3dBoneIndexUploadBuffer)
+	{
+		std::wstring name = wstrFileName + L"_BoneIndexUploadBuffer";
+		m_pd3dBoneIndexUploadBuffer->SetName(name.c_str());
+	}
+
+	if (m_pd3dBoneWeightBuffer)
+	{
+		std::wstring name = wstrFileName + L"_BoneWeightBuffer";
+		m_pd3dBoneWeightBuffer->SetName(name.c_str());
+	}
+
+	if (m_pd3dBoneWeightUploadBuffer)
+	{
+		std::wstring name = wstrFileName + L"_BoneWeightUploadBuffer";
+		m_pd3dBoneWeightUploadBuffer->SetName(name.c_str());
+	}
+#endif
 }
 
 void CSkinnedMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext)

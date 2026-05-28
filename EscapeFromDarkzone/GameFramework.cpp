@@ -3,10 +3,12 @@
 //-----------------------------------------------------------------------------
 
 #include "stdafx.h"
-#include "GameFramework.h"
 #include "InputManager.h"
 #include "EffectManager.h"
 #include "InventoryManager.h"
+#include "ResourceManager.h"
+#include "GameFramework.h"
+
 
 CGameFramework::CGameFramework()
 {
@@ -31,7 +33,6 @@ CGameFramework::CGameFramework()
 	m_nWndClientWidth = FRAME_BUFFER_WIDTH;
 	m_nWndClientHeight = FRAME_BUFFER_HEIGHT;
 
-	m_pScene = NULL;
 	m_pPlayer = NULL;
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
@@ -51,6 +52,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	InputManager::Instance().init(hMainWnd);
 	CreateDirect3DDevice();
+	root = new RootSignature(m_pd3dDevice);
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
 	CreateSwapChain();
@@ -61,10 +63,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
+	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
 
-	m_pScene->CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
+	ResourceManager::Instance().CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
 
 	observer = make_unique<CCamera>();
 	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
@@ -335,7 +338,7 @@ void CGameFramework::ChangeSwapChainState()
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 
-	if (m_pScene) m_pScene->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
+	if (not m_pScene.empty()) m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
 	case WM_LBUTTONDOWN:
@@ -356,7 +359,7 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	if (m_pScene) m_pScene->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
+	if (not m_pScene.empty()) m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
 	case WM_KEYUP:
@@ -393,7 +396,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 		case VK_SPACE:
 		{
-			if (m_pPlayer && m_pScene)
+			if (m_pPlayer && not m_pScene.empty())
 			{
 				XMFLOAT3 pos = m_pPlayer->GetPosition();
 				XMFLOAT3 look = m_pPlayer->GetLookVector();
@@ -406,9 +409,9 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				bombFlatLook.y = 0.0f;
 				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				if (m_pScene && m_pScene->GetEffectManager())
+				if (not m_pScene.empty() && m_pScene.back()->GetEffectManager())
 				{
-					m_pScene->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
+					m_pScene.back()->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
 				}
 			}
 			break;
@@ -459,6 +462,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
+	//ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -495,7 +499,6 @@ void CGameFramework::OnDestroy()
 		(DXGI_DEBUG_RLO_FLAGS)(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 	pdxgiDebug->Release();
 #endif
-
 }
 
 //#define _WITH_TERRAIN_PLAYER
@@ -504,31 +507,32 @@ void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 
-	m_pScene = new MainScene();
-	
-	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	m_pScene.push_back(make_unique<LobbyScene>(this));
+	m_pScene.back()->SetRoot(root->GetRoot());
+	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+
+	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 	PlayerShader* pshader = new PlayerShader();
-	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
-	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
-	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature());
+	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
-	if (m_pScene)
-	{
-		m_pScene->BuildModelPrototypes(
-			m_pd3dDevice,
-			m_pd3dCommandList,
-			pshader
-		);
-	}
+	ResourceManager::Instance().BuildModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		pshader
+	);
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
-		m_pScene->GetGraphicsRootSignature(),
+		root->GetRoot(),
 		pshader,
-		(m_pScene) ? m_pScene->GetModelPrototype(ModelName::RIFLE) : nullptr
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
+		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
@@ -536,16 +540,16 @@ void CGameFramework::BuildObjects()
 	pPlayer->InitializeInventory(
 		m_pd3dDevice,
 		m_pd3dCommandList,
-		m_pScene->GetGraphicsRootSignature(),
+		root->GetRoot(),
 		nullptr
 	);
 
 	m_pPlayer = pPlayer;
-	m_pScene->SetPlayer(m_pPlayer);
+	m_pScene.back()->SetPlayer(m_pPlayer);
 
 	m_pCamera = m_pPlayer->GetCamera();
 
-	if (m_pScene) m_pScene->SetCamera(m_pCamera);
+	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
 
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
@@ -553,7 +557,7 @@ void CGameFramework::BuildObjects()
 
 	WaitForGpuComplete();
 
-	if (m_pScene) m_pScene->ReleaseUploadBuffers();
+	if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
 	if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
@@ -561,17 +565,16 @@ void CGameFramework::BuildObjects()
 
 void CGameFramework::ReleaseObjects()
 {
-	if (m_pPlayer) m_pPlayer->Release();
+	
 
-	if (m_pScene) m_pScene->ReleaseObjects();
-	if (m_pScene) delete m_pScene;
+	if (not m_pScene.empty()) m_pScene.back()->ReleaseObjects();
 }
 
 void CGameFramework::ProcessInput()
 {
 	static UCHAR pKeysBuffer[256];
 	bool bProcessedByScene = false;
-	if (GetKeyboardState(pKeysBuffer) && m_pScene) bProcessedByScene = m_pScene->ProcessInput(pKeysBuffer);
+	if (GetKeyboardState(pKeysBuffer) && not m_pScene.empty()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
 	if (!bProcessedByScene)
 	{
 		float cxDelta = 0.0f, cyDelta = 0.0f;
@@ -585,12 +588,6 @@ void CGameFramework::ProcessInput()
 			cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
 			cyDelta = (float)(ptCursorPos.y - m_ptOldCursorPos.y) / 3.0f;
 
-			/*if (cxDelta != 0.0f || cyDelta != 0.0f)
-			{
-				m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
-
-				m_ptOldCursorPos = ptCursorPos;
-			}*/
 		}
 		
 
@@ -626,7 +623,7 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
-	if (m_pScene) m_pScene->AnimateObjects(fTimeElapsed);
+	if (not m_pScene.empty()) m_pScene.back()->AnimateObjects(fTimeElapsed);
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 	m_pPlayer->UpdateTransform(NULL);
 }
@@ -676,22 +673,33 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
-
-
-
 	InputManager::Instance().update();
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
-	
-	ProcessInput();
-
-	AnimateObjects(fTimeElapsed);
 
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
+	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
+	
+	if (nextScene)
+	{
+		WaitForGpuComplete();
+		ChangeScene();
+		m_pd3dCommandList->Close(); 
+		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
+		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
+		WaitForGpuComplete(); 
+		
+		m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
+		m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
+	}
+	ProcessInput();
+
+	AnimateObjects(fTimeElapsed);
+
+	
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())
 	{
@@ -730,11 +738,11 @@ void CGameFramework::FrameAdvance()
 	for (int i = 0; i < CASCADE_COUNT; i++)
 	{
 		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
-		m_pScene->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
-		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene->GetLightCamera(i));
+		m_pScene.back()->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
+		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
 	}
 	shadowmap->TransitionToSRV(m_pd3dCommandList);
-	m_pScene->GetLightCameraManager().UpdateShaderVariables(m_pd3dCommandList);
+	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList);
 	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
 	
 	
@@ -747,19 +755,19 @@ void CGameFramework::FrameAdvance()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	if (m_pScene) m_pScene->Render(m_pd3dCommandList, MAIN, m_pCamera);
+	if (not m_pScene.empty()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 #endif
 
 
-	if (m_pPlayer) 
+	if (m_pPlayer)
 	{
+		m_pd3dCommandList->OMSetStencilRef(0x04);
 		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-		m_pPlayer->Render(m_pd3dCommandList, THROUGH, m_pCamera);
 	}
-	m_pScene->ThroughRender(m_pd3dCommandList, m_pCamera);
+	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
 
 	//compute pipline
 	
@@ -823,13 +831,13 @@ void CGameFramework::FrameAdvance()
 		if (m_nFenceValues[i] > targetFence) targetFence = m_nFenceValues[i];
 	}
 	targetFence++; 
-	if (m_pScene) m_pScene->DeleteDeadObject(targetFence);
+	if (not m_pScene.empty()) m_pScene.back()->DeleteDeadObject(targetFence);
 
 	
 	MoveToNextFrame();
 
 	UINT64 done = m_pd3dFence->GetCompletedValue();
-	if (m_pScene) m_pScene->DeleteTrash(done);
+	if (not m_pScene.empty()) m_pScene.back()->DeleteTrash(done);
 
 
 
@@ -882,7 +890,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pScene->GetGraphicsRootSignature(), p->x, p->y, p->z);
+			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), p->x, p->y, p->z);
 			pOther->SetServerYaw(p->yaw);
 
 			// 상태 변경
@@ -901,7 +909,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
 
 			break;
 		}
@@ -973,8 +981,9 @@ void CGameFramework::ProcessNetworkPackets()
 			CEnemyObject* pNpc = new CEnemyObject(
 				m_pd3dDevice,
 				m_pd3dCommandList,
-				m_pScene->GetGraphicsRootSignature(), 
-				NULL
+				root->GetRoot(),
+				NULL,
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 			);
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
@@ -986,7 +995,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			m_pScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
 
 			break;
 		}
@@ -1040,8 +1049,8 @@ void CGameFramework::ProcessNetworkPackets()
 			SC_INVENTORY_UPDATE_PACKET* p =
 				reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());
 
-			if (!m_pScene) break;
-			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (m_pScene.empty()) break;
+			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
 			if (!pInvMgr) break;
 
 			bool ok = pInvMgr->ApplyPlayerInventorySlotUpdate(
@@ -1059,7 +1068,7 @@ void CGameFramework::ProcessNetworkPackets()
 			SC_ADD_LOOT_BOX_PACKET* p =
 				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
 
-			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
 
 			pInvMgr->SpawnLootContainer(p->npc_id,
 				XMFLOAT3(p->x, p->y, p->z),
@@ -1076,8 +1085,8 @@ void CGameFramework::ProcessNetworkPackets()
 			SC_LOOT_BOX_SLOT_UPDATE_PACKET* p =
 				reinterpret_cast<SC_LOOT_BOX_SLOT_UPDATE_PACKET*>(packet.data());
 
-			if (!m_pScene) break;
-			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (m_pScene.empty()) break;
+			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
 			if (!pInvMgr) break;
 
 			pInvMgr->ApplyLootBoxSlotUpdate(p->box_id, p->slotidx, p->item_id, p->count);
@@ -1093,8 +1102,8 @@ void CGameFramework::ProcessNetworkPackets()
 			SC_DEACTIVATE_LOOT_BOX_PACKET* p =
 				reinterpret_cast<SC_DEACTIVATE_LOOT_BOX_PACKET*>(packet.data());
 
-			if (!m_pScene) break;
-			InventoryManager* pInvMgr = m_pScene->GetInventoryManager();
+			if (m_pScene.empty()) break;
+			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
 			if (!pInvMgr) break;
 
 			pInvMgr->DeactivateLootBox(p->npc_id);
@@ -1153,4 +1162,16 @@ void CGameFramework::RemoveNpc(short id)
 			return;
 		}
 	}
+}
+
+void CGameFramework::ChangeScene()
+{
+	m_pScene.back()->ReleaseObjects();
+	m_pScene.push_back(unique_ptr<CScene>(nextScene));
+	m_pScene.back()->SetRoot(root->GetRoot());
+	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->SetCamera(m_pCamera);
+
+	nextScene = nullptr;
 }

@@ -1,15 +1,16 @@
 #pragma once
 
+#include <DirectXMath.h>
+
 #include <WS2tcpip.h>
 #include <queue>
 #include <vector>
 #include "protocol.h"
 
-#include <DirectXMath.h>
 
 #pragma comment(lib, "WS2_32.lib")
 
-constexpr char SERVER_ADDR[] = "119.195.220.93";
+constexpr char SERVER_ADDR[] = "127.0.0.1";
 
 // 패킷 큐 최대 크기
 constexpr int MAX_PACKET_QUEUE_SIZE = 100;

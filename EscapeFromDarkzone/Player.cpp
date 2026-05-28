@@ -53,7 +53,6 @@ CPlayer::CPlayer()
 CPlayer::~CPlayer()
 {
 	ReleaseShaderVariables();
-
 	if (m_pCamera) delete m_pCamera;
 }
 
@@ -989,18 +988,22 @@ CTerrainPlayer::CTerrainPlayer(
 	ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* shader,
+	CLoadedModelInfo* pPlayerModel,
 	CGameObject* pDefaultWeaponPrototype)
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
+	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
 
-	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/Ch15_nonPBR.bin",
-		shader
-	);
-	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
+	if (!pPlayerModel)
+	{
+		OutputDebugString(L"Error: Player model instance is null.\n");
+		return;
+	}
+
+	if (!pPlayerModel->m_pAnimationSets)
+	{
+		pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
+	}
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
@@ -1024,7 +1027,13 @@ CTerrainPlayer::CTerrainPlayer(
 
 	InitializeLeftHandIK();
 
-	m_pSkinnedAnimationController = new CPlayerAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel, this);
+	m_pSkinnedAnimationController = new CPlayerAnimationController(
+		pd3dDevice,
+		pd3dCommandList,
+		2,
+		pPlayerModel,
+		this
+	);
 
 	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
 	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
@@ -1040,11 +1049,11 @@ CTerrainPlayer::CTerrainPlayer(
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	if (pPlayerModel) delete pPlayerModel;
 }
 
 CTerrainPlayer::~CTerrainPlayer()
 {
+	//if (m_pChild)m_pChild->Release();
 }
 
 CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)

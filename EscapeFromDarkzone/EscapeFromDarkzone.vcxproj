@@ -124,6 +124,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -157,6 +158,8 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="ResourceManager.h" />
+    <ClInclude Include="RootSignature.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="ShadowMap.h" />
@@ -186,6 +189,8 @@
     <ClCompile Include="Object.cpp" />
     <ClCompile Include="OtherPlayer.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="ResourceManager.cpp" />
+    <ClCompile Include="RootSignature.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="ShadowMap.cpp" />
