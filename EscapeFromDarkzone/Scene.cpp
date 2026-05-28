@@ -608,6 +608,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_vVisionMapChunks.clear();
 	m_vVisionMapChunks.reserve(64);
 
+	// 맵 불러오기 코드
 	{
 		std::unique_ptr<CGameObject> floorObj(
 			CGameObject::LoadGeometryModelByName(
