@@ -366,42 +366,9 @@ void ResourceManager::BuildModelPrototypes(
 		pPlayerShader
 	);
 	*/
-	static const char* s_mapFiles[] = {
-				"Model/block1.bin",
-				"Model/block3.bin",
-				"Model/block4.bin",
-				"Model/block5.bin",
-				"Model/block6.bin",
-				"Model/block10.bin",
-				"Model/block11.bin",
-				"Model/block12.bin",
-				"Model/block13.bin",
-				"Model/block14.bin",
-				"Model/block15.bin",
-				"Model/block16.bin",
-				"Model/block17.bin",
-				"Model/block18.bin",
-				"Model/block19.bin",
-				"Model/block20.bin",
-				"Model/block21.bin",
-				"Model/block22.bin",
-				"Model/block23.bin",
-				"Model/block24.bin",
-				"Model/block30.bin",
-				"Model/block31.bin",
-				"Model/block32.bin",
-				"Model/block33.bin",
-				"Model/block34.bin",
-				"Model/block35.bin",
-				"Model/block36.bin",
-				"Model/block37.bin",
-				"Model/block38.bin",
-				"Model/block40.bin"
-	};
-
 	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
 	{
-		string s = "a";
+		string s = "Model/block" + to_string(i+1) +".bin";
 	}
 }
 
