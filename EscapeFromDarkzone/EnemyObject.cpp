@@ -33,6 +33,13 @@ static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
 	return XMFLOAT3(dir.z, 0.0f, -dir.x);
 }
 
+static float NormalizeAngleDeg(float angle)
+{
+	while (angle > 180.0f) angle -= 360.0f;
+	while (angle < -180.0f) angle += 360.0f;
+	return angle;
+}
+
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
@@ -292,13 +299,7 @@ void CEnemyObject::FaceToPosition(const XMFLOAT3& targetPos)
 	float fAngleRad = atan2f(dir.x, dir.z);
 	float fAngleDeg = XMConvertToDegrees(fAngleRad);
 
-	XMFLOAT4X4 rotate = Matrix4x4::Rotate(0.0f, fAngleDeg, 0.0f);
-
-	rotate._41 = m_xmf3Position.x;
-	rotate._42 = m_xmf3Position.y;
-	rotate._43 = m_xmf3Position.z;
-
-	m_xmf4x4ToParent = rotate;
+	SetYawDeg(fAngleDeg);
 }
 
 bool CEnemyObject::UpdatePathToPosition(const XMFLOAT3& targetPos, float fTimeElapsed)
@@ -307,7 +308,6 @@ bool CEnemyObject::UpdatePathToPosition(const XMFLOAT3& targetPos, float fTimeEl
 
 	if (updateTimer < findTime)
 	{
-		// 수정: 아직 재탐색 시간이 아니면 기존 경로가 남아있는지 반환
 		return !ways.empty() && wayIdx < static_cast<int>(ways.size());
 	}
 
@@ -445,19 +445,188 @@ void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 	SetMoveDir(moveDir);
 }
 
+void CEnemyObject::StartReload()
+{
+	if (m_bReloading)
+		return;
+
+	m_bReloading = true;
+	m_fReloadTimer = m_fReloadDuration;
+	m_nBurstShotsLeft = 0;
+	m_fBurstShotTimer = 0.0f;
+	m_fBurstRestTimer = 0.0f;
+	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+	OutputDebugString(L"[Enemy AI] Reload Start\n");
+}
+
+void CEnemyObject::UpdateReload(float fTimeElapsed)
+{
+	if (!m_bReloading)
+		return;
+
+	m_fReloadTimer -= fTimeElapsed;
+
+	if (m_fReloadTimer <= 0.0f)
+	{
+		m_bReloading = false;
+		m_fReloadTimer = 0.0f;
+		m_nCurrentAmmo = m_nMagazineAmmo;
+
+		OutputDebugString(L"[Enemy AI] Reload Finish\n");
+	}
+}
+
+void CEnemyObject::SetYawDeg(float yawDeg)
+{
+	m_fCurrentYawDeg = NormalizeAngleDeg(yawDeg);
+
+	XMFLOAT4X4 rotate = Matrix4x4::Rotate(0.0f, m_fCurrentYawDeg, 0.0f);
+
+	rotate._41 = m_xmf3Position.x;
+	rotate._42 = m_xmf3Position.y;
+	rotate._43 = m_xmf3Position.z;
+
+	m_xmf4x4ToParent = rotate;
+}
+
+XMFLOAT3 CEnemyObject::GetForwardXZ() const
+{
+	float yawRad = XMConvertToRadians(m_fCurrentYawDeg);
+
+	XMFLOAT3 forward;
+	forward.x = sinf(yawRad);
+	forward.y = 0.0f;
+	forward.z = cosf(yawRad);
+
+	return NormalizeXZ(forward);
+}
+
+bool CEnemyObject::IsPlayerInViewAngle() const
+{
+	if (!m_pPlayer)
+		return false;
+
+	XMFLOAT3 toPlayer = GetDirectionToPlayerXZ();
+
+	if (Vector3::Length(toPlayer) < 0.0001f)
+		return true;
+
+	XMFLOAT3 forward = GetForwardXZ();
+
+	if (Vector3::Length(forward) < 0.0001f)
+		return false;
+
+	float dot = Vector3::DotProduct(forward, toPlayer);
+
+	float halfAngleRad = XMConvertToRadians(m_fViewAngle * 0.5f);
+	float viewCos = cosf(halfAngleRad);
+
+	return dot >= viewCos;
+}
+
+bool CEnemyObject::CanDetectPlayer() const
+{
+	if (!m_pPlayer)
+		return false;
+
+	if (!IsPlayerInDetectRange())
+		return false;
+
+	if (!IsPlayerInViewAngle())
+		return false;
+
+	return true;
+}
+
+bool CEnemyObject::CanShootPlayer() const
+{
+	if (!m_pPlayer)
+		return false;
+
+	if (!IsPlayerInAttackRange())
+		return false;
+
+	if (!IsPlayerInViewAngle())
+		return false;
+
+	return true;
+}
+
+void CEnemyObject::RefreshLastSeenPlayer()
+{
+	if (!m_pPlayer)
+		return;
+
+	m_xmf3LastSeenPlayerPosition = m_pPlayer->GetPosition();
+	m_fLoseSightTimer = 0.0f;
+	m_bHasLastSeenPlayer = true;
+}
+
+bool CEnemyObject::HasRecentLastSeenPlayer() const
+{
+	return m_bHasLastSeenPlayer && (m_fLoseSightTimer < m_fLoseSightDuration);
+}
+
+void CEnemyObject::UpdateIdleLook(float fTimeElapsed)
+{
+	m_fIdleLookTimer -= fTimeElapsed;
+
+	if (m_fIdleLookTimer <= 0.0f)
+	{
+		m_fIdleLookTimer = m_fIdleLookInterval;
+
+		m_nIdleLookDir *= -1;
+		m_fIdleYawTarget = m_fIdleBaseYawDeg + (m_fIdleYawRange * static_cast<float>(m_nIdleLookDir));
+		m_fIdleYawTarget = NormalizeAngleDeg(m_fIdleYawTarget);
+	}
+
+	float yawDiff = NormalizeAngleDeg(m_fIdleYawTarget - m_fCurrentYawDeg);
+	float maxStep = m_fIdleTurnSpeed * fTimeElapsed;
+
+	if (fabsf(yawDiff) <= maxStep)
+	{
+		SetYawDeg(m_fIdleYawTarget);
+	}
+	else
+	{
+		if (yawDiff > 0.0f)
+			SetYawDeg(m_fCurrentYawDeg + maxStep);
+		else
+			SetYawDeg(m_fCurrentYawDeg - maxStep);
+	}
+}
+
 void CEnemyObject::FireAtPlayer()
 {
 	if (!m_pPlayer) return;
 	if (m_bDying) return;
+	if (m_bReloading) return;
+	if (m_nCurrentAmmo <= 0)
+	{
+		StartReload();
+		return;
+	}
+
+	m_nCurrentAmmo--;
 
 	// 나중에 여기에서 총알, 레이캐스트, 서버 패킷, 이펙트 등을 연결하면 됨.
-	OutputDebugString(L"[Enemy AI] Enemy Burst Fire\n");	// 수정: 버스트 사격 구조로 바뀐 것을 확인하기 위한 출력
+	OutputDebugString(L"[Enemy AI] Enemy Burst Fire\n");
+
+	if (m_nCurrentAmmo <= 0)
+	{
+		StartReload();
+	}
 }
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 {
 	pEnemy->SetMoveDir(XMFLOAT3(0, 0, 0));
 	pEnemy->ClearPath();
+
+	pEnemy->m_fIdleBaseYawDeg = pEnemy->m_fCurrentYawDeg;
+	pEnemy->m_fIdleYawTarget = pEnemy->m_fCurrentYawDeg;
+	pEnemy->m_fIdleLookTimer = pEnemy->m_fIdleLookInterval;
 
 	auto* pController = pEnemy->m_pSkinnedAnimationController;
 	if (!pController) return false;
@@ -476,6 +645,8 @@ void EnemyIdle::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
 
+	pEnemy->UpdateIdleLook(fTimeElapsed);
+
 	if (pEnemy->m_fReturnIgnoreTimer > 0.0f)
 	{
 		pEnemy->m_fReturnIgnoreTimer -= fTimeElapsed;
@@ -489,10 +660,12 @@ void EnemyIdle::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	pEnemy->m_fThinkTimer = 0.0f;
 
-	if (!pEnemy->IsPlayerInDetectRange())
+	if (!pEnemy->CanDetectPlayer())
 		return;
 
-	if (pEnemy->IsPlayerInAttackRange())
+	pEnemy->RefreshLastSeenPlayer();
+
+	if (pEnemy->CanShootPlayer())
 	{
 		pEnemy->ChangeState(std::make_unique<EnemyAttack>());
 	}
@@ -536,13 +709,24 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
+	bool bCanDetectPlayer = pEnemy->CanDetectPlayer();
+
+	if (bCanDetectPlayer)
+	{
+		pEnemy->RefreshLastSeenPlayer();
+	}
+	else
+	{
+		pEnemy->m_fLoseSightTimer += fTimeElapsed;
+	}
+
 	pEnemy->m_fThinkTimer += fTimeElapsed;
 
 	if (pEnemy->m_fThinkTimer >= pEnemy->m_fThinkInterval)
 	{
 		pEnemy->m_fThinkTimer = 0.0f;
 
-		if (pEnemy->IsPlayerInAttackRange())
+		if (pEnemy->CanShootPlayer())
 		{
 			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 			pEnemy->ClearPath();
@@ -550,7 +734,7 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 			return;
 		}
 
-		if (!pEnemy->IsPlayerInDetectRange())
+		if (!bCanDetectPlayer && !pEnemy->HasRecentLastSeenPlayer())
 		{
 			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 			pEnemy->ClearPath();
@@ -559,21 +743,38 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		}
 	}
 
-	XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
+	XMFLOAT3 targetPos;
 
-	bool hasPath = pEnemy->UpdatePathToPosition(playerPos, fTimeElapsed);
+	if (bCanDetectPlayer)
+	{
+		targetPos = pEnemy->m_pPlayer->GetPosition();
+	}
+	else if (pEnemy->HasRecentLastSeenPlayer())
+	{
+		targetPos = pEnemy->m_xmf3LastSeenPlayerPosition;
+	}
+	else
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	bool hasPath = pEnemy->UpdatePathToPosition(targetPos, fTimeElapsed);
 
 	if (hasPath && pEnemy->FollowCurrentPath())
 	{
 		return;
 	}
 
-	XMFLOAT3 dirToPlayer = pEnemy->GetDirectionToPlayerXZ();
+	XMFLOAT3 myPos = pEnemy->GetPosition();
+	XMFLOAT3 dirToTarget = Vector3::Subtract(targetPos, myPos);
+	dirToTarget.y = 0.0f;
 
-	if (Vector3::Length(dirToPlayer) > 0.0001f)
+	if (Vector3::Length(dirToTarget) > 0.0001f)
 	{
-		pEnemy->SetMoveDir(dirToPlayer);
-		pEnemy->FaceToPosition(playerPos);
+		dirToTarget = Vector3::Normalize(dirToTarget);
+		pEnemy->SetMoveDir(dirToTarget);
+		pEnemy->FaceToPosition(targetPos);
 	}
 	else
 	{
@@ -627,8 +828,40 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
-	pEnemy->FaceToPosition(playerPos);
+	if (pEnemy->IsReloading())
+	{
+		pEnemy->UpdateReload(fTimeElapsed);
+
+		if (pEnemy->CanDetectPlayer())
+		{
+			pEnemy->RefreshLastSeenPlayer();
+			XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
+			pEnemy->FaceToPosition(playerPos);
+		}
+
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	bool bCanDetectPlayer = pEnemy->CanDetectPlayer();
+	bool bCanShootPlayer = pEnemy->CanShootPlayer();
+
+	if (bCanDetectPlayer)
+	{
+		pEnemy->RefreshLastSeenPlayer();
+
+		XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
+		pEnemy->FaceToPosition(playerPos);
+	}
+	else
+	{
+		pEnemy->m_fLoseSightTimer += fTimeElapsed;
+
+		if (pEnemy->HasRecentLastSeenPlayer())
+		{
+			pEnemy->FaceToPosition(pEnemy->m_xmf3LastSeenPlayerPosition);
+		}
+	}
 
 	pEnemy->m_fThinkTimer += fTimeElapsed;
 
@@ -642,6 +875,19 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 			pEnemy->ChangeState(std::make_unique<EnemyRun>());
 			return;
 		}
+
+		if (!bCanDetectPlayer && !pEnemy->HasRecentLastSeenPlayer())
+		{
+			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+			pEnemy->ChangeState(std::make_unique<EnemyRun>());
+			return;
+		}
+	}
+
+	if (pEnemy->m_nCurrentAmmo <= 0)
+	{
+		pEnemy->StartReload();
+		return;
 	}
 
 	// 사격 전 조준 딜레이
@@ -649,6 +895,24 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	{
 		pEnemy->m_fAimTimer += fTimeElapsed;
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	if (!bCanShootPlayer)
+	{
+		pEnemy->m_fStrafeTimer -= fTimeElapsed;
+
+		if (pEnemy->m_fStrafeTimer <= 0.0f)
+		{
+			pEnemy->m_fStrafeTimer = pEnemy->m_fStrafeDuration;
+			pEnemy->m_fStrafeSign *= -1.0f;
+		}
+
+		if (bCanDetectPlayer)
+			pEnemy->UpdateCombatMove(fTimeElapsed);
+		else
+			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
 		return;
 	}
 
@@ -746,6 +1010,8 @@ void EnemyReturn::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		pEnemy->SetPosition(spawnPos.x, spawnPos.y, spawnPos.z);
 
 		pEnemy->m_fReturnIgnoreTimer = pEnemy->m_fReturnIgnoreDuration;
+		pEnemy->m_bHasLastSeenPlayer = false;
+		pEnemy->m_fLoseSightTimer = 0.0f;
 
 		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
 		return;
@@ -910,13 +1176,7 @@ void CEnemyObject::SetServerYaw(float yawRad)
 {
 	float yawDeg = XMConvertToDegrees(yawRad);
 
-	XMFLOAT4X4 rotate = Matrix4x4::Rotate(0.0f, yawDeg, 0.0f);
-
-	rotate._41 = m_xmf3Position.x;
-	rotate._42 = m_xmf3Position.y;
-	rotate._43 = m_xmf3Position.z;
-
-	m_xmf4x4ToParent = rotate;
+	SetYawDeg(yawDeg);
 }
 
 void CEnemyObject::SnapToServerPosition()

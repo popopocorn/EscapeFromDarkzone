@@ -88,7 +88,7 @@ public:
 	float m_fPreferredCombatRange = 7.0f;
 	float m_fTooCloseRange = 4.0f;
 
-	//연	사
+	//버스트 사격
 	int m_nBurstShotsLeft = 0;
 	int m_nBurstShotMin = 2;
 	int m_nBurstShotMax = 4;
@@ -100,11 +100,35 @@ public:
 	float m_fBurstRestTimer = 0.0f;
 	float m_fBurstRestDuration = 1.0f;
 
-	//전투 중 좌우 이동
+	//좌우 이동
 	float m_fStrafeTimer = 0.0f;
 	float m_fStrafeDuration = 1.2f;
 	float m_fStrafeSign = 1.0f;
 	float m_fCombatMoveSpeedMultiplier = 0.45f;
+
+	//재장전
+	int m_nMagazineAmmo = 12;			//이건 나중에 총마다 다르게 설정할 수 있도록 바꿀 예정
+	int m_nCurrentAmmo = 12;
+	bool m_bReloading = false;
+	float m_fReloadTimer = 0.0f;
+	float m_fReloadDuration = 2.0f;
+
+	// 시야각 관련 값
+	float m_fViewAngle = 120.0f;
+	float m_fLoseSightTimer = 0.0f;
+	float m_fLoseSightDuration = 1.0f;
+	bool m_bHasLastSeenPlayer = false;
+	XMFLOAT3 m_xmf3LastSeenPlayerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	//Idle 상태에서 시야 회전 관련 값
+	float m_fCurrentYawDeg = 0.0f;
+	float m_fIdleBaseYawDeg = 0.0f;
+	float m_fIdleLookTimer = 0.0f;
+	float m_fIdleLookInterval = 2.0f;
+	float m_fIdleYawTarget = 0.0f;
+	float m_fIdleYawRange = 45.0f;
+	float m_fIdleTurnSpeed = 90.0f;
+	int m_nIdleLookDir = 1;
 
 	XMFLOAT3 m_xmf3SpawnPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 10.0f);
@@ -127,27 +151,42 @@ public:
 	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
 	XMFLOAT3 GetSpawnPosition() const { return m_xmf3SpawnPosition; }
 
-	//거리 계산 (XZ 평면)
 	float GetDistanceToPlayerXZ() const;
 	float GetDistanceFromSpawnXZ() const;
 	float GetDistanceToSpawnXZ() const;
 
-	//플레이어와의 거리 비교
 	bool IsPlayerInDetectRange() const;
 	bool IsPlayerInAttackRange() const;
 	bool IsPlayerOutOfAttackRange() const;
 	bool IsOutsideLeashRange() const;
 	bool IsNearSpawn() const;
 
-	//이동 및 전투 관련 행동 함수
 	void FaceToPosition(const XMFLOAT3& targetPos);
 	bool UpdatePathToPosition(const XMFLOAT3& targetPos, float fTimeElapsed);
 	bool FollowCurrentPath();
+
 	void ClearPath();
 	XMFLOAT3 GetDirectionToPlayerXZ() const;
-	XMFLOAT3 GetDirectionToSpawnXZ() const;	
+	XMFLOAT3 GetDirectionToSpawnXZ() const;
 	void StartNewBurst();
 	void UpdateCombatMove(float fTimeElapsed);
+
+	//재장전 함수
+	void StartReload();
+	void UpdateReload(float fTimeElapsed);
+	bool IsReloading() const { return m_bReloading; }
+
+	//시야각/감지 함수
+	void SetYawDeg(float yawDeg);
+	XMFLOAT3 GetForwardXZ() const;
+	bool IsPlayerInViewAngle() const;
+	bool CanDetectPlayer() const;
+	bool CanShootPlayer() const;
+	void RefreshLastSeenPlayer();
+	bool HasRecentLastSeenPlayer() const;
+
+	//Idle 상태 시야 회전
+	void UpdateIdleLook(float fTimeElapsed);
 
 	void FireAtPlayer();
 
