@@ -9,7 +9,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 
 	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 	m_pSkinnedAnimationController->SetTrackEnable(1, false);
 
@@ -61,7 +61,7 @@ bool OtherPlayerIdle::Enter(OtherPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
+		pCtrl->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
 	}
 	return true;
 }
@@ -80,7 +80,7 @@ bool OtherPlayerRun::Enter(OtherPlayer* Player)
 void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 {
 	//int nextAnim = 0;
-	int nextAnim = ANIM_RUN_F;
+	int nextAnim = PLAYER_RIFLE_SMG_RUN_F;
 	
 	//네트워크 전송시 플레이어의 방향(월드좌표가 아닌 화면기준 이동 방향)을 여기의 angle로 사용
 
@@ -108,7 +108,7 @@ bool OtherPlayerDie::Enter(OtherPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_DIE);
+		pCtrl->SetTrackAnimationSetIfChanged(0, PLAYER_DIE);
 	}
 	return true;
 }

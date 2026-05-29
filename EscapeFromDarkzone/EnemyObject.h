@@ -9,10 +9,27 @@ class CPlayer;
 class Inventory;
 class CShader;
 
-enum ENEMY_ANIM {
-	ENEMY_ANIM_IDLE = 0,
-	ENEMY_ANIM_RUN = 1,
-	ENEMY_ANIM_DIE = 2
+enum ENEMY_ANIM
+{
+	ENEMY_RIFLE_SMG_IDLE = 0,
+	ENEMY_RIFLE_SMG_RUN_F = 1,
+	ENEMY_RIFLE_SMG_RUN_L = 2,
+	ENEMY_RIFLE_SMG_RUN_R = 3,
+	ENEMY_RIFLE_SMG_SHOOT = 4,
+	ENEMY_DIE = 5,
+
+	ENEMY_PISTOL_IDLE = 6,
+	ENEMY_PISTOL_RUN_F = 7,
+	ENEMY_PISTOL_RUN_L = 8,
+	ENEMY_PISTOL_RUN_R = 9,
+	ENEMY_PISTOL_SHOOT = 10
+};
+
+enum class EnemyWeaponType
+{
+	Pistol,
+	SMG,
+	Rifle
 };
 
 constexpr int MAX_LOOT_SLOTS = 10;
@@ -65,6 +82,8 @@ public:
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
+	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Rifle;
+
 	float m_fMoveSpeed = 5.0f;
 	float m_fDetectionRange = 20.0f;
 	float m_fAttackRange = 8.0f;
@@ -169,7 +188,22 @@ public:
 	XMFLOAT3 GetDirectionToPlayerXZ() const;
 	XMFLOAT3 GetDirectionToSpawnXZ() const;
 	void StartNewBurst();
+	void SetEnemyAnimation(int nAnim, bool bLoop = true, bool bRestart = false);
 	void UpdateCombatMove(float fTimeElapsed);
+
+	// 총기 설정	관련 함수
+	void SetEnemyWeaponType(EnemyWeaponType eWeaponType);
+
+	EnemyWeaponType GetEnemyWeaponType() const { return m_eWeaponType; }
+
+	int GetIdleAnimationByWeapon() const;
+	int GetForwardRunAnimationByWeapon() const;
+	int GetLeftRunAnimationByWeapon() const;
+	int GetRightRunAnimationByWeapon() const;
+	int GetAttackAnimationByWeapon() const;
+	int GetDieAnimationByWeapon() const;
+
+	void ConfigureWeaponStats();
 
 	//재장전 함수
 	void StartReload();
@@ -185,7 +219,6 @@ public:
 	void RefreshLastSeenPlayer();
 	bool HasRecentLastSeenPlayer() const;
 
-	//Idle 상태 시야 회전
 	void UpdateIdleLook(float fTimeElapsed);
 
 	void FireAtPlayer();

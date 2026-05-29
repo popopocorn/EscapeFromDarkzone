@@ -71,11 +71,13 @@ CEnemyObject::CEnemyObject(
 	);
 
 	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
 	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+	ConfigureWeaponStats();
 
 	if (pEnemyModel)
 	{
@@ -406,6 +408,167 @@ void CEnemyObject::StartNewBurst()
 	m_fBurstShotTimer = 0.0f;
 }
 
+void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
+{
+	auto* pController = m_pSkinnedAnimationController;
+
+	if (!pController)
+		return;
+
+	if (bLoop)
+		pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	else
+		pController->SetTrackType(0, ANIMATION_TYPE_ONCE);
+
+	pController->SetTrackAnimationSetIfChanged(0, nAnim);
+	pController->SetTrackWeight(0, 1.0f);
+	pController->SetTrackEnable(0, true);
+
+	if (bRestart)
+	{
+		pController->SetTrackPosition(0, 0.0f);
+	}
+}
+
+// 총기 타입을 설정하고 해당 총기 스탯을 적용한다.
+void CEnemyObject::SetEnemyWeaponType(EnemyWeaponType eWeaponType)
+{
+	m_eWeaponType = eWeaponType;
+	ConfigureWeaponStats();
+}
+
+int CEnemyObject::GetIdleAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_IDLE;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_IDLE;
+	}
+}
+
+int CEnemyObject::GetForwardRunAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_RUN_F;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_RUN_F;
+	}
+}
+
+int CEnemyObject::GetLeftRunAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_RUN_L;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_RUN_L;
+	}
+}
+
+int CEnemyObject::GetRightRunAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_RUN_R;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_RUN_R;
+	}
+}
+
+// 현재 총기 타입에 맞는 공격 애니메이션 번호를 반환한다.
+int CEnemyObject::GetAttackAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_SHOOT;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_SHOOT;
+	}
+}
+
+int CEnemyObject::GetDieAnimationByWeapon() const
+{
+	return ENEMY_DIE;
+}
+
+// 현재 총기 타입에 맞게 탄창, 재장전, 버스트, 사거리 값을 설정한다.
+void CEnemyObject::ConfigureWeaponStats()
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		m_nMagazineAmmo = 8;
+		m_nCurrentAmmo = m_nMagazineAmmo;
+		m_fReloadDuration = 1.8f;
+		m_nBurstShotMin = 1;
+		m_nBurstShotMax = 2;
+		m_fBurstShotInterval = 0.35f;
+		m_fBurstRestDuration = 0.8f;
+		m_fAimDelay = 0.25f;
+		m_fAttackRange = 9.0f;
+		m_fAttackExitRange = 10.5f;
+		m_fPreferredCombatRange = 6.0f;
+		break;
+
+	case EnemyWeaponType::SMG:
+		m_nMagazineAmmo = 30;
+		m_nCurrentAmmo = m_nMagazineAmmo;
+		m_fReloadDuration = 2.2f;
+		m_nBurstShotMin = 4;
+		m_nBurstShotMax = 7;
+		m_fBurstShotInterval = 0.08f;
+		m_fBurstRestDuration = 0.7f;
+		m_fAimDelay = 0.25f;
+		m_fAttackRange = 8.0f;
+		m_fAttackExitRange = 9.5f;
+		m_fPreferredCombatRange = 7.0f;
+		break;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		m_nMagazineAmmo = 20;
+		m_nCurrentAmmo = m_nMagazineAmmo;
+		m_fReloadDuration = 2.4f;
+		m_nBurstShotMin = 2;
+		m_nBurstShotMax = 4;
+		m_fBurstShotInterval = 0.15f;
+		m_fBurstRestDuration = 1.0f;
+		m_fAimDelay = 0.35f;
+		m_fAttackRange = 12.0f;
+		m_fAttackExitRange = 13.5f;
+		m_fPreferredCombatRange = 9.0f;
+		break;
+	}
+
+	m_nBurstShotsLeft = 0;
+	m_fBurstShotTimer = 0.0f;
+	m_fBurstRestTimer = 0.0f;
+	m_bReloading = false;
+	m_fReloadTimer = 0.0f;
+}
+
 void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 {
 	UNREFERENCED_PARAMETER(fTimeElapsed);
@@ -413,6 +576,7 @@ void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 	if (!m_pPlayer)
 	{
 		SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		SetEnemyAnimation(GetAttackAnimationByWeapon(), true, false);
 		return;
 	}
 
@@ -422,6 +586,7 @@ void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 	if (Vector3::Length(toPlayer) < 0.0001f)
 	{
 		SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		SetEnemyAnimation(GetAttackAnimationByWeapon(), true, false);
 		return;
 	}
 
@@ -430,6 +595,11 @@ void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 	if (distToPlayer < m_fTooCloseRange)
 	{
 		moveDir = Vector3::ScalarProduct(toPlayer, -m_fCombatMoveSpeedMultiplier, false);
+
+		if (m_fStrafeSign >= 0.0f)
+			SetEnemyAnimation(GetRightRunAnimationByWeapon(), true, false);
+		else
+			SetEnemyAnimation(GetLeftRunAnimationByWeapon(), true, false);
 	}
 	else
 	{
@@ -440,6 +610,11 @@ void CEnemyObject::UpdateCombatMove(float fTimeElapsed)
 			m_fStrafeSign * m_fCombatMoveSpeedMultiplier,
 			false
 		);
+
+		if (m_fStrafeSign >= 0.0f)
+			SetEnemyAnimation(GetRightRunAnimationByWeapon(), true, false);
+		else
+			SetEnemyAnimation(GetLeftRunAnimationByWeapon(), true, false);
 	}
 
 	SetMoveDir(moveDir);
@@ -456,6 +631,7 @@ void CEnemyObject::StartReload()
 	m_fBurstShotTimer = 0.0f;
 	m_fBurstRestTimer = 0.0f;
 	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	SetEnemyAnimation(GetAttackAnimationByWeapon(), true, false);
 
 	OutputDebugString(L"[Enemy AI] Reload Start\n");
 }
@@ -628,14 +804,7 @@ bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 	pEnemy->m_fIdleYawTarget = pEnemy->m_fCurrentYawDeg;
 	pEnemy->m_fIdleLookTimer = pEnemy->m_fIdleLookInterval;
 
-	auto* pController = pEnemy->m_pSkinnedAnimationController;
-	if (!pController) return false;
-
-	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
-	pController->SetTrackWeight(0, 1.0f);
-	pController->SetTrackEnable(0, true);
-	pController->SetTrackPosition(0, 0.0f);
+	pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
 
 	return true;
 }
@@ -684,14 +853,7 @@ bool EnemyRun::Enter(CEnemyObject* pEnemy)
 	pEnemy->m_fThinkTimer = 0.0f;
 	pEnemy->ClearPath();
 
-	auto* pController = pEnemy->m_pSkinnedAnimationController;
-	if (!pController) return false;
-
-	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_RUN);
-	pController->SetTrackWeight(0, 1.0f);
-	pController->SetTrackEnable(0, true);
-	pController->SetTrackPosition(0, 0.0f);
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
 
 	return true;
 }
@@ -803,15 +965,7 @@ bool EnemyAttack::Enter(CEnemyObject* pEnemy)
 	pEnemy->m_fStrafeTimer = pEnemy->m_fStrafeDuration;
 	pEnemy->m_fStrafeSign *= -1.0f;
 
-	auto* pController = pEnemy->m_pSkinnedAnimationController;
-	if (!pController) return false;
-
-	// 현재 적에게 별도 사격 애니메이션이 없으므로 일단 Idle로 조준 자세 대체
-	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_IDLE);
-	pController->SetTrackWeight(0, 1.0f);
-	pController->SetTrackEnable(0, true);
-	pController->SetTrackPosition(0, 0.0f);
+	pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, true);
 
 	return true;
 }
@@ -831,6 +985,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsReloading())
 	{
 		pEnemy->UpdateReload(fTimeElapsed);
+		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 
 		if (pEnemy->CanDetectPlayer())
 		{
@@ -895,6 +1050,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	{
 		pEnemy->m_fAimTimer += fTimeElapsed;
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 		return;
 	}
 
@@ -909,9 +1065,14 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		}
 
 		if (bCanDetectPlayer)
+		{
 			pEnemy->UpdateCombatMove(fTimeElapsed);
+		}
 		else
+		{
 			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		}
 
 		return;
 	}
@@ -934,6 +1095,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		{
 			pEnemy->m_fAimTimer = 0.0f;
 			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 		}
 
 		return;
@@ -945,6 +1107,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	}
 
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 
 	pEnemy->m_fBurstShotTimer -= fTimeElapsed;
 
@@ -984,14 +1147,7 @@ bool EnemyReturn::Enter(CEnemyObject* pEnemy)
 	pEnemy->ClearPath();
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 
-	auto* pController = pEnemy->m_pSkinnedAnimationController;
-	if (!pController) return false;
-
-	pController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_RUN);
-	pController->SetTrackWeight(0, 1.0f);
-	pController->SetTrackEnable(0, true);
-	pController->SetTrackPosition(0, 0.0f);
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
 
 	return true;
 }
@@ -1045,20 +1201,13 @@ void EnemyReturn::Exit(CEnemyObject* pEnemy)
 
 bool EnemyDie::Enter(CEnemyObject* pEnemy)
 {
-	auto* pController = pEnemy->m_pSkinnedAnimationController;
-	if (!pController) return false;
-
 	pEnemy->m_bDying = true;
 	pEnemy->m_fDieElapsed = 0.0f;
 
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->ClearPath();
 
-	pController->SetTrackType(0, ANIMATION_TYPE_ONCE);
-	pController->SetTrackAnimationSetIfChanged(0, ENEMY_ANIM_DIE);
-	pController->SetTrackWeight(0, 1.0f);
-	pController->SetTrackEnable(0, true);
-	pController->SetTrackPosition(0, 0.0f);
+	pEnemy->SetEnemyAnimation(pEnemy->GetDieAnimationByWeapon(), false, true);
 
 	return true;
 }
