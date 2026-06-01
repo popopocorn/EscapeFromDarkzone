@@ -36,6 +36,14 @@ enum class WEAPON_POSE
 	GRENADE
 };
 
+enum class PlayerWeaponType
+{
+	Pistol,
+	SMG,
+	Shotgun,
+	Rifle
+};
+
 class PlayerState;
 class CPlayerAnimationController;
 class WeaponItem;
@@ -91,7 +99,7 @@ protected:
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
 	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
-	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();	
+	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
 	bool m_bWeaponGrenadeStartCaptured = false;
 
 	XMFLOAT3 m_xmf3WeaponShootPos = XMFLOAT3(0.02f, 0.00f, 0.00f);
@@ -120,7 +128,7 @@ protected:
 
 	// 04.10 추가: 서버 위치 보간
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
-	
+
 	//현재 장착 중인 무기 데이터
 	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
 
@@ -209,6 +217,12 @@ public:
 
 	XMFLOAT2 GetMoveInput2D() const;
 	int GetRunAnimationFromInput(const XMFLOAT2& dir) const;
+	PlayerWeaponType GetCurrentPlayerWeaponType() const;
+	int GetIdleAnimationByWeapon() const;
+	int GetGrenadeAnimationByWeapon() const;
+	int GetShootAnimationByWeapon() const;
+	int GetReloadAnimationByWeapon() const;
+	int GetDieAnimationByWeapon() const;
 	bool IsMoveInputActive(const XMFLOAT2& dir) const;
 	XMFLOAT3 GetMoveDirectionFromInput(const XMFLOAT2& dir) const;
 
@@ -255,7 +269,7 @@ public:
 
 	float GetWeaponShotInterval() const;
 	float GetWeaponDamage() const;
-	
+
 	void SetFireHeld(bool bHeld) { m_bFireHeld = bHeld; }
 	bool IsFireHeld() const { return m_bFireHeld; }
 
@@ -309,16 +323,28 @@ public:
 	virtual void HandleCallback(void* pCallbackData, float fTrackPosition);
 };
 
-enum PLAYER_ANIM {
-	ANIM_IDLE = 0,
-	ANIM_RUN_F,
-	ANIM_RUN_L,
-	ANIM_RUN_B,
-	ANIM_RUN_R,
-	ANIM_GRENADE,
-	ANIM_SHOOT,
-	ANIM_RELOAD,
-	ANIM_DIE
+enum PLAYER_ANIM
+{
+	PLAYER_RIFLE_SMG_IDLE = 0,
+	PLAYER_RIFLE_SMG_RUN_F = 1,
+	PLAYER_RIFLE_SMG_RUN_L = 2,
+	PLAYER_RIFLE_SMG_RUN_B = 3,
+	PLAYER_RIFLE_SMG_RUN_R = 4,
+	PLAYER_RIFLE_SMG_GRENADE = 5,
+	PLAYER_RIFLE_SMG_SHOOT = 6,
+	PLAYER_RIFLE_SMG_RELOAD = 7,
+	PLAYER_DIE = 8,
+
+	PLAYER_PISTOL_IDLE = 9,
+	PLAYER_PISTOL_RUN_F = 10,
+	PLAYER_PISTOL_RUN_L = 11,
+	PLAYER_PISTOL_RUN_B = 12,
+	PLAYER_PISTOL_RUN_R = 13,
+	PLAYER_PISTOL_GRENADE = 14,
+	PLAYER_PISTOL_SHOOT = 15,
+	PLAYER_PISTOL_RELOAD = 16,
+
+	PLAYER_SHOTGUN_SHOOT = 17
 };
 
 class CTerrainPlayer : public CPlayer
@@ -360,7 +386,7 @@ class PlayerRun : public State<CPlayer> {
 class PlayerGrenade : public State<CPlayer> {
 private:
 	float m_fElapsed = 0.0f;
-	int m_nLastLowerAnim = ANIM_IDLE;
+	int m_nLastLowerAnim = PLAYER_RIFLE_SMG_IDLE;
 	bool m_bKeepRun = false;
 
 public:

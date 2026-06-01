@@ -215,6 +215,17 @@ private:
 public:
 	void SetPlayer(CPlayer* p);
 
+	//이펙트	재생용 함수
+	void PlayEffectFromServerLikeRequest(
+		EffectID effectId,
+		const XMFLOAT3& position,
+		const XMFLOAT3& direction,
+		int ownerId = 0,
+		float value = 0.0f
+	);
+
+	void PlayTestEffectByKey(WPARAM keyCode);
+
 	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence) {};

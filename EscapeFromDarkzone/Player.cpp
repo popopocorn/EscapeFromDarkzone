@@ -900,21 +900,120 @@ XMFLOAT2 CPlayer::GetMoveInput2D() const
 	return dir;
 }
 
+PlayerWeaponType CPlayer::GetCurrentPlayerWeaponType() const
+{
+	if (!m_pEquippedWeaponItem)
+		return PlayerWeaponType::Rifle;
+
+	switch (m_pEquippedWeaponItem->GetType())
+	{
+	case ItemType::PISTOL:
+		return PlayerWeaponType::Pistol;
+
+	case ItemType::SMG:
+		return PlayerWeaponType::SMG;
+
+	case ItemType::SHOTGUN:
+		return PlayerWeaponType::Shotgun;
+
+	case ItemType::RIFLE:
+	default:
+		return PlayerWeaponType::Rifle;
+	}
+}
+
+int CPlayer::GetIdleAnimationByWeapon() const
+{
+	switch (GetCurrentPlayerWeaponType())
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_IDLE;
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_IDLE;
+	}
+}
+
+int CPlayer::GetGrenadeAnimationByWeapon() const
+{
+	switch (GetCurrentPlayerWeaponType())
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_GRENADE;
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_GRENADE;
+	}
+}
+
+int CPlayer::GetShootAnimationByWeapon() const
+{
+	switch (GetCurrentPlayerWeaponType())
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_SHOOT;
+	case PlayerWeaponType::Shotgun:
+		return PLAYER_SHOTGUN_SHOOT;
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_SHOOT;
+	}
+}
+
+int CPlayer::GetReloadAnimationByWeapon() const
+{
+	switch (GetCurrentPlayerWeaponType())
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_RELOAD;
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_RELOAD;
+	}
+}
+
+int CPlayer::GetDieAnimationByWeapon() const
+{
+	return PLAYER_DIE;
+}
+
 int CPlayer::GetRunAnimationFromInput(const XMFLOAT2& dir) const
 {
+	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
+
+	int runF = PLAYER_RIFLE_SMG_RUN_F;
+	int runL = PLAYER_RIFLE_SMG_RUN_L;
+	int runB = PLAYER_RIFLE_SMG_RUN_B;
+	int runR = PLAYER_RIFLE_SMG_RUN_R;
+
+	if (weaponType == PlayerWeaponType::Pistol)
+	{
+		runF = PLAYER_PISTOL_RUN_F;
+		runL = PLAYER_PISTOL_RUN_L;
+		runB = PLAYER_PISTOL_RUN_B;
+		runR = PLAYER_PISTOL_RUN_R;
+	}
+
 	if (fabs(dir.x) < 0.01f && fabs(dir.y) < 0.01f)
-		return ANIM_RUN_F;
+		return runF;
 
 	float angle = atan2f(dir.y, dir.x);
 
 	if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-		return ANIM_RUN_F;
+		return runF;
 	else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-		return ANIM_RUN_R;
+		return runR;
 	else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-		return ANIM_RUN_L;
+		return runL;
 	else
-		return ANIM_RUN_B;
+		return runB;
 }
 
 bool CPlayer::IsMoveInputActive(const XMFLOAT2& dir) const
@@ -1037,8 +1136,14 @@ CTerrainPlayer::CTerrainPlayer(
 	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
 	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, PLAYER_RIFLE_SMG_IDLE);
+
+	m_pSkinnedAnimationController->SetTrackPosition(0, 0.0f);
+	m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
 
 	m_pSkinnedAnimationController->SetTrackEnable(0, true);
 	m_pSkinnedAnimationController->SetTrackEnable(1, true);
@@ -1228,8 +1333,8 @@ bool PlayerIdle::Enter(CPlayer* Player)
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
 
-		pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_IDLE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
 
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackEnable(1, true);
@@ -1287,7 +1392,7 @@ bool PlayerRun::Enter(CPlayer* Player)
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
@@ -1329,7 +1434,7 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_IDLE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
@@ -1348,7 +1453,7 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 
 	m_fElapsed = 0.0f;
 	m_bKeepRun = false;
-	m_nLastLowerAnim = ANIM_IDLE;
+	m_nLastLowerAnim = Player->GetIdleAnimationByWeapon();
 
 	Player->BeginGrenadeWeaponPose();
 	Player->ApplyWeaponPose(WEAPON_POSE::GRENADE);
@@ -1357,7 +1462,7 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 	bool bMove = Player->IsMoveInputActive(dir);
 	m_bKeepRun = bMove;
 
-	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 	m_nLastLowerAnim = nextLowerAnim;
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -1369,7 +1474,7 @@ bool PlayerGrenade::Enter(CPlayer* Player)
 		pCtrl->SetTrackWeight(0, 1.0f);
 
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_GRENADE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetGrenadeAnimationByWeapon());
 		pCtrl->SetTrackPosition(1, 0.0f);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
@@ -1386,7 +1491,7 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 	bool bMove = Player->IsMoveInputActive(dir);
 	m_bKeepRun = bMove;
 
-	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 	m_nLastLowerAnim = nextLowerAnim;
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -1406,7 +1511,7 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 
 	if (m_fElapsed >= 2.80f)
 	{
-		if (m_nLastLowerAnim != ANIM_IDLE)
+		if (m_nLastLowerAnim != Player->GetIdleAnimationByWeapon())
 			Player->ChangeState(std::make_unique<PlayerRun>());
 		else
 			Player->ChangeState(std::make_unique<PlayerIdle>());
@@ -1440,7 +1545,7 @@ bool PlayerShoot::Enter(CPlayer* Player)
 
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
-	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1451,7 +1556,7 @@ bool PlayerShoot::Enter(CPlayer* Player)
 		pCtrl->SetTrackWeight(0, 1.0f);
 
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_SHOOT);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
 		pCtrl->SetTrackPosition(1, 0.0f);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
@@ -1469,7 +1574,7 @@ void PlayerShoot::Update(CPlayer* Player, float fTimeElapsed)
 
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
-	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1491,7 +1596,7 @@ void PlayerShoot::Update(CPlayer* Player, float fTimeElapsed)
 		if (pCtrl)
 		{
 			pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-			pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_SHOOT);
+			pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
 			pCtrl->SetTrackPosition(1, 0.0f);
 			pCtrl->SetTrackEnable(1, true);
 			pCtrl->SetTrackWeight(1, 1.0f);
@@ -1523,7 +1628,7 @@ bool PlayerReload::Enter(CPlayer* Player)
 {
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
-	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1534,7 +1639,7 @@ bool PlayerReload::Enter(CPlayer* Player)
 		pCtrl->SetTrackWeight(0, 1.0f);
 
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_RELOAD);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetReloadAnimationByWeapon());
 		pCtrl->SetTrackPosition(1, 0.0f);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
@@ -1546,7 +1651,7 @@ void PlayerReload::Update(CPlayer* Player, float fTimeElapsed)
 {
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
-	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : ANIM_IDLE;
+	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
@@ -1582,8 +1687,8 @@ bool PlayerDie::Enter(CPlayer* Player)
 	pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
 	pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
 
-	pCtrl->SetTrackAnimationSetIfChanged(0, ANIM_DIE);
-	pCtrl->SetTrackAnimationSetIfChanged(1, ANIM_DIE);
+	pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetDieAnimationByWeapon());
+	pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetDieAnimationByWeapon());
 
 	pCtrl->SetTrackPosition(0, 0.0f);
 	pCtrl->SetTrackPosition(1, 0.0f);

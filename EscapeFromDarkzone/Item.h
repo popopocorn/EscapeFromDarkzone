@@ -8,7 +8,7 @@
 //아이템 선언
 enum class ItemType {
 	PISTOL,
-	ASSAULT_RIFLE,
+	RIFLE,
 	SMG,
 	SHOTGUN,
 	ARMOR,
