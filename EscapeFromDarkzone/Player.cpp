@@ -1105,7 +1105,12 @@ CTerrainPlayer::CTerrainPlayer(
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
-	SetOOBB(NULL);
+	BoundingOrientedBox playerBox;
+	playerBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	playerBox.Extents = XMFLOAT3(0.35f, 1.0f, 0.35f);
+	playerBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+	SetOOBB(playerBox);
 
 	auto pDefaultWeaponItem = WeaponItem::CreateDefaultPlayerRifle(
 		pDefaultWeaponPrototype
