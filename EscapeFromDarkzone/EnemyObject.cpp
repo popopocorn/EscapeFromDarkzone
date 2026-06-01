@@ -65,7 +65,7 @@ CEnemyObject::CEnemyObject(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SK_Gangster_4.bin",
+		"Model/SM_Gangster.bin",
 		NULL);
 
 	if (!pEnemyModel || !pEnemyModel->m_pModelRootObject)
@@ -81,6 +81,20 @@ CEnemyObject::CEnemyObject(
 	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
+
+	ClearOOBB(false);
+
+	if (pEnemyModel->m_pModelRootObject)
+	{
+		pEnemyModel->m_pModelRootObject->ClearOOBB(true);
+	}
+
+	BoundingOrientedBox enemyBox;
+	enemyBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	enemyBox.Extents = XMFLOAT3(0.35f, 1.0f, 0.35f);
+	enemyBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+	SetOOBB(enemyBox);
 
 	m_pSkinnedAnimationController = new CAnimationController(
 		pd3dDevice,

@@ -433,6 +433,7 @@ public:
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
 	void SetOOBB(std::vector<BoundingOrientedBox*>* container);
 	void SetOOBB(BoundingOrientedBox obb);
+	void ClearOOBB(bool bRecursive = false);
 	const std::vector<BoundingOrientedBox*>& GetOOBB() const { return OOBBs; }
 	bool CheckOOBB() const { return HasOOBB; }
 	virtual void HandleCollision(const ColResult& normal) {};

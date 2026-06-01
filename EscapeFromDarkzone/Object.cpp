@@ -1222,10 +1222,28 @@ void CGameObject::SetOOBB(std::vector<BoundingOrientedBox*>* container)
 
 void CGameObject::SetOOBB(BoundingOrientedBox obb)
 {
+	OOBBs.clear();
+
 	OOBBModel = obb;
 	OOBBWorld = obb;
 	HasOOBB = true;
-	OOBBs.push_back(&OOBBModel);
+
+	OOBBs.push_back(&OOBBWorld);
+}
+
+void CGameObject::ClearOOBB(bool bRecursive)
+{
+	OOBBs.clear();
+	HasOOBB = false;
+
+	OOBBModel = BoundingOrientedBox();
+	OOBBWorld = BoundingOrientedBox();
+
+	if (bRecursive)
+	{
+		if (m_pChild) m_pChild->ClearOOBB(true);
+		if (m_pSibling) m_pSibling->ClearOOBB(true);
+	}
 }
 
 int ReadIntegerFromFile(FILE *pInFile)

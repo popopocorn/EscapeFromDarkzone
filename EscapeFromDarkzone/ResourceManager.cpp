@@ -395,7 +395,7 @@ void ResourceManager::BuildEnemyModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SK_Gangster_4.bin",
+		"Model/SM_Gangster.bin",
 		pEnemyShader
 	);
 

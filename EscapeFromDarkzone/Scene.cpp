@@ -890,7 +890,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->SetOOBB(NULL);
 	pEnemy->setNav(AStarNav.get());
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
