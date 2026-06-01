@@ -43,7 +43,7 @@ public:
 	XMFLOAT3						GetAABBCenter() const { return m_xmf3AABBCenter; }
 	XMFLOAT3						GetAABBExtents() const { return m_xmf3AABBExtents; }
 public:
-	char							m_pstrMeshName[64] = { 0 };
+	char							m_pstrMeshName[260] = { 0 };
 
 protected:
 	UINT							m_nType = 0x00;
@@ -172,7 +172,7 @@ public:	// Skinning Info
 public:
 	int								m_nSkinningBones = 0; 
 
-	char							(*m_ppstrSkinningBoneNames)[64]; //[m_nSkinningBones]
+	char							(*m_ppstrSkinningBoneNames)[260]; //[m_nSkinningBones]
 	CGameObject						**m_ppSkinningBoneFrameCaches = NULL; //[m_nSkinningBones]
 
 	XMFLOAT4X4						*m_pxmf4x4BindPoseBoneOffsets = NULL; //[m_nSkinningBones], Transposed

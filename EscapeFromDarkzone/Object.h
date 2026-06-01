@@ -128,7 +128,7 @@ public:
 
 public:
 	int 							m_nTextures = 0;
-	_TCHAR							(*m_ppstrTextureNames)[64] = NULL;
+	_TCHAR							(*m_ppstrTextureNames)[260] = NULL;
 	CTexture						**m_ppTextures = NULL; //0:Albedo, 1:Specular, 2:Metallic, 3:Normal, 4:Emission, 5:DetailAlbedo, 6:DetailNormal
 
 	void LoadTextureFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, UINT nType, UINT nRootParameter, _TCHAR *pwstrTextureName, CTexture **ppTexture, CGameObject *pParent, FILE *pInFile, CShader *pShader);
@@ -172,7 +172,7 @@ public:
 	~CAnimationSet();
 
 public:
-	char							m_pstrAnimationSetName[64];
+	char							m_pstrAnimationSetName[260];
 
 	float							m_fLength = 0.0f;
 	int								m_nFramesPerSecond = 0; //m_fTicksPerSecond
@@ -354,7 +354,7 @@ public:
 public:
 	bool							HasOOBB = false;
 
-	char							m_pstrFrameName[64];
+	char							m_pstrFrameName[260];
 
 	CMesh							*m_pMesh = NULL;
 

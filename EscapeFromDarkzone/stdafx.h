@@ -85,7 +85,8 @@ extern ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice
 extern ID3D12Resource* CreateTexture2DResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UINT nWidth, UINT nHeight, UINT nElements, UINT nMipLevels, DXGI_FORMAT dxgiFormat, D3D12_RESOURCE_FLAGS d3dResourceFlags, D3D12_RESOURCE_STATES d3dResourceStates, D3D12_CLEAR_VALUE* pd3dClearValue);
 extern ID3D12Resource* CreateTextureResourceFromWICFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName, ID3D12Resource** ppd3dUploadBuffer, D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-extern BYTE ReadStringFromFile(FILE *pInFile, char *pstrToken);
+extern BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken);
+extern BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken, int nBufferSize);
 extern int ReadIntegerFromFile(FILE *pInFile);
 extern float ReadFloatFromFile(FILE *pInFile);
 

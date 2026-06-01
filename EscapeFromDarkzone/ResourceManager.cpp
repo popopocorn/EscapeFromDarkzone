@@ -311,7 +311,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Ch15_nonPBR.bin",
+		"Model/SM_Soldier_03_Complete_Reduced.bin",
 		pPlayerShader
 	);
 

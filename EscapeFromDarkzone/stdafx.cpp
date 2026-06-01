@@ -165,6 +165,18 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 	DDS_ALPHA_MODE ddsAlphaMode = DDS_ALPHA_MODE_UNKNOWN;
 	bool bIsCubeMap = false;
 	HRESULT hResult = DirectX::LoadDDSTextureFromFileEx(pd3dDevice, pszFileName, 0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT, &pd3dTexture, ddsData, vSubresources, &ddsAlphaMode, &bIsCubeMap);
+	
+	
+	if (FAILED(hResult) || !pd3dTexture || vSubresources.empty())
+	{
+		wchar_t pstrDebug[512] = { 0 };
+		swprintf_s(pstrDebug, 512, L"[DDS Load Failed] %s\n", pszFileName);
+		OutputDebugStringW(pstrDebug);
+
+		if (ppd3dUploadBuffer) *ppd3dUploadBuffer = NULL;
+		return NULL;
+	}
+
 
 	D3D12_HEAP_PROPERTIES d3dHeapPropertiesDesc;
 	::ZeroMemory(&d3dHeapPropertiesDesc, sizeof(D3D12_HEAP_PROPERTIES));

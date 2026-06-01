@@ -241,12 +241,12 @@ void CStandardMesh::ReleaseUploadBuffers()
 
 void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName)
 {
-	char pstrToken[64] = { '\0' };
+	char pstrToken[260] = { '\0' };
 	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nIndices = 0, nSubMeshes = 0, nSubIndices = 0;
 
 	UINT nReads = (UINT)::fread(&m_nVertices, sizeof(int), 1, pInFile);
 
-	::ReadStringFromFile(pInFile, m_pstrMeshName);
+	::ReadStringFromFile(pInFile, m_pstrMeshName, _countof(m_pstrMeshName));
 
 	for ( ; ; )
 	{
@@ -523,10 +523,10 @@ void CSkinnedMesh::PrepareSkinning(CGameObject *pModelRootObject)
 
 void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName)
 {
-	char pstrToken[64] = { '\0' };
+	char pstrToken[260] = { '\0' };
 	UINT nReads = 0;
 
-	::ReadStringFromFile(pInFile, m_pstrMeshName); 
+	::ReadStringFromFile(pInFile, m_pstrMeshName, _countof(m_pstrMeshName));
 
 	for ( ; ; )
 	{
@@ -545,11 +545,11 @@ void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12Graphics
 			m_nSkinningBones = ::ReadIntegerFromFile(pInFile);
 			if (m_nSkinningBones > 0) 
 			{
-				m_ppstrSkinningBoneNames = new char[m_nSkinningBones][64];
+				m_ppstrSkinningBoneNames = new char[m_nSkinningBones][260];
 				m_ppSkinningBoneFrameCaches = new CGameObject*[m_nSkinningBones];
 				for (int i = 0; i < m_nSkinningBones; i++)
 				{
-					::ReadStringFromFile(pInFile, m_ppstrSkinningBoneNames[i]);
+					::ReadStringFromFile(pInFile, m_ppstrSkinningBoneNames[i], 260);
 					m_ppSkinningBoneFrameCaches[i] = NULL;
 				}
 			}
