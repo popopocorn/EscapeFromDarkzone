@@ -942,6 +942,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+	if (!NetworkManager::Instance().Init("Player"))
+	{
+		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	}
 }
 
 void MainScene::ReleaseObjects()

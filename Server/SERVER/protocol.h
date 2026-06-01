@@ -45,6 +45,8 @@ constexpr char SC_LOOT_BOX_SLOT_UPDATE = 16;
 constexpr char SC_DEACTIVATE_LOOT_BOX = 17;
 
 constexpr char SC_PLAYER_STATE_CHANGE = 18;
+constexpr char SC_NPC_FIRE = 19;
+constexpr char SC_PLAYER_HP_UPDATE = 20;
 
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
@@ -60,6 +62,8 @@ constexpr char PLAYER_STATE_RUN = 1;
 constexpr char NPC_STATE_IDLE = 0;
 constexpr char NPC_STATE_RUN = 1;
 constexpr char NPC_STATE_DIE = 2;
+constexpr char NPC_STATE_RETURN = 3;
+constexpr char NPC_STATE_ATTACK = 4;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -208,6 +212,21 @@ struct SC_PLAYER_STATE_CHANGE_PACKET {
 	char          type;
 	short         id;
 	char          state;
+};
+
+struct SC_NPC_FIRE_PACKET {
+	unsigned char size;
+	char          type;
+	short         npc_id;
+	float         ox, oy, oz;
+	float         dx, dy, dz;
+};
+
+struct SC_PLAYER_HP_UPDATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         id;
+	short         hp;
 };
 
 #pragma pack (pop)

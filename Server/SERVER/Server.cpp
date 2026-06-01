@@ -23,16 +23,210 @@
 
 std::vector<BoundingOrientedBox> g_mapOOBBs;
 
-constexpr float NPC_MOVE_SPEED = 7.0f;
-constexpr float NPC_DETECTION_RANGE = 10.0f;
-constexpr float NPC_ATTACK_RANGE = 3.0f;
-constexpr float NPC_DIE_DURATION = 1.2f;
-constexpr float NPC_WAYPOINT_REACH_DIST = 1.0f;
-constexpr float NPC_PATH_UPDATE_INTERVAL = 1.0f;
+// 이동 / 거리
+constexpr float NPC_MOVE_SPEED				= 5.0f;
+constexpr float NPC_DETECTION_RANGE			= 20.0f;
+constexpr float NPC_ATTACK_RANGE			= 8.0f;
+constexpr float NPC_ATTACK_EXIT_RANGE		= 9.5f;
+constexpr float NPC_LEASH_RANGE				= 25.0f;
+constexpr float NPC_RETURN_STOP_DIST		= 0.5f;
+constexpr float NPC_PREFERRED_COMBAT_RANGE	= 7.0f;
+constexpr float NPC_TOO_CLOSE_RANGE			= 4.0f;
+constexpr float NPC_COMBAT_MOVE_SPEED_MULT	= 0.45f;
 
-constexpr float NPC_DETECTION_RANGE_SQ = NPC_DETECTION_RANGE * NPC_DETECTION_RANGE;
-constexpr float NPC_ATTACK_RANGE_SQ = NPC_ATTACK_RANGE * NPC_ATTACK_RANGE;
-constexpr float NPC_WAYPOINT_REACH_DIST_SQ = NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
+// 사고 주기 / 타이머
+constexpr float NPC_THINK_INTERVAL			= 0.2f;
+constexpr float NPC_PATH_UPDATE_INTERVAL	= 0.3f;
+constexpr float NPC_WAYPOINT_REACH_DIST		= 1.0f;
+constexpr float NPC_RETURN_IGNORE_DURATION	= 1.0f;
+constexpr float NPC_DIE_DURATION			= 3.4f;
+
+// 사격 / 조준
+constexpr float NPC_AIM_DELAY				= 0.35f;
+constexpr float NPC_ATTACK_INTERVAL			= 1.0f;
+constexpr int   NPC_BURST_SHOT_MIN			= 2;
+constexpr int   NPC_BURST_SHOT_MAX			= 4;
+constexpr float NPC_BURST_SHOT_INTERVAL		= 0.15f;
+constexpr float NPC_BURST_REST_DURATION		= 1.0f;
+
+// 스트레이프 / 재장전
+constexpr float NPC_STRAFE_DURATION			= 1.2f;
+constexpr int   NPC_MAG_AMMO				= 12;
+constexpr float NPC_RELOAD_DURATION			= 2.0f;
+
+// 시야각
+constexpr float NPC_VIEW_ANGLE_DEG			= 120.0f;
+constexpr float NPC_LOSE_SIGHT_DURATION		= 1.0f;
+
+// 제곱값 캐시
+constexpr float NPC_DETECTION_RANGE_SQ		= NPC_DETECTION_RANGE * NPC_DETECTION_RANGE;
+constexpr float NPC_ATTACK_RANGE_SQ			= NPC_ATTACK_RANGE * NPC_ATTACK_RANGE;
+constexpr float NPC_ATTACK_EXIT_RANGE_SQ	= NPC_ATTACK_EXIT_RANGE * NPC_ATTACK_EXIT_RANGE;
+constexpr float NPC_LEASH_RANGE_SQ			= NPC_LEASH_RANGE * NPC_LEASH_RANGE;
+constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STOP_DIST;
+constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
+constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
+
+// NPC 사격 (플레이어 무기와 분리 — 밸런스 독립 조절)
+constexpr short NPC_FIRE_DAMAGE = 5;       // 발당 데미지
+constexpr float NPC_FIRE_RANGE = 12.0f;   // 사격 유효 사거리 (attack range보다 약간 길게)
+constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
+constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
+
+static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
+{
+	float dx = a.x - b.x;
+	float dz = a.z - b.z;
+	return std::sqrt(dx * dx + dz * dz);
+}
+
+static XMFLOAT3 NormalizeXZ(const XMFLOAT3& v)
+{
+	XMFLOAT3 r = v;
+	r.y = 0.0f;
+
+	float len = std::sqrt(r.x * r.x + r.z * r.z);
+	if (len < 0.0001f) return XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	r.x /= len;
+	r.z /= len;
+	return r;
+}
+
+static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
+{
+	XMFLOAT3 dir = NormalizeXZ(forward);
+
+	float len_sq = dir.x * dir.x + dir.z * dir.z;
+	if (len_sq < 0.0001f * 0.0001f)
+		return XMFLOAT3(1.0f, 0.0f, 0.0f);
+
+	return XMFLOAT3(dir.z, 0.0f, -dir.x);
+}
+
+static float NormalizeAngleDeg(float angle)
+{
+	while (angle > 180.0f) angle -= 360.0f;
+	while (angle < -180.0f) angle += 360.0f;
+	return angle;
+}
+
+static float GetDistanceToPlayerXZ(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	return DistanceXZ(npc.position, player_pos);
+}
+
+static float GetDistanceFromSpawnXZ(const SERVER_NPC& npc)
+{
+	return DistanceXZ(npc.position, npc.spawn_position);
+}
+
+static XMFLOAT3 GetDirectionToPlayerXZ(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	XMFLOAT3 d;
+	d.x = player_pos.x - npc.position.x;
+	d.y = 0.0f;
+	d.z = player_pos.z - npc.position.z;
+	return NormalizeXZ(d);
+}
+
+static XMFLOAT3 GetDirectionToSpawnXZ(const SERVER_NPC& npc)
+{
+	XMFLOAT3 d;
+	d.x = npc.spawn_position.x - npc.position.x;
+	d.y = 0.0f;
+	d.z = npc.spawn_position.z - npc.position.z;
+	return NormalizeXZ(d);
+}
+
+static bool IsPlayerInDetectRange(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	return (dx * dx + dz * dz) <= NPC_DETECTION_RANGE_SQ;
+}
+
+static bool IsPlayerInAttackRange(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	return (dx * dx + dz * dz) <= NPC_ATTACK_RANGE_SQ;
+}
+
+static bool IsPlayerOutOfAttackRange(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	return (dx * dx + dz * dz) >= NPC_ATTACK_EXIT_RANGE_SQ;
+}
+
+static bool IsOutsideLeashRange(const SERVER_NPC& npc)
+{
+	float dx = npc.position.x - npc.spawn_position.x;
+	float dz = npc.position.z - npc.spawn_position.z;
+	return (dx * dx + dz * dz) > NPC_LEASH_RANGE_SQ;
+}
+
+static bool IsNearSpawn(const SERVER_NPC& npc)
+{
+	float dx = npc.position.x - npc.spawn_position.x;
+	float dz = npc.position.z - npc.spawn_position.z;
+	return (dx * dx + dz * dz) <= NPC_RETURN_STOP_DIST_SQ;
+}
+
+static XMFLOAT3 GetForwardXZ(float yaw_rad)
+{
+	XMFLOAT3 fwd;
+	fwd.x = std::sin(yaw_rad);
+	fwd.y = 0.0f;
+	fwd.z = std::cos(yaw_rad);
+	return fwd;  // 단위벡터
+}
+
+static bool IsPlayerInViewAngle(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	XMFLOAT3 to_player = GetDirectionToPlayerXZ(npc, player_pos);
+
+	// 너무 가까우면 항상 시야 내로 본다
+	float len_sq = to_player.x * to_player.x + to_player.z * to_player.z;
+	if (len_sq < 0.0001f * 0.0001f) return true;
+
+	XMFLOAT3 forward = GetForwardXZ(npc.yaw);
+	float dot = forward.x * to_player.x + forward.z * to_player.z;
+
+	constexpr float PI = 3.14159265359f;
+	float half_angle_rad = (NPC_VIEW_ANGLE_DEG * 0.5f) * (PI / 180.0f);
+	float view_cos = std::cos(half_angle_rad);
+
+	return dot >= view_cos;
+}
+
+static bool CanDetectPlayer(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	if (!IsPlayerInDetectRange(npc, player_pos)) return false;
+	if (!IsPlayerInViewAngle(npc, player_pos))  return false;
+	return true;
+}
+
+static bool CanShootPlayer(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	if (!IsPlayerInAttackRange(npc, player_pos)) return false;
+	if (!IsPlayerInViewAngle(npc, player_pos))   return false;
+	return true;
+}
+
+static void RefreshLastSeenPlayer(SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	npc.last_seen_player_pos = player_pos;
+	npc.lose_sight_timer = 0.0f;
+	npc.has_last_seen_player = true;
+}
+
+static bool HasRecentLastSeenPlayer(const SERVER_NPC& npc)
+{
+	return npc.has_last_seen_player
+		&& (npc.lose_sight_timer < NPC_LOSE_SIGHT_DURATION);
+}
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 class OVER_EXP {
@@ -76,6 +270,9 @@ public:
 
 	std::array<ItemSlot, INVENTORY_SIZE> _inventory{};
 
+	short hp = 100;
+	short max_hp = 100;
+
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
@@ -93,6 +290,8 @@ public:
 		_name[0] = 0;
 		_state = ST_FREE;
 		_prev_remain = 0;
+		hp = 100;
+		max_hp = 100;
 		_last_move_recv_time = std::chrono::steady_clock::now();
 	}
 
@@ -367,6 +566,8 @@ int get_new_client_id()
 struct PlayerSnapshot {
 	bool  in_game;
 	float x, y, z;
+	float yaw;
+	short hp;
 };
 
 static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
@@ -378,6 +579,8 @@ static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
 			out[i].x = clients[i].x;
 			out[i].y = clients[i].y;
 			out[i].z = clients[i].z;
+			out[i].yaw = clients[i].yaw;
+			out[i].hp = clients[i].hp;
 		}
 		else {
 			out[i].in_game = false;
@@ -410,11 +613,157 @@ static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapsho
 	return best_id;
 }
 
+static void StartNpcBurst(SERVER_NPC& npc)
+{
+	int range = NPC_BURST_SHOT_MAX - NPC_BURST_SHOT_MIN + 1;
+	if (range <= 0) {
+		npc.burst_shots_left = 3;
+	}
+	else {
+		npc.burst_serial++;
+		npc.burst_shots_left = NPC_BURST_SHOT_MIN + (npc.burst_serial % range);
+	}
+	npc.burst_shot_timer = 0.0f;
+}
+
+static void StartNpcReload(SERVER_NPC& npc)
+{
+	if (npc.reloading) return;
+	npc.reloading = true;
+	npc.reload_timer = NPC_RELOAD_DURATION;
+	npc.burst_shots_left = 0;
+	npc.burst_shot_timer = 0.0f;
+	npc.burst_rest_timer = 0.0f;
+	std::cout << "[NPC " << npc.id << "] Reload Start\n";
+}
+
+static void UpdateNpcReload(SERVER_NPC& npc, float dt)
+{
+	if (!npc.reloading) return;
+	npc.reload_timer -= dt;
+	if (npc.reload_timer <= 0.0f) {
+		npc.reloading = false;
+		npc.reload_timer = 0.0f;
+		npc.current_ammo = NPC_MAG_AMMO;
+		std::cout << "[NPC " << npc.id << "] Reload Finish\n";
+	}
+}
+
+static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	if (npc.reloading) return;
+	if (NPC_STATE_DIE == npc.state) return;
+	if (npc.current_ammo <= 0) { StartNpcReload(npc); return; }
+
+	npc.current_ammo--;
+
+	XMFLOAT3 forward = GetForwardXZ(npc.yaw);
+
+	if (NPC_FIRE_SPREAD_RAD > 0.0f) {		// 나중에 원뿔 탄퍼짐 적용시킬 때 if문 삭제할 것
+		float r = ((float)rand() / RAND_MAX * 2.0f - 1.0f) * NPC_FIRE_SPREAD_RAD;		// rand 말고 다른 함수?
+		float c = std::cos(r), s = std::sin(r);
+		XMFLOAT3 f = forward;
+		forward.x = f.x * c - f.z * s;
+		forward.z = f.x * s + f.z * c;
+	}
+
+	XMFLOAT3 origin = { npc.position.x, npc.position.y + NPC_FIRE_ORIGIN_Y, npc.position.z };
+	XMFLOAT3 dir = { forward.x, 0.0f, forward.z };
+
+	std::cout << "[NPC " << npc.id << "] Fire (ammo=" << npc.current_ammo << ")\n";
+
+	bool hit = false;
+	if (target_id >= 0 && player_snapshot[target_id].in_game) {
+		XMVECTOR vO = XMVectorSet(origin.x, origin.y, origin.z, 0.0f);
+		XMVECTOR vD = XMVector3Normalize(XMVectorSet(dir.x, dir.y, dir.z, 0.0f));
+
+		XMFLOAT3 tpos = { player_snapshot[target_id].x,
+						  player_snapshot[target_id].y,
+						  player_snapshot[target_id].z };
+		BoundingOrientedBox pbox = MakePlayerOOBB(tpos, player_snapshot[target_id].yaw);
+
+		float t{}; // Intersects out 파라미터
+		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= NPC_FIRE_RANGE) {
+			hit = true;
+		}
+
+		if (hit) {
+			short new_hp = 0;
+			{
+				std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
+				if (clients[target_id]._state == ST_INGAME) {
+					clients[target_id].hp -= NPC_FIRE_DAMAGE;
+					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
+					new_hp = clients[target_id].hp;
+				}
+			}
+
+			std::cout << "[NPC " << npc.id << "] HIT player " << target_id
+				<< " (hp=" << new_hp << ")\n";
+			if (new_hp <= 0) {
+				std::cout << "[NPC " << npc.id << "] player " << target_id << " HP 0 (death deferred)\n";
+			}
+
+			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+			hp_pkt.size = sizeof(hp_pkt);
+			hp_pkt.type = SC_PLAYER_HP_UPDATE;
+			hp_pkt.id = (short)target_id;
+			hp_pkt.hp = new_hp;
+			clients[target_id].do_send(&hp_pkt);
+		}
+	}
+
+	{
+		SC_NPC_FIRE_PACKET fp;
+		fp.size = sizeof(fp);
+		fp.type = SC_NPC_FIRE;
+		fp.npc_id = npc.id;
+		fp.ox = origin.x; fp.oy = origin.y; fp.oz = origin.z;
+		fp.dx = dir.x;    fp.dy = dir.y;    fp.dz = dir.z;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (!player_snapshot[i].in_game) continue;
+			clients[i].do_send(&fp);
+		}
+	}
+
+	if (npc.current_ammo <= 0) StartNpcReload(npc);
+}
+
+static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
+{
+	XMFLOAT3 to_player = GetDirectionToPlayerXZ(npc, player_pos);
+	if (to_player.x == 0.0f && to_player.z == 0.0f)
+		return XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float dx = player_pos.x - npc.position.x;
+	float dz = player_pos.z - npc.position.z;
+	float dist = std::sqrt(dx * dx + dz * dz);
+
+	XMFLOAT3 move_dir;
+	if (dist < NPC_TOO_CLOSE_RANGE) {
+		// 너무 가까움 — 플레이어 반대로 후퇴
+		move_dir.x = -to_player.x * NPC_COMBAT_MOVE_SPEED_MULT;
+		move_dir.y = 0.0f;
+		move_dir.z = -to_player.z * NPC_COMBAT_MOVE_SPEED_MULT;
+	}
+	else {
+		// 좌우 스트레이프
+		XMFLOAT3 right = GetRightFromForwardXZ(to_player);
+		move_dir.x = right.x * npc.strafe_sign * NPC_COMBAT_MOVE_SPEED_MULT;
+		move_dir.y = 0.0f;
+		move_dir.z = right.z * npc.strafe_sign * NPC_COMBAT_MOVE_SPEED_MULT;
+	}
+	return move_dir;
+}
+
 static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (npc.state == new_state) return;
 
 	npc.state = new_state;
+
+	npc.think_timer = 0.0f;
 
 	if (new_state == NPC_STATE_DIE) {
 		npc.die_timer = 0.0f;
@@ -638,16 +987,50 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 	}
 }
 
+static void EnterNpcAttack(SERVER_NPC& npc)
+{
+	npc.aim_timer = 0.0f;
+	npc.attack_cooldown = 0.0f;
+	npc.burst_shots_left = 0;
+	npc.burst_shot_timer = 0.0f;
+	npc.burst_rest_timer = 0.0f;
+	npc.strafe_timer = NPC_STRAFE_DURATION;
+	npc.strafe_sign *= -1.0f;
+}
+
 static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
+	if (npc.return_ignore_timer > 0.0f) {
+		npc.return_ignore_timer -= dt;
+		return;
+	}
+
+	// 사고 주기 — 0.2초마다만 판단
+	npc.think_timer += dt;
+	if (npc.think_timer < NPC_THINK_INTERVAL) return;
+	npc.think_timer = 0.0f;
+
 	float dist_sq;
 	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
 	if (player_id < 0) return;  // 게임 중인 플레이어 없음
 
-	// 감지 범위 안 + 공격 범위 밖일 때만 추적 시작
-	if (dist_sq <= NPC_DETECTION_RANGE_SQ && dist_sq > NPC_ATTACK_RANGE_SQ) {
-		ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+	XMFLOAT3 player_pos = {
+		player_snapshot[player_id].x,
+		player_snapshot[player_id].y,
+		player_snapshot[player_id].z
+	};
+
+	if (!CanDetectPlayer(npc, player_pos)) return;
+
+	RefreshLastSeenPlayer(npc, player_pos);
+
+	if (CanShootPlayer(npc, player_pos)) {
+		EnterNpcAttack(npc);
+		ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		return;
 	}
+
+	ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
 }
 
 static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
@@ -656,7 +1039,7 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	float dist_sq;
 	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
 	if (player_id < 0) {
-		// 접속 중인 클라이언트 없으면 Idle 복귀
+		// 클라이언트 없으면 Idle 복귀
 		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
 		return;
 	}
@@ -667,12 +1050,49 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 		player_snapshot[player_id].y,
 		player_snapshot[player_id].z
 	};
-	float dx = player_pos.x - npc.position.x;
-	float dz = player_pos.z - npc.position.z;
-	float dist_xz_sq = dx * dx + dz * dz;
 
-	if (dist_xz_sq > NPC_DETECTION_RANGE_SQ || dist_xz_sq <= NPC_ATTACK_RANGE_SQ) {
-		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+	if (IsOutsideLeashRange(npc)) {
+		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		return;
+	}
+
+	bool can_detect = CanDetectPlayer(npc, player_pos);
+	if (can_detect) {
+		RefreshLastSeenPlayer(npc, player_pos);
+	}
+	else {
+		npc.lose_sight_timer += dt;
+	}
+
+	npc.think_timer += dt;
+	if (npc.think_timer >= NPC_THINK_INTERVAL) {
+		npc.think_timer = 0.0f;
+
+		// (Phase D: CanShootPlayer → ATTACK. 지금은 사격 거리 안이면 IDLE)
+		if (CanShootPlayer(npc, player_pos)) {
+			EnterNpcAttack(npc);
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			return;
+		}
+
+		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
+			ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+			return;
+		}
+	}
+
+	XMFLOAT3 target_pos;
+	if (can_detect) {
+		target_pos = player_pos;
+	}
+	else if (HasRecentLastSeenPlayer(npc)) {
+		target_pos = npc.last_seen_player_pos;
+	}
+	else {
+		// 목표 없음 — 정지 (충돌만 처리)
+		XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
 		return;
 	}
 
@@ -680,7 +1100,7 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	npc.path_update_timer += dt;
 	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
 		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
-		npc.waypoints = g_astar.FindPath(npc.position, player_pos);
+		npc.waypoints = g_astar.FindPath(npc.position, target_pos);
 		npc.way_idx = 0;
 	}
 
@@ -720,11 +1140,14 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	// 5. 경로 없거나 모든 waypoint 도달 --> 정지하되 플레이어 방향으로는 향함
 	if (!is_moving) {
 		// move_dir 유지: (0,0,0) → 위치 적분에서 안 움직임
-		if (dist_xz_sq > 0.01f) {  // 클라는 0.1f, 거리 비교라 제곱은 0.01f
-			float d = std::sqrt(dist_xz_sq);
-			look.x = dx / d;
+		float tdx = target_pos.x - npc.position.x;
+		float tdz = target_pos.z - npc.position.z;
+		float t_sq = tdx * tdx + tdz * tdz;
+		if (t_sq > 0.01f) {  // 클라는 0.1f, 거리 비교라 제곱은 0.01f
+			float d = std::sqrt(t_sq);
+			look.x = tdx / d;
 			look.y = 0.0f;
-			look.z = dz / d;
+			look.z = tdz / d;
 		}
 	}
 
@@ -741,6 +1164,215 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 
 	// 9. 충돌 검사 + 보정 + 이번 틱 노멀 누적
 	ResolveNpcCollision(npc, npc.yaw);
+}
+
+static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	// 복귀 중에도 플레이어가 시야+사거리 안으로 다시 들어오면 즉시 재교전
+	npc.think_timer += dt;
+	if (npc.think_timer >= NPC_THINK_INTERVAL) {
+		npc.think_timer = 0.0f;
+
+		float dist_sq;
+		int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+		if (player_id >= 0) {
+			XMFLOAT3 player_pos = {
+				player_snapshot[player_id].x,
+				player_snapshot[player_id].y,
+				player_snapshot[player_id].z
+			};
+			if (CanDetectPlayer(npc, player_pos)) {
+				RefreshLastSeenPlayer(npc, player_pos);
+				ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+				return;
+			}
+		}
+	}
+
+	// 스폰 위치 도착 → IDLE (잠깐 감지 무시 타이머 세팅)
+	if (IsNearSpawn(npc)) {
+		npc.has_last_seen_player = false;
+		npc.lose_sight_timer = 0.0f;
+		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
+		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		return;
+	}
+
+	// 스폰 위치로 A* 경로 추적 (RUN과 동일 구조, target = spawn_position)
+	npc.path_update_timer += dt;
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
+		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
+		npc.waypoints = g_astar.FindPath(npc.position, npc.spawn_position);
+		npc.way_idx = 0;
+	}
+
+	XMFLOAT3 look = { 0.0f, 0.0f, 1.0f };
+	XMFLOAT3 move_dir = { 0.0f, 0.0f, 0.0f };
+	bool is_moving = false;
+
+	while (npc.way_idx < (int)npc.waypoints.size()) {
+		const XMFLOAT3& wp = npc.waypoints[npc.way_idx];
+		float wdx = wp.x - npc.position.x;
+		float wdz = wp.z - npc.position.z;
+		float wd_sq = wdx * wdx + wdz * wdz;
+
+		if (wd_sq < NPC_WAYPOINT_REACH_DIST_SQ) {
+			npc.way_idx++;
+		}
+		else {
+			float wd = std::sqrt(wd_sq);
+			look.x = wdx / wd;
+			look.y = 0.0f;
+			look.z = wdz / wd;
+			move_dir = look;
+			is_moving = true;
+			break;
+		}
+	}
+
+	if (!is_moving) {
+		// 경로가 비었으면 스폰 방향 직선
+		XMFLOAT3 d = GetDirectionToSpawnXZ(npc);
+		if (d.x != 0.0f || d.z != 0.0f) {
+			look = d;
+			move_dir = d;
+		}
+	}
+
+	npc.yaw = std::atan2(look.x, look.z);
+	ApplyNpcSlide(npc, move_dir);
+	npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+	npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+	ResolveNpcCollision(npc, npc.yaw);
+}
+
+static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	// 1. Leash 밖이면 Return
+	if (IsOutsideLeashRange(npc)) {
+		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		return;
+	}
+
+	float dist_sq;
+	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	if (player_id < 0) {
+		ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+		return;
+	}
+	XMFLOAT3 player_pos = {
+		player_snapshot[player_id].x,
+		player_snapshot[player_id].y,
+		player_snapshot[player_id].z
+	};
+
+	bool can_detect = CanDetectPlayer(npc, player_pos);
+	bool can_shoot = CanShootPlayer(npc, player_pos);
+
+	// 2. 재장전 중 정지, 조준만
+	if (npc.reloading) {
+		UpdateNpcReload(npc, dt);
+		if (can_detect) {
+			RefreshLastSeenPlayer(npc, player_pos);
+			npc.yaw = std::atan2(player_pos.x - npc.position.x, player_pos.z - npc.position.z);
+		}
+		return;  // 이동 없음
+	}
+
+	// 3. 시야 판정 + 조준 (yaw)
+	if (can_detect) {
+		RefreshLastSeenPlayer(npc, player_pos);
+		npc.yaw = std::atan2(player_pos.x - npc.position.x, player_pos.z - npc.position.z);
+	}
+	else {
+		npc.lose_sight_timer += dt;
+		if (HasRecentLastSeenPlayer(npc)) {
+			const XMFLOAT3& ls = npc.last_seen_player_pos;
+			npc.yaw = std::atan2(ls.x - npc.position.x, ls.z - npc.position.z);
+		}
+	}
+
+	// 4. think 주기 - 상태 전환 판단
+	npc.think_timer += dt;
+	if (npc.think_timer >= NPC_THINK_INTERVAL) {
+		npc.think_timer = 0.0f;
+
+		if (IsPlayerOutOfAttackRange(npc, player_pos)) {
+			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			return;
+		}
+		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
+			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			return;
+		}
+	}
+
+	// 5. 탄약 0이면 재장전
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc);
+		return;
+	}
+
+	// 6. 조준 딜레이 (0.35s) - 정지 대기
+	if (npc.aim_timer < NPC_AIM_DELAY) {
+		npc.aim_timer += dt;
+		return;
+	}
+
+	// 7. 사격 불가 - 스트레이프 이동
+	if (!can_shoot) {
+		npc.strafe_timer -= dt;
+		if (npc.strafe_timer <= 0.0f) {
+			npc.strafe_timer = NPC_STRAFE_DURATION;
+			npc.strafe_sign *= -1.0f;
+		}
+		if (can_detect) {
+			XMFLOAT3 move_dir = ComputeNpcCombatMoveDir(npc, player_pos);
+			ApplyNpcSlide(npc, move_dir);
+			npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+			npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+			ResolveNpcCollision(npc, npc.yaw);
+		}
+		return;
+	}
+
+	// 8. 버스트 휴지 중 - 스트레이프하며 대기
+	if (npc.burst_rest_timer > 0.0f) {
+		npc.burst_rest_timer -= dt;
+		npc.strafe_timer -= dt;
+		if (npc.strafe_timer <= 0.0f) {
+			npc.strafe_timer = NPC_STRAFE_DURATION;
+			npc.strafe_sign *= -1.0f;
+		}
+		XMFLOAT3 move_dir = ComputeNpcCombatMoveDir(npc, player_pos);
+		ApplyNpcSlide(npc, move_dir);
+		npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+		npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+		ResolveNpcCollision(npc, npc.yaw);
+
+		if (npc.burst_rest_timer <= 0.0f) {
+			npc.aim_timer = 0.0f;
+		}
+		return;
+	}
+
+	// 9. 버스트 진행 - 정지하고 발사
+	if (npc.burst_shots_left <= 0) {
+		StartNpcBurst(npc);
+	}
+
+	npc.burst_shot_timer -= dt;
+	if (npc.burst_shot_timer <= 0.0f) {
+		NpcFireAtPlayer(npc, player_id, player_snapshot);   // Phase D: 탄 차감 + 로그
+		npc.burst_shots_left--;
+		npc.burst_shot_timer = NPC_BURST_SHOT_INTERVAL;
+
+		if (npc.burst_shots_left <= 0) {
+			npc.burst_rest_timer = NPC_BURST_REST_DURATION;
+			npc.strafe_timer = NPC_STRAFE_DURATION;
+			npc.strafe_sign *= -1.0f;
+		}
+	}
 }
 
 static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
@@ -778,6 +1410,12 @@ static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot
 		break;
 	case NPC_STATE_RUN:  
 		UpdateNpcRun(npc, dt, player_snapshot); 
+		break;
+	case NPC_STATE_RETURN: 
+		UpdateNpcReturn(npc, dt, player_snapshot);
+		break;
+	case NPC_STATE_ATTACK: 
+		UpdateNpcAttack(npc, dt, player_snapshot);
 		break;
 	case NPC_STATE_DIE:  
 		UpdateNpcDie(npc, dt, player_snapshot); 
@@ -1319,6 +1957,7 @@ int main()
 		npc.kind = 0;
 		npc.state = NPC_STATE_IDLE;
 		npc.position = tmp_position_list[i];
+		npc.spawn_position = npc.position;
 		npc.yaw = 0.0f;
 		npc.hp = 100;
 		npc.max_hp = 100;
