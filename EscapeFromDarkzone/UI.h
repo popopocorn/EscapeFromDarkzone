@@ -15,7 +15,7 @@ private:
 	ID3D12Resource*					UVUploadBuffer = NULL;
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dPositionBufferView;
 	D3D12_VERTEX_BUFFER_VIEW		UVBufferView;
-	CTexture*						texture;
+	unique_ptr<CTexture>			texture;
 public:	
 	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist);
 	~UIMesh();
@@ -64,4 +64,16 @@ public:
 
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
+};
+
+class UIObjectShader;
+
+class HUDManager {
+private:
+	vector<unique_ptr<UIObject>> objs;
+public:
+	bool ProcessClick(POINT mouse);
+	void SubmitToShader(UIObjectShader* shader);
+	void release();
+	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
 };

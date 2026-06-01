@@ -3,6 +3,7 @@
 #include "UI.h"
 #include"Scene.h"
 #include"ResourceManager.h"
+#include"Shader.h"
 
 UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 {
@@ -58,7 +59,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	m_pd3dPositionBuffer->SetName(L"uivupuffer");
 	UVBuffer->SetName(L"uiuvbuffer");
 	UVUploadBuffer->SetName(L"uiuvupbuffer");*/
-	LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
+	//LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
@@ -92,13 +93,14 @@ UIMesh::~UIMesh()
 
 void UIMesh::ReleaseUploadBuffers()
 {
+
 }
 
 void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName)
 {
-	texture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	texture = make_unique<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
 	texture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pszFileName, RESOURCE_TEXTURE2D, 0);
-	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, texture, 0, 3);
+	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, texture.get(), 0, 3);
 	
 }
 
@@ -161,3 +163,25 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 	object->Render(pd3dCommandList, 0, 1);
 }
 
+void HUDManager::SubmitToShader(UIObjectShader* shader)
+{
+	for (const auto& o : objs)
+	{
+		shader->addObjects(o.get());
+	}
+}
+
+void HUDManager::release()
+{
+	objs.clear();
+}
+
+
+bool HUDManager::ProcessClick(POINT mouse)
+{
+	for (auto& o : objs)
+	{
+		if (o->GetBox().Intersects(mouse))
+			o->HandleClick();
+	}
+}

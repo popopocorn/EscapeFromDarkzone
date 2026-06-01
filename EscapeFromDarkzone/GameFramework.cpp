@@ -68,7 +68,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	BuildObjects();
 
 	ResourceManager::Instance().CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
-
+	
 	observer = make_unique<CCamera>();
 	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
 	observer->GenerateViewMatrix(XMFLOAT3(0.0f, 100.0f, 0.0f), XMFLOAT3(0, -1, 0), XMFLOAT3(0, 0, 1));
@@ -76,11 +76,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
 
-	// 03.27 추가: 네트워크 초기화 및 연결
-	if (!NetworkManager::Instance().Init("Player"))
-	{
-		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
-	}
+	//// 03.27 추가: 네트워크 초기화 및 연결
+	//if (!NetworkManager::Instance().Init("Player"))
+	//{
+	//	OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	//}
 
 	return(true);
 }
@@ -510,7 +510,7 @@ void CGameFramework::BuildObjects()
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-
+	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 	PlayerShader* pshader = new PlayerShader();
@@ -551,14 +551,16 @@ void CGameFramework::BuildObjects()
 
 	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
 
+	
+
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
 
-	if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
-	if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
+	//if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
 }
@@ -762,12 +764,13 @@ void CGameFramework::FrameAdvance()
 #endif
 
 
-	if (m_pPlayer)
+	/*if (m_pPlayer)
 	{
 		m_pd3dCommandList->OMSetStencilRef(0x04);
 		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-	}
+	}*/
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
+
 
 	//compute pipline
 	
@@ -972,9 +975,25 @@ void CGameFramework::ProcessNetworkPackets()
 
 			SC_ADD_NPC_PACKET* p = reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data());
 
+			 // 디버그 로그 추가
+			wchar_t szLog[128];
+			swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, pos=(%.1f, %.1f, %.1f)\n",
+				p->npc_id, p->x, p->y, p->z);
+			OutputDebugStringW(szLog);
+
 			// 중복 방지
 			if (FindNpc(p->npc_id)) {
 				break;
+			}
+
+			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01);
+			{
+				wchar_t szLog[256];
+				swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
+					p->npc_id,
+					pModel ? L"OK" : L"NULL",
+					(pModel && pModel->m_pModelRootObject) ? L"OK" : L"NULL");
+				OutputDebugStringW(szLog);
 			}
 
 			// CEnemyObject 동적 스폰 (생성자 시그니처는 BuildObjects의 고정 스폰과 동일)
@@ -985,6 +1004,13 @@ void CGameFramework::ProcessNetworkPackets()
 				NULL,
 				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 			);
+			{
+				wchar_t szLog[256];
+				swprintf_s(szLog, L"[SC_ADD_NPC] pNpc->m_pChild=%s, controller=%s\n",
+					pNpc->m_pChild ? L"OK" : L"NULL",
+					pNpc->m_pSkinnedAnimationController ? L"OK" : L"NULL");
+				OutputDebugStringW(szLog);
+			}
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
 			pNpc->SetServerYaw(p->yaw);
@@ -1031,7 +1057,11 @@ void CGameFramework::ProcessNetworkPackets()
 					pNpc->SnapToServerPosition();
 					break;
 				case NPC_STATE_RUN:
+				case NPC_STATE_RETURN:
 					pNpc->ChangeState(std::make_unique<EnemyRun>());
+					break;
+				case NPC_STATE_ATTACK:
+					pNpc->ChangeState(std::make_unique<EnemyAttack>());
 					break;
 				case NPC_STATE_DIE:
 					// EnemyDie::Enter가 m_bDying / m_fDieElapsed 설정
@@ -1107,6 +1137,15 @@ void CGameFramework::ProcessNetworkPackets()
 			if (!pInvMgr) break;
 
 			pInvMgr->DeactivateLootBox(p->npc_id);
+			break;
+		}
+		case SC_PLAYER_HP_UPDATE: {
+			SC_PLAYER_HP_UPDATE_PACKET* p =
+				reinterpret_cast<SC_PLAYER_HP_UPDATE_PACKET*>(packet.data());
+			// 본인 플레이어 HP 갱신 (UI 체력바 등 연결은 후속)
+			if (m_pPlayer) {
+				m_pPlayer->SetHP(p->hp);   // 임시 체력 추가
+			}
 			break;
 		}
 		default:

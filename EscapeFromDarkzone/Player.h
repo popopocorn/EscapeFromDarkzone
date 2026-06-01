@@ -144,6 +144,8 @@ protected:
 
 	bool m_bWasMoving = false;			// 이동이 끝나는 시점에 서버로 패킷을 전송하기
 
+	short m_hp = 100;		// 임시 체력 추가
+
 	std::unique_ptr<Inventory> m_pInventory;
 public:
 	CPlayer();
@@ -291,6 +293,9 @@ public:
 
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
+
+	void SetHP(short hp) { m_hp = hp; }			// 임시 체력 추가
+	short GetHP() const { return m_hp; }
 };
 
 class CPlayerAnimationController : public CAnimationController

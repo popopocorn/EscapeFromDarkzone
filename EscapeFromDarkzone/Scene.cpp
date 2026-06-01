@@ -165,12 +165,13 @@ CScene::CScene(CGameFramework* game)
 
 	m_pSkyBox = nullptr;
 	
-	UIShader = nullptr;
+	UIShader = make_unique<UIObjectShader>();
 
 	m_nLights = 0;
 	m_fElapsedTime = 0.0f;
 	frame = game;
 	ShadowCameraManager = new LightCameraManager();
+	uiManager = make_unique<HUDManager>();
 }
 
 CScene::~CScene()
@@ -445,7 +446,6 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		}
 		break;
 	}
-
 	case WM_LBUTTONUP:
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
@@ -551,11 +551,11 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			return true;
 		}
 
-		default:
+		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
+			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
 
-		case VK_F11:
-			DumpMapOOBBToCSV("map_oobb.csv");
+		default:
 			break;
 		}
 
@@ -567,7 +567,6 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
 	}
-
 	case WM_KEYUP:
 	{
 		if (wParam == VK_TAB)
@@ -673,10 +672,10 @@ void MainScene::PlayTestEffectByKey(WPARAM keyCode)
 void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	BuildDefaultLightsAndMaterials();
-
+	frame->mouseMove = false;
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	UIShader = make_unique<UIObjectShader>();
+	
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
@@ -943,6 +942,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+	if (!NetworkManager::Instance().Init("Player"))
+	{
+		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	}
 }
 
 void MainScene::ReleaseObjects()
@@ -1290,6 +1294,12 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 	{
 		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
+
+	if (m_pPlayer)
+	{
+		pd3dCommandList->OMSetStencilRef(0x04);
+		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
@@ -1385,7 +1395,7 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
 {
-
+	
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -1394,7 +1404,7 @@ void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 	{
 	case WM_LBUTTONDOWN:
 	{
-		frame->nextScene = new MainScene(frame);
+		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		break;
 	}
 	default:
@@ -1407,13 +1417,32 @@ bool LobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM 
 	return false;
 }
 
+void LobbyScene::SetPlayer(CPlayer* player)
+{
+	m_pPlayer = player;
+}
+
 void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	
+	frame->mouseMove = true;
 	BuildDefaultLightsAndMaterials();
+	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	UIObject* lobbybutton = new UIObject();
+	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
+	lobbybutton->SetScale(0.5, 0.5, 1.0);
+	lobbybutton->SetLocate(0.0, -0.5, 0.5);
+
+	lobbybutton->setAABB();
+	lobbybutton->SetFunc([this]() {
+		this->frame->nextScene = new MainScene(frame);
+		});
+	
+	uiManager->AddToManager(lobbybutton);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+
 }
 
 void LobbyScene::ReleaseObjects()
@@ -1424,6 +1453,7 @@ void LobbyScene::ReleaseObjects()
 
 void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
 {
+	uiManager->SubmitToShader(UIShader.get());
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
 	pd3dCommandList->SetDescriptorHeaps(1, &heap);
@@ -1434,5 +1464,5 @@ void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipeli
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-
+	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 }

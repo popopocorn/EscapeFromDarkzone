@@ -16,7 +16,8 @@ struct SERVER_NPC {
     char     state;              // NPC상태  NPC_STATE_IDLE / NPC_STATE_RUN / NPC_STATE_DIE
 
     XMFLOAT3 position;
-    float    yaw;
+    XMFLOAT3 spawn_position;    // 복귀 기준점
+    float    yaw;               // 라디안
 
     short    hp;
     short    max_hp;
@@ -28,6 +29,29 @@ struct SERVER_NPC {
     float                  die_timer;          // Die 상태 진입 후 경과 시간
 
     std::vector<XMFLOAT3>  coll_normals;       // 이번 틱 누적 충돌 노멀 (아직안씀?)
+
+	float think_timer;          // AI 행동 주기
+
+    float    lose_sight_timer;      // 마지막 목격 처리 관련
+    bool     has_last_seen_player;
+    XMFLOAT3 last_seen_player_pos;
+
+    float    return_ignore_timer;
+
+    float    aim_timer;             // 조준 시간, 공격 쿨다운
+    float    attack_cooldown;
+
+    int      burst_shots_left;      // 버스트 사격
+    int      burst_serial;
+    float    burst_shot_timer;
+    float    burst_rest_timer;
+
+    float    strafe_timer;          // 스트레이프
+    float    strafe_sign;
+
+    int      current_ammo;          // 재장전
+    bool     reloading;
+    float    reload_timer;
 
     std::array<ItemSlot, INVENTORY_SIZE>    _inventory;     // 루팅박스 내용물
     bool                                    loot_active;    // 박스 활성 여부

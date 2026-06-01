@@ -17,15 +17,63 @@ enum class ModelName
 	LOOT_BOX,
 
 	PLAYER = PLAYER_01,
-	ENEMY = ENEMY_01
-};
+	ENEMY = ENEMY_01,
 
+	MAP_BLOCK01,
+	MAP_BLOCK02,
+	MAP_BLOCK03,
+	MAP_BLOCK04,
+	MAP_BLOCK05,
+	MAP_BLOCK06,
+	MAP_BLOCK07,
+	MAP_BLOCK08,
+	MAP_BLOCK09,
+	MAP_BLOCK10,
+	MAP_BLOCK11,
+	MAP_BLOCK12,
+	MAP_BLOCK13,
+	MAP_BLOCK14,
+	MAP_BLOCK15,
+	MAP_BLOCK16,
+	MAP_BLOCK17,
+	MAP_BLOCK18,
+	MAP_BLOCK19,
+	MAP_BLOCK20,
+	MAP_BLOCK21,
+	MAP_BLOCK22,
+	MAP_BLOCK23,
+	MAP_BLOCK24,
+	MAP_BLOCK25,
+	MAP_BLOCK26,
+	MAP_BLOCK27,
+	MAP_BLOCK28,
+	MAP_BLOCK29,
+	MAP_BLOCK30,
+	MAP_BLOCK31,
+	MAP_BLOCK32,
+	MAP_BLOCK33,
+	MAP_BLOCK34,
+	MAP_BLOCK35,
+	MAP_BLOCK36,
+	MAP_BLOCK37,
+	MAP_BLOCK38,
+	MAP_BLOCK39,
+	MAP_BLOCK40,
+};
+const int MAP_BLOCK_SIZE = 40;
+
+enum class UIName {
+	LOBBY_BACKGROUND=0,
+	LOBBY_START_BUTTON,
+
+};
 // 전방 선언
 class CLoadedModelInfo;
 class CGameObject;
 class CTexture;
 class ShadowMap;
 class CShader;
+class UIMesh;
 
 class ResourceManager
 {
@@ -49,7 +97,7 @@ private:
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
 	//UI 원본
-	//unordered_map<UIName, UI*> m_UIPrototypes;
+	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
 private:
 	ResourceManager() = default;
@@ -75,6 +123,8 @@ private:
 		const char* modelPath,
 		CShader* pShader
 	);
+
+
 
 	void ReleaseSkinnedModelPrototypes();
 
@@ -141,6 +191,11 @@ public:
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* pEnemyShader
 	);
+	void BuildUIMesh(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature
+	);
 
 	//루팅 모델 원본 등록
 	void BuildLootModelPrototypes(
@@ -156,5 +211,5 @@ public:
 	// 스킨드 모델 인스턴스 생성
 	CLoadedModelInfo* CreateSkinnedModelInstance(ModelName key);
 
-	
+	UIMesh* GetUIMesh(UIName name);
 };

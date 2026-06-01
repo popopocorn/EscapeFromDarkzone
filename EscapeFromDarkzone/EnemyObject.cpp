@@ -5,6 +5,8 @@
 #include "AI.h"
 #include "Shader.h"
 
+#include "Network.h"
+
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
 {
 	float dx = a.x - b.x;
@@ -40,6 +42,70 @@ static float NormalizeAngleDeg(float angle)
 	return angle;
 }
 
+// 임시 코드 (서버 연결 시 NPC가 투명하게 보이는 현상 해결 용도)
+CEnemyObject::CEnemyObject(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pShader,
+	CLoadedModelInfo* pEnemyModelInstance)
+{
+	UNREFERENCED_PARAMETER(pShader);
+
+	// OtherPlayer와 동일하게 인스턴스마다 모델을 독립적으로 로드한다.
+	// (공유 메쉬의 m_ppSkinningBoneFrameCaches가 인스턴스 간 충돌하는 문제 회피)
+	// 외부에서 넘어온 공유 인스턴스는 사용하지 않고, 누수 방지를 위해 정리한다.
+	if (pEnemyModelInstance)
+	{
+		delete pEnemyModelInstance;
+		pEnemyModelInstance = nullptr;
+	}
+
+	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SK_Gangster_4.bin",
+		NULL);
+
+	if (!pEnemyModel || !pEnemyModel->m_pModelRootObject)
+	{
+		OutputDebugString(L"Error: Failed to load enemy model.\n");
+		if (pEnemyModel) delete pEnemyModel;
+		return;
+	}
+
+	if (!pEnemyModel->m_pAnimationSets)
+	{
+		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
+	}
+
+	SetChild(pEnemyModel->m_pModelRootObject, true);
+
+	m_pSkinnedAnimationController = new CAnimationController(
+		pd3dDevice,
+		pd3dCommandList,
+		1,
+		pEnemyModel
+	);
+
+	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
+	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
+	m_pSkinnedAnimationController->SetTrackEnable(0, true);
+
+	CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+	ConfigureWeaponStats();
+
+	if (pEnemyModel)
+	{
+		delete pEnemyModel;
+	}
+
+	ChangeState(std::make_unique<EnemyIdle>());
+}
+/*
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
@@ -86,6 +152,7 @@ CEnemyObject::CEnemyObject(
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
+*/
 
 CEnemyObject::~CEnemyObject()
 {
@@ -975,6 +1042,12 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
 
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		return;
+	}
+
 	if (pEnemy->IsOutsideLeashRange())
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1155,6 +1228,12 @@ bool EnemyReturn::Enter(CEnemyObject* pEnemy)
 void EnemyReturn::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	if (pEnemy->m_bDying) return;
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		return;
+	}
+
 
 	XMFLOAT3 spawnPos = pEnemy->GetSpawnPosition();
 
