@@ -7,6 +7,7 @@
 #include "EffectManager.h"
 #include "InventoryManager.h"
 #include "ResourceManager.h"
+#include"ShaderManager.h"
 #include "GameFramework.h"
 
 
@@ -52,7 +53,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	InputManager::Instance().init(hMainWnd);
 	CreateDirect3DDevice();
-	root = new RootSignature(m_pd3dDevice);
+	root = make_unique<RootSignature>(m_pd3dDevice);
+	
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
 	CreateSwapChain();
@@ -63,6 +65,9 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
+
+	shadermanager = make_unique<ShaderManager>();
+	
 	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
@@ -506,13 +511,13 @@ void CGameFramework::OnDestroy()
 void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
+	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
-
+	
 	PlayerShader* pshader = new PlayerShader();
 	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
@@ -551,7 +556,8 @@ void CGameFramework::BuildObjects()
 
 	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
 
-	
+	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+
 
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
@@ -1172,8 +1178,8 @@ void CGameFramework::ChangeScene()
 	m_pScene.back()->ReleaseObjects();
 	m_pScene.push_back(unique_ptr<CScene>(nextScene));
 	m_pScene.back()->SetRoot(root->GetRoot());
-	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 
 	nextScene = nullptr;

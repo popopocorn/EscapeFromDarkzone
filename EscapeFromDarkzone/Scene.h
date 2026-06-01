@@ -60,6 +60,7 @@ class EffectManager;
 class InventoryManager;
 
 class CGameFramework;
+class ShaderManager;
 
 class CScene
 {
@@ -112,7 +113,8 @@ public:
 
 	float								m_fElapsedTime = 0.0f;
 
-	vector<std::unique_ptr<CShader>>				m_ppShaders;
+	ShaderManager*						shadermanager = nullptr;
+	vector<CShader*>					m_ppShaders;
 
 	unique_ptr<CSkyBox>								m_pSkyBox;
 
@@ -129,7 +131,7 @@ public:
 private:
 	
 public:
-	virtual void SetPlayer(CPlayer* p) {};
+	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }
 
 	CCamera* GetLightCamera(int idx);
 
@@ -147,7 +149,7 @@ public:
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	virtual void SetPlayer(CPlayer* player);
+	
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
@@ -211,9 +213,8 @@ private:
 	float m_fLootInteractDistance = 3.0f;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
-
+	void LinkToPlayer();
 public:
-	void SetPlayer(CPlayer* p);
 
 	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
