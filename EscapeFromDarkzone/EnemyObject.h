@@ -9,10 +9,27 @@ class CPlayer;
 class Inventory;
 class CShader;
 
-enum ENEMY_ANIM {
-	ENEMY_ANIM_IDLE = 0,
-	ENEMY_ANIM_RUN = 1,
-	ENEMY_ANIM_DIE = 2
+enum ENEMY_ANIM
+{
+	ENEMY_RIFLE_SMG_IDLE = 0,
+	ENEMY_RIFLE_SMG_RUN_F = 1,
+	ENEMY_RIFLE_SMG_RUN_L = 2,
+	ENEMY_RIFLE_SMG_RUN_R = 3,
+	ENEMY_RIFLE_SMG_SHOOT = 4,
+	ENEMY_DIE = 5,
+
+	ENEMY_PISTOL_IDLE = 6,
+	ENEMY_PISTOL_RUN_F = 7,
+	ENEMY_PISTOL_RUN_L = 8,
+	ENEMY_PISTOL_RUN_R = 9,
+	ENEMY_PISTOL_SHOOT = 10
+};
+
+enum class EnemyWeaponType
+{
+	Pistol,
+	SMG,
+	Rifle
 };
 
 constexpr int MAX_LOOT_SLOTS = 10;
@@ -22,9 +39,9 @@ class CEnemyObject : public CGameObject
 {
 protected:
 	AstarNavigation* AStarNav = NULL;
-	
-	
-	
+
+
+
 public:
 	CEnemyObject(
 		ID3D12Device* pd3dDevice,
@@ -55,20 +72,84 @@ public:
 	AstarNavigation* GetNav() { return AStarNav; }
 	std::unique_ptr<State<CEnemyObject>> m_pState;
 
-	CGameObject*				m_pPlayer = nullptr;
+	CGameObject* m_pPlayer = nullptr;
 	float						hp = 100;
 	float						updateTimer = 0;
 	vector<XMFLOAT3>			ways;
 	int							wayIdx = 0;
-	float						findTime = 0.5f;
+	float						findTime = 0.3f;
 
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
-	float m_fMoveSpeed = 7.0f;
-	float m_fDetectionRange = 20.0f;
-	float m_fAttackRange = 3.0f;
+	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Rifle;
 
+	float m_fMoveSpeed = 5.0f;
+	float m_fDetectionRange = 20.0f;
+	float m_fAttackRange = 8.0f;
+	float m_fAttackExitRange = 9.5f;
+	float m_fLeashRange = 25.0f;
+	float m_fReturnStopDistance = 0.5f;
+
+	float m_fThinkTimer = 0.0f;
+	float m_fThinkInterval = 0.2f;
+
+	float m_fAimTimer = 0.0f;
+	float m_fAimDelay = 0.35f;
+	float m_fAttackInterval = 1.0f;
+
+	float m_fAttackCooldown = 0.0f;
+
+	float m_fReturnIgnoreTimer = 0.0f;
+	float m_fReturnIgnoreDuration = 1.0f;
+
+	//거리 유지
+	float m_fPreferredCombatRange = 7.0f;
+	float m_fTooCloseRange = 4.0f;
+
+	//버스트 사격
+	int m_nBurstShotsLeft = 0;
+	int m_nBurstShotMin = 2;
+	int m_nBurstShotMax = 4;
+	int m_nBurstSerial = 0;
+
+	float m_fBurstShotTimer = 0.0f;
+	float m_fBurstShotInterval = 0.15f;
+
+	float m_fBurstRestTimer = 0.0f;
+	float m_fBurstRestDuration = 1.0f;
+
+	//좌우 이동
+	float m_fStrafeTimer = 0.0f;
+	float m_fStrafeDuration = 1.2f;
+	float m_fStrafeSign = 1.0f;
+	float m_fCombatMoveSpeedMultiplier = 0.45f;
+
+	//재장전
+	int m_nMagazineAmmo = 12;			//이건 나중에 총마다 다르게 설정할 수 있도록 바꿀 예정
+	int m_nCurrentAmmo = 12;
+	bool m_bReloading = false;
+	float m_fReloadTimer = 0.0f;
+	float m_fReloadDuration = 2.0f;
+
+	// 시야각 관련 값
+	float m_fViewAngle = 120.0f;
+	float m_fLoseSightTimer = 0.0f;
+	float m_fLoseSightDuration = 1.0f;
+	bool m_bHasLastSeenPlayer = false;
+	XMFLOAT3 m_xmf3LastSeenPlayerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	//Idle 상태에서 시야 회전 관련 값
+	float m_fCurrentYawDeg = 0.0f;
+	float m_fIdleBaseYawDeg = 0.0f;
+	float m_fIdleLookTimer = 0.0f;
+	float m_fIdleLookInterval = 2.0f;
+	float m_fIdleYawTarget = 0.0f;
+	float m_fIdleYawRange = 45.0f;
+	float m_fIdleTurnSpeed = 90.0f;
+	int m_nIdleLookDir = 1;
+
+	XMFLOAT3 m_xmf3SpawnPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 m_xmf3Position = XMFLOAT3(0.0f, 0.0f, 10.0f);
 	XMFLOAT3 m_xmf3MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3 m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -84,6 +165,64 @@ public:
 	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
 
 	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+
+public:
+	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
+	XMFLOAT3 GetSpawnPosition() const { return m_xmf3SpawnPosition; }
+
+	float GetDistanceToPlayerXZ() const;
+	float GetDistanceFromSpawnXZ() const;
+	float GetDistanceToSpawnXZ() const;
+
+	bool IsPlayerInDetectRange() const;
+	bool IsPlayerInAttackRange() const;
+	bool IsPlayerOutOfAttackRange() const;
+	bool IsOutsideLeashRange() const;
+	bool IsNearSpawn() const;
+
+	void FaceToPosition(const XMFLOAT3& targetPos);
+	bool UpdatePathToPosition(const XMFLOAT3& targetPos, float fTimeElapsed);
+	bool FollowCurrentPath();
+
+	void ClearPath();
+	XMFLOAT3 GetDirectionToPlayerXZ() const;
+	XMFLOAT3 GetDirectionToSpawnXZ() const;
+	void StartNewBurst();
+	void SetEnemyAnimation(int nAnim, bool bLoop = true, bool bRestart = false);
+	void UpdateCombatMove(float fTimeElapsed);
+
+	// 총기 설정	관련 함수
+	void SetEnemyWeaponType(EnemyWeaponType eWeaponType);
+
+	EnemyWeaponType GetEnemyWeaponType() const { return m_eWeaponType; }
+
+	int GetIdleAnimationByWeapon() const;
+	int GetForwardRunAnimationByWeapon() const;
+	int GetLeftRunAnimationByWeapon() const;
+	int GetRightRunAnimationByWeapon() const;
+	int GetAttackAnimationByWeapon() const;
+	int GetDieAnimationByWeapon() const;
+
+	void ConfigureWeaponStats();
+
+	//재장전 함수
+	void StartReload();
+	void UpdateReload(float fTimeElapsed);
+	bool IsReloading() const { return m_bReloading; }
+
+	//시야각/감지 함수
+	void SetYawDeg(float yawDeg);
+	XMFLOAT3 GetForwardXZ() const;
+	bool IsPlayerInViewAngle() const;
+	bool CanDetectPlayer() const;
+	bool CanShootPlayer() const;
+	void RefreshLastSeenPlayer();
+	bool HasRecentLastSeenPlayer() const;
+
+	void UpdateIdleLook(float fTimeElapsed);
+
+	void FireAtPlayer();
+
 };
 
 class EnemyIdle : public State<CEnemyObject>
@@ -95,6 +234,22 @@ public:
 };
 
 class EnemyRun : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyAttack : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyReturn : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
@@ -129,6 +284,7 @@ public:
 	short GetBoxId() const { return m_npc_id; };
 	void SetSlotData(int idx, ItemID item, int count);
 
+	bool SetVisualModel(CGameObject* pModelInstance);
 private:
 	//std::array<unique_ptr<Item>, MAX_LOOT_SLOTS> m_LootItems;
 	//std::array<int, MAX_LOOT_SLOTS> m_LootCounts{};

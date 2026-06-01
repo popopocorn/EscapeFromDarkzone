@@ -524,40 +524,50 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		switch (wParam)
 		{
-			case 'I':
-			{
-				if (wasDownBefore) return true;
+		case VK_F6:
+		case VK_F7:
+		{
+			if (wasDownBefore) return true;
 
-				if (m_pInventoryManager)
-				{
-					m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
-				}
-				return true;
-			}
-
-			case VK_TAB:
-			{
-				if (m_pInventoryManager)
-				{
-					m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
-				}
-				return true;
-			}
-
-			default:
-				break;
-			case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
-				DumpMapOOBBToCSV("map_oobb.csv");
-				break;
+			PlayTestEffectByKey(wParam);
+			return true;
 		}
 
-			if (IsAnyInventoryOpen())
-				return true;
+		case 'I':
+		{
+			if (wasDownBefore) return true;
 
-			if (wasDownBefore)
-				return true;
+			if (m_pInventoryManager)
+			{
+				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
+			}
+			return true;
+		}
 
-			return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
+		case VK_TAB:
+		{
+			if (m_pInventoryManager)
+			{
+				m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
+			}
+			return true;
+		}
+
+		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
+			DumpMapOOBBToCSV("map_oobb.csv");
+			break;
+
+		default:
+			break;
+		}
+
+		if (wasDownBefore)
+			return true;
+
+		if (IsAnyInventoryOpen())
+			return true;
+
+		return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
 	}
 	case WM_KEYUP:
 	{
@@ -580,6 +590,86 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 	return false;
 }
 
+void MainScene::PlayEffectFromServerLikeRequest(
+	EffectID effectId,
+	const XMFLOAT3& position,
+	const XMFLOAT3& direction,
+	int ownerId,
+	float value)
+{
+	if (!m_pEffectManager)
+		return;
+
+	EffectSpawnDesc desc;
+	desc.id = effectId;
+	desc.position = position;
+	desc.direction = direction;
+	desc.ownerId = ownerId;
+	desc.value = value;
+
+	m_pEffectManager->PlayEffectByID(desc);
+}
+
+void MainScene::PlayTestEffectByKey(WPARAM keyCode)
+{
+	if (!m_pPlayer)
+		return;
+
+	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+	XMFLOAT3 look = m_pPlayer->GetLookVector();
+	XMFLOAT3 up = m_pPlayer->GetUpVector();
+
+	if (Vector3::Length(look) < 0.0001f)
+	{
+		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	}
+
+	look = Vector3::Normalize(look);
+
+	XMFLOAT3 effectPos;
+	effectPos.x = playerPos.x + look.x * 3.0f;
+	effectPos.y = playerPos.y + 1.0f + look.y * 3.0f;
+	effectPos.z = playerPos.z + look.z * 3.0f;
+
+	XMFLOAT3 effectDir = look;
+
+	switch (keyCode)
+	{
+	case VK_F6:
+	{
+		PlayEffectFromServerLikeRequest(
+			EffectID::SPARK,
+			effectPos,
+			effectDir,
+			1,
+			0.0f
+		);
+
+		OutputDebugString(L"[Effect Test] SPARK\n");
+		break;
+	}
+
+	case VK_F7:
+	{
+		XMFLOAT3 explosionPos = effectPos;
+		explosionPos.y = playerPos.y + 0.3f;
+
+		PlayEffectFromServerLikeRequest(
+			EffectID::GRENADE_EXPLOSION,
+			explosionPos,
+			XMFLOAT3(0.0f, 1.0f, 0.0f),
+			1,
+			0.0f
+		);
+
+		OutputDebugString(L"[Effect Test] GRENADE_EXPLOSION\n");
+		break;
+	}
+
+	default:
+		break;
+	}
+}
 
 void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
@@ -786,6 +876,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->SetOOBB(NULL);
 	pEnemy->setNav(AStarNav.get());
@@ -823,6 +915,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+	if (!NetworkManager::Instance().Init("Player"))
+	{
+		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	}
 }
 
 void MainScene::ReleaseObjects()
@@ -870,11 +967,29 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 	if (m_pInventoryManager)
 	{
-		//m_pInventoryManager->UpdateLootWorld(fTimeElapsed);	// 루트박스 만료 서버로 옮겼음
-
-		if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+		// 서버 없이 혼자 테스트할 때만 로컬 루팅박스 생성
+		if (!NetworkManager::Instance().IsConnected())
 		{
-			//m_pInventoryManager->ProcessEnemyLootSpawnRequests(m_ppShaders[SHADERIDX::ENEMY].get());	// 루트박스를 서버 권위로 바꾸면서 자체스폰 삭제
+			if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+			{
+				auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
+				if (enemyObjs)
+				{
+					for (auto& obj : *enemyObjs)
+					{
+						if (!obj) continue;
+
+						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+						if (!pEnemy) continue;
+
+						if (pEnemy->ConsumeLootSpawnRequest())
+						{
+							m_pInventoryManager->SpawnLootContainerFromEnemy(pEnemy);
+						}
+					}
+				}
+			}
 		}
 
 		m_pInventoryManager->Update(fTimeElapsed);

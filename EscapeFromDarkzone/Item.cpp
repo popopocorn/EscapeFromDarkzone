@@ -16,7 +16,7 @@ CGameObject* Item::CreateModelInstance() const
 WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)
 {
-	type = ItemType::PISTOL;
+	type = category;
 	m_Spec = BuildSpec(category, grade);
 }
 
@@ -35,7 +35,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		spec.reloadTime = 1.2f;
 		break;
 
-	case ItemType::ASSAULT_RIFLE:
+	case ItemType::RIFLE:
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
 		spec.magazineSize = 30;
@@ -132,7 +132,7 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pP
 
 	auto pItem = std::make_shared<WeaponItem>(
 		ItemGrade::GRADE_1,
-		ItemType::ASSAULT_RIFLE
+		ItemType::RIFLE
 	);
 
 	pItem->SetModelPrototype(pPrototype);

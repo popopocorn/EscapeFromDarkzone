@@ -4,6 +4,7 @@
 #include "EnemyObject.h"
 #include "Player.h"
 #include "Object.h"
+#include "ResourceManager.h"
 
 //인벤토리 3개(플레이어, 루팅, 제작) 초기화
 void InventoryManager::Initialize(
@@ -267,7 +268,7 @@ CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDista
 	return pNearest;
 }
 
-/*void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
+void InventoryManager::SpawnLootContainerFromEnemy(CEnemyObject* pEnemy)
 {
 	if (!pEnemy) return;
 	if (!m_pLootShader) return;
@@ -277,23 +278,47 @@ CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDista
 	XMFLOAT3 pos = pEnemy->GetPosition();
 	pLoot->SetPosition(pos);
 
-	BoundingOrientedBox obb;
-	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
-	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
-	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
-	pLoot->SetOOBB(obb);
+	static short s_LocalLootBoxId = -1000;
+	pLoot->SetBoxId(s_LocalLootBoxId--);
 
-	// 임시 기본 루팅 아이템
-	//pLoot->AddLoot(std::make_shared<WeaponItem>(ItemGrade::GRADE_1, WeaponCategory::PISTOL), 1);
-	//pLoot->AddLoot(std::make_shared<ArmorItem>(), 1);
+	CGameObject* pLootBoxModel = CGameObject::CreateModelInstance(
+		ResourceManager::Instance().GetModelPrototype(ModelName::LOOT_BOX)
+	);
+
+	if (pLootBoxModel)
+	{
+		pLootBoxModel->SetPosition(0.0f, 0.0f, 0.0f);
+		pLootBoxModel->SetScale(1.0f, 1.0f, 1.0f);
+
+		pLoot->SetChild(pLootBoxModel, true);
+		pLoot->SetOOBB(NULL);
+	}
+	else
+	{
+		BoundingOrientedBox obb;
+		obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
+		obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
+		obb.Orientation = XMFLOAT4(0, 0, 0, 1);
+		pLoot->SetOOBB(obb);
+
+		OutputDebugString(L"[Local Loot Test] LOOT_BOX model prototype is null.\n");
+	}
+
+	/*pLoot->SetSlotData(0, ItemID::MAT_1, 1);
+	pLoot->SetSlotData(1, ItemID::MAT_2, 2);
+	pLoot->SetSlotData(2, ItemID::ARMOR_PLATE, 1);*/
 
 	m_pLootShader->addObjects(std::unique_ptr<CGameObject>(pLoot));
 
-	if (m_pLootBoxShader)
+	// 디버그/솔리드 박스도 같이 보고 싶으면 유지
+	/*if (m_pLootBoxShader)
 	{
 		m_pLootBoxShader->AddObject(pLoot);
-	}
-}*/
+	}*/
+
+	OutputDebugString(L"[Local Loot Test] SpawnLootContainerFromEnemy created loot box.\n");
+}
+
 void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount)
 {
 	if (!m_pLootShader) return;
@@ -302,11 +327,25 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 	pLoot->SetBoxId(npc_id);
 	pLoot->SetPosition(pos);
 
-	BoundingOrientedBox obb;
-	obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
-	obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
-	obb.Orientation = XMFLOAT4(0, 0, 0, 1);
-	pLoot->SetOOBB(obb);
+	CGameObject* pLootBoxModel = CGameObject::CreateModelInstance(
+		ResourceManager::Instance().GetModelPrototype(ModelName::LOOT_BOX)
+	);
+
+	if (pLootBoxModel)
+	{
+		pLootBoxModel->SetPosition(0.0f, 0.0f, 0.0f);
+		pLootBoxModel->SetScale(1.0f, 1.0f, 1.0f);
+
+		pLoot->SetVisualModel(pLootBoxModel);
+	}
+	else
+	{
+		BoundingOrientedBox obb;
+		obb.Center = XMFLOAT3(0.0f, 0.6f, 0.0f);
+		obb.Extents = XMFLOAT3(0.35f, 0.6f, 0.35f);
+		obb.Orientation = XMFLOAT4(0, 0, 0, 1);
+		pLoot->SetOOBB(obb);
+	}
 
 	for (int i = 0; i < slotCount; ++i) {
 		if (items[i] != ItemID::NONE && counts[i] > 0) {

@@ -370,6 +370,16 @@ void ResourceManager::BuildModelPrototypes(
 	{
 		string s = "Model/block" + to_string(i+1) +".bin";
 	}
+
+	//루팅 아이템 모델
+	LoadAndRegisterModelPrototype(
+		ModelName::LOOT_BOX,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/LootBox.bin",
+		pPlayerShader
+	);
 }
 
 void ResourceManager::BuildEnemyModelPrototypes(
@@ -411,14 +421,30 @@ void ResourceManager::BuildEnemyModelPrototypes(
 	*/
 }
 
-void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+void ResourceManager::BuildUIMesh(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature)
 {
 	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
-	
+
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Start_BTN.dds");
+}
+void ResourceManager::BuildLootModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pLootShader)
+{
+	if (!pLootShader) return;
 
+	LoadAndRegisterModelPrototype(
+		ModelName::LOOT_BOX,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/LootBox.bin",
+		pLootShader
+	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
