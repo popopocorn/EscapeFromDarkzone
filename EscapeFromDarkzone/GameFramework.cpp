@@ -807,31 +807,6 @@ void CGameFramework::FrameAdvance()
 #else
 	HRESULT hr =  m_pdxgiSwapChain->Present(0, 0);
 
-#ifdef _DEBUG
-	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-	{
-		// 1. ����̽��� ���ŵ� ��¥ ���� Ȯ��
-		HRESULT removedReason = m_pd3dDevice->GetDeviceRemovedReason();
-		OutputDebugStringA("GPU ũ����(Device Removed) �߻�!\n");
-
-		// 2. DRED ������ ����
-		ComPtr<ID3D12DeviceRemovedExtendedData1> pDred;
-		if (SUCCEEDED(m_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pDred)))) // ����̽����� DRED �������̽� ��������
-		{
-			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 DredAutoBreadcrumbsOutput;
-			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-
-			// ��ɾ� ���� ���(Breadcrumbs) �� ������ ��Ʈ ������ ��������
-			pDred->GetAutoBreadcrumbsOutput1(&DredAutoBreadcrumbsOutput);
-			pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput);
-
-			// 3. ����Ÿ� ������ ���߰� ��
-			// ���⼭ �ߴ���(Breakpoint)�� �ɸ���, Visual Studio�� '�����(Watch)' â����
-			// DredAutoBreadcrumbsOutput ������ ���� � ���(��ɾ�)���� ����Ǵ� �׾����� Ȯ���մϴ�.
-			__debugbreak();
-		}
-	}
-#endif
 #endif
 #endif
 	UINT64 targetFence = 0;

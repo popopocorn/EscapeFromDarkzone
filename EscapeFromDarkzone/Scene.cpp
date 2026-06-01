@@ -840,7 +840,10 @@ void MainScene::ReleaseObjects()
 		delete m_pEffectManager;
 		m_pEffectManager = nullptr;
 	}
-
+	for (auto& s : m_ppShaders)
+	{
+		s->ReleaseObjects();
+	}
 	m_ppShaders.clear();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
