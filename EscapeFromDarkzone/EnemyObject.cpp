@@ -43,7 +43,7 @@ static float NormalizeAngleDeg(float angle)
 }
 
 // 임시 코드 (서버 연결 시 NPC가 투명하게 보이는 현상 해결 용도)
-CEnemyObject::CEnemyObject(
+/*CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
@@ -118,8 +118,8 @@ CEnemyObject::CEnemyObject(
 	}
 
 	ChangeState(std::make_unique<EnemyIdle>());
-}
-/*
+}*/
+///*
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
@@ -166,7 +166,8 @@ CEnemyObject::CEnemyObject(
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
-*/
+//*/
+
 
 CEnemyObject::~CEnemyObject()
 {
@@ -324,6 +325,16 @@ void CEnemyObject::SetPosition(float x, float y, float z)
 	m_xmf3Position.y = y;
 	m_xmf3Position.z = z;
 
+}
+
+void CEnemyObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
+{
+	if (m_pSkinnedAnimationController)
+	{
+		m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
+	}
+
+	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
 float CEnemyObject::GetDistanceToPlayerXZ() const

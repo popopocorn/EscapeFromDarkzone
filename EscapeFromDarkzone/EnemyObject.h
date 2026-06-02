@@ -60,6 +60,7 @@ public:
 	virtual void HandleCollision(XMFLOAT3 normal);
 	virtual void SetPosition(float x, float y, float z);
 	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
 
 	void ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState);
 

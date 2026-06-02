@@ -571,6 +571,17 @@ CAnimationController::CAnimationController(ID3D12Device* pd3dDevice, ID3D12Graph
 		m_ppd3dcbSkinningBoneTransforms[i]->Map(0, NULL, (void**)&m_ppcbxmf4x4MappedSkinningBoneTransforms[i]);
 	}
 
+	m_pppSkinningBoneFrameCaches = new CGameObject**[m_nSkinnedMeshes];
+
+	for (int i = 0; i < m_nSkinnedMeshes; i++)
+	{
+		m_pppSkinningBoneFrameCaches[i] = new CGameObject*[m_ppSkinnedMeshes[i]->m_nSkinningBones];
+		for (int j = 0; j < m_ppSkinnedMeshes[i]->m_nSkinningBones; j++)
+		{
+			m_pppSkinningBoneFrameCaches[i][j] = pModel->m_pModelRootObject->FindFrame(m_ppSkinnedMeshes[i]->m_ppstrSkinningBoneNames[j]);
+		}
+	}
+
 	m_bIsBlending = false;
 	m_fBlendTime = 0.0f;
 	m_fBlendDuration = 0.2f;
@@ -594,6 +605,14 @@ CAnimationController::~CAnimationController()
 	}
 
 	if (m_ppSkinnedMeshes) delete[] m_ppSkinnedMeshes;
+	if (m_pppSkinningBoneFrameCaches)
+	{
+		for (int i = 0; i < m_nSkinnedMeshes; i++)
+		{
+			if (m_pppSkinningBoneFrameCaches[i]) delete[] m_pppSkinningBoneFrameCaches[i];
+		}
+		delete[] m_pppSkinningBoneFrameCaches;
+	}
 }
 
 void CAnimationController::SetCallbackKeys(int nAnimationTrack, int nCallbackKeys)
@@ -663,10 +682,21 @@ float CAnimationController::GetTrackPosition(int nAnimationTrack) const
 	return m_pAnimationTracks[nAnimationTrack].m_fPosition;
 }
 
-void CAnimationController::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
+void CAnimationController::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	for (int i = 0; i < m_nSkinnedMeshes; i++)
 	{
+		
+		for (int j = 0; j < m_ppSkinnedMeshes[i]->m_nSkinningBones; j++)
+		{
+			if (m_pppSkinningBoneFrameCaches[i][j])
+			{
+				XMStoreFloat4x4(&m_ppcbxmf4x4MappedSkinningBoneTransforms[i][j],
+					XMMatrixTranspose(XMLoadFloat4x4(&m_pppSkinningBoneFrameCaches[i][j]->m_xmf4x4World)));
+			}
+		}
+
+		
 		m_ppSkinnedMeshes[i]->m_pd3dcbSkinningBoneTransforms = m_ppd3dcbSkinningBoneTransforms[i];
 		m_ppSkinnedMeshes[i]->m_pcbxmf4x4MappedSkinningBoneTransforms = m_ppcbxmf4x4MappedSkinningBoneTransforms[i];
 	}
@@ -853,15 +883,6 @@ void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, in
 CLoadedModelInfo::~CLoadedModelInfo()
 {
 	if (m_ppSkinnedMeshes) delete[] m_ppSkinnedMeshes;
-}
-
-void CLoadedModelInfo::PrepareSkinning()
-{
-	int nSkinnedMesh = 0;
-	m_ppSkinnedMeshes = new CSkinnedMesh*[m_nSkinnedMeshes];
-	m_pModelRootObject->FindAndSetSkinnedMesh(m_ppSkinnedMeshes, &nSkinnedMesh);
-
-	for (int i = 0; i < m_nSkinnedMeshes; i++) m_ppSkinnedMeshes[i]->PrepareSkinning(m_pModelRootObject);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1625,7 +1646,9 @@ CLoadedModelInfo *CGameObject::LoadGeometryAndAnimationFromFile(ID3D12Device *pd
 			else if (!strcmp(pstrToken, "<Animation>:"))
 			{
 				CGameObject::LoadAnimationFromFile(pInFile, pLoadedModel);
-				pLoadedModel->PrepareSkinning();
+				int nSkinnedMesh = 0;
+				pLoadedModel->m_ppSkinnedMeshes = new CSkinnedMesh * [pLoadedModel->m_nSkinnedMeshes];
+				pLoadedModel->m_pModelRootObject->FindAndSetSkinnedMesh(pLoadedModel->m_ppSkinnedMeshes, &nSkinnedMesh);
 			}
 			else if (!strcmp(pstrToken, "</Animation>:"))
 			{
