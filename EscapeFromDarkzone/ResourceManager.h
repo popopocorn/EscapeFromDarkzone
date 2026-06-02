@@ -13,6 +13,7 @@ enum class ModelName
 	RIFLE,
 	PISTOL,
 	SHOTGUN,
+	SMG,
 
 	LOOT_BOX,
 

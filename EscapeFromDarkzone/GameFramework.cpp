@@ -10,6 +10,23 @@
 #include"ShaderManager.h"
 #include "GameFramework.h"
 
+static CGameObject* FindSocketMuzzleFrame(CGameObject* pTarget)
+{
+	if (!pTarget) return nullptr;
+
+	CGameObject* pMuzzle = pTarget->FindFrame("Socket_Muzzle");
+	if (pMuzzle) return pMuzzle;
+
+	return nullptr;
+}
+static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
+{
+	if (Vector3::Length(v) < 0.0001f)
+		return fallback;
+
+	return Vector3::Normalize(v);
+}
+
 
 CGameFramework::CGameFramework()
 {
@@ -1147,11 +1164,58 @@ void CGameFramework::ProcessNetworkPackets()
 				pTarget = FindOtherPlayer(entityId);
 			}
 
-			if (!pTarget) {
+			if (!pTarget)
+			{
 				break;
 			}
 
-			// 이펙트 붙이기
+			MainScene* pMainScene = dynamic_cast<MainScene*>(m_pScene.back().get());
+			if (!pMainScene)
+			{
+				break;
+			}
+
+			pTarget->UpdateTransform(NULL);
+
+			CGameObject* pMuzzle = FindSocketMuzzleFrame(pTarget);
+
+			XMFLOAT3 effectPos;
+			XMFLOAT3 effectDir;
+
+			if (pMuzzle)
+			{
+				effectPos = pMuzzle->GetPosition();
+				effectDir = pMuzzle->GetLook();
+
+				effectDir = SafeNormalizeOrDefault(effectDir, pTarget->GetLook());
+			}
+			//소켓 없는 경우, 대충 머리 위쪽에서 앞쪽으로
+			else
+			{
+				XMFLOAT3 targetPos = pTarget->GetPosition();
+				XMFLOAT3 targetLook = SafeNormalizeOrDefault(pTarget->GetLook(), XMFLOAT3(0.0f, 0.0f, 1.0f));
+				XMFLOAT3 targetUp = SafeNormalizeOrDefault(pTarget->GetUp(), XMFLOAT3(0.0f, 1.0f, 0.0f));
+
+				effectPos.x = targetPos.x + targetLook.x * 0.8f + targetUp.x * 1.2f;
+				effectPos.y = targetPos.y + targetLook.y * 0.8f + targetUp.y * 1.2f;
+				effectPos.z = targetPos.z + targetLook.z * 0.8f + targetUp.z * 1.2f;
+
+				effectDir = targetLook;
+
+				OutputDebugString(L"[Effect] Socket_Muzzle not found. fallback used.\n");
+			}
+
+			int ownerId =
+				(static_cast<int>(entityKind) << 16) |
+				static_cast<unsigned short>(entityId);
+
+			pMainScene->PlayEffectFromServerLikeRequest(
+				effectId,
+				effectPos,
+				effectDir,
+				ownerId,
+				0.0f
+			);
 
 			break;
 		}

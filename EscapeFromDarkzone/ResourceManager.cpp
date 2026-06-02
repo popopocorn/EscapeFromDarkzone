@@ -346,26 +346,31 @@ void ResourceManager::BuildModelPrototypes(
 		pPlayerShader
 	);
 
-	// 나중에 무기 모델 추가 시
-	/*
 	LoadAndRegisterModelPrototype(
 		ModelName::PISTOL,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Pistol.bin",
+		"Model/Pistol_2.bin",
 		pPlayerShader
 	);
-
+	LoadAndRegisterModelPrototype(
+		ModelName::SMG,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_MP5.bin",
+		pPlayerShader
+	);
 	LoadAndRegisterModelPrototype(
 		ModelName::SHOTGUN,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Shotgun.bin",
+		"Model/AllActive.bin",
 		pPlayerShader
 	);
-	*/
+
 	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
 	{
 		string s = "Model/block" + to_string(i+1) +".bin";
