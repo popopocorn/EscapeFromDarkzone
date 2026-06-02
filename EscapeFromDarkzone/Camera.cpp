@@ -299,7 +299,7 @@ void CThirdPersonCamera::Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed)
 			m_xmf3Position = Vector3::Add(m_xmf3Position, xmf3Direction, fDistance);
 		}
 
-		float fLookAtOffsetDistance = 5.0f;
+		float fLookAtOffsetDistance = 7.0f;
 		XMFLOAT3 xmf3PlayerPos = m_pPlayer->GetPosition();
 		XMFLOAT3 xmf3PlayerLook = m_pPlayer->GetLookVector();
 		XMFLOAT3 xmf3NewLookAt = Vector3::Add(xmf3PlayerPos, Vector3::ScalarProduct(xmf3PlayerLook, fLookAtOffsetDistance));
