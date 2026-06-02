@@ -1148,6 +1148,46 @@ void CGameFramework::ProcessNetworkPackets()
 			}
 			break;
 		}
+		case SC_PLAY_EFFECT_ATTACHED: {
+			// 머즐 플래시 (NPC, OtherPlayer)
+			SC_PLAY_EFFECT_ATTACHED_PACKET* p =
+				reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
+
+			// 패킷 언팩
+			EffectID  effectId = static_cast<EffectID>(p->effect_id);
+			const unsigned char entityKind = p->entity_kind;   // 0=NPC, 1=OtherPlayer
+			const short         entityId = p->entity_id;
+
+			CGameObject* pTarget = nullptr;
+			if (entityKind == 0) {
+				pTarget = FindNpc(entityId);
+			}
+			else if (entityKind == 1) {
+				pTarget = FindOtherPlayer(entityId);
+			}
+
+			if (!pTarget) {
+				break;
+			}
+
+			// 이펙트 붙이기
+
+			break;
+		}
+		case SC_PLAY_EFFECT_WORLD: {
+			// 수류탄 등등?
+			SC_PLAY_EFFECT_WORLD_PACKET* p =
+				reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
+
+			// 패킷 언팩
+			EffectID effectId = static_cast<EffectID>(p->effect_id);
+			XMFLOAT3 pos = { p->x, p->y, p->z };
+			XMFLOAT3 dir = { p->dx, p->dy, p->dz };
+
+			// 이펙트 붙이기
+
+			break;
+		}
 		default:
 			break;
 		}
