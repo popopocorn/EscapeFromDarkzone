@@ -219,7 +219,7 @@ struct SC_PLAY_EFFECT_ATTACHED_PACKET {
 	unsigned char size;
 	char          type;
 	unsigned char effect_id;     // EffectID raw 값
-	unsigned char entity_kind;   // 0=NPC, 1=PLAYER (id 공간 구분)
+	unsigned char entity_kind;   // 0=NPC, 1=OtherPlayer (id 공간 구분)
 	short         entity_id;
 };
 
