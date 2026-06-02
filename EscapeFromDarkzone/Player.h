@@ -85,6 +85,7 @@ protected:
 	//애니메이션 관련 무기
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
+	CGameObject* m_pWeaponMuzzleSocket = nullptr;
 
 	XMFLOAT4X4 m_xmf4x4WeaponBaseLocal = Matrix4x4::Identity();
 	bool m_bWeaponBaseLocalSaved = false;
@@ -131,6 +132,7 @@ protected:
 
 	//현재 장착 중인 무기 데이터
 	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
+	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
 
 	int   m_nCurrentAmmo = 0;
 	int   m_nMaxAmmo = 0;
@@ -214,12 +216,18 @@ public:
 
 	void EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName);
 	CGameObject* GetWeapon() { return m_pWeapon; }
+	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
 	void UpdateWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
+
+	bool EquipDebugWeapon(PlayerWeaponType weaponType);
+	void ApplyWeaponVisualConfig(PlayerWeaponType weaponType);
+	void DetachCurrentWeapon();
 
 	XMFLOAT2 GetMoveInput2D() const;
 	int GetRunAnimationFromInput(const XMFLOAT2& dir) const;
 	PlayerWeaponType GetCurrentPlayerWeaponType() const;
+	bool IsCurrentWeaponAutomatic() const;
 	int GetIdleAnimationByWeapon() const;
 	int GetGrenadeAnimationByWeapon() const;
 	int GetShootAnimationByWeapon() const;

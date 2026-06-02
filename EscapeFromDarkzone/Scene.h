@@ -190,14 +190,11 @@ public:
 
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
-	CGameObject* m_pLaserMuzzle = nullptr;
 	float m_fLaserLength = 15.0f;
 
 	bool m_bSparkFireActive = false;
 	float m_fSparkSpawnTimer = 0.0f;
 	float m_fSparkSpawnInterval = 0.03f;
-
-	CGameObject* m_pWeaponMuzzle = nullptr;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
