@@ -7,6 +7,7 @@
 #include "EffectManager.h"
 #include "InventoryManager.h"
 #include "ResourceManager.h"
+#include"ShaderManager.h"
 #include "GameFramework.h"
 
 
@@ -52,7 +53,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	InputManager::Instance().init(hMainWnd);
 	CreateDirect3DDevice();
-	root = new RootSignature(m_pd3dDevice);
+	root = make_unique<RootSignature>(m_pd3dDevice);
+	
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
 	CreateSwapChain();
@@ -63,6 +65,9 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
+
+	shadermanager = make_unique<ShaderManager>();
+	
 	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
@@ -506,13 +511,13 @@ void CGameFramework::OnDestroy()
 void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
+	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
-
+	
 	PlayerShader* pshader = new PlayerShader();
 	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
@@ -551,7 +556,8 @@ void CGameFramework::BuildObjects()
 
 	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
 
-	
+	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+
 
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
@@ -801,31 +807,6 @@ void CGameFramework::FrameAdvance()
 #else
 	HRESULT hr =  m_pdxgiSwapChain->Present(0, 0);
 
-#ifdef _DEBUG
-	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
-	{
-		// 1. ����̽��� ���ŵ� ��¥ ���� Ȯ��
-		HRESULT removedReason = m_pd3dDevice->GetDeviceRemovedReason();
-		OutputDebugStringA("GPU ũ����(Device Removed) �߻�!\n");
-
-		// 2. DRED ������ ����
-		ComPtr<ID3D12DeviceRemovedExtendedData1> pDred;
-		if (SUCCEEDED(m_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pDred)))) // ����̽����� DRED �������̽� ��������
-		{
-			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 DredAutoBreadcrumbsOutput;
-			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-
-			// ��ɾ� ���� ���(Breadcrumbs) �� ������ ��Ʈ ������ ��������
-			pDred->GetAutoBreadcrumbsOutput1(&DredAutoBreadcrumbsOutput);
-			pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput);
-
-			// 3. ����Ÿ� ������ ���߰� ��
-			// ���⼭ �ߴ���(Breakpoint)�� �ɸ���, Visual Studio�� '�����(Watch)' â����
-			// DredAutoBreadcrumbsOutput ������ ���� � ���(��ɾ�)���� ����Ǵ� �׾����� Ȯ���մϴ�.
-			__debugbreak();
-		}
-	}
-#endif
 #endif
 #endif
 	UINT64 targetFence = 0;
@@ -1148,6 +1129,46 @@ void CGameFramework::ProcessNetworkPackets()
 			}
 			break;
 		}
+		case SC_PLAY_EFFECT_ATTACHED: {
+			// 머즐 플래시 (NPC, OtherPlayer)
+			SC_PLAY_EFFECT_ATTACHED_PACKET* p =
+				reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
+
+			// 패킷 언팩
+			EffectID  effectId = static_cast<EffectID>(p->effect_id);
+			const unsigned char entityKind = p->entity_kind;   // 0=NPC, 1=OtherPlayer
+			const short         entityId = p->entity_id;
+
+			CGameObject* pTarget = nullptr;
+			if (entityKind == 0) {
+				pTarget = FindNpc(entityId);
+			}
+			else if (entityKind == 1) {
+				pTarget = FindOtherPlayer(entityId);
+			}
+
+			if (!pTarget) {
+				break;
+			}
+
+			// 이펙트 붙이기
+
+			break;
+		}
+		case SC_PLAY_EFFECT_WORLD: {
+			// 수류탄 등등?
+			SC_PLAY_EFFECT_WORLD_PACKET* p =
+				reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
+
+			// 패킷 언팩
+			EffectID effectId = static_cast<EffectID>(p->effect_id);
+			XMFLOAT3 pos = { p->x, p->y, p->z };
+			XMFLOAT3 dir = { p->dx, p->dy, p->dz };
+
+			// 이펙트 붙이기
+
+			break;
+		}
 		default:
 			break;
 		}
@@ -1208,8 +1229,8 @@ void CGameFramework::ChangeScene()
 	m_pScene.back()->ReleaseObjects();
 	m_pScene.push_back(unique_ptr<CScene>(nextScene));
 	m_pScene.back()->SetRoot(root->GetRoot());
-	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 
 	nextScene = nullptr;

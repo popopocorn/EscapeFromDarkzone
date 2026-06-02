@@ -7,6 +7,7 @@
 #include "Player.h"
 #include "EnemyObject.h"
 #include "Shader.h"
+#include"ShaderManager.h"
 #include "InputManager.h"
 #include "ShadowMap.h"
 #include "EffectShader.h"
@@ -172,6 +173,7 @@ CScene::CScene(CGameFramework* game)
 	frame = game;
 	ShadowCameraManager = new LightCameraManager();
 	uiManager = make_unique<HUDManager>();
+	shadermanager = game->GetShaderManager();
 }
 
 CScene::~CScene()
@@ -690,11 +692,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	);
 
 	// 맵 쉐이더
-	std::unique_ptr<CStandardObjectsShader> stdshader = std::make_unique<CStandardObjectsShader>();
-	stdshader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	stdshader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	stdshader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
+	CShader* stdshader = shadermanager->GetShader(ShaderType::STANDARD);
 	m_vVisionMapChunks.clear();
 	m_vVisionMapChunks.reserve(64);
 
@@ -703,7 +701,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		std::unique_ptr<CGameObject> floorObj(
 			CGameObject::LoadGeometryModelByName(
 				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-				NULL, "Model/floor.bin", stdshader.get(), 0
+				NULL, "Model/floor.bin", stdshader, 0
 			)
 		);
 		floorObj->SetPosition(-150, -0.1f, -150);
@@ -796,7 +794,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 			std::unique_ptr<CGameObject> map(
 				CGameObject::LoadGeometryModelByName(
 					pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-					NULL, fileName, stdshader.get(), 0
+					NULL, fileName, stdshader, 0
 				)
 			);
 			map->SetPosition(-150, 0.0f, -150);
@@ -807,14 +805,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 			stdshader->addObjects(std::move(map));
 		}
 	}
-	m_ppShaders.push_back(std::move(stdshader));
+	m_ppShaders.push_back(stdshader);
 
 	// 시야 객체 생성
-	std::unique_ptr<ViewShader> view = make_unique<ViewShader>();
-	view->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	view->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	view->CreateThroughShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
+	CShader* view = shadermanager->GetShader(ShaderType::VIEW);
 	{
 		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
 		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
@@ -822,13 +816,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		auto pCircleObj = std::make_unique<CGameObject>();
 		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
 		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 3.0f, 72));
-		pCircleObj->SetShader(view.get());
+		pCircleObj->SetShader(view);
 		pCircleObj->SetPosition(0.0f, 0.7f, 0.0f);
 
 		auto pConeObj = std::make_unique<CGameObject>();
 		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
 		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 20.0f, 75.0f, 72));
-		pConeObj->SetShader(view.get());
+		pConeObj->SetShader(view);
 		pConeObj->SetPosition(0.0f, 0.7f, 0.0f);
 
 		viewobj->SetCircleObject(pCircleObj.get());
@@ -842,7 +836,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 		view->addObjects(std::move(viewobj));
 	}
-	m_ppShaders.push_back(std::move(view));
+	m_ppShaders.push_back(view);
 
 	// 디버그 쉐이더
 	m_pDebugShader = std::make_unique<CBoundingBoxShader>(
@@ -861,17 +855,12 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	);
 
 	// 적 쉐이더
-	auto pSkinnedShader = std::make_unique<CSkinnedAnimationObjectsShader>();
-
-	pSkinnedShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pSkinnedShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pSkinnedShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
+	auto pSkinnedShader = shadermanager->GetShader(ShaderType::SKINNED);
 	ResourceManager::Instance().BuildEnemyModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
-		pSkinnedShader.get()
+		pSkinnedShader
 	);
 
 	AStarNav = make_unique<AstarNavigation>();
@@ -883,7 +872,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		pd3dDevice,
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
-		pSkinnedShader.get(),
+		pSkinnedShader,
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
@@ -893,30 +882,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pEnemy->setNav(AStarNav.get());
 	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
 
-	m_ppShaders.push_back(std::move(pSkinnedShader));
-
-	// 루팅 전용 쉐이더
-	auto pLootShader = std::make_unique<CStandardObjectsShader>();
-	pLootShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	pLootShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-	pLootShader->CreateShadowShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
-	ResourceManager::Instance().BuildLootModelPrototypes(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pLootShader.get()
-	);
-
-	CStandardObjectsShader* pLootShaderRaw = pLootShader.get();
-
-	m_ppShaders.push_back(std::move(pLootShader));
+	m_ppShaders.push_back(pSkinnedShader);
 
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->BindLootWorld(
 			nullptr,
-			pLootShaderRaw,
+			(CStandardObjectsShader*)stdshader,
 			m_pDebugShader.get(),
 			m_pLootBoxShader.get()
 		);
@@ -937,6 +909,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 			}
 		}
 	}
+	LinkToPlayer();
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -963,7 +936,10 @@ void MainScene::ReleaseObjects()
 		delete m_pEffectManager;
 		m_pEffectManager = nullptr;
 	}
-
+	for (auto& s : m_ppShaders)
+	{
+		s->ReleaseObjects();
+	}
 	m_ppShaders.clear();
 
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
@@ -1038,7 +1014,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 			}
 			else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
 			{
-				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP].get(), visionBlockers);
+				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], visionBlockers);
 			}
 
 			auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
@@ -1323,20 +1299,18 @@ void MainScene::ReleaseUploadBuffers()
 	}
 }
 
-void MainScene::SetPlayer(CPlayer* p)
+void MainScene::LinkToPlayer()
 {
-	m_pPlayer = p;
-
 	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 	for (auto& obj : *pVector)
 	{
 		ViewObject* pViewObj = static_cast<ViewObject*>(obj.get());
-		pViewObj->setPlayer(p);
+		pViewObj->setPlayer(m_pPlayer);
 	}
 
 	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
 
-	ShadowCameraManager->SetPlayer(p->GetCamera());
+	ShadowCameraManager->SetPlayer(m_pPlayer->GetCamera());
 	ShadowCameraManager->SetDir(m_pLights[0].m_xmf3Direction);
 
 	if (m_ppShaders[SHADERIDX::ENEMY])
@@ -1369,8 +1343,6 @@ void MainScene::SetPlayer(CPlayer* p)
 		m_pInventoryManager->SetPlayer(m_pPlayer);
 	}
 }
-
-
 bool MainScene::IsAnyInventoryOpen() const
 {
 	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
@@ -1414,11 +1386,6 @@ void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPa
 bool LobbyScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	return false;
-}
-
-void LobbyScene::SetPlayer(CPlayer* player)
-{
-	m_pPlayer = player;
 }
 
 void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)

@@ -25,6 +25,7 @@ struct NpcSlot {
 	CEnemyObject* pNpc;
 	NpcSlot() : id(-1), pNpc(nullptr) {}
 };
+class ShaderManager;
 
 class CGameFramework
 {
@@ -69,6 +70,7 @@ public:
 	CScene*						nextScene;
 	void ChangeScene();
 	bool						mouseMove = false;
+	ShaderManager* GetShaderManager() { return shadermanager.get(); }
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
@@ -102,7 +104,7 @@ private:
 	HANDLE						m_hFenceEvent;
 	
 
-	RootSignature*				root=NULL;
+	unique_ptr<RootSignature>	root;
 
 #if defined(_DEBUG)
 	ID3D12Debug					*m_pd3dDebugController;
@@ -114,8 +116,9 @@ private:
 	
 	CPlayer						*m_pPlayer = NULL;	//소유용
 	CCamera						*m_pCamera = NULL;	// 참조용
-	std::unique_ptr<CCamera>	observer;
-	std::unique_ptr<ShadowMap>	shadowmap;
+	unique_ptr<CCamera>			observer;
+	unique_ptr<ShadowMap>		shadowmap;
+	unique_ptr<ShaderManager>	shadermanager;
 	
 	bool						observing = false;
 

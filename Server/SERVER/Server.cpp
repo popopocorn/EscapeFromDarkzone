@@ -17,6 +17,7 @@
 #include "Server_Collision.h"
 #include "Server_Npc.h"
 #include "Server_AI.h"
+#include "Server_Effect.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -649,6 +650,40 @@ static void UpdateNpcReload(SERVER_NPC& npc, float dt)
 	}
 }
 
+static void BroadcastAttachedEffect(
+	EffectID id, EffectEntityKind kind, short entity_id,
+	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
+	ep.size = sizeof(ep);
+	ep.type = SC_PLAY_EFFECT_ATTACHED;
+	ep.effect_id = static_cast<unsigned char>(id);
+	ep.entity_kind = static_cast<unsigned char>(kind);
+	ep.entity_id = entity_id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&ep);
+	}
+}
+
+static void BroadcastWorldEffect(
+	EffectID id, const XMFLOAT3& pos, const XMFLOAT3& dir,
+	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+{
+	SC_PLAY_EFFECT_WORLD_PACKET ep;
+	ep.size = sizeof(ep);
+	ep.type = SC_PLAY_EFFECT_WORLD;
+	ep.effect_id = static_cast<unsigned char>(id);
+	ep.x = pos.x; ep.y = pos.y; ep.z = pos.z;
+	ep.dx = dir.x; ep.dy = dir.y; ep.dz = dir.z;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!player_snapshot[i].in_game) continue;
+		clients[i].do_send(&ep);
+	}
+}
+
 static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (npc.reloading) return;
@@ -713,19 +748,8 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		}
 	}
 
-	{
-		SC_NPC_FIRE_PACKET fp;
-		fp.size = sizeof(fp);
-		fp.type = SC_NPC_FIRE;
-		fp.npc_id = npc.id;
-		fp.ox = origin.x; fp.oy = origin.y; fp.oz = origin.z;
-		fp.dx = dir.x;    fp.dy = dir.y;    fp.dz = dir.z;
-
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
-			clients[i].do_send(&fp);
-		}
-	}
+	// 발사 이펙트: 머즐 플래시
+	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
 
 	if (npc.current_ammo <= 0) StartNpcReload(npc);
 }
