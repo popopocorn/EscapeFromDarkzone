@@ -135,6 +135,7 @@
     <ClInclude Include="protocol.h" />
     <ClInclude Include="Server_AI.h" />
     <ClInclude Include="Server_Collision.h" />
+    <ClInclude Include="Server_Effect.h" />
     <ClInclude Include="Server_Npc.h" />
   </ItemGroup>
   <ItemGroup>

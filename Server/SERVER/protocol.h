@@ -45,8 +45,9 @@ constexpr char SC_LOOT_BOX_SLOT_UPDATE = 16;
 constexpr char SC_DEACTIVATE_LOOT_BOX = 17;
 
 constexpr char SC_PLAYER_STATE_CHANGE = 18;
-constexpr char SC_NPC_FIRE = 19;
+constexpr char SC_PLAY_EFFECT_ATTACHED = 19;
 constexpr char SC_PLAYER_HP_UPDATE = 20;
+constexpr char SC_PLAY_EFFECT_WORLD = 21;
 
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
@@ -214,12 +215,12 @@ struct SC_PLAYER_STATE_CHANGE_PACKET {
 	char          state;
 };
 
-struct SC_NPC_FIRE_PACKET {
+struct SC_PLAY_EFFECT_ATTACHED_PACKET {
 	unsigned char size;
 	char          type;
-	short         npc_id;
-	float         ox, oy, oz;
-	float         dx, dy, dz;
+	unsigned char effect_id;     // EffectID raw 값
+	unsigned char entity_kind;   // 0=NPC, 1=PLAYER (id 공간 구분)
+	short         entity_id;
 };
 
 struct SC_PLAYER_HP_UPDATE_PACKET {
@@ -227,6 +228,14 @@ struct SC_PLAYER_HP_UPDATE_PACKET {
 	char          type;
 	short         id;
 	short         hp;
+};
+
+struct SC_PLAY_EFFECT_WORLD_PACKET {
+	unsigned char size;
+	char          type;
+	unsigned char effect_id;     // EffectID raw 값
+	float         x, y, z;       // 발생 위치
+	float         dx, dy, dz;    // 방향 (방향 무의미한 이펙트는 클라가 무시)
 };
 
 #pragma pack (pop)
