@@ -265,8 +265,6 @@ public:
 
 	CAnimationSets					*m_pAnimationSets = NULL;
 
-public:
-	void PrepareSkinning();
 };
 
 struct SBoneBlendCache {
@@ -329,6 +327,7 @@ public:
 	bool m_bIsBlending = false;
 	float m_fBlendTime = 0.0f;
 	float m_fBlendDuration = 0.2f;
+	CGameObject*** m_pppSkinningBoneFrameCaches = NULL;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

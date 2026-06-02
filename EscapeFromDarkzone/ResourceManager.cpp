@@ -501,16 +501,6 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 			pInstanceInfo->m_ppSkinnedMeshes,
 			&nSkinnedMesh
 		);
-
-		for (int i = 0; i < pInstanceInfo->m_nSkinnedMeshes; ++i)
-		{
-			if (pInstanceInfo->m_ppSkinnedMeshes[i])
-			{
-				pInstanceInfo->m_ppSkinnedMeshes[i]->PrepareSkinning(
-					pRootInstance
-				);
-			}
-		}
 	}
 
 	return pInstanceInfo;

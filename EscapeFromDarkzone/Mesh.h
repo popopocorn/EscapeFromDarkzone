@@ -173,7 +173,6 @@ public:
 	int								m_nSkinningBones = 0; 
 
 	char							(*m_ppstrSkinningBoneNames)[64]; //[m_nSkinningBones]
-	CGameObject						**m_ppSkinningBoneFrameCaches = NULL; //[m_nSkinningBones]
 
 	XMFLOAT4X4						*m_pxmf4x4BindPoseBoneOffsets = NULL; //[m_nSkinningBones], Transposed
 
@@ -184,7 +183,7 @@ public:
 	XMFLOAT4X4						*m_pcbxmf4x4MappedSkinningBoneTransforms = NULL; //[m_nSkinningBones]
 
 public:
-	void PrepareSkinning(CGameObject *pModelRootObject);
+	
 	void LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
