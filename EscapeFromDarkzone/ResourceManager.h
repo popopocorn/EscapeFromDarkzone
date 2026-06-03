@@ -179,7 +179,7 @@ public:
 
 	// 플레이어 / 무기 / 일반 모델 원본 등록
 	
-	//skinned mesh object load
+	//player mesh object load
 	void BuildPlayerModelPrototypes(
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
@@ -187,6 +187,7 @@ public:
 		CShader* PlayerShader
 	);
 
+	//skinned mesh object load
 	void BuildSkinnedModelPrototypes(
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
