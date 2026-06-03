@@ -223,14 +223,16 @@ void ResourceManager::ReleaseUploadBuffers()
 
 void ResourceManager::ReleaseResources()
 {
-	m_ModelPrototypes.clear();
-	ReleaseSkinnedModelPrototypes();
-
 	if (m_pd3dCbvSrvDescriptorHeap)
 	{
 		m_pd3dCbvSrvDescriptorHeap->Release();
 		m_pd3dCbvSrvDescriptorHeap = nullptr;
 	}
+
+	m_SkinnedModelPrototypes.clear(); 
+
+	
+	m_ModelPrototypes.clear();
 }
 
 bool ResourceManager::LoadAndRegisterModelPrototype(
@@ -530,23 +532,4 @@ UIMesh* ResourceManager::GetUIMesh(UIName name)
 	auto it = m_UIPrototypes.find(name);
 	if (it != m_UIPrototypes.end())return it->second.get();
 	else return nullptr;
-}
-
-void ResourceManager::ReleaseSkinnedModelPrototypes()
-{
-	for (auto& pair : m_SkinnedModelPrototypes)
-	{
-		CLoadedModelInfo* pInfo = pair.second.get();
-		if (!pInfo) continue;
-
-		if (pInfo->m_pAnimationSets)
-		{
-			//pInfo->m_pAnimationSets->ReleaseUploadBuffers();
-			pInfo->m_pAnimationSets = nullptr;
-		}
-
-		delete pInfo;
-	}
-
-	m_SkinnedModelPrototypes.clear();
 }

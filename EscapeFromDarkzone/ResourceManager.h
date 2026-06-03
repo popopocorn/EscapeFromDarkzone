@@ -257,9 +257,6 @@ private:
 	);
 
 
-
-	void ReleaseSkinnedModelPrototypes();
-
 public:
 	static ResourceManager& Instance()
 	{
