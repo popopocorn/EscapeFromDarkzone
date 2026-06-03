@@ -208,6 +208,19 @@ void ResourceManager::CreateshadowResourceViews(
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
+void ResourceManager::ReleaseUploadBuffers()
+{
+	for (auto& obj : m_SkinnedModelPrototypes)
+	{
+		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
+	}
+
+	for (auto& obj : m_ModelPrototypes)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
+}
+
 void ResourceManager::ReleaseResources()
 {
 	m_ModelPrototypes.clear();

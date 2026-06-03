@@ -104,7 +104,6 @@ private:
 	ResourceManager() = default;
 	ResourceManager(const ResourceManager&) = delete;
 	ResourceManager& operator=(const ResourceManager&) = delete;
-
 	// 정적 모델 원본 등록
 	bool LoadAndRegisterModelPrototype(
 		ModelName key,
@@ -174,6 +173,8 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUSrvDescriptorNextHandle() { return m_d3dSrvGPUDescriptorNextHandle; }
 
 	ID3D12DescriptorHeap* GetDescriptorHeap() const { return m_pd3dCbvSrvDescriptorHeap; }
+
+	void ReleaseUploadBuffers();
 
 	void ReleaseResources();
 

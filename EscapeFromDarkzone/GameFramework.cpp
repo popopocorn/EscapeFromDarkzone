@@ -360,7 +360,7 @@ void CGameFramework::ChangeSwapChainState()
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 
-	if (not m_pScene.empty()) m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
 	case WM_LBUTTONDOWN:
@@ -381,7 +381,7 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	if (not m_pScene.empty()) m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
 	case WM_KEYUP:
@@ -418,7 +418,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 		case VK_SPACE:
 		{
-			if (m_pPlayer && not m_pScene.empty())
+			if (m_pPlayer && !m_pScene.empty() && m_pScene.back())
 			{
 				XMFLOAT3 pos = m_pPlayer->GetPosition();
 				XMFLOAT3 look = m_pPlayer->GetLookVector();
@@ -431,7 +431,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				bombFlatLook.y = 0.0f;
 				bombFlatLook = Vector3::Normalize(bombFlatLook);
 
-				if (not m_pScene.empty() && m_pScene.back()->GetEffectManager())
+				if (!m_pScene.empty() && m_pScene.back() && m_pScene.back()->GetEffectManager())
 				{
 					m_pScene.back()->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
 				}
@@ -583,9 +583,9 @@ void CGameFramework::BuildObjects()
 
 	m_pCamera = m_pPlayer->GetCamera();
 
-	if (not m_pScene.empty()) m_pScene.back()->SetCamera(m_pCamera);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->SetCamera(m_pCamera);
 
-	if (not m_pScene.empty()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
 
 	m_pd3dCommandList->Close();
@@ -593,8 +593,8 @@ void CGameFramework::BuildObjects()
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
-
-	//if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+	ResourceManager::Instance().ReleaseUploadBuffers();
+	if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
 	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
@@ -604,14 +604,14 @@ void CGameFramework::ReleaseObjects()
 {
 	
 
-	if (not m_pScene.empty()) m_pScene.back()->ReleaseObjects();
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseObjects();
 }
 
 void CGameFramework::ProcessInput()
 {
 	static UCHAR pKeysBuffer[256];
 	bool bProcessedByScene = false;
-	if (GetKeyboardState(pKeysBuffer) && not m_pScene.empty()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
+	if (GetKeyboardState(pKeysBuffer) && !m_pScene.empty() && m_pScene.back()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
 	if (!bProcessedByScene)
 	{
 		float cxDelta = 0.0f, cyDelta = 0.0f;
@@ -660,7 +660,7 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
-	if (not m_pScene.empty()) m_pScene.back()->AnimateObjects(fTimeElapsed);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->AnimateObjects(fTimeElapsed);
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 	m_pPlayer->UpdateTransform(NULL);
 }
@@ -792,7 +792,7 @@ void CGameFramework::FrameAdvance()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 
-	if (not m_pScene.empty()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
@@ -844,13 +844,13 @@ void CGameFramework::FrameAdvance()
 		if (m_nFenceValues[i] > targetFence) targetFence = m_nFenceValues[i];
 	}
 	targetFence++; 
-	if (not m_pScene.empty()) m_pScene.back()->DeleteDeadObject(targetFence);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->DeleteDeadObject(targetFence);
 
 	
 	MoveToNextFrame();
 
 	UINT64 done = m_pd3dFence->GetCompletedValue();
-	if (not m_pScene.empty()) m_pScene.back()->DeleteTrash(done);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->DeleteTrash(done);
 
 
 
