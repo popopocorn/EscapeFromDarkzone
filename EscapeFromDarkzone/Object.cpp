@@ -193,29 +193,27 @@ CMaterial::CMaterial(int nTextures)
 
 CMaterial::~CMaterial()
 {
-	
+	//if (m_pShader) m_pShader->Release();
 
 	if (m_nTextures > 0)
 	{
-		for (int i = 0; i < m_nTextures; i++)
-		{
-			if (m_ppTextures[i]) m_ppTextures[i]->Release();
-		}
+		for (int i = 0; i < m_nTextures; i++) //if (m_ppTextures[i]) m_ppTextures[i]->Release();
 		delete[] m_ppTextures;
+
+		if (m_ppstrTextureNames) delete[] m_ppstrTextureNames;
 	}
-	if (m_ppstrTextureNames) delete[] m_ppstrTextureNames;
 }
 
 void CMaterial::SetShader(CShader *pShader)
 {
+	//if (m_pShader) m_pShader->Release();
 	m_pShader = pShader;
+	//if (m_pShader) m_pShader->AddRef();
 }
 
 void CMaterial::SetTexture(CTexture *pTexture, UINT nTexture) 
 { 
-	if (m_ppTextures[nTexture]) m_ppTextures[nTexture]->Release();
-	m_ppTextures[nTexture] = pTexture;
-	if (m_ppTextures[nTexture]) m_ppTextures[nTexture]->AddRef();
+	m_ppTextures[nTexture] = pTexture; 
 }
 
 void CMaterial::ReleaseUploadBuffers()
@@ -320,7 +318,7 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 		{
 			*ppTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 			(*ppTexture)->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pwstrTextureName, RESOURCE_TEXTURE2D, 0);
-			(*ppTexture)->AddRef();
+
 			if ((*ppTexture)->GetResource(0))
 			{
 				ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, *ppTexture, 0, nRootParameter);
@@ -342,7 +340,6 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 				}
 				CGameObject* pRootGameObject = pParent;
 				*ppTexture = pRootGameObject->FindReplicatedTexture(pwstrTextureName);
-				if (*ppTexture) (*ppTexture)->AddRef();
 			}
 		}
 	}
@@ -886,9 +883,6 @@ void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, in
 CLoadedModelInfo::~CLoadedModelInfo()
 {
 	if (m_ppSkinnedMeshes) delete[] m_ppSkinnedMeshes;
-
-	if (m_pModelRootObject) delete m_pModelRootObject;
-	if (m_pAnimationSets) delete m_pAnimationSets;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -911,28 +905,19 @@ CGameObject::CGameObject(int nMaterials) : CGameObject()
 
 CGameObject::~CGameObject()
 {
-	if (m_pChild)
-	{
-		m_pChild->Release();
-		m_pChild = nullptr;
-	}
-
-	if (m_pSibling)
-	{
-		m_pSibling->Release();
-		m_pSibling = nullptr;
-	}
-	if (m_pMesh) m_pMesh->Release(); 
+	ReleaseUploadBuffers();
 
 	if (m_nMaterials > 0)
 	{
 		for (int i = 0; i < m_nMaterials; i++)
 		{
-			if (m_ppMaterials[i]) m_ppMaterials[i]->Release(); 
+			//if (m_ppMaterials[i]) m_ppMaterials[i]->Release();
 		}
 	}
 	if (m_ppMaterials) delete[] m_ppMaterials;
+
 	if (m_pSkinnedAnimationController) delete m_pSkinnedAnimationController;
+
 }
 
 void CGameObject::init()
@@ -945,7 +930,6 @@ void CGameObject::SetChild(CGameObject *pChild, bool bReferenceUpdate)
 	if (pChild)
 	{
 		pChild->m_pParent = this;
-		pChild->AddRef();
 	}
 	if (m_pChild)
 	{
@@ -980,9 +964,7 @@ void CGameObject::SetShader(int nMaterial, CShader *pShader)
 
 void CGameObject::SetMaterial(int nMaterial, CMaterial *pMaterial)
 {
-	if (m_ppMaterials[nMaterial]) m_ppMaterials[nMaterial]->Release();
 	m_ppMaterials[nMaterial] = pMaterial;
-	if (m_ppMaterials[nMaterial]) m_ppMaterials[nMaterial]->AddRef();
 }
 
 void CGameObject::FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh)

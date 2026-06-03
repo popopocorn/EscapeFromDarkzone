@@ -37,7 +37,7 @@ public:
 private:
 
 	UINT							m_nTextureType;
-	int								m_nReferences = 0;
+
 	int								m_nTextures = 0;
 	ID3D12Resource** m_ppd3dTextures = NULL;
 	ID3D12Resource** m_ppd3dTextureUploadBuffers;
@@ -55,9 +55,6 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE* m_pd3dSamplerGpuDescriptorHandles = NULL;
 
 public:
-	void AddRef() { m_nReferences++; } 
-	void Release() { if (--m_nReferences <= 0) delete this; } 
-
 	void SetSampler(int nIndex, D3D12_GPU_DESCRIPTOR_HANDLE d3dSamplerGpuDescriptorHandle);
 
 	void UpdateShaderVariable(ID3D12GraphicsCommandList* pd3dCommandList, int nParameterIndex, int nTextureIndex);
@@ -101,8 +98,6 @@ class CGameObject;
 
 class CMaterial
 {
-private:
-	int m_nReferences = 0;
 public:
 	CMaterial(int nTextures);
 	virtual ~CMaterial();
@@ -113,8 +108,7 @@ public:
 	XMFLOAT4						m_xmf4EmissiveColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	XMFLOAT4						m_xmf4SpecularColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 	XMFLOAT4						m_xmf4AmbientColor = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-	void AddRef() { m_nReferences++; }
-	void Release() { if (--m_nReferences <= 0) delete this; } 
+
 	void SetShader(CShader *pShader);
 	void SetMaterialType(UINT nType) { m_nType |= nType; }
 	void SetTexture(CTexture *pTexture, UINT nTexture = 0);
@@ -348,7 +342,6 @@ protected:
 	BoundingOrientedBox				OOBBWorld;
 private:
 	bool							Alive = true;
-	int								m_nReferences = 0;
 	std::vector<BoundingOrientedBox*> OOBBs;
 public:
 	CGameObject();
@@ -356,9 +349,6 @@ public:
     virtual ~CGameObject();
 	virtual void init();
 	virtual void initWithObj(CGameObject* child) {};
-	void AddRef() { m_nReferences++; }
-	void Release() { if (--m_nReferences <= 0) delete this; }
-
 
 public:
 	bool							HasOOBB = false;

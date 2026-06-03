@@ -481,10 +481,10 @@ void CGameFramework::OnDestroy()
 	if (NetworkManager::Instance().IsConnected()) {
 		NetworkManager::Instance().Shutdown();
 	}
-	delete m_pPlayer;
+
 	WaitForGpuComplete();
 	ReleaseObjects();
-	ResourceManager::Instance().ReleaseResources();
+	//ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -508,11 +508,11 @@ void CGameFramework::OnDestroy()
 		m_pdxgiSwapChain->Release();
 	}
 
-	if (m_pd3dFence) m_pd3dFence->Release();
+	
 	if (m_pd3dDevice) m_pd3dDevice->Release();
 	if (m_pdxgiFactory) m_pdxgiFactory->Release();
 
-	
+	if (m_pd3dFence) m_pd3dFence->Release();
 
 #if defined(_DEBUG)
 	IDXGIDebug1* pdxgiDebug = NULL;
@@ -603,10 +603,7 @@ void CGameFramework::BuildObjects()
 void CGameFramework::ReleaseObjects()
 {
 	
-	for (auto& scene : m_pScene)
-	{
-		scene->ReleaseObjects();
-	}
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseObjects();
 }
 
 void CGameFramework::ProcessInput()
