@@ -1602,10 +1602,10 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 
-			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1, 5 };
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 5 };
 			clients[c_id].send_inventory_update_packet(0);
 
-			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2, 3 };
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 3 };
 			clients[c_id].send_inventory_update_packet(1);
 		}
 
@@ -1988,8 +1988,8 @@ int main()
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
-		npc._inventory[0] = ItemSlot{ ItemID::MAT_3, 2 };
-		npc._inventory[1] = ItemSlot{ ItemID::MAT_4, 1 };
+		npc._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 2 };
+		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };
 
 		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
 			<< "slot0=" << static_cast<int>(npc._inventory[0].item)
