@@ -4,7 +4,7 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 #include "Shader.h"
-
+#include "ResourceManager.h"
 #include "Network.h"
 
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
@@ -13,7 +13,6 @@ static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
 	float dz = a.z - b.z;
 	return sqrtf(dx * dx + dz * dz);
 }
-
 static XMFLOAT3 NormalizeXZ(const XMFLOAT3& v)
 {
 	XMFLOAT3 result = v;
@@ -24,7 +23,6 @@ static XMFLOAT3 NormalizeXZ(const XMFLOAT3& v)
 
 	return Vector3::Normalize(result);
 }
-
 static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
 {
 	XMFLOAT3 dir = NormalizeXZ(forward);
@@ -34,13 +32,83 @@ static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
 
 	return XMFLOAT3(dir.z, 0.0f, -dir.x);
 }
-
 static float NormalizeAngleDeg(float angle)
 {
 	while (angle > 180.0f) angle -= 360.0f;
 	while (angle < -180.0f) angle += 360.0f;
 	return angle;
 }
+static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const* ppNames, int nCount)
+{
+	if (!pRoot) return nullptr;
+
+	for (int i = 0; i < nCount; ++i)
+	{
+		CGameObject* pFrame = pRoot->FindFrame(ppNames[i]);
+		if (pFrame) return pFrame;
+	}
+
+	return nullptr;
+}
+static bool DetachChildTemporarily(
+	CGameObject* pParent,
+	CGameObject* pChild,
+	CGameObject*& pOutPrev,
+	CGameObject*& pOutSavedSibling)
+{
+	pOutPrev = nullptr;
+	pOutSavedSibling = nullptr;
+
+	if (!pParent || !pChild)
+		return false;
+
+	CGameObject* pCur = pParent->m_pChild;
+
+	while (pCur && pCur != pChild)
+	{
+		pOutPrev = pCur;
+		pCur = pCur->m_pSibling;
+	}
+
+	if (pCur != pChild)
+		return false;
+
+	pOutSavedSibling = pChild->m_pSibling;
+
+	if (pOutPrev)
+	{
+		pOutPrev->m_pSibling = pOutSavedSibling;
+	}
+	else
+	{
+		pParent->m_pChild = pOutSavedSibling;
+	}
+
+	pChild->m_pSibling = nullptr;
+	return true;
+}
+static void RestoreDetachedChild(
+	CGameObject* pParent,
+	CGameObject* pChild,
+	CGameObject* pPrev,
+	CGameObject* pSavedSibling)
+{
+	if (!pParent || !pChild)
+		return;
+
+	if (pPrev)
+	{
+		pPrev->m_pSibling = pChild;
+	}
+	else
+	{
+		pParent->m_pChild = pChild;
+	}
+
+	pChild->m_pSibling = pSavedSibling;
+	pChild->m_pParent = pParent;
+}
+
 
 // 임시 코드 (서버 연결 시 NPC가 투명하게 보이는 현상 해결 용도)
 /*CEnemyObject::CEnemyObject(
@@ -142,6 +210,8 @@ CEnemyObject::CEnemyObject(
 	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
+
+	EquipDefaultPistol();
 
 	ClearOOBB(false);
 
@@ -341,14 +411,57 @@ void CEnemyObject::SetPosition(float x, float y, float z)
 
 }
 
-void CEnemyObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
+void CEnemyObject::Render(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	bool batch,
+	int nPipelineState,
+	CCamera* pCamera)
 {
 	if (m_pSkinnedAnimationController)
 	{
 		m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 	}
 
+	// 장착 무기가 없으면 기존 방식 그대로
+	if (!m_pWeapon || !m_pWeaponSocket)
+	{
+		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
+		return;
+	}
+
+	CGameObject* pPrev = nullptr;
+	CGameObject* pSavedSibling = nullptr;
+
+	bool bDetached = DetachChildTemporarily(
+		m_pWeaponSocket,
+		m_pWeapon,
+		pPrev,
+		pSavedSibling
+	);
+
+	if (!bDetached)
+	{
+		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
+		return;
+	}
+
+	// 1. NPC 몸체는 기존 batch 값 그대로 렌더
+	// 여기서 false를 넣으면 스킨드 셰이더 재귀 호출로 스택오버플로우 난다.
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
+
+	// 2. 현재 장착 무기만 따로 false 렌더
+	// 권총/SMG/Rifle/Shotgun 모두 m_pWeapon에 들어있으면 이 경로를 탄다.
+	m_pWeapon->m_pParent = m_pWeaponSocket;
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	m_pWeapon->Render(pd3dCommandList, false, nPipelineState, pCamera);
+
+	// 3. 렌더 후 다시 원래 계층 복구
+	RestoreDetachedChild(
+		m_pWeaponSocket,
+		m_pWeapon,
+		pPrev,
+		pSavedSibling
+	);
 }
 
 float CEnemyObject::GetDistanceToPlayerXZ() const
@@ -358,12 +471,10 @@ float CEnemyObject::GetDistanceToPlayerXZ() const
 	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 	return DistanceXZ(m_xmf3Position, playerPos);
 }
-
 float CEnemyObject::GetDistanceFromSpawnXZ() const
 {
 	return DistanceXZ(m_xmf3Position, m_xmf3SpawnPosition);
 }
-
 float CEnemyObject::GetDistanceToSpawnXZ() const
 {
 	return DistanceXZ(m_xmf3Position, m_xmf3SpawnPosition);
@@ -373,22 +484,18 @@ bool CEnemyObject::IsPlayerInDetectRange() const
 {
 	return GetDistanceToPlayerXZ() <= m_fDetectionRange;
 }
-
 bool CEnemyObject::IsPlayerInAttackRange() const
 {
 	return GetDistanceToPlayerXZ() <= m_fAttackRange;
 }
-
 bool CEnemyObject::IsPlayerOutOfAttackRange() const
 {
 	return GetDistanceToPlayerXZ() >= m_fAttackExitRange;
 }
-
 bool CEnemyObject::IsOutsideLeashRange() const
 {
 	return GetDistanceFromSpawnXZ() > m_fLeashRange;
 }
-
 bool CEnemyObject::IsNearSpawn() const
 {
 	return GetDistanceToSpawnXZ() <= m_fReturnStopDistance;
@@ -534,6 +641,93 @@ void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
 	{
 		pController->SetTrackPosition(0, 0.0f);
 	}
+}
+
+void CEnemyObject::EquipWeaponModel(ModelName modelName)
+{
+	CGameObject* pWeaponPrototype =
+		ResourceManager::Instance().GetModelPrototype(modelName);
+
+	if (!pWeaponPrototype)
+	{
+		OutputDebugString(L"[Enemy] weapon prototype not found.\n");
+		return;
+	}
+
+	CGameObject* pWeaponInstance =
+		CGameObject::CreateModelInstance(pWeaponPrototype);
+
+	if (!pWeaponInstance)
+	{
+		OutputDebugString(L"[Enemy] weapon instance create failed.\n");
+		return;
+	}
+
+	static const char* s_ppRightHandNames[] =
+	{
+		"mixamorig:RightHand",
+		"RightHand",
+		"Bip001 R Hand",
+		"mixamorig:RightHandIndex1"
+	};
+
+	CGameObject* pRightHand =
+		FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
+
+	if (!pRightHand)
+	{
+		OutputDebugString(L"[Enemy] RightHand frame not found. weapon not equipped.\n");
+		delete pWeaponInstance;
+		return;
+	}
+
+	m_pWeapon = pWeaponInstance;
+	m_pWeaponSocket = pRightHand;
+
+	m_pWeapon->m_pParent = m_pWeaponSocket;
+	m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
+	m_pWeaponSocket->m_pChild = m_pWeapon;
+
+	// 기본값. 나중에 무기별로 조정 가능.
+	switch (modelName)
+	{
+	case ModelName::SMG:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(0.9f, 0.9f, 0.9f);
+		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		break;
+
+	case ModelName::RIFLE:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(1.2f, 1.2f, 1.2f);
+		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		break;
+
+	case ModelName::PISTOL:
+	default:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
+		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		break;
+	}
+
+	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
+
+	if (m_pWeaponMuzzleSocket)
+	{
+		OutputDebugString(L"[Enemy] Socket_Muzzle found.\n");
+	}
+	else
+	{
+		OutputDebugString(L"[Enemy] Socket_Muzzle not found.\n");
+	}
+
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+}
+
+void CEnemyObject::EquipDefaultPistol()
+{
+	EquipWeaponModel(ModelName::PISTOL);
 }
 
 // 총기 타입을 설정하고 해당 총기 스탯을 적용한다.

@@ -1,4 +1,5 @@
 #pragma once
+#include "UI.h"
 
 enum class ModelName
 {
@@ -74,10 +75,16 @@ class CGameObject;
 class CTexture;
 class ShadowMap;
 class CShader;
-class UIMesh;
+//class UIMesh;
 
 class ResourceManager
 {
+private:
+	ResourceManager() = default;
+	~ResourceManager();
+
+	ResourceManager(const ResourceManager&) = delete;
+	ResourceManager& operator=(const ResourceManager&) = delete;
 private:
 	ID3D12DescriptorHeap* m_pd3dCbvSrvDescriptorHeap = nullptr;
 
@@ -97,14 +104,10 @@ private:
 	// 애니메이션 있는 모델 원본
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
-	//UI 원본
+	// UI 원본
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
 private:
-	ResourceManager() = default;
-	ResourceManager(const ResourceManager&) = delete;
-	ResourceManager& operator=(const ResourceManager&) = delete;
-
 	// 정적 모델 원본 등록
 	bool LoadAndRegisterModelPrototype(
 		ModelName key,
@@ -124,8 +127,6 @@ private:
 		const char* modelPath,
 		CShader* pShader
 	);
-
-
 
 	void ReleaseSkinnedModelPrototypes();
 

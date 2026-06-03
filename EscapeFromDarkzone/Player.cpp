@@ -450,20 +450,49 @@ static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
 }
 static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
-	const XMFLOAT3 rifleIdleRot = XMFLOAT3(-90.0f, -90.0f, 28.0f);
 
+	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
+	// SMG 기준값
+	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
+	const XMFLOAT3 smgShootPos = XMFLOAT3(0.02f, -0.10f, -0.20f);
+
+	const XMFLOAT3 smgIdleRot = XMFLOAT3(-90.0f, 0.0f, 28.0f);
+	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 90.0f, 0.0f);
+	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 90.0f, 0.0f);
+
+	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
+	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
+
+	// Rifle 테스트값
+	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
+	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.4f, 0.2f, 0.2f);
 	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
-	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, -25.0f);
+	const XMFLOAT3 rifleShootPos = XMFLOAT3(0.02f, 0.0f, -0.20f);
+
+	const XMFLOAT3 rifleIdleRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
+	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
+	const XMFLOAT3 rifleShootRot = XMFLOAT3(90.0f, 90.0f, 0.0f);
 
 	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
+	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
 
-	const XMFLOAT3 rifleShootPos = XMFLOAT3(0.02f, 0.00f, 0.00f);
-	const XMFLOAT3 rifleShootRot = XMFLOAT3(0.0f, 8.0f, 0.0f);
+	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
-	const XMFLOAT3 rifleScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
+	// Shotgun 테스트값
+	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
+	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.4f, 0.2f, 0.10f);
+	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.20f, 0.20f);
+	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.45f, 0.20f, 0.20f);
 
+	const XMFLOAT3 shotgunIdleRot = XMFLOAT3(180.0f, 0.0f, 90.0f);
+	const XMFLOAT3 shotgunRunRot = XMFLOAT3(0.0f, 0.0f, -0.50f);
+	const XMFLOAT3 shotgunShootRot = XMFLOAT3(0.40f, 0.0f, -0.0f);
+
+	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(-0.50f, 0.15f, 0.45f);
+	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
+
+	const XMFLOAT3 shotgunScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 	PlayerWeaponVisualConfig config{};
 
 	switch (weaponType)
@@ -472,20 +501,19 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 		config.modelName = ModelName::SMG;
 		config.itemType = ItemType::SMG;
 
-		config.idlePos = rifleIdlePos;
-		config.idleRot = rifleIdleRot;
-		config.runPos = rifleRunPos;
-		config.runRot = rifleRunRot;
-		config.grenadePos = rifleGrenadePos;
-		config.grenadeRot = rifleGrenadeRot;
-		config.shootPos = rifleShootPos;
-		config.shootRot = rifleShootRot;
+		config.idlePos = smgIdlePos;
+		config.idleRot = smgIdleRot;
+		config.runPos = smgRunPos;
+		config.runRot = smgRunRot;
+		config.grenadePos = smgGrenadePos;
+		config.grenadeRot = smgGrenadeRot;
+		config.shootPos = smgShootPos;
+		config.shootRot = smgShootRot;
 
-		// SMG는 Rifle보다 0.75배
 		config.scale = XMFLOAT3(
-			rifleScale.x * 0.75f,
-			rifleScale.y * 0.75f,
-			rifleScale.z * 0.75f
+			rifleScale.x * 0.90f,
+			rifleScale.y * 0.90f,
+			rifleScale.z * 0.90f
 		);
 		break;
 
@@ -493,21 +521,20 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 		config.modelName = ModelName::SHOTGUN;
 		config.itemType = ItemType::SHOTGUN;
 
-		config.idlePos = rifleIdlePos;
-		config.idleRot = rifleIdleRot;
-		config.runPos = rifleRunPos;
-		config.runRot = rifleRunRot;
-		config.grenadePos = rifleGrenadePos;
-		config.grenadeRot = rifleGrenadeRot;
-		config.shootPos = rifleShootPos;
-		config.shootRot = rifleShootRot;
+		config.idlePos = shotgunIdlePos;
+		config.idleRot = shotgunIdleRot;
 
-		// Shotgun은 Rifle보다 1.2배
-		config.scale = XMFLOAT3(
-			rifleScale.x * 1.2f,
-			rifleScale.y * 1.2f,
-			rifleScale.z * 1.2f
-		);
+		config.runPos = shotgunRunPos;
+		config.runRot = shotgunRunRot;
+
+		config.grenadePos = shotgunGrenadePos;
+		config.grenadeRot = shotgunGrenadeRot;
+
+		config.shootPos = shotgunShootPos;
+		config.shootRot = shotgunShootRot;
+
+		config.scale = shotgunScale;
+
 		break;
 
 	case PlayerWeaponType::Pistol:

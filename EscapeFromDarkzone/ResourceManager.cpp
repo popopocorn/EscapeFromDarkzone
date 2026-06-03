@@ -4,6 +4,7 @@
 #include "UI.h"
 #include "ResourceManager.h"
 
+ResourceManager::~ResourceManager() = default;
 
 static CAnimationSets* CreateAnimationSetsInstanceCache(
 	CAnimationSets* pPrototypeAnimationSets,
@@ -342,7 +343,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Classic_M4_1.bin",
+		"Model/Classic_M4.bin",
 		pPlayerShader
 	);
 
@@ -367,7 +368,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/AllActive.bin",
+		"Model/Shotgun.bin",
 		pPlayerShader
 	);
 
