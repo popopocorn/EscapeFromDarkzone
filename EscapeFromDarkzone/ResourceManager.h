@@ -3,6 +3,7 @@
 
 enum class ModelName
 {
+
 	PLAYER_01 = 0,
 	PLAYER_02,
 	PLAYER_03,
@@ -21,15 +22,13 @@ enum class ModelName
 	PLAYER = PLAYER_01,
 	ENEMY = ENEMY_01,
 
-	MAP_BLOCK01,
-	MAP_BLOCK02,
+	MAP_FLOOR,
+
+	MAP_BLOCK01,   // block1
 	MAP_BLOCK03,
 	MAP_BLOCK04,
 	MAP_BLOCK05,
 	MAP_BLOCK06,
-	MAP_BLOCK07,
-	MAP_BLOCK08,
-	MAP_BLOCK09,
 	MAP_BLOCK10,
 	MAP_BLOCK11,
 	MAP_BLOCK12,
@@ -45,11 +44,6 @@ enum class ModelName
 	MAP_BLOCK22,
 	MAP_BLOCK23,
 	MAP_BLOCK24,
-	MAP_BLOCK25,
-	MAP_BLOCK26,
-	MAP_BLOCK27,
-	MAP_BLOCK28,
-	MAP_BLOCK29,
 	MAP_BLOCK30,
 	MAP_BLOCK31,
 	MAP_BLOCK32,
@@ -59,11 +53,149 @@ enum class ModelName
 	MAP_BLOCK36,
 	MAP_BLOCK37,
 	MAP_BLOCK38,
-	MAP_BLOCK39,
 	MAP_BLOCK40,
-};
-const int MAP_BLOCK_SIZE = 40;
 
+	MAP_BLOCK51,
+	MAP_BLOCK52,
+	MAP_BLOCK53,
+	MAP_BLOCK54,
+
+	MAP_GREEN1,
+	MAP_GREEN2,
+
+	MAP_BOUNDARY_1,
+	MAP_BOUNDARY_2,
+	MAP_BOUNDARY_3,
+	MAP_BOUNDARY_4,
+
+	MAP_FACTORY1,
+	MAP_FACTORY_WALL_1,
+	MAP_FACTORY_WALL_2,
+	MAP_FACTORY_WALL_3,
+
+	MAP_CONT_WALL_1,
+	MAP_CONT_WALL_2,
+	MAP_CONT_WALL_3,
+
+	MAP_MAZE_C1,
+	MAP_MAZE_C2,
+	MAP_MAZE_C3,
+	MAP_MAZE_C4,
+	MAP_MAZE_C5,
+	MAP_MAZE_C6,
+
+	MAP_BLOCK_CB_1,
+	MAP_BLOCK_CB_2,
+	MAP_BLOCK_CB_3,
+	MAP_BLOCK_CB_4,
+	MAP_BLOCK_CB_5,
+	MAP_BLOCK_CB_6,
+	MAP_BLOCK_CB_7,
+	MAP_BLOCK_CB_8,
+	MAP_BLOCK_CB_9,
+
+	MAP_CARS_C1,
+	MAP_CARS_C2,
+	MAP_CARS_C3,
+	MAP_CARS_C4,
+	MAP_CARS_C5,
+	MAP_CARS_C6,
+
+	MAP_ROAD,
+
+	MODEL_TYPE_END
+};
+
+inline ModelName& operator++(ModelName& e)
+{
+	if (e == ModelName::MODEL_TYPE_END)
+		return e; // 또는 assert
+
+	e = static_cast<ModelName>(static_cast<int>(e) + 1);
+	return e;
+}
+
+static vector<string>s_mapFiles = {
+			"Model/floor.bin",
+			"Model/block1.bin",
+			"Model/block3.bin",
+			"Model/block4.bin",
+			"Model/block5.bin",
+			"Model/block6.bin",
+			"Model/block10.bin",
+			"Model/block11.bin",
+			"Model/block12.bin",
+			"Model/block13.bin",
+			"Model/block14.bin",
+			"Model/block15.bin",
+			"Model/block16.bin",
+			"Model/block17.bin",
+			"Model/block18.bin",
+			"Model/block19.bin",
+			"Model/block20.bin",
+			"Model/block21.bin",
+			"Model/block22.bin",
+			"Model/block23.bin",
+			"Model/block24.bin",
+			"Model/block30.bin",
+			"Model/block31.bin",
+			"Model/block32.bin",
+			"Model/block33.bin",
+			"Model/block34.bin",
+			"Model/block35.bin",
+			"Model/block36.bin",
+			"Model/block37.bin",
+			"Model/block38.bin",
+			"Model/block40.bin",
+
+			"Model/block51.bin",
+			"Model/block52.bin",
+			"Model/block53.bin",
+			"Model/block54.bin",
+
+			"Model/green1.bin",
+			"Model/green2.bin",
+
+			"Model/boundary_1.bin",
+			"Model/boundary_2.bin",
+			"Model/boundary_3.bin",
+			"Model/boundary_4.bin",
+
+			"Model/factory1.bin",
+			"Model/factory_wall_1.bin",
+			"Model/factory_wall_2.bin",
+			"Model/factory_wall_3.bin",
+
+			"Model/cont_wall_1.bin",
+			"Model/cont_wall_2.bin",
+			"Model/cont_wall_3.bin",
+
+			"Model/maze_c1.bin",
+			"Model/maze_c2.bin",
+			"Model/maze_c3.bin",
+			"Model/maze_c4.bin",
+			"Model/maze_c5.bin",
+			"Model/maze_c6.bin",
+
+			"Model/block_cb_1.bin",
+			"Model/block_cb_2.bin",
+			"Model/block_cb_3.bin",
+			"Model/block_cb_4.bin",
+			"Model/block_cb_5.bin",
+			"Model/block_cb_6.bin",
+			"Model/block_cb_7.bin",
+			"Model/block_cb_8.bin",
+			"Model/block_cb_9.bin",
+
+			"Model/cars_c1.bin",
+			"Model/cars_c2.bin",
+			"Model/cars_c3.bin",
+			"Model/cars_c4.bin",
+			"Model/cars_c5.bin",
+			"Model/cars_c6.bin",
+
+			"Model/road.bin",
+};
 enum class UIName {
 	LOBBY_BACKGROUND=0,
 	LOBBY_START_BUTTON,
@@ -108,6 +240,9 @@ private:
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
 private:
+	ResourceManager() = default;
+	ResourceManager(const ResourceManager&) = delete;
+	ResourceManager& operator=(const ResourceManager&) = delete;
 	// 정적 모델 원본 등록
 	bool LoadAndRegisterModelPrototype(
 		ModelName key,
@@ -175,6 +310,8 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUSrvDescriptorNextHandle() { return m_d3dSrvGPUDescriptorNextHandle; }
 
 	ID3D12DescriptorHeap* GetDescriptorHeap() const { return m_pd3dCbvSrvDescriptorHeap; }
+
+	void ReleaseUploadBuffers();
 
 	void ReleaseResources();
 

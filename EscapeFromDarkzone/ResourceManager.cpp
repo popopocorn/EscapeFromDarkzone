@@ -209,6 +209,19 @@ void ResourceManager::CreateshadowResourceViews(
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
+void ResourceManager::ReleaseUploadBuffers()
+{
+	for (auto& obj : m_SkinnedModelPrototypes)
+	{
+		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
+	}
+
+	for (auto& obj : m_ModelPrototypes)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
+}
+
 void ResourceManager::ReleaseResources()
 {
 	m_ModelPrototypes.clear();
@@ -419,9 +432,18 @@ void ResourceManager::BuildModelPrototypes(
 		pPlayerShader
 	);
 
-	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
+	ModelName name = ModelName::MAP_FLOOR;
+	for (const string& s : s_mapFiles)
 	{
-		string s = "Model/block" + to_string(i+1) +".bin";
+		LoadAndRegisterModelPrototype(
+			name,
+			pd3dDevice,
+			pd3dCommandList,
+			pd3dGraphicsRootSignature,
+			s.c_str(),
+			Standardshader
+		);
+		++name;
 	}
 
 	//루팅 아이템 모델
