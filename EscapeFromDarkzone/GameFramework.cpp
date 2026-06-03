@@ -530,29 +530,41 @@ void CGameFramework::BuildObjects()
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
-	m_pScene.push_back(make_unique<LobbyScene>(this));
+	m_pScene.push_back(make_unique<MainScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	
-	PlayerShader* pshader = new PlayerShader();
-	pshader->CreateShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	pshader->CreateShadowShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	pshader->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
-	pshader->CreateThroughShader(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+	ResourceManager::Instance().BuildUIMesh(
+		m_pd3dDevice, 
+		m_pd3dCommandList, 
+		root->GetRoot());
+
+	ResourceManager::Instance().BuildPlayerModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager->GetShader(ShaderType::PLAYER)
+	);
+
+	ResourceManager::Instance().BuildSkinnedModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager->GetShader(ShaderType::SKINNED)
+	);
 
 	ResourceManager::Instance().BuildModelPrototypes(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
-		pshader
+		shadermanager->GetShader(ShaderType::STANDARD)
 	);
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
-		pshader,
+		shadermanager->GetShader(ShaderType::PLAYER),
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);

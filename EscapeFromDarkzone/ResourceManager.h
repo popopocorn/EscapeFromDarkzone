@@ -178,32 +178,36 @@ public:
 	void ReleaseResources();
 
 	// 플레이어 / 무기 / 일반 모델 원본 등록
+	
+	//skinned mesh object load
+	void BuildPlayerModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* PlayerShader
+	);
+
+	void BuildSkinnedModelPrototypes(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		ID3D12RootSignature* pd3dGraphicsRootSignature,
+		CShader* SkinnedShader
+	);
+
+	//static mesh object load
 	void BuildModelPrototypes(
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pPlayerShader
+		CShader* StandardShader
 	);
 
-	// 적 모델 원본 등록
-	void BuildEnemyModelPrototypes(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pEnemyShader
-	);
+
+	//ui object load
 	void BuildUIMesh(
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature
-	);
-
-	//루팅 모델 원본 등록
-	void BuildLootModelPrototypes(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pLootShader
 	);
 
 	// 정적 모델 원본 가져오기

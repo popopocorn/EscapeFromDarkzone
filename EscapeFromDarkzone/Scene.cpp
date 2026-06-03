@@ -856,16 +856,9 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	// 적 쉐이더
 	auto pSkinnedShader = shadermanager->GetShader(ShaderType::SKINNED);
-	ResourceManager::Instance().BuildEnemyModelPrototypes(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pSkinnedShader
-	);
 
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
-
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
 	CEnemyObject* pEnemy = new CEnemyObject(
