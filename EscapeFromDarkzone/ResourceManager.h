@@ -197,7 +197,7 @@ static vector<string>s_mapFiles = {
 			"Model/road.bin",
 };
 enum class UIName {
-	LOBBY_BACKGROUND=0,
+	LOBBY_BACKGROUND = 0,
 	LOBBY_START_BUTTON,
 
 };
@@ -211,12 +211,6 @@ class CShader;
 
 class ResourceManager
 {
-private:
-	ResourceManager() = default;
-	~ResourceManager();
-
-	ResourceManager(const ResourceManager&) = delete;
-	ResourceManager& operator=(const ResourceManager&) = delete;
 private:
 	ID3D12DescriptorHeap* m_pd3dCbvSrvDescriptorHeap = nullptr;
 
@@ -316,7 +310,7 @@ public:
 	void ReleaseResources();
 
 	// 플레이어 / 무기 / 일반 모델 원본 등록
-	
+
 	//player mesh object load
 	void BuildPlayerModelPrototypes(
 		ID3D12Device* pd3dDevice,

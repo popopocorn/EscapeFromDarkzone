@@ -4,7 +4,6 @@
 #include "UI.h"
 #include "ResourceManager.h"
 
-ResourceManager::~ResourceManager() = default;
 
 static CAnimationSets* CreateAnimationSetsInstanceCache(
 	CAnimationSets* pPrototypeAnimationSets,
@@ -110,7 +109,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE ResourceManager::CreateConstantBufferViews(
 	{
 		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
 
-		
+
 
 		pd3dDevice->CreateConstantBufferView(
 			&d3dCBVDesc,
@@ -312,9 +311,9 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 }
 
 void ResourceManager::BuildPlayerModelPrototypes(
-	ID3D12Device* pd3dDevice, 
-	ID3D12GraphicsCommandList* pd3dCommandList, 
-	ID3D12RootSignature* pd3dGraphicsRootSignature, 
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* PlayerShader)
 {
 	// 플레이어 모델
@@ -331,9 +330,9 @@ void ResourceManager::BuildPlayerModelPrototypes(
 }
 
 void ResourceManager::BuildSkinnedModelPrototypes(
-	ID3D12Device* pd3dDevice, 
-	ID3D12GraphicsCommandList* pd3dCommandList, 
-	ID3D12RootSignature* pd3dGraphicsRootSignature, 
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
 
@@ -363,7 +362,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SM_Gangster.bin",
+		"Model/SM_Ganster4.bin",
 		SkinnedShader
 	);
 
@@ -404,7 +403,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Classic_M4.bin",
-		pPlayerShader
+		Standardshader
 	);
 
 	LoadAndRegisterModelPrototype(
@@ -429,7 +428,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Shotgun.bin",
-		pPlayerShader
+		Standardshader
 	);
 
 	ModelName name = ModelName::MAP_FLOOR;
@@ -458,7 +457,7 @@ void ResourceManager::BuildModelPrototypes(
 }
 
 
-void ResourceManager::BuildUIMesh(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature)
+void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
