@@ -5,6 +5,7 @@ enum class ShaderType {
 	SKINNED,
 	VIEW,
 	UI,
+	PLAYER
 };
 
 class ShaderManager
