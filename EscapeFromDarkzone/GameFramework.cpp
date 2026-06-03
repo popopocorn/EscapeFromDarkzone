@@ -594,7 +594,7 @@ void CGameFramework::BuildObjects()
 
 	WaitForGpuComplete();
 	ResourceManager::Instance().ReleaseUploadBuffers();
-	if (not m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
 	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
@@ -603,7 +603,6 @@ void CGameFramework::BuildObjects()
 void CGameFramework::ReleaseObjects()
 {
 	
-
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseObjects();
 }
 
@@ -776,7 +775,6 @@ void CGameFramework::FrameAdvance()
 	{
 		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
 		m_pScene.back()->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
-		if (m_pPlayer) m_pPlayer->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
 	}
 	shadowmap->TransitionToSRV(m_pd3dCommandList);
 	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList);
@@ -798,12 +796,6 @@ void CGameFramework::FrameAdvance()
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 #endif
 
-
-	/*if (m_pPlayer)
-	{
-		m_pd3dCommandList->OMSetStencilRef(0x04);
-		m_pPlayer->Render(m_pd3dCommandList, MAIN, m_pCamera);
-	}*/
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
 
 

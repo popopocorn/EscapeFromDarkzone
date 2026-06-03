@@ -431,9 +431,18 @@ void ResourceManager::BuildModelPrototypes(
 		Standardshader
 	);
 
-	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
+	ModelName name = ModelName::MAP_FLOOR;
+	for (const string& s : s_mapFiles)
 	{
-		string s = "Model/block" + to_string(i+1) +".bin";
+		LoadAndRegisterModelPrototype(
+			name,
+			pd3dDevice,
+			pd3dCommandList,
+			pd3dGraphicsRootSignature,
+			s.c_str(),
+			Standardshader
+		);
+		++name;
 	}
 
 	//루팅 아이템 모델
