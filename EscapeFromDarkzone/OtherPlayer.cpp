@@ -1,4 +1,5 @@
 #include "OtherPlayer.h"
+#include"SoundManager.h"
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -81,7 +82,14 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 {
 	//int nextAnim = 0;
 	int nextAnim = PLAYER_RIFLE_SMG_RUN_F;
-	
+	static float timeacu = 0;
+	timeacu += fTimeElapsed;
+	if (timeacu > 0.5)
+	{
+		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
+		timeacu -= 0.5;
+	}
+
 	//네트워크 전송시 플레이어의 방향(월드좌표가 아닌 화면기준 이동 방향)을 여기의 angle로 사용
 
 	/*if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)

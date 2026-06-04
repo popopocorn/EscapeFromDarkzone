@@ -8,6 +8,7 @@
 #include "InputManager.h"
 #include "Collision.h"
 #include "Item.h"
+#include"SoundManager.h"
 
 #include "Network.h"	// 03.27 추가
 
@@ -1382,6 +1383,7 @@ void PlayerIdle::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerRun::Enter(CPlayer* Player)
 {
+	
 	Player->ApplyWeaponPose(WEAPON_POSE::RUN);
 
 	XMFLOAT2 dir = Player->GetMoveInput2D();
@@ -1404,8 +1406,16 @@ bool PlayerRun::Enter(CPlayer* Player)
 	return true;
 }
 
+
 void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
+	static float timeacu = 0;
+	timeacu += fTimeElapsed;
+	if (timeacu > 0.5)
+	{
+		SoundManager::Instance().Play(SoundName::FOOSTEP, Player->GetPosition());
+		timeacu -= 0.5;
+	}
 	if (Player->IsReloading())
 	{
 		Player->ChangeState(std::make_unique<PlayerReload>());
@@ -1443,7 +1453,6 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
-
 	Player->SetMoveDir(Player->GetMoveDirectionFromInput(dir));
 }
 

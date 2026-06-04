@@ -86,7 +86,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	shadowmap->Create(m_pd3dDevice);
 
 	shadermanager = make_unique<ShaderManager>();
-	
+	SoundManager::Instance().BuildSound();
 	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
@@ -736,7 +736,12 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	AnimateObjects(fTimeElapsed);
-
+	SoundManager::Instance().UpdateListener(
+		m_pPlayer->GetPosition(),
+		m_pPlayer->GetLookVector(),
+		m_pPlayer->GetUpVector()
+	);
+	SoundManager::Instance().Update();
 	
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())

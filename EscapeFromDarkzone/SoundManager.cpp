@@ -32,7 +32,18 @@ void SoundManager::Release()
 
 void SoundManager::BuildSound()
 {
-
+    LoadSound(
+        SoundName::FOOSTEP,
+        "Sound/Footstep01.wav",
+        false,
+        false
+        );
+    LoadSound(
+        SoundName::ENEMY_FOOSTEP,
+        "Sound/Footstep01.wav",
+        true,
+        false
+        );
 }
 
 void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool loop)
@@ -56,7 +67,7 @@ void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool
 
     if (pSound)
     {
-        if (is3D) pSound->set3DMinMaxDistance(2.0f, 50.0f);
+        if (is3D) pSound->set3DMinMaxDistance(1.0f, 100.0f);
 
         sounds[name] = pSound;
     }
@@ -65,7 +76,7 @@ void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool
 FMOD::Channel* SoundManager::Play(SoundName name, XMFLOAT3 position, XMFLOAT3 velocity)
 {
     auto it = sounds.find(name);
-    if (it == sounds.end()) return;
+    if (it == sounds.end()) return nullptr;
 
     FMOD::Channel* pChannel = nullptr;
 

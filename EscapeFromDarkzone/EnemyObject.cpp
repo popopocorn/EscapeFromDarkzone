@@ -4,7 +4,7 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 #include "Shader.h"
-
+#include"SoundManager.h"
 #include "Network.h"
 
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
@@ -968,7 +968,13 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
-
+	static float timeacu = 0;
+	timeacu += fTimeElapsed;
+	if (timeacu > 0.5)
+	{
+		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+		timeacu -= 0.5;
+	}
 	if (pEnemy->IsOutsideLeashRange())
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
