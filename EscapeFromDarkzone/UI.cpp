@@ -187,5 +187,5 @@ bool HUDManager::ProcessClick(POINT mouse)
 			return true;
 		}
 	}
-	return false
+	return false;
 }

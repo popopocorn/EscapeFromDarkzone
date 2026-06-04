@@ -5,6 +5,7 @@
 #include "EscapeFromDarkzone.h"
 #include "GameFramework.h"
 
+
 #define MAX_LOADSTRING 100
 
 HINSTANCE						ghAppInstance;
@@ -31,7 +32,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	MyRegisterClass(hInstance);
 
 	gGameFramework = make_unique<CGameFramework>();
-
 	if (!InitInstance(hInstance, nCmdShow)) return(FALSE);
 
 	hAccelTable = ::LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_ESCAPEFROMDARKZONE));

@@ -1122,6 +1122,11 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 		{
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+			if (m_pPlayer)
+			{
+				pd3dCommandList->OMSetStencilRef(0x04);
+				m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+			}
 		}
 		return;
 	}

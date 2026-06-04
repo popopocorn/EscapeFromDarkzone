@@ -94,6 +94,7 @@
       <Filter>소스파일</Filter>
     </ClCompile>
     <ClCompile Include="ShaderManager.cpp" />
+    <ClCompile Include="SoundManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -196,6 +197,7 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="ShaderManager.h" />
+    <ClInclude Include="SoundManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">

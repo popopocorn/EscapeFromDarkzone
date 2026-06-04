@@ -8,6 +8,7 @@
 #include "InventoryManager.h"
 #include "ResourceManager.h"
 #include"ShaderManager.h"
+#include"SoundManager.h"
 #include "GameFramework.h"
 
 static CGameObject* FindSocketMuzzleFrame(CGameObject* pTarget)
@@ -69,6 +70,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	m_hWnd = hMainWnd;
 
 	InputManager::Instance().init(hMainWnd);
+	SoundManager::Instance().Init();
 	CreateDirect3DDevice();
 	root = make_unique<RootSignature>(m_pd3dDevice);
 	
