@@ -758,7 +758,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
 		pSkinnedShader,
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));

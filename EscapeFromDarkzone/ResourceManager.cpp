@@ -326,16 +326,6 @@ void ResourceManager::BuildPlayerModelPrototypes(
 		PlayerShader
 	);
 
-
-}
-
-void ResourceManager::BuildSkinnedModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* SkinnedShader)
-{
-
 	// 나중에 플레이어 모델 추가 시
 	/*
 	LoadAndRegisterSkinnedModelPrototype(
@@ -356,36 +346,63 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 	*/
+}
 
+void ResourceManager::BuildSkinnedModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* SkinnedShader)
+{
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_01,
+		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SM_Ganster4.bin",
+		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
 	);
-
-	// 나중에 적 모델 추가 시 여기만 열면 됨
-	/*
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_02,
+		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Enemy_02.bin",
+		"Model/SM_Gangster1_2.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_01_3,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_03,
+		ModelName::ENEMY_03_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Enemy_03.bin",
+		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
 	);
-	*/
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_03_2,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster3_2.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_03_3,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster3_3.bin",
+		SkinnedShader
+	);
 }
 
 void ResourceManager::BuildModelPrototypes(

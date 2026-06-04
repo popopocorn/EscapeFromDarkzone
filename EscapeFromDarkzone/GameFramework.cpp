@@ -1023,7 +1023,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01);
+			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1);
 			{
 				wchar_t szLog[256];
 				swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
@@ -1039,7 +1039,7 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dCommandList,
 				root->GetRoot(),
 				NULL,
-				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 			);
 			{
 				wchar_t szLog[256];

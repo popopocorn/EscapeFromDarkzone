@@ -8,9 +8,13 @@ enum class ModelName
 	PLAYER_02,
 	PLAYER_03,
 
-	ENEMY_01,
+	ENEMY_01_1,
+	ENEMY_01_2,
+	ENEMY_01_3,
 	ENEMY_02,
-	ENEMY_03,
+	ENEMY_03_1,
+	ENEMY_03_2,
+	ENEMY_03_3,
 
 	RIFLE,
 	PISTOL,
@@ -20,7 +24,7 @@ enum class ModelName
 	LOOT_BOX,
 
 	PLAYER = PLAYER_01,
-	ENEMY = ENEMY_01,
+	ENEMY = ENEMY_01_1,
 
 	MAP_FLOOR,
 
