@@ -182,6 +182,10 @@ bool HUDManager::ProcessClick(POINT mouse)
 	for (auto& o : objs)
 	{
 		if (o->GetBox().Intersects(mouse))
+		{
 			o->HandleClick();
+			return true;
+		}
 	}
+	return false
 }
