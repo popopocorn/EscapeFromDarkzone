@@ -1127,10 +1127,10 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	}
 #endif
 
-	if (m_pLootBoxShader)
+	/*if (m_pLootBoxShader)
 	{
 		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}
+	}*/
 
 	if (m_pPlayer)
 	{
