@@ -301,9 +301,9 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 		mbstowcs_s(&nConverted, pwstrTextureName, 260, pstrFilePath, _TRUNCATE);
 
 		
-		TCHAR pstrDebugTexture[512] = { 0 };
+		/*TCHAR pstrDebugTexture[512] = { 0 };
 		_stprintf_s(pstrDebugTexture, 512, _T("[Texture Load] %s\n"), pwstrTextureName);
-		OutputDebugString(pstrDebugTexture);
+		OutputDebugString(pstrDebugTexture);*/
 		
 		
 		//#define _WITH_DISPLAY_TEXTURE_NAME

@@ -208,6 +208,19 @@ void ResourceManager::CreateshadowResourceViews(
 	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
 }
 
+void ResourceManager::ReleaseUploadBuffers()
+{
+	for (auto& obj : m_SkinnedModelPrototypes)
+	{
+		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
+	}
+
+	for (auto& obj : m_ModelPrototypes)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
+}
+
 void ResourceManager::ReleaseResources()
 {
 	m_ModelPrototypes.clear();
@@ -297,14 +310,12 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	return true;
 }
 
-void ResourceManager::BuildModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pPlayerShader)
+void ResourceManager::BuildPlayerModelPrototypes(
+	ID3D12Device* pd3dDevice, 
+	ID3D12GraphicsCommandList* pd3dCommandList, 
+	ID3D12RootSignature* pd3dGraphicsRootSignature, 
+	CShader* PlayerShader)
 {
-	if (!pPlayerShader) return;
-
 	// 플레이어 모델
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::PLAYER_01,
@@ -312,8 +323,18 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Soldier_03_Complete_Reduced.bin",
-		pPlayerShader
+		PlayerShader
 	);
+
+
+}
+
+void ResourceManager::BuildSkinnedModelPrototypes(
+	ID3D12Device* pd3dDevice, 
+	ID3D12GraphicsCommandList* pd3dCommandList, 
+	ID3D12RootSignature* pd3dGraphicsRootSignature, 
+	CShader* SkinnedShader)
+{
 
 	// 나중에 플레이어 모델 추가 시
 	/*
@@ -323,7 +344,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Player_02.bin",
-		pPlayerShader
+		SkinnedShader
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
@@ -332,68 +353,9 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Player_03.bin",
-		pPlayerShader
+		SkinnedShader
 	);
 	*/
-
-	// 무기 / 정적 모델
-	LoadAndRegisterModelPrototype(
-		ModelName::RIFLE,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/Classic_M4_1.bin",
-		pPlayerShader
-	);
-
-	LoadAndRegisterModelPrototype(
-		ModelName::PISTOL,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/Pistol_2.bin",
-		pPlayerShader
-	);
-	LoadAndRegisterModelPrototype(
-		ModelName::SMG,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SM_MP5.bin",
-		pPlayerShader
-	);
-	LoadAndRegisterModelPrototype(
-		ModelName::SHOTGUN,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/AllActive.bin",
-		pPlayerShader
-	);
-
-	for (int i = 0; i < MAP_BLOCK_SIZE; ++i)
-	{
-		string s = "Model/block" + to_string(i+1) +".bin";
-	}
-
-	//루팅 아이템 모델
-	LoadAndRegisterModelPrototype(
-		ModelName::LOOT_BOX,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/LootBox.bin",
-		pPlayerShader
-	);
-}
-
-void ResourceManager::BuildEnemyModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pEnemyShader)
-{
-	if (!pEnemyShader) return;
 
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01,
@@ -401,7 +363,7 @@ void ResourceManager::BuildEnemyModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster.bin",
-		pEnemyShader
+		SkinnedShader
 	);
 
 	// 나중에 적 모델 추가 시 여기만 열면 됨
@@ -412,7 +374,7 @@ void ResourceManager::BuildEnemyModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Enemy_02.bin",
-		pEnemyShader
+		SkinnedShader
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
@@ -421,10 +383,79 @@ void ResourceManager::BuildEnemyModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/Enemy_03.bin",
-		pEnemyShader
+		SkinnedShader
 	);
 	*/
 }
+
+void ResourceManager::BuildModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* Standardshader)
+{
+	if (!Standardshader) return;
+
+	// 무기 / 정적 모델
+	LoadAndRegisterModelPrototype(
+		ModelName::RIFLE,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/Classic_M4_1.bin",
+		Standardshader
+	);
+
+	LoadAndRegisterModelPrototype(
+		ModelName::PISTOL,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/Pistol_2.bin",
+		Standardshader
+	);
+	LoadAndRegisterModelPrototype(
+		ModelName::SMG,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_MP5.bin",
+		Standardshader
+	);
+	LoadAndRegisterModelPrototype(
+		ModelName::SHOTGUN,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/AllActive.bin",
+		Standardshader
+	);
+
+	ModelName name = ModelName::MAP_FLOOR;
+	for (const string& s : s_mapFiles)
+	{
+		LoadAndRegisterModelPrototype(
+			name,
+			pd3dDevice,
+			pd3dCommandList,
+			pd3dGraphicsRootSignature,
+			s.c_str(),
+			Standardshader
+		);
+		++name;
+	}
+
+	//루팅 아이템 모델
+	LoadAndRegisterModelPrototype(
+		ModelName::LOOT_BOX,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/LootBox.bin",
+		Standardshader
+	);
+}
+
 
 void ResourceManager::BuildUIMesh(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature)
 {
@@ -433,23 +464,6 @@ void ResourceManager::BuildUIMesh(ID3D12Device * pd3dDevice, ID3D12GraphicsComma
 
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Start_BTN.dds");
-}
-void ResourceManager::BuildLootModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pLootShader)
-{
-	if (!pLootShader) return;
-
-	LoadAndRegisterModelPrototype(
-		ModelName::LOOT_BOX,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/LootBox.bin",
-		pLootShader
-	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const

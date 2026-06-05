@@ -711,117 +711,22 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	// 맵 쉐이더
 	CShader* stdshader = shadermanager->GetShader(ShaderType::STANDARD);
 	m_vVisionMapChunks.clear();
-	m_vVisionMapChunks.reserve(64);
-
-	// 맵 불러오기 코드
+	m_vVisionMapChunks.reserve(70);
+	ModelName name = ModelName::MAP_FLOOR;
+	for (int i = 0; i < s_mapFiles.size(); ++i)
 	{
-		std::unique_ptr<CGameObject> floorObj(
-			CGameObject::LoadGeometryModelByName(
-				pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-				NULL, "Model/floor.bin", stdshader, 0
-			)
-		);
-		floorObj->SetPosition(-150, -0.1f, -150);
-		floorObj->SetOOBB(NULL);
-		stdshader->addObjects(std::move(floorObj));
-
-		static const char* s_mapFiles[] = {
-			"Model/block1.bin",
-			"Model/block3.bin",
-			"Model/block4.bin",
-			"Model/block5.bin",
-			"Model/block6.bin",
-			"Model/block10.bin",
-			"Model/block11.bin",
-			"Model/block12.bin",
-			"Model/block13.bin",
-			"Model/block14.bin",
-			"Model/block15.bin",
-			"Model/block16.bin",
-			"Model/block17.bin",
-			"Model/block18.bin",
-			"Model/block19.bin",
-			"Model/block20.bin",
-			"Model/block21.bin",
-			"Model/block22.bin",
-			"Model/block23.bin",
-			"Model/block24.bin",
-			"Model/block30.bin",
-			"Model/block31.bin",
-			"Model/block32.bin",
-			"Model/block33.bin",
-			"Model/block34.bin",
-			"Model/block35.bin",
-			"Model/block36.bin",
-			"Model/block37.bin",
-			"Model/block38.bin",
-			"Model/block40.bin",
-
-			"Model/block51.bin",
-			"Model/block52.bin",
-			"Model/block53.bin",
-			"Model/block54.bin",
-
-			"Model/green1.bin",
-			"Model/green2.bin",
-
-			"Model/boundary_1.bin",
-			"Model/boundary_2.bin",
-			"Model/boundary_3.bin",
-			"Model/boundary_4.bin",
-
-			"Model/factory1.bin",
-			"Model/factory_wall_1.bin",
-			"Model/factory_wall_2.bin",
-			"Model/factory_wall_3.bin",
-
-			"Model/cont_wall_1.bin",
-			"Model/cont_wall_2.bin",
-			"Model/cont_wall_3.bin",
-
-			"Model/maze_c1.bin",
-			"Model/maze_c2.bin",
-			"Model/maze_c3.bin",
-			"Model/maze_c4.bin",
-			"Model/maze_c5.bin",
-			"Model/maze_c6.bin",
-
-			"Model/block_cb_1.bin",
-			"Model/block_cb_2.bin",
-			"Model/block_cb_3.bin",
-			"Model/block_cb_4.bin",
-			"Model/block_cb_5.bin",
-			"Model/block_cb_6.bin",
-			"Model/block_cb_7.bin",
-			"Model/block_cb_8.bin",
-			"Model/block_cb_9.bin",
-
-			"Model/cars_c1.bin",
-			"Model/cars_c2.bin",
-			"Model/cars_c3.bin",
-			"Model/cars_c4.bin",
-			"Model/cars_c5.bin",
-			"Model/cars_c6.bin",
-
-			"Model/road.bin",
-		};
-
-		for (const char* fileName : s_mapFiles)
-		{
-			std::unique_ptr<CGameObject> map(
-				CGameObject::LoadGeometryModelByName(
-					pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature,
-					NULL, fileName, stdshader, 0
-				)
-			);
-			map->SetPosition(-150, 0.0f, -150);
-			map->SetOOBB(NULL);
-
-			m_vVisionMapChunks.push_back(map.get());
-
-			stdshader->addObjects(std::move(map));
-		}
+		
+		CGameObject* map = new CGameObject();
+		map->SetChild(ResourceManager::Instance().GetModelPrototype(name));
+		map->SetPosition(-150, 0.0f, -150);
+		map->SetOOBB(NULL);
+		m_vVisionMapChunks.push_back(map);
+		stdshader->addObjects(unique_ptr<CGameObject>(map));
+		++name;
 	}
+
+
+
 	m_ppShaders.push_back(stdshader);
 
 	// 시야 객체 생성
@@ -873,16 +778,9 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	// 적 쉐이더
 	auto pSkinnedShader = shadermanager->GetShader(ShaderType::SKINNED);
-	ResourceManager::Instance().BuildEnemyModelPrototypes(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pSkinnedShader
-	);
 
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
-
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
 	CEnemyObject* pEnemy = new CEnemyObject(
