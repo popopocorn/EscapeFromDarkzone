@@ -199,7 +199,6 @@ D3D12_BLEND_DESC CShader::CreateBlendState()
 
 	return desc;
 }
-
 void CShader::CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature)
 {
 	::ZeroMemory(&m_d3dPipelineStateDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -424,7 +423,28 @@ void CStandardObjectsShader::ReleaseObjects()
 {
 	m_ppObjects.clear();
 }
+D3D12_BLEND_DESC CStandardObjectsShader::CreateBlendState()
+{
+	D3D12_BLEND_DESC desc = {};
+	desc.AlphaToCoverageEnable = FALSE;
+	desc.IndependentBlendEnable = FALSE;
 
+	auto& rt = desc.RenderTarget[0];
+	rt.BlendEnable = FALSE;
+	rt.LogicOpEnable = FALSE;
+
+	rt.SrcBlend = D3D12_BLEND_ONE;
+	rt.DestBlend = D3D12_BLEND_ZERO;
+	rt.BlendOp = D3D12_BLEND_OP_ADD;
+
+	rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	return desc;
+}
 void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;
@@ -435,27 +455,16 @@ void CStandardObjectsShader::ReleaseUploadBuffers()
 	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
-void CStandardObjectsShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState)
+void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
 	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
 
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
-		if (m_ppObjects[j])
-		{
-			bool inCamera = false;
-			for (auto& obb : m_ppObjects[j]->GetOOBB()) {
-				if (pCamera->GetFrustum().Intersects(*obb)) {
-					inCamera = true;
-					break;
-				}
-			}
-			if(inCamera)
-			{
-				m_ppObjects[j]->UpdateTransform(NULL);
-				m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
-			}
-		}
+		if (!m_ppObjects[j]) continue;
+
+		m_ppObjects[j]->UpdateTransform(NULL);
+		m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 	}
 }
 

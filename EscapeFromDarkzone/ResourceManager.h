@@ -23,9 +23,6 @@ enum class ModelName
 
 	LOOT_BOX,
 
-	PLAYER = PLAYER_01,
-	ENEMY = ENEMY_01_1,
-
 	MAP_FLOOR,
 
 	MAP_BLOCK01,   // block1

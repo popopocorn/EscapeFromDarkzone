@@ -1065,7 +1065,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 }
 
-void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
@@ -1090,7 +1090,6 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 		return;
 	}
 
-	// 1. 월드
 	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 
 	for (int i = 0; i < m_ppShaders.size(); i++)
@@ -1099,22 +1098,23 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	// 2. 이펙트 매니저 렌더
+	//if (m_pInventoryManager)
+	//{
+	//	m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, nPipelineState);
+	//}
+
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 
-	// 3. 시야 바깥
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
-	// 4. UI
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -1139,10 +1139,38 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 	}
 }
 
-void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
+void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-	if (!m_pPlayer || !pCamera) return;
-	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+	if (!pCamera) return;
+
+	if (m_pPlayer)
+	{
+		m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+	}
+
+	if (m_pd3dGraphicsRootSignature)
+	{
+		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	}
+
+	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
+	pd3dCommandList->SetDescriptorHeaps(1, &heap);
+
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pd3dcbLights)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	}
+
+	pd3dCommandList->OMSetStencilRef(0xff);
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
+	}
 }
 
 void MainScene::ReleaseUploadBuffers()
