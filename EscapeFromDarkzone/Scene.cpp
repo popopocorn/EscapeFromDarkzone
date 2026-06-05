@@ -544,6 +544,23 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
 
+		case '9':
+		{
+			if (wasDownBefore) return true;
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+			}
+			return true;
+		}
+		case '0':
+		{
+			if (wasDownBefore) return true;
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_VEST);
+			}
+			return true;
+		}
+
 		default:
 			break;
 		}

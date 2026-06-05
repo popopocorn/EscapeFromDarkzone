@@ -298,3 +298,13 @@ bool NetworkManager::SendLootPickup(short box_id, short slotidx)
 	pkt.slotidx = slotidx;
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendCraftRequest(ItemID target)
+{
+	CS_CRAFT_REQUEST_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_CRAFT_REQUEST_PACKET);
+	pkt.type = CS_CRAFT_REQUEST;
+	pkt.target = target;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
