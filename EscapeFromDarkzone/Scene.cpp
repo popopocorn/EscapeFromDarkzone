@@ -1147,11 +1147,10 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
-
-	/*if (m_pLootBoxShader)
+	if (m_pInventoryManager)
 	{
-		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}*/
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
+	}
 
 	if (m_pPlayer)
 	{
@@ -1169,29 +1168,6 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamer
 		m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
 	}
 
-	if (m_pd3dGraphicsRootSignature)
-	{
-		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
-	}
-
-	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
-	pd3dCommandList->SetDescriptorHeaps(1, &heap);
-
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-	UpdateShaderVariables(pd3dCommandList);
-
-	if (m_pd3dcbLights)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
-		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	}
-
-	pd3dCommandList->OMSetStencilRef(0xff);
-
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
-	}
 }
 
 void MainScene::ReleaseUploadBuffers()

@@ -1045,7 +1045,7 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dDevice,
 				m_pd3dCommandList,
 				root->GetRoot(),
-				NULL,
+				shadermanager->GetShader(ShaderType::SKINNED),
 				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 			);
 			{
