@@ -1092,6 +1092,17 @@ void CGameFramework::ProcessNetworkPackets()
 
 			break;
 		}
+		case SC_EQUIPMENT_UPDATE: {
+			SC_EQUIPMENT_UPDATE_PACKET* p =
+				reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
+
+			// 장비 시스템 미구현 — 현재는 콘솔 출력만
+			wchar_t buf[128];
+			swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n",
+				static_cast<int>(p->equip_id));
+			OutputDebugStringW(buf);
+			break;
+		}
 		case SC_ADD_LOOT_BOX: {
 			SC_ADD_LOOT_BOX_PACKET* p =
 				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
