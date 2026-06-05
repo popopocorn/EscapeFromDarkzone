@@ -54,4 +54,5 @@ public:
     bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId);
 
     bool SendLootPickup(short box_id, short slotidx);
+    bool SendCraftRequest(ItemID target);
 };

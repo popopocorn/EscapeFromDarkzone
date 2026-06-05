@@ -49,6 +49,10 @@ constexpr char SC_PLAY_EFFECT_ATTACHED = 19;
 constexpr char SC_PLAYER_HP_UPDATE = 20;
 constexpr char SC_PLAY_EFFECT_WORLD = 21;
 
+// 제작(crafting)
+constexpr char CS_CRAFT_REQUEST = 22;
+constexpr char SC_EQUIPMENT_UPDATE = 23;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -236,6 +240,18 @@ struct SC_PLAY_EFFECT_WORLD_PACKET {
 	unsigned char effect_id;     // EffectID raw 값
 	float         x, y, z;       // 발생 위치
 	float         dx, dy, dz;    // 방향 (방향 무의미한 이펙트는 클라가 무시)
+};
+
+struct CS_CRAFT_REQUEST_PACKET {
+	unsigned char size;
+	char          type;
+	ItemID        target;
+};
+
+struct SC_EQUIPMENT_UPDATE_PACKET {
+	unsigned char size;
+	char          type;
+	ItemID        equip_id;
 };
 
 #pragma pack (pop)

@@ -11,15 +11,6 @@
 #include"SoundManager.h"
 #include "GameFramework.h"
 
-static CGameObject* FindSocketMuzzleFrame(CGameObject* pTarget)
-{
-	if (!pTarget) return nullptr;
-
-	CGameObject* pMuzzle = pTarget->FindFrame("Socket_Muzzle");
-	if (pMuzzle) return pMuzzle;
-
-	return nullptr;
-}
 static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 {
 	if (Vector3::Length(v) < 0.0001f)
@@ -27,6 +18,50 @@ static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 
 	return Vector3::Normalize(v);
 }
+static bool GetAttachedEffectMuzzleInfo(
+	CGameObject* pTarget,
+	XMFLOAT3& outPos,
+	XMFLOAT3& outDir)
+{
+	if (!pTarget)
+		return false;
+
+	pTarget->UpdateTransform(NULL);
+
+	CGameObject* pMuzzle = nullptr;
+
+	if (CEnemyObject* pNpc = dynamic_cast<CEnemyObject*>(pTarget))
+	{
+		pMuzzle = pNpc->GetWeaponMuzzleSocket();
+	}
+	else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pTarget))
+	{
+		pMuzzle = pOther->GetWeaponMuzzleSocket();
+	}
+
+	if (!pMuzzle)
+	{
+		pMuzzle = pTarget->FindFrame("Socket_Muzzle");
+	}
+
+	if (!pMuzzle)
+	{
+		OutputDebugString(L"[Effect] Socket_Muzzle not found. attached effect skipped.\n");
+		return false;
+	}
+
+	outPos = pMuzzle->GetPosition();
+
+	outDir = pTarget->GetLook();
+	outDir = SafeNormalizeOrDefault(outDir, XMFLOAT3(0.0f, 0.0f, 1.0f));
+
+	outPos.x += outDir.x * 0.05f;
+	outPos.y += outDir.y * 0.05f;
+	outPos.z += outDir.z * 0.05f;
+
+	return true;
+}
+
 
 
 CGameFramework::CGameFramework()
@@ -995,7 +1030,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01);
+			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1);
 			{
 				wchar_t szLog[256];
 				swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
@@ -1011,7 +1046,7 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dCommandList,
 				root->GetRoot(),
 				NULL,
-				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 			);
 			{
 				wchar_t szLog[256];
@@ -1103,6 +1138,17 @@ void CGameFramework::ProcessNetworkPackets()
 
 			break;
 		}
+		case SC_EQUIPMENT_UPDATE: {
+			SC_EQUIPMENT_UPDATE_PACKET* p =
+				reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
+
+			// 장비 시스템 미구현 — 현재는 콘솔 출력만
+			wchar_t buf[128];
+			swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n",
+				static_cast<int>(p->equip_id));
+			OutputDebugStringW(buf);
+			break;
+		}
 		case SC_ADD_LOOT_BOX: {
 			SC_ADD_LOOT_BOX_PACKET* p =
 				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
@@ -1157,25 +1203,33 @@ void CGameFramework::ProcessNetworkPackets()
 			}
 			break;
 		}
-		case SC_PLAY_EFFECT_ATTACHED: {
-			// 머즐 플래시 (NPC, OtherPlayer)
+		case SC_PLAY_EFFECT_ATTACHED:
+		{
 			SC_PLAY_EFFECT_ATTACHED_PACKET* p =
 				reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
 
-			// 패킷 언팩
-			EffectID  effectId = static_cast<EffectID>(p->effect_id);
-			const unsigned char entityKind = p->entity_kind;   // 0=NPC, 1=OtherPlayer
-			const short         entityId = p->entity_id;
+			EffectID effectId = static_cast<EffectID>(p->effect_id);
+			const unsigned char entityKind = p->entity_kind;   // 0 = NPC, 1 = OtherPlayer
+			const short entityId = p->entity_id;
 
 			CGameObject* pTarget = nullptr;
-			if (entityKind == 0) {
+
+			if (entityKind == 0)
+			{
 				pTarget = FindNpc(entityId);
 			}
-			else if (entityKind == 1) {
+			else if (entityKind == 1)
+			{
 				pTarget = FindOtherPlayer(entityId);
 			}
 
 			if (!pTarget)
+			{
+				OutputDebugString(L"[Effect] attached target not found.\n");
+				break;
+			}
+
+			if (m_pScene.empty())
 			{
 				break;
 			}
@@ -1186,34 +1240,12 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			pTarget->UpdateTransform(NULL);
-
-			CGameObject* pMuzzle = FindSocketMuzzleFrame(pTarget);
-
 			XMFLOAT3 effectPos;
 			XMFLOAT3 effectDir;
 
-			if (pMuzzle)
+			if (!GetAttachedEffectMuzzleInfo(pTarget, effectPos, effectDir))
 			{
-				effectPos = pMuzzle->GetPosition();
-				effectDir = pMuzzle->GetLook();
-
-				effectDir = SafeNormalizeOrDefault(effectDir, pTarget->GetLook());
-			}
-			//소켓 없는 경우, 대충 머리 위쪽에서 앞쪽으로
-			else
-			{
-				XMFLOAT3 targetPos = pTarget->GetPosition();
-				XMFLOAT3 targetLook = SafeNormalizeOrDefault(pTarget->GetLook(), XMFLOAT3(0.0f, 0.0f, 1.0f));
-				XMFLOAT3 targetUp = SafeNormalizeOrDefault(pTarget->GetUp(), XMFLOAT3(0.0f, 1.0f, 0.0f));
-
-				effectPos.x = targetPos.x + targetLook.x * 0.8f + targetUp.x * 1.2f;
-				effectPos.y = targetPos.y + targetLook.y * 0.8f + targetUp.y * 1.2f;
-				effectPos.z = targetPos.z + targetLook.z * 0.8f + targetUp.z * 1.2f;
-
-				effectDir = targetLook;
-
-				OutputDebugString(L"[Effect] Socket_Muzzle not found. fallback used.\n");
+				break;
 			}
 
 			int ownerId =

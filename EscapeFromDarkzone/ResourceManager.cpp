@@ -109,7 +109,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE ResourceManager::CreateConstantBufferViews(
 	{
 		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
 
-		
+
 
 		pd3dDevice->CreateConstantBufferView(
 			&d3dCBVDesc,
@@ -311,9 +311,9 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 }
 
 void ResourceManager::BuildPlayerModelPrototypes(
-	ID3D12Device* pd3dDevice, 
-	ID3D12GraphicsCommandList* pd3dCommandList, 
-	ID3D12RootSignature* pd3dGraphicsRootSignature, 
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* PlayerShader)
 {
 	// 플레이어 모델
@@ -325,16 +325,6 @@ void ResourceManager::BuildPlayerModelPrototypes(
 		"Model/SM_Soldier_03_Complete_Reduced.bin",
 		PlayerShader
 	);
-
-
-}
-
-void ResourceManager::BuildSkinnedModelPrototypes(
-	ID3D12Device* pd3dDevice, 
-	ID3D12GraphicsCommandList* pd3dCommandList, 
-	ID3D12RootSignature* pd3dGraphicsRootSignature, 
-	CShader* SkinnedShader)
-{
 
 	// 나중에 플레이어 모델 추가 시
 	/*
@@ -356,36 +346,63 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 	*/
+}
 
+void ResourceManager::BuildSkinnedModelPrototypes(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* SkinnedShader)
+{
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_01,
+		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SM_Gangster.bin",
+		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
 	);
-
-	// 나중에 적 모델 추가 시 여기만 열면 됨
-	/*
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_02,
+		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Enemy_02.bin",
+		"Model/SM_Gangster1_2.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_01_3,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_03,
+		ModelName::ENEMY_03_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Enemy_03.bin",
+		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
 	);
-	*/
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_03_2,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster3_2.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_03_3,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster3_3.bin",
+		SkinnedShader
+	);
 }
 
 void ResourceManager::BuildModelPrototypes(
@@ -402,7 +419,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/Classic_M4_1.bin",
+		"Model/Classic_M4.bin",
 		Standardshader
 	);
 
@@ -427,7 +444,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/AllActive.bin",
+		"Model/Shotgun.bin",
 		Standardshader
 	);
 
@@ -457,7 +474,7 @@ void ResourceManager::BuildModelPrototypes(
 }
 
 
-void ResourceManager::BuildUIMesh(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature)
+void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");

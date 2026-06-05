@@ -2,7 +2,7 @@
 
 
 //재료를 위한 구조
-enum class ItemID {
+enum class ItemID : short {
 	//재료
 	NONE = 0,
 	MAT_1_FIBER,
@@ -16,7 +16,8 @@ enum class ItemID {
 	ARMOR_PLATE,
 
 	//완성품
-
+	WEAPON_RIFLE,     // 더미 무기
+	ARMOR_VEST,       // 더미 방어구
 };
 struct ItemSlot {
     ItemID item = ItemID::NONE;

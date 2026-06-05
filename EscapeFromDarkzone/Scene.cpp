@@ -22,58 +22,6 @@
 
 #include "Network.h"
 
-static CGameObject* FindLaserMuzzleFrame(CGameObject* pWeapon)
-{
-	if (!pWeapon) return nullptr;
-
-	static const char* s_ppMuzzleNames[] =
-	{
-		"Muzzle",
-		"muzzle",
-		"MuzzleFlash",
-		"muzzleflash",
-		"FirePos",
-		"firepos",
-		"BarrelEnd",
-		"barrel_end",
-		"Socket_Muzzle",
-		"socket_muzzle"
-	};
-
-	for (const char* name : s_ppMuzzleNames)
-	{
-		CGameObject* pFrame = pWeapon->FindFrame(name);
-		if (pFrame) return pFrame;
-	}
-
-	return nullptr;
-}
-static CGameObject* FindWeaponMuzzleFrame(CGameObject* pWeapon)
-{
-	if (!pWeapon) return nullptr;
-
-	static const char* s_ppMuzzleNames[] =
-	{
-		"Muzzle",
-		"muzzle",
-		"MuzzleFlash",
-		"muzzleflash",
-		"FirePos",
-		"firepos",
-		"BarrelEnd",
-		"barrel_end",
-		"Socket_Muzzle",
-		"socket_muzzle"
-	};
-
-	for (const char* name : s_ppMuzzleNames)
-	{
-		CGameObject* pFrame = pWeapon->FindFrame(name);
-		if (pFrame) return pFrame;
-	}
-
-	return nullptr;
-}
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
 {
 	if (!pShader) return;
@@ -153,6 +101,58 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
+static bool GetCurrentPlayerMuzzleInfo(
+	CPlayer* pPlayer,
+	XMFLOAT3& outPos,
+	XMFLOAT3& outLook,
+	XMFLOAT3& outRight,
+	XMFLOAT3& outUp)
+{
+	if (!pPlayer)
+		return false;
+
+	outLook = pPlayer->GetLookVector();
+	outRight = pPlayer->GetRightVector();
+	outUp = pPlayer->GetUpVector();
+
+	if (Vector3::Length(outLook) < 0.0001f)
+		outLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	if (Vector3::Length(outRight) < 0.0001f)
+		outRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
+
+	if (Vector3::Length(outUp) < 0.0001f)
+		outUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	outLook = Vector3::Normalize(outLook);
+	outRight = Vector3::Normalize(outRight);
+	outUp = Vector3::Normalize(outUp);
+
+	CGameObject* pMuzzle = pPlayer->GetWeaponMuzzleSocket();
+
+	if (pMuzzle)
+	{
+		pPlayer->UpdateTransform(NULL);
+
+		outPos = pMuzzle->GetPosition();
+
+		outPos.x += outLook.x * 0.05f;
+		outPos.y += outLook.y * 0.05f;
+		outPos.z += outLook.z * 0.05f;
+
+		return true;
+	}
+
+	// Socket_Muzzle이 없을 때 fallback
+	outPos = pPlayer->GetPosition();
+
+	outPos.x += outLook.x * 0.8f + outRight.x * 0.25f + outUp.x * 1.2f;
+	outPos.y += outLook.y * 0.8f + outRight.y * 0.25f + outUp.y * 1.2f;
+	outPos.z += outLook.z * 0.8f + outRight.z * 0.25f + outUp.z * 1.2f;
+
+	return false;
+}
+
 
 CScene::CScene(CGameFramework* game)
 {
@@ -300,9 +300,6 @@ MainScene::MainScene(CGameFramework* game) : CScene(game)
 	m_pFogOverlayShader = nullptr;
 	m_pDebugShader = nullptr;
 
-	m_pLaserMuzzle = nullptr;
-	m_pWeaponMuzzle = nullptr;
-
 	m_pEffectManager = nullptr;
 	m_pInventoryManager = nullptr;
 
@@ -339,97 +336,83 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			{
 				m_pEffectManager->HideLaser(0);
 			}
+
 			return;
 		}
 
-		if (!m_pPlayer) return;
+		if (!m_pPlayer)
+			return;
 
-		m_bSparkFireActive = true;
+		if (!m_pPlayer->TryFireWeapon())
+		{
+			m_bSparkFireActive = false;
+			m_bLaserActive = false;
+			m_fSparkSpawnTimer = 0.0f;
+
+			if (m_pEffectManager)
+			{
+				m_pEffectManager->HideLaser(0);
+			}
+
+			return;
+		}
+
+		m_bSparkFireActive = m_pPlayer->IsCurrentWeaponAutomatic();
 		m_bLaserActive = true;
 		m_fSparkSpawnTimer = 0.0f;
 		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
 
-		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
-		{
-			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
-		}
-
-		if (!m_pPlayer->TryFireWeapon())
-		{
-			return;
-		}
-
 		m_pPlayer->NotifyWeaponFired();
 
+		XMFLOAT3 muzzlePos;
+		XMFLOAT3 muzzleLook;
+		XMFLOAT3 muzzleRight;
+		XMFLOAT3 muzzleUp;
+
+		GetCurrentPlayerMuzzleInfo(
+			m_pPlayer,
+			muzzlePos,
+			muzzleLook,
+			muzzleRight,
+			muzzleUp
+		);
+
 		XMFLOAT3 sparkPos;
-		XMFLOAT3 sparkRight;
-		XMFLOAT3 sparkUp;
+		sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
+		sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
+		sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
 
-		if (m_pWeaponMuzzle)
-		{
-			XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
-			XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
-			XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
-
-			XMFLOAT3 flatLook = muzzleLook;
-			flatLook.y = 0.0f;
-			flatLook = Vector3::Normalize(flatLook);
-
-			sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-			sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-			sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
-
-			sparkRight = muzzleRight;
-			sparkUp = flatLook;
-		}
-		else
-		{
-			XMFLOAT3 pos = m_pPlayer->GetPosition();
-			XMFLOAT3 look = m_pPlayer->GetLookVector();
-			XMFLOAT3 right = m_pPlayer->GetRightVector();
-			XMFLOAT3 up = m_pPlayer->GetUpVector();
-
-			XMFLOAT3 flatLook = look;
-			flatLook.y = 0.0f;
-			flatLook = Vector3::Normalize(flatLook);
-
-			sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
-			sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
-			sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
-
-			sparkRight = right;
-			sparkUp = flatLook;
-		}
+		XMFLOAT3 sparkRight = muzzleRight;
+		XMFLOAT3 sparkUp = muzzleLook;
 
 		if (m_pEffectManager)
 		{
 			m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 		}
 
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
-			if (NetworkManager::Instance().IsConnected()) {
-				XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
-				XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
-
-				XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
-				XMFLOAT3 rayDirection;
-				XMStoreFloat3(&rayDirection, dirVec);
-
-				NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 			}
-			else {
-				XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-				XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+			else
+			{
+				XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
+				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
 
 				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
 				for (auto& obj : *objs)
 				{
+					if (!obj) continue;
+
 					const auto& oobbs = obj->GetOOBB();
 
 					for (BoundingOrientedBox* pOOBB : oobbs)
 					{
+						if (!pOOBB) continue;
+
 						float fDist = 0.0f;
 
 						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
@@ -444,11 +427,13 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 					}
 				}
 			}
-
 		}
+
 		break;
 	}
+
 	case WM_LBUTTONUP:
+	{
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
 		m_fSparkSpawnTimer = 0.0f;
@@ -457,7 +442,9 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			m_pEffectManager->HideLaser(0);
 		}
+
 		break;
+	}
 
 	default:
 		break;
@@ -556,6 +543,23 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
 			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
+
+		case '9':
+		{
+			if (wasDownBefore) return true;
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+			}
+			return true;
+		}
+		case '0':
+		{
+			if (wasDownBefore) return true;
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_VEST);
+			}
+			return true;
+		}
 
 		default:
 			break;
@@ -771,7 +775,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		pd3dCommandList,
 		m_pd3dGraphicsRootSignature,
 		pSkinnedShader,
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 	);
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -928,95 +932,83 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	}
 
 	// 연사 처리
-	if (m_bSparkFireActive && m_pPlayer && !IsAnyInventoryOpen())
+	if (m_bSparkFireActive && m_pPlayer && m_pPlayer->IsCurrentWeaponAutomatic() && !IsAnyInventoryOpen())
 	{
-		if (!m_pWeaponMuzzle && m_pPlayer->GetWeapon())
-		{
-			m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
-		}
-
 		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
 		m_fSparkSpawnTimer += fTimeElapsed;
 
 		while (m_fSparkSpawnTimer >= m_fSparkSpawnInterval)
 		{
-			if (!m_pPlayer->TryFireWeapon())
+			if (!m_pPlayer->CanFireWeapon())
 			{
 				m_fSparkSpawnTimer = 0.0f;
+				m_bSparkFireActive = false;
+				m_bLaserActive = false;
+
+				if (m_pEffectManager)
+				{
+					m_pEffectManager->HideLaser(0);
+				}
+
 				break;
 			}
 
+			if (!m_pPlayer->TryFireWeapon())
+			{
+				break;
+			}
+
+			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
+
 			m_pPlayer->NotifyWeaponFired();
 
+			XMFLOAT3 muzzlePos;
+			XMFLOAT3 muzzleLook;
+			XMFLOAT3 muzzleRight;
+			XMFLOAT3 muzzleUp;
+
+			GetCurrentPlayerMuzzleInfo(
+				m_pPlayer,
+				muzzlePos,
+				muzzleLook,
+				muzzleRight,
+				muzzleUp
+			);
+
 			XMFLOAT3 sparkPos;
-			XMFLOAT3 sparkRight;
-			XMFLOAT3 sparkUp;
-
-			if (m_pWeaponMuzzle)
-			{
-				XMFLOAT3 muzzlePos = m_pWeaponMuzzle->GetPosition();
-				XMFLOAT3 muzzleLook = m_pWeaponMuzzle->GetLook();
-				XMFLOAT3 muzzleRight = m_pWeaponMuzzle->GetRight();
-
-				XMFLOAT3 flatLook = muzzleLook;
-				flatLook.y = 0.0f;
-				flatLook = Vector3::Normalize(flatLook);
-
-				sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-				sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-				sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
-
-				sparkRight = muzzleRight;
-				sparkUp = flatLook;
-			}
-			else
-			{
-				XMFLOAT3 pos = m_pPlayer->GetPosition();
-				XMFLOAT3 look = m_pPlayer->GetLookVector();
-				XMFLOAT3 right = m_pPlayer->GetRightVector();
-				XMFLOAT3 up = m_pPlayer->GetUpVector();
-
-				XMFLOAT3 flatLook = look;
-				flatLook.y = 0.0f;
-				flatLook = Vector3::Normalize(flatLook);
-
-				sparkPos.x = pos.x + look.x * 0.8f + right.x * 0.25f + up.x * 1.2f;
-				sparkPos.y = pos.y + look.y * 0.8f + right.y * 0.25f + up.y * 1.2f;
-				sparkPos.z = pos.z + look.z * 0.8f + right.z * 0.25f + up.z * 1.2f;
-
-				sparkRight = right;
-				sparkUp = flatLook;
-			}
+			sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
+			sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
+			sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
 
 			if (m_pEffectManager)
 			{
-				m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+				m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, muzzleRight, muzzleLook);
+				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
-				if (NetworkManager::Instance().IsConnected()) {
-					XMFLOAT3 rayOrigin = m_pPlayer->GetPosition();
-					XMFLOAT3 lookVec = m_pPlayer->GetLookVector();
-
-					XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&lookVec));
-					XMFLOAT3 rayDirection;
-					XMStoreFloat3(&rayDirection, dirVec);
-
-					NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, 0);
+				if (NetworkManager::Instance().IsConnected())
+				{
+					NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 				}
-				else {
-					XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-					XMVECTOR rayOrigin = XMLoadFloat3(&playerPos);
-					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&m_pPlayer->GetLookVector()));
+				else
+				{
+					XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
+					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
 
 					auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
 					for (auto& obj : *objs)
 					{
+						if (!obj) continue;
+
 						const auto& oobbs = obj->GetOOBB();
 
 						for (BoundingOrientedBox* pOOBB : oobbs)
 						{
+							if (!pOOBB) continue;
+
 							float fDist = 0.0f;
 
 							if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
@@ -1031,15 +1023,17 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 						}
 					}
 				}
-
 			}
-
-			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
 		}
 	}
 	else
 	{
 		m_fSparkSpawnTimer = 0.0f;
+
+		if (m_pEffectManager)
+		{
+			m_pEffectManager->HideLaser(0);
+		}
 	}
 
 	if (m_pEffectManager)
@@ -1050,40 +1044,27 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	// 레이저 transform 갱신
 	if (m_bLaserActive && m_pPlayer && !IsAnyInventoryOpen() && m_pEffectManager)
 	{
-		if (!m_pLaserMuzzle && m_pPlayer->GetWeapon())
-		{
-			m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
-		}
+		XMFLOAT3 muzzlePos;
+		XMFLOAT3 muzzleLook;
+		XMFLOAT3 muzzleRight;
+		XMFLOAT3 muzzleUp;
 
-		XMFLOAT3 origin;
-		XMFLOAT3 right;
-		XMFLOAT3 up;
-		XMFLOAT3 dir;
+		GetCurrentPlayerMuzzleInfo(
+			m_pPlayer,
+			muzzlePos,
+			muzzleLook,
+			muzzleRight,
+			muzzleUp
+		);
 
-		if (m_pLaserMuzzle)
-		{
-			origin = m_pLaserMuzzle->GetPosition();
-			dir = Vector3::Normalize(m_pLaserMuzzle->GetLook());
-			right = Vector3::Normalize(m_pLaserMuzzle->GetRight());
-			up = Vector3::Normalize(m_pLaserMuzzle->GetUp());
-		}
-		else
-		{
-			XMFLOAT3 pos = m_pPlayer->GetPosition();
-			XMFLOAT3 look = Vector3::Normalize(m_pPlayer->GetLookVector());
-			XMFLOAT3 rightVec = Vector3::Normalize(m_pPlayer->GetRightVector());
-			XMFLOAT3 upVec = Vector3::Normalize(m_pPlayer->GetUpVector());
-
-			origin.x = pos.x + upVec.x * 1.2f + rightVec.x * 0.3f + look.x * 0.5f;
-			origin.y = pos.y + upVec.y * 1.2f + rightVec.y * 0.3f + look.y * 0.5f;
-			origin.z = pos.z + upVec.z * 1.2f + rightVec.z * 0.3f + look.z * 0.5f;
-
-			dir = look;
-			right = rightVec;
-			up = upVec;
-		}
-
-		m_pEffectManager->UpdateLaser(0, origin, right, up, dir, m_fLaserLength);
+		m_pEffectManager->UpdateLaser(
+			0,
+			muzzlePos,
+			muzzleRight,
+			muzzleUp,
+			muzzleLook,
+			m_fLaserLength
+		);
 	}
 	else if (m_pEffectManager)
 	{
@@ -1100,7 +1081,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
-void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
@@ -1130,7 +1111,6 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 		return;
 	}
 
-	// 1. 월드
 	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 
 	for (int i = 0; i < m_ppShaders.size(); i++)
@@ -1139,22 +1119,23 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	// 2. 이펙트 매니저 렌더
+	//if (m_pInventoryManager)
+	//{
+	//	m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, nPipelineState);
+	//}
+
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 
-	// 3. 시야 바깥
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
-	// 4. UI
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -1167,10 +1148,10 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 	}
 #endif
 
-	if (m_pLootBoxShader)
+	/*if (m_pLootBoxShader)
 	{
 		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}
+	}*/
 
 	if (m_pPlayer)
 	{
@@ -1179,10 +1160,38 @@ void MainScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelin
 	}
 }
 
-void MainScene::ThroughRender(ID3D12GraphicsCommandList * pd3dCommandList, CCamera * pCamera)
+void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
-	if (!m_pPlayer || !pCamera) return;
-	m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+	if (!pCamera) return;
+
+	if (m_pPlayer)
+	{
+		m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
+	}
+
+	if (m_pd3dGraphicsRootSignature)
+	{
+		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	}
+
+	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
+	pd3dCommandList->SetDescriptorHeaps(1, &heap);
+
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	if (m_pd3dcbLights)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	}
+
+	pd3dCommandList->OMSetStencilRef(0xff);
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
+	}
 }
 
 void MainScene::ReleaseUploadBuffers()
@@ -1204,13 +1213,17 @@ void MainScene::ReleaseUploadBuffers()
 void MainScene::LinkToPlayer()
 {
 	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+
 	for (auto& obj : *pVector)
 	{
 		ViewObject* pViewObj = static_cast<ViewObject*>(obj.get());
 		pViewObj->setPlayer(m_pPlayer);
 	}
 
-	if (m_pPlayer) m_pDebugShader->AddObject(m_pPlayer);
+	if (m_pPlayer)
+	{
+		m_pDebugShader->AddObject(m_pPlayer);
+	}
 
 	ShadowCameraManager->SetPlayer(m_pPlayer->GetCamera());
 	ShadowCameraManager->SetDir(m_pLights[0].m_xmf3Direction);
@@ -1218,26 +1231,16 @@ void MainScene::LinkToPlayer()
 	if (m_ppShaders[SHADERIDX::ENEMY])
 	{
 		auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
 		for (auto& obj : *objs)
 		{
 			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+
 			if (pEnemy)
 			{
 				pEnemy->SetPlayer(m_pPlayer);
 			}
 		}
-	}
-
-	m_pWeaponMuzzle = nullptr;
-	if (m_pPlayer && m_pPlayer->GetWeapon())
-	{
-		m_pWeaponMuzzle = FindWeaponMuzzleFrame(m_pPlayer->GetWeapon());
-	}
-
-	m_pLaserMuzzle = nullptr;
-	if (m_pPlayer && m_pPlayer->GetWeapon())
-	{
-		m_pLaserMuzzle = FindLaserMuzzleFrame(m_pPlayer->GetWeapon());
 	}
 
 	if (m_pInventoryManager)

@@ -1,4 +1,5 @@
 #pragma once
+#include "UI.h"
 
 enum class ModelName
 {
@@ -7,9 +8,13 @@ enum class ModelName
 	PLAYER_02,
 	PLAYER_03,
 
-	ENEMY_01,
+	ENEMY_01_1,
+	ENEMY_01_2,
+	ENEMY_01_3,
 	ENEMY_02,
-	ENEMY_03,
+	ENEMY_03_1,
+	ENEMY_03_2,
+	ENEMY_03_3,
 
 	RIFLE,
 	PISTOL,
@@ -17,9 +22,6 @@ enum class ModelName
 	SMG,
 
 	LOOT_BOX,
-
-	PLAYER = PLAYER_01,
-	ENEMY = ENEMY_01,
 
 	MAP_FLOOR,
 
@@ -196,7 +198,7 @@ static vector<string>s_mapFiles = {
 			"Model/road.bin",
 };
 enum class UIName {
-	LOBBY_BACKGROUND=0,
+	LOBBY_BACKGROUND = 0,
 	LOBBY_START_BUTTON,
 
 };
@@ -206,7 +208,7 @@ class CGameObject;
 class CTexture;
 class ShadowMap;
 class CShader;
-class UIMesh;
+//class UIMesh;
 
 class ResourceManager
 {
@@ -229,7 +231,7 @@ private:
 	// 애니메이션 있는 모델 원본
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
-	//UI 원본
+	// UI 원본
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
 private:
@@ -255,8 +257,6 @@ private:
 		const char* modelPath,
 		CShader* pShader
 	);
-
-
 
 	void ReleaseSkinnedModelPrototypes();
 
@@ -311,7 +311,7 @@ public:
 	void ReleaseResources();
 
 	// 플레이어 / 무기 / 일반 모델 원본 등록
-	
+
 	//player mesh object load
 	void BuildPlayerModelPrototypes(
 		ID3D12Device* pd3dDevice,

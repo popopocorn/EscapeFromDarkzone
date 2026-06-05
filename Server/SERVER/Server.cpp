@@ -374,6 +374,14 @@ public:
 		p.count = _inventory[slotidx].count;
 		do_send(&p);
 	}
+	void send_equipment_update_packet(ItemID equip_id)
+	{
+		SC_EQUIPMENT_UPDATE_PACKET p;
+		p.size = sizeof(SC_EQUIPMENT_UPDATE_PACKET);
+		p.type = SC_EQUIPMENT_UPDATE;
+		p.equip_id = equip_id;
+		do_send(&p);
+	}
 	void send_player_state_change_packet(int c_id);
 };
 
@@ -1602,11 +1610,14 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 
-			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 5 };
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 10 };
 			clients[c_id].send_inventory_update_packet(0);
 
-			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 3 };
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 20 };
 			clients[c_id].send_inventory_update_packet(1);
+
+			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 20 };
+			clients[c_id].send_inventory_update_packet(2);
 		}
 
 		break;
@@ -1716,6 +1727,63 @@ void process_packet(int c_id, char* packet)
 			<< " item:" << static_cast<int>(s.item)
 			<< " count:" << s.count << "\n";
 
+		break;
+	}
+	case CS_CRAFT_REQUEST: {
+		CS_CRAFT_REQUEST_PACKET* p =
+			reinterpret_cast<CS_CRAFT_REQUEST_PACKET*>(packet);
+
+		const CraftRecipe* recipe = FindCraftRecipe(p->target);
+		if (recipe == nullptr) {
+			std::cout << "[CRAFT] id:" << c_id
+				<< " unknown recipe target:" << static_cast<int>(p->target) << "\n";
+			break;
+		}
+
+		std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+		auto& inv = clients[c_id]._inventory;
+
+		// 1) 재료 충분 검사
+		bool enough = true;
+		for (int k = 0; k < MAX_RECIPE_INGREDIENTS; ++k) {
+			const RecipeIngredient& req = recipe->ingredients[k];
+			if (req.item == ItemID::NONE) break;
+			int have = 0;
+			for (int i = 0; i < INVENTORY_SIZE; ++i) {
+				if (inv[i].item == req.item) { have = inv[i].count; break; }
+			}
+			if (have < req.count) { enough = false; break; }
+		}
+		if (!enough) {
+			std::cout << "[CRAFT] id:" << c_id
+				<< " target:" << static_cast<int>(p->target)
+				<< " FAILED (not enough materials)\n";
+			break;
+		}
+
+		// 2) 재료 차감 + 변경 슬롯 송신
+		for (int k = 0; k < MAX_RECIPE_INGREDIENTS; ++k) {
+			const RecipeIngredient& req = recipe->ingredients[k];
+			if (req.item == ItemID::NONE) break;
+			for (int i = 0; i < INVENTORY_SIZE; ++i) {
+				if (inv[i].item == req.item) {
+					inv[i].count -= req.count;
+					if (inv[i].count <= 0) {
+						inv[i].item = ItemID::NONE;
+						inv[i].count = 0;
+					}
+					clients[c_id].send_inventory_update_packet(static_cast<short>(i));
+					break;
+				}
+			}
+		}
+
+		// 3) 결과물 장비 슬롯 통보
+		clients[c_id].send_equipment_update_packet(recipe->result);
+
+		std::cout << "[CRAFT] id:" << c_id
+			<< " target:" << static_cast<int>(p->target)
+			<< " SUCCESS -> equip:" << static_cast<int>(recipe->result) << "\n";
 		break;
 	}
 	case CS_HIT_NPC: {
@@ -1988,7 +2056,7 @@ int main()
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
-		npc._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 2 };
+		npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
 		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };
 
 		std::cout << "NPC[" << npc.id << "] spawned with inventory: "

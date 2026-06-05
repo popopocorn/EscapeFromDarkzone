@@ -164,6 +164,8 @@ public:
 	virtual void DeleteObject(UINT64 fence);
 	virtual void ProcessingGarbageQueue(UINT64 completed);
 
+	virtual D3D12_BLEND_DESC CreateBlendState() override;
+
 	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 protected:
 	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
