@@ -5,99 +5,45 @@
 #include "ResourceManager.h"
 
 
-//static CAnimationSets* CreateAnimationSetsInstanceCache(
-//	CAnimationSets* pPrototypeAnimationSets,
-//	CGameObject* pInstanceRoot)
-//{
-//	if (!pPrototypeAnimationSets || !pInstanceRoot)
-//		return nullptr;
-//
-//	CAnimationSets* pInstanceAnimationSets =
-//		new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
-//
-//	// 애니메이션 키프레임 데이터는 원본과 공유
-//	pInstanceAnimationSets->m_vAnimationSets =
-//		pPrototypeAnimationSets->m_vAnimationSets;
-//
-//	pInstanceAnimationSets->m_nAnimationSets =
-//		pPrototypeAnimationSets->m_nAnimationSets;
-//
-//	pInstanceAnimationSets->m_nBoneFrames =
-//		pPrototypeAnimationSets->m_nBoneFrames;
-//
-//	// 중요:
-//	// m_vAnimationSets는 원본과 공유하므로 인스턴스 쪽에서 delete하면 안 됨
-//	pInstanceAnimationSets->m_bOwnAnimationSets = false;
-//
-//	if (pInstanceAnimationSets->m_nBoneFrames > 0)
-//	{
-//		pInstanceAnimationSets->m_ppBoneFrameCaches =
-//			new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
-//
-//		for (int i = 0; i < pInstanceAnimationSets->m_nBoneFrames; ++i)
-//		{
-//			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = nullptr;
-//
-//			CGameObject* pPrototypeBone =
-//				pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
-//
-//			if (!pPrototypeBone)
-//				continue;
-//
-//			// 원본 bone 이름과 같은 frame을 인스턴스 계층에서 찾음
-//			pInstanceAnimationSets->m_ppBoneFrameCaches[i] =
-//				pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
-//		}
-//	}
-//
-//	return pInstanceAnimationSets;
-//}
-static CAnimationSets* CreateAnimationSetsInstanceCache(CAnimationSets* pPrototypeAnimationSets, CGameObject* pInstanceRoot)
+static CAnimationSets* CreateAnimationSetsInstanceCache(
+	CAnimationSets* pPrototypeAnimationSets,
+	CGameObject* pInstanceRoot)
 {
-	if (!pPrototypeAnimationSets || !pInstanceRoot) return nullptr;
+	if (!pPrototypeAnimationSets || !pInstanceRoot)
+		return nullptr;
 
-	CAnimationSets* pInstanceAnimationSets = new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
+	CAnimationSets* pInstanceAnimationSets =
+		new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
 
-	pInstanceAnimationSets->m_vAnimationSets = pPrototypeAnimationSets->m_vAnimationSets;
-	pInstanceAnimationSets->m_nAnimationSets = pPrototypeAnimationSets->m_nAnimationSets;
-	pInstanceAnimationSets->m_nBoneFrames = pPrototypeAnimationSets->m_nBoneFrames;
+	pInstanceAnimationSets->m_vAnimationSets =
+		pPrototypeAnimationSets->m_vAnimationSets;
+
+	pInstanceAnimationSets->m_nAnimationSets =
+		pPrototypeAnimationSets->m_nAnimationSets;
+
+	pInstanceAnimationSets->m_nBoneFrames =
+		pPrototypeAnimationSets->m_nBoneFrames;
+
 	pInstanceAnimationSets->m_bOwnAnimationSets = false;
 
 	if (pInstanceAnimationSets->m_nBoneFrames > 0)
 	{
-		pInstanceAnimationSets->m_ppBoneFrameCaches = new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
-
-		int nMissingBoneFrames = 0;
+		pInstanceAnimationSets->m_ppBoneFrameCaches =
+			new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
 
 		for (int i = 0; i < pInstanceAnimationSets->m_nBoneFrames; ++i)
 		{
 			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = nullptr;
 
-			CGameObject* pPrototypeBone = pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
-			if (!pPrototypeBone) continue;
+			CGameObject* pPrototypeBone =
+				pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
 
-			CGameObject* pFoundFrame = pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
+			if (!pPrototypeBone)
+				continue;
 
-			if (!pFoundFrame && i == 0)
-			{
-				pFoundFrame = pInstanceRoot;
-			}
-
-			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = pFoundFrame;
-
-			if (!pFoundFrame)
-			{
-				++nMissingBoneFrames;
-
-				char buf[256];
-				sprintf_s(buf, "[AnimationShare] missing bone frame in target model: %s\n", pPrototypeBone->m_pstrFrameName ? pPrototypeBone->m_pstrFrameName : "null");
-				OutputDebugStringA(buf);
-			}
+			pInstanceAnimationSets->m_ppBoneFrameCaches[i] =
+				pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
 		}
-
-		char buf[256];
-		sprintf_s(buf, "[AnimationShare] bone cache mapping finished. total=%d, missing=%d\n", pInstanceAnimationSets->m_nBoneFrames, nMissingBoneFrames);
-		OutputDebugStringA(buf);
 	}
 
 	return pInstanceAnimationSets;
@@ -408,20 +354,12 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
-	/*LoadAndRegisterSkinnedModelPrototype(
-		ModelName::ENEMY_01_1,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SM_Gangster1_1.bin",
-		SkinnedShader
-	);*/
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/SM_Soldier_03_Complete_Reduced_Green.bin",
+		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
 	);
 	LoadAndRegisterSkinnedModelPrototype(

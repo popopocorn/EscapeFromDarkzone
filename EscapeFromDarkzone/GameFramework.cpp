@@ -562,113 +562,58 @@ void CGameFramework::OnDestroy()
 
 //#define _WITH_TERRAIN_PLAYER
 
-//void CGameFramework::BuildObjects()
-//{
-//	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
-//	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-//
-//	m_pScene.push_back(make_unique<LobbyScene>(this));
-//	m_pScene.back()->SetRoot(root->GetRoot());
-//	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-//	
-//	ResourceManager::Instance().BuildUIMesh(
-//		m_pd3dDevice, 
-//		m_pd3dCommandList, 
-//		root->GetRoot());
-//
-//	ResourceManager::Instance().BuildPlayerModelPrototypes(
-//		m_pd3dDevice,
-//		m_pd3dCommandList,
-//		root->GetRoot(),
-//		shadermanager->GetShader(ShaderType::PLAYER)
-//	);
-//
-//	ResourceManager::Instance().BuildSkinnedModelPrototypes(
-//		m_pd3dDevice,
-//		m_pd3dCommandList,
-//		root->GetRoot(),
-//		shadermanager->GetShader(ShaderType::SKINNED)
-//	);
-//
-//	ResourceManager::Instance().BuildModelPrototypes(
-//		m_pd3dDevice,
-//		m_pd3dCommandList,
-//		root->GetRoot(),
-//		shadermanager->GetShader(ShaderType::STANDARD)
-//	);
-//
-//	CTerrainPlayer* pPlayer = new CTerrainPlayer(
-//		m_pd3dDevice,
-//		m_pd3dCommandList,
-//		root->GetRoot(),
-//		shadermanager->GetShader(ShaderType::PLAYER),
-//		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02),
-//		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
-//	);
-//
-//	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
-//
-//	pPlayer->InitializeInventory(
-//		m_pd3dDevice,
-//		m_pd3dCommandList,
-//		root->GetRoot(),
-//		nullptr
-//	);
-//
-//	m_pPlayer = pPlayer;
-//	m_pScene.back()->SetPlayer(m_pPlayer);
-//
-//	m_pCamera = m_pPlayer->GetCamera();
-//
-//	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->SetCamera(m_pCamera);
-//
-//	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
-//
-//
-//	m_pd3dCommandList->Close();
-//	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
-//	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
-//
-//	WaitForGpuComplete();
-//	ResourceManager::Instance().ReleaseUploadBuffers();
-//	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
-//	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
-//
-//	m_GameTimer.Reset();
-//}
 void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
-
 	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
-
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+	
+	ResourceManager::Instance().BuildUIMesh(
+		m_pd3dDevice, 
+		m_pd3dCommandList, 
+		root->GetRoot());
 
-	ResourceManager::Instance().BuildUIMesh(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+	ResourceManager::Instance().BuildPlayerModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager->GetShader(ShaderType::PLAYER)
+	);
 
-	ResourceManager::Instance().BuildPlayerModelPrototypes(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), shadermanager->GetShader(ShaderType::PLAYER));
+	ResourceManager::Instance().BuildSkinnedModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager->GetShader(ShaderType::SKINNED)
+	);
 
-	ResourceManager::Instance().BuildSkinnedModelPrototypes(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), shadermanager->GetShader(ShaderType::SKINNED));
-
-	ResourceManager::Instance().BuildModelPrototypes(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), shadermanager->GetShader(ShaderType::STANDARD));
-
-	CLoadedModelInfo* pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01);
+	ResourceManager::Instance().BuildModelPrototypes(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager->GetShader(ShaderType::STANDARD)
+	);
 
 	CTerrainPlayer* pPlayer = new CTerrainPlayer(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
 		shadermanager->GetShader(ShaderType::PLAYER),
-		pPlayerModel,
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
-	pPlayer->SetPosition(XMFLOAT3(0, 0.1f, 0));
+	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
 
-	pPlayer->InitializeInventory(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), nullptr);
+	pPlayer->InitializeInventory(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		nullptr
+	);
 
 	m_pPlayer = pPlayer;
 	m_pScene.back()->SetPlayer(m_pPlayer);
@@ -679,16 +624,15 @@ void CGameFramework::BuildObjects()
 
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 
-	m_pd3dCommandList->Close();
 
+	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
 	WaitForGpuComplete();
-
 	ResourceManager::Instance().ReleaseUploadBuffers();
-
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
 }
