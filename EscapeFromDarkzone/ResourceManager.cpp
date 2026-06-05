@@ -5,54 +5,103 @@
 #include "ResourceManager.h"
 
 
-static CAnimationSets* CreateAnimationSetsInstanceCache(
-	CAnimationSets* pPrototypeAnimationSets,
-	CGameObject* pInstanceRoot)
+//static CAnimationSets* CreateAnimationSetsInstanceCache(
+//	CAnimationSets* pPrototypeAnimationSets,
+//	CGameObject* pInstanceRoot)
+//{
+//	if (!pPrototypeAnimationSets || !pInstanceRoot)
+//		return nullptr;
+//
+//	CAnimationSets* pInstanceAnimationSets =
+//		new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
+//
+//	// 애니메이션 키프레임 데이터는 원본과 공유
+//	pInstanceAnimationSets->m_vAnimationSets =
+//		pPrototypeAnimationSets->m_vAnimationSets;
+//
+//	pInstanceAnimationSets->m_nAnimationSets =
+//		pPrototypeAnimationSets->m_nAnimationSets;
+//
+//	pInstanceAnimationSets->m_nBoneFrames =
+//		pPrototypeAnimationSets->m_nBoneFrames;
+//
+//	// 중요:
+//	// m_vAnimationSets는 원본과 공유하므로 인스턴스 쪽에서 delete하면 안 됨
+//	pInstanceAnimationSets->m_bOwnAnimationSets = false;
+//
+//	if (pInstanceAnimationSets->m_nBoneFrames > 0)
+//	{
+//		pInstanceAnimationSets->m_ppBoneFrameCaches =
+//			new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
+//
+//		for (int i = 0; i < pInstanceAnimationSets->m_nBoneFrames; ++i)
+//		{
+//			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = nullptr;
+//
+//			CGameObject* pPrototypeBone =
+//				pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
+//
+//			if (!pPrototypeBone)
+//				continue;
+//
+//			// 원본 bone 이름과 같은 frame을 인스턴스 계층에서 찾음
+//			pInstanceAnimationSets->m_ppBoneFrameCaches[i] =
+//				pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
+//		}
+//	}
+//
+//	return pInstanceAnimationSets;
+//}
+static CAnimationSets* CreateAnimationSetsInstanceCache(CAnimationSets* pPrototypeAnimationSets, CGameObject* pInstanceRoot)
 {
-	if (!pPrototypeAnimationSets || !pInstanceRoot)
-		return nullptr;
+	if (!pPrototypeAnimationSets || !pInstanceRoot) return nullptr;
 
-	CAnimationSets* pInstanceAnimationSets =
-		new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
+	CAnimationSets* pInstanceAnimationSets = new CAnimationSets(pPrototypeAnimationSets->m_nAnimationSets);
 
-	// 애니메이션 키프레임 데이터는 원본과 공유
-	pInstanceAnimationSets->m_vAnimationSets =
-		pPrototypeAnimationSets->m_vAnimationSets;
-
-	pInstanceAnimationSets->m_nAnimationSets =
-		pPrototypeAnimationSets->m_nAnimationSets;
-
-	pInstanceAnimationSets->m_nBoneFrames =
-		pPrototypeAnimationSets->m_nBoneFrames;
-
-	// 중요:
-	// m_vAnimationSets는 원본과 공유하므로 인스턴스 쪽에서 delete하면 안 됨
+	pInstanceAnimationSets->m_vAnimationSets = pPrototypeAnimationSets->m_vAnimationSets;
+	pInstanceAnimationSets->m_nAnimationSets = pPrototypeAnimationSets->m_nAnimationSets;
+	pInstanceAnimationSets->m_nBoneFrames = pPrototypeAnimationSets->m_nBoneFrames;
 	pInstanceAnimationSets->m_bOwnAnimationSets = false;
 
 	if (pInstanceAnimationSets->m_nBoneFrames > 0)
 	{
-		pInstanceAnimationSets->m_ppBoneFrameCaches =
-			new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
+		pInstanceAnimationSets->m_ppBoneFrameCaches = new CGameObject * [pInstanceAnimationSets->m_nBoneFrames];
+
+		int nMissingBoneFrames = 0;
 
 		for (int i = 0; i < pInstanceAnimationSets->m_nBoneFrames; ++i)
 		{
 			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = nullptr;
 
-			CGameObject* pPrototypeBone =
-				pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
+			CGameObject* pPrototypeBone = pPrototypeAnimationSets->m_ppBoneFrameCaches[i];
+			if (!pPrototypeBone) continue;
 
-			if (!pPrototypeBone)
-				continue;
+			CGameObject* pFoundFrame = pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
 
-			// 원본 bone 이름과 같은 frame을 인스턴스 계층에서 찾음
-			pInstanceAnimationSets->m_ppBoneFrameCaches[i] =
-				pInstanceRoot->FindFrame(pPrototypeBone->m_pstrFrameName);
+			if (!pFoundFrame && i == 0)
+			{
+				pFoundFrame = pInstanceRoot;
+			}
+
+			pInstanceAnimationSets->m_ppBoneFrameCaches[i] = pFoundFrame;
+
+			if (!pFoundFrame)
+			{
+				++nMissingBoneFrames;
+
+				char buf[256];
+				sprintf_s(buf, "[AnimationShare] missing bone frame in target model: %s\n", pPrototypeBone->m_pstrFrameName ? pPrototypeBone->m_pstrFrameName : "null");
+				OutputDebugStringA(buf);
+			}
 		}
+
+		char buf[256];
+		sprintf_s(buf, "[AnimationShare] bone cache mapping finished. total=%d, missing=%d\n", pInstanceAnimationSets->m_nBoneFrames, nMissingBoneFrames);
+		OutputDebugStringA(buf);
 	}
 
 	return pInstanceAnimationSets;
 }
-
 
 void ResourceManager::CreateCbvSrvDescriptorHeaps(
 	ID3D12Device* pd3dDevice,
@@ -310,42 +359,47 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	return true;
 }
 
-void ResourceManager::BuildPlayerModelPrototypes(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* PlayerShader)
+bool ResourceManager::ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey)
 {
-	// 플레이어 모델
-	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_01,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SM_Soldier_03_Complete_Reduced.bin",
-		PlayerShader
-	);
+	auto targetIt = m_SkinnedModelPrototypes.find(targetKey);
+	if (targetIt == m_SkinnedModelPrototypes.end()) return false;
 
-	// 나중에 플레이어 모델 추가 시
-	/*
-	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_02,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/Player_02.bin",
-		SkinnedShader
-	);
+	auto sourceIt = m_SkinnedModelPrototypes.find(sourceKey);
+	if (sourceIt == m_SkinnedModelPrototypes.end()) return false;
 
-	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_03,
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/Player_03.bin",
-		SkinnedShader
-	);
-	*/
+	CLoadedModelInfo* pTargetInfo = targetIt->second.get();
+	CLoadedModelInfo* pSourceInfo = sourceIt->second.get();
+
+	if (!pTargetInfo) return false;
+	if (!pSourceInfo) return false;
+	if (!pSourceInfo->m_pAnimationSets) return false;
+
+	if (pTargetInfo->m_pAnimationSets && pTargetInfo->m_pAnimationSets != pSourceInfo->m_pAnimationSets)
+	{
+		delete pTargetInfo->m_pAnimationSets;
+		pTargetInfo->m_pAnimationSets = nullptr;
+	}
+
+	pTargetInfo->m_pAnimationSets = pSourceInfo->m_pAnimationSets;
+
+	return true;
+}
+
+void ResourceManager::BuildPlayerModelPrototypes(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* PlayerShader)
+{
+	if (!PlayerShader) return;
+
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_01, pd3dDevice, pd3dCommandList, 
+		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_black.bin", PlayerShader);
+
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, 
+		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
+
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_03, pd3dDevice, pd3dCommandList, 
+		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_green.bin", PlayerShader);
+
+	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
 }
 
 void ResourceManager::BuildSkinnedModelPrototypes(
@@ -354,12 +408,20 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
-	LoadAndRegisterSkinnedModelPrototype(
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster1_1.bin",
+		SkinnedShader
+	);*/
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_01_1,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Soldier_03_Complete_Reduced_Green.bin",
 		SkinnedShader
 	);
 	LoadAndRegisterSkinnedModelPrototype(

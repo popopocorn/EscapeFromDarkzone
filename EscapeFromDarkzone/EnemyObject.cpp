@@ -446,17 +446,12 @@ void CEnemyObject::Render(
 		return;
 	}
 
-	// 1. NPC 몸체는 기존 batch 값 그대로 렌더
-	// 여기서 false를 넣으면 스킨드 셰이더 재귀 호출로 스택오버플로우 난다.
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 
-	// 2. 현재 장착 무기만 따로 false 렌더
-	// 권총/SMG/Rifle/Shotgun 모두 m_pWeapon에 들어있으면 이 경로를 탄다.
 	m_pWeapon->m_pParent = m_pWeaponSocket;
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	m_pWeapon->Render(pd3dCommandList, false, nPipelineState, pCamera);
 
-	// 3. 렌더 후 다시 원래 계층 복구
 	RestoreDetachedChild(
 		m_pWeaponSocket,
 		m_pWeapon,

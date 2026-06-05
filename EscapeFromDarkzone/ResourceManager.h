@@ -258,6 +258,7 @@ private:
 		CShader* pShader
 	);
 
+	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
 	void ReleaseSkinnedModelPrototypes();
 
 public:

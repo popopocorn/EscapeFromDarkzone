@@ -713,6 +713,81 @@ inline XMMATRIX CalcBlendedMatrix(const SBoneBlendCache& start, const XMFLOAT4X4
 
 	return XMMatrixAffineTransformation(vCurScale, XMVectorZero(), vCurRot, vCurTrans);
 }
+//void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject)
+//{
+//	m_fTime += fTimeElapsed;
+//
+//	if (m_pAnimationTracks)
+//	{
+//		if (m_bIsBlending)
+//		{
+//			m_fBlendTime += fTimeElapsed;
+//			if (m_fBlendTime >= m_fBlendDuration)
+//			{
+//				m_bIsBlending = false;
+//			}
+//		}
+//
+//		for (int k = 0; k < m_nAnimationTracks; k++)
+//		{
+//			if (m_pAnimationTracks[k].m_bEnable)
+//			{
+//				int nSetIndex = m_pAnimationTracks[k].m_nAnimationSet;
+//				if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size()) continue;
+//
+//				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
+//
+//				m_pAnimationTracks[k].m_fPosition =
+//					m_pAnimationTracks[k].UpdatePosition(
+//						m_pAnimationTracks[k].m_fPosition,
+//						fTimeElapsed,
+//						pAnimationSet->m_fLength
+//					);
+//
+//				m_pAnimationTracks[k].HandleCallback();
+//			}
+//		}
+//
+//		float fBlendRatio = (m_fBlendDuration > 0.0f) ? (m_fBlendTime / m_fBlendDuration) : 1.0f;
+//		if (fBlendRatio > 1.0f) fBlendRatio = 1.0f;
+//
+//		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
+//		{
+//			int nSelectedTrack = IsUpperBodyBone(j) ? m_nUpperBodyTrack : m_nLowerBodyTrack;
+//
+//			if (nSelectedTrack < 0 || nSelectedTrack >= m_nAnimationTracks || !m_pAnimationTracks[nSelectedTrack].m_bEnable)
+//			{
+//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+//				continue;
+//			}
+//
+//			int nSetIndex = m_pAnimationTracks[nSelectedTrack].m_nAnimationSet;
+//			if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size())
+//			{
+//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+//				continue;
+//			}
+//
+//			CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
+//			XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[nSelectedTrack].m_fPosition);
+//
+//			if (m_bIsBlending && !m_vBlendCaches.empty())
+//			{
+//				XMMATRIX mBlended = CalcBlendedMatrix(m_vBlendCaches[j], xmf4x4TrackTransform, fBlendRatio);
+//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, mBlended);
+//			}
+//			else
+//			{
+//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMLoadFloat4x4(&xmf4x4TrackTransform));
+//			}
+//		}
+//
+//		pRootGameObject->UpdateTransform(NULL);
+//		OnRootMotion(pRootGameObject);
+//		OnAnimationIK(pRootGameObject);
+//		pRootGameObject->UpdateTransform(NULL);
+//	}
+//}
 void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject)
 {
 	m_fTime += fTimeElapsed;
@@ -737,12 +812,7 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 
 				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
 
-				m_pAnimationTracks[k].m_fPosition =
-					m_pAnimationTracks[k].UpdatePosition(
-						m_pAnimationTracks[k].m_fPosition,
-						fTimeElapsed,
-						pAnimationSet->m_fLength
-					);
+				m_pAnimationTracks[k].m_fPosition = m_pAnimationTracks[k].UpdatePosition(m_pAnimationTracks[k].m_fPosition, fTimeElapsed, pAnimationSet->m_fLength);
 
 				m_pAnimationTracks[k].HandleCallback();
 			}
@@ -753,32 +823,35 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 
 		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
 		{
+			CGameObject* pBoneFrame = m_pAnimationSets->m_ppBoneFrameCaches[j];
+			if (!pBoneFrame) continue;
+
 			int nSelectedTrack = IsUpperBodyBone(j) ? m_nUpperBodyTrack : m_nLowerBodyTrack;
 
 			if (nSelectedTrack < 0 || nSelectedTrack >= m_nAnimationTracks || !m_pAnimationTracks[nSelectedTrack].m_bEnable)
 			{
-				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+				XMStoreFloat4x4(&pBoneFrame->m_xmf4x4ToParent, XMMatrixIdentity());
 				continue;
 			}
 
 			int nSetIndex = m_pAnimationTracks[nSelectedTrack].m_nAnimationSet;
 			if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size())
 			{
-				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
+				XMStoreFloat4x4(&pBoneFrame->m_xmf4x4ToParent, XMMatrixIdentity());
 				continue;
 			}
 
 			CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
 			XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[nSelectedTrack].m_fPosition);
 
-			if (m_bIsBlending && !m_vBlendCaches.empty())
+			if (m_bIsBlending && !m_vBlendCaches.empty() && j < (int)m_vBlendCaches.size())
 			{
 				XMMATRIX mBlended = CalcBlendedMatrix(m_vBlendCaches[j], xmf4x4TrackTransform, fBlendRatio);
-				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, mBlended);
+				XMStoreFloat4x4(&pBoneFrame->m_xmf4x4ToParent, mBlended);
 			}
 			else
 			{
-				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMLoadFloat4x4(&xmf4x4TrackTransform));
+				XMStoreFloat4x4(&pBoneFrame->m_xmf4x4ToParent, XMLoadFloat4x4(&xmf4x4TrackTransform));
 			}
 		}
 
@@ -788,7 +861,6 @@ void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGam
 		pRootGameObject->UpdateTransform(NULL);
 	}
 }
-
 bool CAnimationController::IsUpperBodyBone(int nBoneIndex) const
 {
 	if (!m_pbUpperBodyMask) return false;
@@ -846,6 +918,33 @@ void CAnimationController::SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUp
 	m_nUpperBodyTrack = nUpperBodyTrack;
 }
 
+//void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet)
+//{
+//	if (!m_pAnimationTracks) return;
+//	if (!m_pAnimationSets) return;
+//	if (nAnimationTrack < 0 || nAnimationTrack >= m_nAnimationTracks) return;
+//	if (nAnimationSet < 0 || nAnimationSet >= (int)m_pAnimationSets->m_vAnimationSets.size()) return;
+//
+//	if (m_pAnimationTracks[nAnimationTrack].m_nAnimationSet == nAnimationSet)
+//		return;
+//
+//	if (m_pAnimationSets && m_pAnimationSets->m_nBoneFrames > 0)
+//	{
+//		m_vBlendCaches.resize(m_pAnimationSets->m_nBoneFrames);
+//		for (int i = 0; i < m_pAnimationSets->m_nBoneFrames; i++)
+//		{
+//			XMMATRIX mStart = XMLoadFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[i]->m_xmf4x4ToParent);
+//			XMMatrixDecompose(&m_vBlendCaches[i].vScale, &m_vBlendCaches[i].vRot, &m_vBlendCaches[i].vTrans, mStart);
+//		}
+//	}
+//
+//	m_bIsBlending = true;
+//	m_fBlendTime = 0.0f;
+//	m_fBlendDuration = 0.25f;
+//
+//	m_pAnimationTracks[nAnimationTrack].SetAnimationSet(nAnimationSet);
+//	m_pAnimationTracks[nAnimationTrack].SetPosition(0.0f);
+//}
 void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet)
 {
 	if (!m_pAnimationTracks) return;
@@ -859,9 +958,20 @@ void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, in
 	if (m_pAnimationSets && m_pAnimationSets->m_nBoneFrames > 0)
 	{
 		m_vBlendCaches.resize(m_pAnimationSets->m_nBoneFrames);
+
 		for (int i = 0; i < m_pAnimationSets->m_nBoneFrames; i++)
 		{
-			XMMATRIX mStart = XMLoadFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[i]->m_xmf4x4ToParent);
+			CGameObject* pBoneFrame = m_pAnimationSets->m_ppBoneFrameCaches[i];
+
+			if (!pBoneFrame)
+			{
+				m_vBlendCaches[i].vScale = XMVectorSet(1.0f, 1.0f, 1.0f, 0.0f);
+				m_vBlendCaches[i].vRot = XMQuaternionIdentity();
+				m_vBlendCaches[i].vTrans = XMVectorZero();
+				continue;
+			}
+
+			XMMATRIX mStart = XMLoadFloat4x4(&pBoneFrame->m_xmf4x4ToParent);
 			XMMatrixDecompose(&m_vBlendCaches[i].vScale, &m_vBlendCaches[i].vRot, &m_vBlendCaches[i].vTrans, mStart);
 		}
 	}
@@ -873,7 +983,6 @@ void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, in
 	m_pAnimationTracks[nAnimationTrack].SetAnimationSet(nAnimationSet);
 	m_pAnimationTracks[nAnimationTrack].SetPosition(0.0f);
 }
-
 
 
 //*/
