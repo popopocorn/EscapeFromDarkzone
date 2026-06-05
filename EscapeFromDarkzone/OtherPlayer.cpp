@@ -1,5 +1,6 @@
 #include "OtherPlayer.h"
 #include "ResourceManager.h"
+#include"SoundManager.h"
 
 static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const* ppNames, int nCount)
 {
@@ -46,7 +47,7 @@ static bool DetachChildTemporarily(
 	{
 		pParent->m_pChild = pOutSavedSibling;
 	}
-#include"SoundManager.h"
+
 
 	pChild->m_pSibling = nullptr;
 	return true;
