@@ -713,81 +713,6 @@ inline XMMATRIX CalcBlendedMatrix(const SBoneBlendCache& start, const XMFLOAT4X4
 
 	return XMMatrixAffineTransformation(vCurScale, XMVectorZero(), vCurRot, vCurTrans);
 }
-//void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject)
-//{
-//	m_fTime += fTimeElapsed;
-//
-//	if (m_pAnimationTracks)
-//	{
-//		if (m_bIsBlending)
-//		{
-//			m_fBlendTime += fTimeElapsed;
-//			if (m_fBlendTime >= m_fBlendDuration)
-//			{
-//				m_bIsBlending = false;
-//			}
-//		}
-//
-//		for (int k = 0; k < m_nAnimationTracks; k++)
-//		{
-//			if (m_pAnimationTracks[k].m_bEnable)
-//			{
-//				int nSetIndex = m_pAnimationTracks[k].m_nAnimationSet;
-//				if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size()) continue;
-//
-//				CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
-//
-//				m_pAnimationTracks[k].m_fPosition =
-//					m_pAnimationTracks[k].UpdatePosition(
-//						m_pAnimationTracks[k].m_fPosition,
-//						fTimeElapsed,
-//						pAnimationSet->m_fLength
-//					);
-//
-//				m_pAnimationTracks[k].HandleCallback();
-//			}
-//		}
-//
-//		float fBlendRatio = (m_fBlendDuration > 0.0f) ? (m_fBlendTime / m_fBlendDuration) : 1.0f;
-//		if (fBlendRatio > 1.0f) fBlendRatio = 1.0f;
-//
-//		for (int j = 0; j < m_pAnimationSets->m_nBoneFrames; j++)
-//		{
-//			int nSelectedTrack = IsUpperBodyBone(j) ? m_nUpperBodyTrack : m_nLowerBodyTrack;
-//
-//			if (nSelectedTrack < 0 || nSelectedTrack >= m_nAnimationTracks || !m_pAnimationTracks[nSelectedTrack].m_bEnable)
-//			{
-//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
-//				continue;
-//			}
-//
-//			int nSetIndex = m_pAnimationTracks[nSelectedTrack].m_nAnimationSet;
-//			if (nSetIndex >= m_pAnimationSets->m_vAnimationSets.size())
-//			{
-//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMMatrixIdentity());
-//				continue;
-//			}
-//
-//			CAnimationSet* pAnimationSet = m_pAnimationSets->m_vAnimationSets[nSetIndex];
-//			XMFLOAT4X4 xmf4x4TrackTransform = pAnimationSet->GetSRT(j, m_pAnimationTracks[nSelectedTrack].m_fPosition);
-//
-//			if (m_bIsBlending && !m_vBlendCaches.empty())
-//			{
-//				XMMATRIX mBlended = CalcBlendedMatrix(m_vBlendCaches[j], xmf4x4TrackTransform, fBlendRatio);
-//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, mBlended);
-//			}
-//			else
-//			{
-//				XMStoreFloat4x4(&m_pAnimationSets->m_ppBoneFrameCaches[j]->m_xmf4x4ToParent, XMLoadFloat4x4(&xmf4x4TrackTransform));
-//			}
-//		}
-//
-//		pRootGameObject->UpdateTransform(NULL);
-//		OnRootMotion(pRootGameObject);
-//		OnAnimationIK(pRootGameObject);
-//		pRootGameObject->UpdateTransform(NULL);
-//	}
-//}
 void CAnimationController::AdvanceTime(float fTimeElapsed, CGameObject* pRootGameObject)
 {
 	m_fTime += fTimeElapsed;
@@ -1352,13 +1277,14 @@ void CGameObject::SetOOBB(std::vector<BoundingOrientedBox*>* container)
 
 void CGameObject::SetOOBB(BoundingOrientedBox obb)
 {
-	OOBBs.clear();
-
 	OOBBModel = obb;
 	OOBBWorld = obb;
 	HasOOBB = true;
 
+	OOBBs.clear();
 	OOBBs.push_back(&OOBBWorld);
+
+	UpdateTransform(NULL);
 }
 
 void CGameObject::ClearOOBB(bool bRecursive)

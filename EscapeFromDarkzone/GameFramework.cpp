@@ -602,7 +602,7 @@ void CGameFramework::BuildObjects()
 		m_pd3dCommandList,
 		root->GetRoot(),
 		shadermanager->GetShader(ShaderType::PLAYER),
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02),
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 

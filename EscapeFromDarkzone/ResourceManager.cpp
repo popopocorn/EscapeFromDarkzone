@@ -380,6 +380,30 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_02_1,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster2_1.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_02_2,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster2_2.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
+		ModelName::ENEMY_02_3,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/SM_Gangster2_3.bin",
+		SkinnedShader
+	);
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
 		pd3dCommandList,
