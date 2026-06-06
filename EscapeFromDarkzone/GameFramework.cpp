@@ -956,6 +956,7 @@ void CGameFramework::ProcessNetworkPackets()
 				pOther->Kill();
 				break;
 			}
+			pOther->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
 			m_pScene.back()->AddObj(pOther);
 			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pOther);
 

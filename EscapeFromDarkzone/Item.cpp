@@ -438,3 +438,18 @@ bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
 	//playerinventory 아이템 추가
 	return true;
 }
+
+EquipUI::EquipUI(CPlayer* player)
+{
+	
+}
+
+void EquipUI::SetItem(ItemID item)
+{
+	
+}
+
+bool EquipUI::ProcessClick(POINT mouse)
+{
+	return false;
+}

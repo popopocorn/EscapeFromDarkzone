@@ -580,7 +580,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_VEST);
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
 			}
 			return true;
 		}
@@ -806,6 +806,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->setNav(AStarNav.get());
+	pEnemy->SubmitWeaponToShader(stdshader);
 	GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
 	pSkinnedShader->addObjects(pEnemy);
 

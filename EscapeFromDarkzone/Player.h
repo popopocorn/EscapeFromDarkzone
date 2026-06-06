@@ -149,6 +149,7 @@ protected:
 	short m_hp = 100;		// 임시 체력 추가
 
 	std::unique_ptr<Inventory> m_pInventory;
+	//equips
 public:
 	CPlayer();
 	virtual ~CPlayer();
