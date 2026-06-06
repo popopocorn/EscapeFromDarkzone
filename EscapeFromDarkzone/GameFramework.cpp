@@ -1184,6 +1184,12 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
+			if (entityKind == 0 && effectId == EffectID::SPARK)
+			{
+				if (CEnemyObject* pNpc = static_cast<CEnemyObject*>(pTarget))
+					pNpc->TriggerShootAnim();
+			}
+
 			MainScene* pMainScene = dynamic_cast<MainScene*>(m_pScene.back().get());
 			if (!pMainScene)
 			{
