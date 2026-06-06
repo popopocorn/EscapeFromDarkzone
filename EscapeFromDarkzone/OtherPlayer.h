@@ -42,9 +42,11 @@ private:
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 	CGameObject* m_pWeaponMuzzleSocket = nullptr;
+	CGameObject* m_pRenderWeapon = nullptr;
 public:
 	void EquipDefaultPistol();
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+	void SubmitWeaponToShader(CShader* shader);
 };
 
 

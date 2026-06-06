@@ -2,29 +2,7 @@
 
 #include "UI.h"
 #include<algorithm>
-
 #include "ItemDef.h"
-
-//아이템 선언
-enum class ItemType {
-	PISTOL,
-	RIFLE,
-	SMG,
-	SHOTGUN,
-	ARMOR,
-	PLATE,
-	CONSUMABLE,
-	MATERIAL,
-};
-
-enum class ItemGrade
-{
-	BASIC,
-	GRADE_1,
-	GRADE_2,
-	GRADE_3,
-	GRADE_4
-};
 
 
 
@@ -181,15 +159,19 @@ class ArmorItem : public Item
 public:
 	ArmorItem()
 	{
-		type = ItemType::ARMOR;
 	}
 };
 
 class EquipUI {
 private:
-	CPlayer* player;
-
-
-
+	CPlayer*	player;
+	ItemID		helmet;
+	ItemID		body;
+	ItemID		shoes;
+	unordered_map<ItemType, UIObject> UIs;
 public:
+	EquipUI(CPlayer* player);
+	void SetItem(ItemID item);
+	bool ProcessClick(POINT mouse);
+
 };

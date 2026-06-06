@@ -423,28 +423,8 @@ void CStandardObjectsShader::ReleaseObjects()
 {
 	m_ppObjects.clear();
 }
-D3D12_BLEND_DESC CStandardObjectsShader::CreateBlendState()
-{
-	D3D12_BLEND_DESC desc = {};
-	desc.AlphaToCoverageEnable = FALSE;
-	desc.IndependentBlendEnable = FALSE;
 
-	auto& rt = desc.RenderTarget[0];
-	rt.BlendEnable = FALSE;
-	rt.LogicOpEnable = FALSE;
 
-	rt.SrcBlend = D3D12_BLEND_ONE;
-	rt.DestBlend = D3D12_BLEND_ZERO;
-	rt.BlendOp = D3D12_BLEND_OP_ADD;
-
-	rt.SrcBlendAlpha = D3D12_BLEND_ONE;
-	rt.DestBlendAlpha = D3D12_BLEND_ZERO;
-	rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-
-	rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	return desc;
-}
 void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;
@@ -461,20 +441,30 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
-		if (!m_ppObjects[j]) continue;
-
-		m_ppObjects[j]->UpdateTransform(NULL);
-		m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+		if (m_ppObjects[j])
+		{
+			bool inCamera = false;
+			for (auto& obb : m_ppObjects[j]->GetOOBB()) {
+				if (pCamera->GetFrustum().Intersects(*obb)) {
+					inCamera = true;
+					break;
+				}
+			}
+			if (inCamera)
+			{
+				m_ppObjects[j]->UpdateTransform(NULL);
+				m_ppObjects[j]->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+			}
+		}
 	}
 }
 
 void CStandardObjectsShader::DeleteObject(UINT64 fence)
 {
-	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+	std::erase_if(m_ppObjects, [this, fence](CGameObject* obj) {
 		if (!obj->IsAlive())
 		{
-			CGameObject* pRawObj = obj.release();
-			GarbageQueue.push({ pRawObj, fence });
+			GarbageQueue.push({ obj, fence });
 			return true;
 		}
 		return false;
@@ -574,7 +564,7 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 
 			if (m_ppObjects[i]->m_pSkinnedAnimationController)
 			{
-				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i].get());
+				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i]);
 			}
 		}
 	}
@@ -626,11 +616,10 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList* pd3dComma
 
 void CSkinnedAnimationObjectsShader::DeleteObject(UINT64 fence)
 {
-	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+	std::erase_if(m_ppObjects, [this, fence](CGameObject* obj) {
 			if (not obj->IsAlive())
 			{
-				CGameObject* pRawObj = obj.release();
-				GarbageQueue.push({ pRawObj, fence });
+				GarbageQueue.push({ obj, fence });
 				return true;
 			}
 			return false;

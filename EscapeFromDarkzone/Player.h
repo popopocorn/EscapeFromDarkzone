@@ -149,6 +149,7 @@ protected:
 	short m_hp = 100;		// 임시 체력 추가
 
 	std::unique_ptr<Inventory> m_pInventory;
+	//equips
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -171,6 +172,7 @@ public:
 			xmf3Position.z - m_xmf3Position.z
 		), false);
 	}
+
 
 	void SetScale(const XMFLOAT3& xmf3Scale) { m_xmf3Scale = xmf3Scale; }
 
@@ -304,6 +306,7 @@ public:
 
 	void SetHP(short hp) { m_hp = hp; }			// 임시 체력 추가
 	short GetHP() const { return m_hp; }
+	float	cameraDistance = 15.0f;
 };
 
 class CPlayerAnimationController : public CAnimationController

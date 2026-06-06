@@ -1,6 +1,7 @@
 #include "OtherPlayer.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
+#include"Shader.h"
 
 static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const* ppNames, int nCount)
 {
@@ -14,66 +15,6 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 	return nullptr;
 }
-static bool DetachChildTemporarily(
-	CGameObject* pParent,
-	CGameObject* pChild,
-	CGameObject*& pOutPrev,
-	CGameObject*& pOutSavedSibling)
-{
-	pOutPrev = nullptr;
-	pOutSavedSibling = nullptr;
-
-	if (!pParent || !pChild)
-		return false;
-
-	CGameObject* pCur = pParent->m_pChild;
-
-	while (pCur && pCur != pChild)
-	{
-		pOutPrev = pCur;
-		pCur = pCur->m_pSibling;
-	}
-
-	if (pCur != pChild)
-		return false;
-
-	pOutSavedSibling = pChild->m_pSibling;
-
-	if (pOutPrev)
-	{
-		pOutPrev->m_pSibling = pOutSavedSibling;
-	}
-	else
-	{
-		pParent->m_pChild = pOutSavedSibling;
-	}
-
-
-	pChild->m_pSibling = nullptr;
-	return true;
-}
-static void RestoreDetachedChild(
-	CGameObject* pParent,
-	CGameObject* pChild,
-	CGameObject* pPrev,
-	CGameObject* pSavedSibling)
-{
-	if (!pParent || !pChild)
-		return;
-
-	if (pPrev)
-	{
-		pPrev->m_pSibling = pChild;
-	}
-	else
-	{
-		pParent->m_pChild = pChild;
-	}
-
-	pChild->m_pSibling = pSavedSibling;
-	pChild->m_pParent = pParent;
-}
-
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -115,6 +56,10 @@ void OtherPlayer::Update(float fTimeElapsed)
 		m_pState->Update(this, fTimeElapsed);
 
 	UpdateTransform(NULL);
+	if (m_pRenderWeapon && m_pWeaponSocket)
+	{
+		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+	}
 }
 
 void OtherPlayer::Render(
@@ -128,40 +73,7 @@ void OtherPlayer::Render(
 		m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 	}
 
-	if (!m_pWeapon || !m_pWeaponSocket)
-	{
-		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
-		return;
-	}
-
-	CGameObject* pPrev = nullptr;
-	CGameObject* pSavedSibling = nullptr;
-
-	bool bDetached = DetachChildTemporarily(
-		m_pWeaponSocket,
-		m_pWeapon,
-		pPrev,
-		pSavedSibling
-	);
-
-	if (!bDetached)
-	{
-		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
-		return;
-	}
-
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
-
-	m_pWeapon->m_pParent = m_pWeaponSocket;
-	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
-	m_pWeapon->Render(pd3dCommandList, false, nPipelineState, pCamera);
-
-	RestoreDetachedChild(
-		m_pWeaponSocket,
-		m_pWeapon,
-		pPrev,
-		pSavedSibling
-	);
 }
 
 void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState)
@@ -316,9 +228,6 @@ void OtherPlayer::EquipDefaultPistol()
 	m_pWeapon = pPistolInstance;
 	m_pWeaponSocket = pRightHand;
 
-	m_pWeapon->m_pParent = m_pWeaponSocket;
-	m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
-	m_pWeaponSocket->m_pChild = m_pWeapon;
 
 	m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
 	m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
@@ -336,4 +245,9 @@ void OtherPlayer::EquipDefaultPistol()
 	}
 
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+}
+
+void OtherPlayer::SubmitWeaponToShader(CShader* shader)
+{
+	shader->addObjects(m_pRenderWeapon);
 }

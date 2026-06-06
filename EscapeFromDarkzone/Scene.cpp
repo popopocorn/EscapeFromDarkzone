@@ -32,7 +32,7 @@ static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameOb
 	for (auto& obj : *objs)
 	{
 		if (!obj) continue;
-		outBlockers.push_back(obj.get());
+		outBlockers.push_back(obj);
 	}
 }
 static void GatherVisionBlockersNearPlayer(CShader* pShader, const XMFLOAT3& playerPos, float maxDistance, std::vector<CGameObject*>& outBlockers)
@@ -55,7 +55,7 @@ static void GatherVisionBlockersNearPlayer(CShader* pShader, const XMFLOAT3& pla
 
 		if (distSq <= maxDistSq)
 		{
-			outBlockers.push_back(obj.get());
+			outBlockers.push_back(obj);
 		}
 	}
 }
@@ -417,7 +417,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 						{
-							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
 							if (pEnemy)
 							{
 								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
@@ -445,7 +445,31 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		break;
 	}
+	case WM_MOUSEWHEEL:
+	{
+		if (!m_pPlayer) return;
+		if (IsAnyInventoryOpen()) return; 
 
+		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+		float currentDistX10 = round(m_pPlayer->cameraDistance * 10.0f);
+
+		if (zDelta > 0)
+			currentDistX10 -= 10.0f;
+		else
+			currentDistX10 += 10.0f; 
+
+		m_pPlayer->cameraDistance = currentDistX10 / 10.0f;
+
+		m_pPlayer->cameraDistance = clamp(m_pPlayer->cameraDistance, 3.0f, 15.0f);
+
+		if (m_pPlayer->GetCamera())
+		{
+			m_pPlayer->GetCamera()->SetOffset(XMFLOAT3(0.0f, m_pPlayer->cameraDistance, -5.0f));
+		}
+
+		break;
+	}
 	default:
 		break;
 	}
@@ -556,11 +580,10 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_VEST);
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
 			}
 			return true;
 		}
-
 		default:
 			break;
 		}
@@ -708,7 +731,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		map->SetPosition(-150, 0.0f, -150);
 		map->SetOOBB(NULL);
 		m_vVisionMapChunks.push_back(map);
-		stdshader->addObjects(unique_ptr<CGameObject>(map));
+		GameObjects.push_back(unique_ptr<CGameObject>(map));
+		stdshader->addObjects(map);
 		++name;
 	}
 
@@ -719,7 +743,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	// 시야 객체 생성
 	CShader* view = shadermanager->GetShader(ShaderType::VIEW);
 	{
-		std::unique_ptr<ViewObject> viewobj = make_unique<ViewObject>();
+		ViewObject* viewobj = new ViewObject();
 		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
 
 		auto pCircleObj = std::make_unique<CGameObject>();
@@ -742,8 +766,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 		pCircleObj.release();
 		pConeObj.release();
-
-		view->addObjects(std::move(viewobj));
+		GameObjects.push_back(unique_ptr<CGameObject>(viewobj));
+		view->addObjects(viewobj);
 	}
 	m_ppShaders.push_back(view);
 
@@ -782,7 +806,9 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->setNav(AStarNav.get());
-	pSkinnedShader->addObjects(std::unique_ptr<CGameObject>(pEnemy));
+	pEnemy->SubmitWeaponToShader(stdshader);
+	GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
+	pSkinnedShader->addObjects(pEnemy);
 
 	m_ppShaders.push_back(pSkinnedShader);
 
@@ -807,7 +833,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		{
 			for (auto& obj : *objs)
 			{
-				m_pDebugShader->AddObject(obj.get());
+				m_pDebugShader->AddObject(obj);
 			}
 		}
 	}
@@ -881,7 +907,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 					{
 						if (!obj) continue;
 
-						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
 						if (!pEnemy) continue;
 
 						if (pEnemy->ConsumeLootSpawnRequest())
@@ -922,7 +948,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 			auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 			if (viewObjs && !viewObjs->empty())
 			{
-				ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0).get());
+				ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
 				if (pViewObj)
 				{
 					pViewObj->UpdateClippedMeshes(visionBlockers);
@@ -1013,7 +1039,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 							if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 							{
-								CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+								CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
 								if (pEnemy)
 								{
 									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
@@ -1147,11 +1173,10 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
-
-	/*if (m_pLootBoxShader)
+	if (m_pInventoryManager)
 	{
-		m_pLootBoxShader->Render(pd3dCommandList, pCamera, nPipelineState);
-	}*/
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
+	}
 
 	if (m_pPlayer)
 	{
@@ -1169,29 +1194,6 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamer
 		m_pPlayer->Render(pd3dCommandList, THROUGH, pCamera);
 	}
 
-	if (m_pd3dGraphicsRootSignature)
-	{
-		pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
-	}
-
-	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
-	pd3dCommandList->SetDescriptorHeaps(1, &heap);
-
-	pCamera->UpdateShaderVariables(pd3dCommandList);
-	UpdateShaderVariables(pd3dCommandList);
-
-	if (m_pd3dcbLights)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
-		pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	}
-
-	pd3dCommandList->OMSetStencilRef(0xff);
-
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
-	}
 }
 
 void MainScene::ReleaseUploadBuffers()
@@ -1212,11 +1214,11 @@ void MainScene::ReleaseUploadBuffers()
 
 void MainScene::LinkToPlayer()
 {
-	std::vector<std::unique_ptr<CGameObject>>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+	std::vector<CGameObject*>* pVector = m_ppShaders[SHADERIDX::VIEW]->GetObj();
 
 	for (auto& obj : *pVector)
 	{
-		ViewObject* pViewObj = static_cast<ViewObject*>(obj.get());
+		ViewObject* pViewObj = static_cast<ViewObject*>(obj);
 		pViewObj->setPlayer(m_pPlayer);
 	}
 
@@ -1234,7 +1236,7 @@ void MainScene::LinkToPlayer()
 
 		for (auto& obj : *objs)
 		{
-			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
+			CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
 
 			if (pEnemy)
 			{
