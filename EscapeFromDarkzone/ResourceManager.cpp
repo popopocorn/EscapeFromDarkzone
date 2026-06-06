@@ -431,6 +431,7 @@ void ResourceManager::BuildModelPrototypes(
 		"Model/Pistol_2.bin",
 		Standardshader
 	);
+
 	LoadAndRegisterModelPrototype(
 		ModelName::SMG,
 		pd3dDevice,
@@ -439,6 +440,7 @@ void ResourceManager::BuildModelPrototypes(
 		"Model/SM_MP5.bin",
 		Standardshader
 	);
+
 	LoadAndRegisterModelPrototype(
 		ModelName::SHOTGUN,
 		pd3dDevice,

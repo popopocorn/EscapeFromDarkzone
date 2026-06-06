@@ -47,6 +47,7 @@ protected:
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 	CGameObject* m_pWeaponMuzzleSocket = nullptr;
+	CGameObject* m_pRenderWeapon = nullptr;
 
 public:
 	CEnemyObject(
@@ -57,7 +58,7 @@ public:
 		CLoadedModelInfo* pEnemyModelInstance = nullptr
 	);
 	virtual ~CEnemyObject();
-
+	void SubmitWeaponToShader(CShader* shader);
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
 	virtual void HandleCollision(XMFLOAT3 normal);

@@ -3,14 +3,14 @@
 #include"Object.h"
 
 void CollisionManager::DoCollision(
-	CGameObject* main, std::vector<std::unique_ptr<CGameObject>>* target)
+	CGameObject* main, std::vector<CGameObject*>* target)
 {
 	if (not main || not target) return;
 	for (const auto& other : *target)
 	{
 		
 		if (!other) continue;
-		CGameObject* pTarget = other.get();
+		CGameObject* pTarget = other;
 
 		if (main == pTarget) continue;
 
@@ -23,13 +23,13 @@ void CollisionManager::CheckCollision(CGameObject* main, CGameObject* target)
 {
 	const auto& oobbs1 = main->GetOOBB();
 	const auto& oobbs2 = target->GetOOBB();
-
+	if (not target->isColl) return;
 	for (const BoundingOrientedBox* obb1 : oobbs1)
 	{
 		for (const BoundingOrientedBox* obb2 : oobbs2)
 		{
 			if (!obb1 || !obb2) continue;
-
+			
 			ColResult cresult = CalcCollision(*obb1, *obb2);
 			if (cresult.isCollide) 
 			{

@@ -503,6 +503,7 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 	case WM_LBUTTONUP:
 	case WM_RBUTTONUP:
 	case WM_MOUSEMOVE:
+	case WM_MOUSEWHEEL:
 		OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 		break;
 	case WM_KEYDOWN:
@@ -955,8 +956,8 @@ void CGameFramework::ProcessNetworkPackets()
 				pOther->Kill();
 				break;
 			}
-
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
+			m_pScene.back()->AddObj(pOther);
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pOther);
 
 			break;
 		}
@@ -1058,15 +1059,15 @@ void CGameFramework::ProcessNetworkPackets()
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
 			pNpc->SetServerYaw(p->yaw);
-
+			pNpc->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
 			if (!AddNpc(p->npc_id, pNpc)) {
 				OutputDebugString(L"[Network] NPC slot full.\n");
 				pNpc->Kill();
 				break;
 			}
 
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
-
+			m_pScene.back()->AddObj(pNpc);
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pNpc);
 			break;
 		}
 		case SC_REMOVE_NPC:

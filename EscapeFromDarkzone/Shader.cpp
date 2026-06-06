@@ -461,11 +461,10 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 
 void CStandardObjectsShader::DeleteObject(UINT64 fence)
 {
-	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+	std::erase_if(m_ppObjects, [this, fence](CGameObject* obj) {
 		if (!obj->IsAlive())
 		{
-			CGameObject* pRawObj = obj.release();
-			GarbageQueue.push({ pRawObj, fence });
+			GarbageQueue.push({ obj, fence });
 			return true;
 		}
 		return false;
@@ -565,7 +564,7 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 
 			if (m_ppObjects[i]->m_pSkinnedAnimationController)
 			{
-				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i].get());
+				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i]);
 			}
 		}
 	}
@@ -617,11 +616,10 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList* pd3dComma
 
 void CSkinnedAnimationObjectsShader::DeleteObject(UINT64 fence)
 {
-	std::erase_if(m_ppObjects, [this, fence](std::unique_ptr<CGameObject>& obj) {
+	std::erase_if(m_ppObjects, [this, fence](CGameObject* obj) {
 			if (not obj->IsAlive())
 			{
-				CGameObject* pRawObj = obj.release();
-				GarbageQueue.push({ pRawObj, fence });
+				GarbageQueue.push({ obj, fence });
 				return true;
 			}
 			return false;

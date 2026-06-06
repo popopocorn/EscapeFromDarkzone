@@ -172,6 +172,7 @@ public:
 		), false);
 	}
 
+
 	void SetScale(const XMFLOAT3& xmf3Scale) { m_xmf3Scale = xmf3Scale; }
 
 	const XMFLOAT3& GetVelocity() const { return m_xmf3Velocity; }
@@ -304,6 +305,7 @@ public:
 
 	void SetHP(short hp) { m_hp = hp; }			// 임시 체력 추가
 	short GetHP() const { return m_hp; }
+	float	cameraDistance = 15.0f;
 };
 
 class CPlayerAnimationController : public CAnimationController

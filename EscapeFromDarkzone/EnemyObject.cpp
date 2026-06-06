@@ -4,6 +4,7 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 #include "Shader.h"
+#include"ShaderManager.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
 #include "Network.h"
@@ -51,144 +52,7 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 	return nullptr;
 }
-static bool DetachChildTemporarily(
-	CGameObject* pParent,
-	CGameObject* pChild,
-	CGameObject*& pOutPrev,
-	CGameObject*& pOutSavedSibling)
-{
-	pOutPrev = nullptr;
-	pOutSavedSibling = nullptr;
 
-	if (!pParent || !pChild)
-		return false;
-
-	CGameObject* pCur = pParent->m_pChild;
-
-	while (pCur && pCur != pChild)
-	{
-		pOutPrev = pCur;
-		pCur = pCur->m_pSibling;
-	}
-
-	if (pCur != pChild)
-		return false;
-
-	pOutSavedSibling = pChild->m_pSibling;
-
-	if (pOutPrev)
-	{
-		pOutPrev->m_pSibling = pOutSavedSibling;
-	}
-	else
-	{
-		pParent->m_pChild = pOutSavedSibling;
-	}
-
-	pChild->m_pSibling = nullptr;
-	return true;
-}
-static void RestoreDetachedChild(
-	CGameObject* pParent,
-	CGameObject* pChild,
-	CGameObject* pPrev,
-	CGameObject* pSavedSibling)
-{
-	if (!pParent || !pChild)
-		return;
-
-	if (pPrev)
-	{
-		pPrev->m_pSibling = pChild;
-	}
-	else
-	{
-		pParent->m_pChild = pChild;
-	}
-
-	pChild->m_pSibling = pSavedSibling;
-	pChild->m_pParent = pParent;
-}
-
-
-// 임시 코드 (서버 연결 시 NPC가 투명하게 보이는 현상 해결 용도)
-/*CEnemyObject::CEnemyObject(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pShader,
-	CLoadedModelInfo* pEnemyModelInstance)
-{
-	UNREFERENCED_PARAMETER(pShader);
-
-	// OtherPlayer와 동일하게 인스턴스마다 모델을 독립적으로 로드한다.
-	// (공유 메쉬의 m_ppSkinningBoneFrameCaches가 인스턴스 간 충돌하는 문제 회피)
-	// 외부에서 넘어온 공유 인스턴스는 사용하지 않고, 누수 방지를 위해 정리한다.
-	if (pEnemyModelInstance)
-	{
-		delete pEnemyModelInstance;
-		pEnemyModelInstance = nullptr;
-	}
-
-	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SM_Gangster.bin",
-		NULL);
-
-	if (!pEnemyModel || !pEnemyModel->m_pModelRootObject)
-	{
-		OutputDebugString(L"Error: Failed to load enemy model.\n");
-		if (pEnemyModel) delete pEnemyModel;
-		return;
-	}
-
-	if (!pEnemyModel->m_pAnimationSets)
-	{
-		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
-	}
-
-	SetChild(pEnemyModel->m_pModelRootObject, true);
-
-	ClearOOBB(false);
-
-	if (pEnemyModel->m_pModelRootObject)
-	{
-		pEnemyModel->m_pModelRootObject->ClearOOBB(true);
-	}
-
-	BoundingOrientedBox enemyBox;
-	enemyBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	enemyBox.Extents = XMFLOAT3(0.35f, 1.0f, 0.35f);
-	enemyBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-	SetOOBB(enemyBox);
-
-	m_pSkinnedAnimationController = new CAnimationController(
-		pd3dDevice,
-		pd3dCommandList,
-		1,
-		pEnemyModel
-	);
-
-	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
-	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
-	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-
-	CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
-	ConfigureWeaponStats();
-
-	if (pEnemyModel)
-	{
-		delete pEnemyModel;
-	}
-
-	ChangeState(std::make_unique<EnemyIdle>());
-}*/
-///*
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
@@ -211,7 +75,7 @@ CEnemyObject::CEnemyObject(
 	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
-
+	m_pRenderWeapon = new CGameObject();
 	EquipDefaultPistol();
 
 	ClearOOBB(false);
@@ -251,12 +115,15 @@ CEnemyObject::CEnemyObject(
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
-//*/
-
 
 CEnemyObject::~CEnemyObject()
 {
 
+}
+
+void CEnemyObject::SubmitWeaponToShader(CShader* shader)
+{
+	shader->addObjects(m_pRenderWeapon);
 }
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
@@ -358,6 +225,12 @@ void CEnemyObject::Update(float fTimeElapsed)
 	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 
 	UpdateTransform(NULL);
+
+	if (m_pRenderWeapon && m_pWeaponSocket)
+	{
+		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+	}
+
 }
 
 void CEnemyObject::HandleCollision(XMFLOAT3 normal)
@@ -423,46 +296,8 @@ void CEnemyObject::Render(
 		m_pSkinnedAnimationController->UpdateShaderVariables(pd3dCommandList);
 	}
 
-	// 장착 무기가 없으면 기존 방식 그대로
-	if (!m_pWeapon || !m_pWeaponSocket)
-	{
-		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
-		return;
-	}
-
-	CGameObject* pPrev = nullptr;
-	CGameObject* pSavedSibling = nullptr;
-
-	bool bDetached = DetachChildTemporarily(
-		m_pWeaponSocket,
-		m_pWeapon,
-		pPrev,
-		pSavedSibling
-	);
-
-	if (!bDetached)
-	{
-		CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
-		return;
-	}
-
-	// 1. NPC 몸체는 기존 batch 값 그대로 렌더
-	// 여기서 false를 넣으면 스킨드 셰이더 재귀 호출로 스택오버플로우 난다.
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 
-	// 2. 현재 장착 무기만 따로 false 렌더
-	// 권총/SMG/Rifle/Shotgun 모두 m_pWeapon에 들어있으면 이 경로를 탄다.
-	m_pWeapon->m_pParent = m_pWeaponSocket;
-	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
-	m_pWeapon->Render(pd3dCommandList, false, nPipelineState, pCamera);
-
-	// 3. 렌더 후 다시 원래 계층 복구
-	RestoreDetachedChild(
-		m_pWeaponSocket,
-		m_pWeapon,
-		pPrev,
-		pSavedSibling
-	);
 }
 
 float CEnemyObject::GetDistanceToPlayerXZ() const
@@ -681,13 +516,18 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		delete pWeaponInstance;
 		return;
 	}
+	if (m_pRenderWeapon->m_pChild)
+	{
+		delete m_pRenderWeapon->m_pChild;
+		m_pRenderWeapon->m_pChild = nullptr;
+	}
 
 	m_pWeapon = pWeaponInstance;
 	m_pWeaponSocket = pRightHand;
-
-	m_pWeapon->m_pParent = m_pWeaponSocket;
-	m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
-	m_pWeaponSocket->m_pChild = m_pWeapon;
+	
+	m_pRenderWeapon->SetChild(m_pWeapon);
+	m_pRenderWeapon->SetOOBB(NULL);
+	m_pRenderWeapon->isColl = false;
 
 	// 기본값. 나중에 무기별로 조정 가능.
 	switch (modelName)
@@ -708,7 +548,7 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 	default:
 		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
 		m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
-		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		m_pWeapon->Rotate(90.0f, -90.0f, 14.0f);
 		break;
 	}
 
@@ -723,7 +563,7 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		OutputDebugString(L"[Enemy] Socket_Muzzle not found.\n");
 	}
 
-	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	//m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 }
 
 void CEnemyObject::EquipDefaultPistol()
