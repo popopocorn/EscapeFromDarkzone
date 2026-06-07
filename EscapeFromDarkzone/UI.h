@@ -155,4 +155,5 @@ public:
 	void release();
 	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
 	void AddToManager(UIPannel* obj) { pannels.push_back(unique_ptr<UIPannel>(obj)); }
+	vector<unique_ptr<UIPannel>>* GetPannels() { return &pannels; }
 };

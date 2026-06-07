@@ -552,6 +552,13 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			{
 				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
 			}
+			if (uiManager)
+			{
+				for (auto& o : *uiManager->GetPannels())
+				{
+					o->ToggleOpen();
+				}
+			}
 			return true;
 		}
 
@@ -838,6 +845,9 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		}
 	}
 	LinkToPlayer();
+	EquipUI* e = new EquipUI(m_pPlayer);
+	e->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(e);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -1161,7 +1171,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
-
+	uiManager->SubmitToShader(UIShader.get());
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);

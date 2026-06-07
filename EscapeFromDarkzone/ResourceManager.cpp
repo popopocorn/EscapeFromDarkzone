@@ -479,13 +479,21 @@ void ResourceManager::BuildModelPrototypes(
 void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Lobby.dds");
+	m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Lobby.dds");
 
 	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Start_BTN.dds");
+	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Start_BTN.dds");
 
 	m_UIPrototypes[UIName::TABLE_VERTICAL] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::TABLE_VERTICAL]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Table_02.dds");
+	m_UIPrototypes[UIName::TABLE_VERTICAL]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Table_02.dds");
+	
+	m_UIPrototypes[UIName::WINDOW_BASE] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	m_UIPrototypes[UIName::WINDOW_BASE]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Window.dds");
+	
+	m_UIPrototypes[UIName::PANEL_001] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	m_UIPrototypes[UIName::PANEL_001]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/panel001.dds");
+
+
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
