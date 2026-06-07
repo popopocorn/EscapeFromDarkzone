@@ -454,13 +454,16 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 {
 	// Rifle 테스트값
 	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.1f, 0.3f, 0.1f);
-	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.0f, 0.20f, -0.0f);
-	const XMFLOAT3 rifleShootPos = XMFLOAT3(0.02f, 0.0f, -0.0f);
+	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.15f, 0.2f, 0.1f);
+	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.0f, 0.10f, -0.0f);
+	const XMFLOAT3 rifleShootPos = XMFLOAT3(-0.10f, 0.0f, -0.0f);
 
 	const XMFLOAT3 rifleIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
 	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
 	const XMFLOAT3 rifleShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
+	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
 
 	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
@@ -474,8 +477,11 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
 	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
+	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
+	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
+
 	// Shotgun 테스트값
-	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
+	// x값 수정 시 좌+ 우-, y값 수정 시 앞+ 뒤-, z값 수정 시 위- 아래+
 	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.15f, 0.3f, 0.05f);
 	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
 	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
@@ -483,6 +489,9 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 	const XMFLOAT3 shotgunIdleRot = XMFLOAT3(180.0f, 0.0f, 90.0f);
 	const XMFLOAT3 shotgunRunRot = XMFLOAT3(0.0f, 0.0f, -0.50f);
 	const XMFLOAT3 shotgunShootRot = XMFLOAT3(0.40f, 0.0f, -0.0f);
+
+	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(0.0f, 0.10f, 0.0f);
+	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, -90.0f, 180.0f);
 
 	const XMFLOAT3 shotgunScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
@@ -496,18 +505,9 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 	const XMFLOAT3 pistolRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
 	const XMFLOAT3 pistolShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	//grenade 테스트값
-	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
-
-	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
-
-	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(-0.50f, 0.15f, 0.45f);
-	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
-
-	const XMFLOAT3 pistolGrenadePos = XMFLOAT3(-0.50f, 0.15f, 0.45f);
+	const XMFLOAT3 pistolGrenadePos = XMFLOAT3(-0.0f, 0.f, 0.0f);
 	const XMFLOAT3 pistolGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
+
 
 	PlayerWeaponVisualConfig config{};
 	switch (weaponType)
