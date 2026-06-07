@@ -445,12 +445,14 @@ bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
 EquipUI::EquipUI(CPlayer* p)
 {
 	player = p->GetEquips();
-
 }
+
 XMFLOAT3 CalcPixelByRatio(float ratio)
 {
-	float screenAspectRatio = FRAME_BUFFER_WIDTH / FRAME_BUFFER_HEIGHT;
+	float screenAspectRatio = static_cast<float>(FRAME_BUFFER_WIDTH) / static_cast<float>(FRAME_BUFFER_HEIGHT);
+
 	float correctedScaleX = ratio / screenAspectRatio;
+
 	return XMFLOAT3(correctedScaleX, 1.0f, 1.0f);
 }
 
@@ -460,10 +462,11 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	base->SetLocate(0.5, 0.0, 0.6);
 	base->SetScale(0.5f, 1.0f, 1.0f);
 	base->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::WINDOW_BASE));
-	float BtnSize = 0.2f;
+
+	float BtnSize = 0.15f;
 	XMFLOAT3 scale = CalcPixelByRatio(1.0f);
 	UIs[ItemType::ARMOR_HELMET] = make_unique<UIObject>();
-	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.5, 0.0, 0.5);
+	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.35, 0.0, 0.5);
 	UIs[ItemType::ARMOR_HELMET]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 
