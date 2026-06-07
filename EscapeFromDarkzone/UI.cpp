@@ -1,9 +1,10 @@
 
 #include"stdafx.h"
 #include "UI.h"
-#include"Scene.h"
 #include"ResourceManager.h"
 #include"Shader.h"
+#include"Network.h"
+#include"Player.h"
 
 UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 {
@@ -162,6 +163,357 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4World, 0);
 	object->Render(pd3dCommandList, 0, 1);
 }
+
+
+
+Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
+{
+	box.maxY = 0.5f;
+	box.minY = -0.5f;
+	box.minX = -0.4f;
+	box.maxX = 0.0f;
+
+	float totalW = box.maxX - box.minX;
+	float totalH = box.maxY - box.minY;
+
+	m_slotW = totalW;
+	m_slotH = totalH / static_cast<float>(MAX_SLOTS);
+	m_slotGap = 0.025f;
+
+	m_pSharedMesh = std::make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+
+	BuildSlotViews();
+	SetPosition(0.0f, 0.0f);
+}
+
+void Inventory::BuildSlotViews()
+{
+	const float rowH = m_slotH - m_slotGap;
+
+	const float iconW = m_slotW * m_iconRatio;
+	const float textW = m_slotW * m_textRatio;
+	const float countW = m_slotW * m_countRatio;
+
+	const float innerGap = 0.01f;
+
+	const float iconRenderW = iconW - innerGap;
+	const float textRenderW = textW - innerGap;
+	const float countRenderW = countW - innerGap;
+	const float renderH = rowH - 0.005f;
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (!slotViews[i].hitBox)
+		{
+			slotViews[i].hitBox = std::make_unique<UIObject>();
+			slotViews[i].hitBox->SetFunc([this, i]() {
+				this->SlotClicked(i);
+				});
+			slotViews[i].hitBox->SetScale(m_slotW, rowH, 1.0f);
+		}
+
+		if (!slotViews[i].iconCell)
+		{
+			slotViews[i].iconCell = std::make_unique<UIObject>();
+			slotViews[i].iconCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].iconCell->SetScale(iconRenderW, renderH, 1.0f);
+		}
+
+		if (!slotViews[i].textCell)
+		{
+			slotViews[i].textCell = std::make_unique<UIObject>();
+			slotViews[i].textCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].textCell->SetScale(textRenderW, renderH, 1.0f);
+		}
+
+		if (!slotViews[i].countCell)
+		{
+			slotViews[i].countCell = std::make_unique<UIObject>();
+			slotViews[i].countCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].countCell->SetScale(countRenderW, renderH, 1.0f);
+		}
+	}
+}
+
+void Inventory::LayoutSlotViews()
+{
+	const float iconW = m_slotW * m_iconRatio;
+	const float textW = m_slotW * m_textRatio;
+	const float countW = m_slotW * m_countRatio;
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		float posY = m_baseY + (0.5f - (m_slotH * 0.5f) - (i * m_slotH));
+
+		float rowLeft = m_baseX - (m_slotW * 0.5f);
+
+		float iconCenterX = rowLeft + (iconW * 0.5f);
+		float textCenterX = rowLeft + iconW + (textW * 0.5f);
+		float countCenterX = rowLeft + iconW + textW + (countW * 0.5f);
+
+		if (slotViews[i].hitBox)
+		{
+			slotViews[i].hitBox->SetLocate(m_baseX, posY, 0.5f);
+			slotViews[i].hitBox->setAABB();
+		}
+
+		if (slotViews[i].iconCell)
+		{
+			slotViews[i].iconCell->SetLocate(iconCenterX, posY, 0.5f);
+			slotViews[i].iconCell->setAABB();
+		}
+
+		if (slotViews[i].textCell)
+		{
+			slotViews[i].textCell->SetLocate(textCenterX, posY, 0.5f);
+			slotViews[i].textCell->setAABB();
+		}
+
+		if (slotViews[i].countCell)
+		{
+			slotViews[i].countCell->SetLocate(countCenterX, posY, 0.5f);
+			slotViews[i].countCell->setAABB();
+		}
+	}
+}
+
+void Inventory::SubmitToShader(UIObjectShader* shader)
+{
+	if (!isOpen) return;
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (slotViews[i].iconCell)
+		{
+			shader->addObjects(slotViews[i].iconCell.get());
+		}
+		if (slotViews[i].textCell)
+		{
+			shader->addObjects(slotViews[i].textCell.get());
+		}
+		if (slotViews[i].countCell)
+		{
+			shader->addObjects(slotViews[i].countCell.get());
+		}
+	}
+}
+
+void Inventory::SlotClicked(int slotidx)
+{
+	/*wchar_t debugBuf[256];
+	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
+	OutputDebugStringW(debugBuf);*/
+
+	if (false == NetworkManager::Instance().IsConnected()) {
+		return;
+	}
+
+	if (ID >= 0) {
+		NetworkManager::Instance().SendLootPickup(
+			static_cast<short>(ID),
+			static_cast<short>(slotidx));
+	}
+	else {
+		NetworkManager::Instance().SendInventoryClick(
+			INV_ACTION_CLICK,
+			static_cast<short>(slotidx));
+	}
+}
+
+bool Inventory::ProcessClick(POINT mouse)
+{
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		auto* hitBox = slotViews[i].hitBox.get();
+		if (!hitBox) continue;
+
+		if (hitBox->GetBox().Intersects(mouse))
+		{
+			hitBox->HandleClick();
+			return true; // UI 클릭 소비됨
+		}
+	}
+
+	return false; // UI 클릭 아님
+}
+
+void Inventory::SetPosition(float x, float y)
+{
+	m_baseX = x;
+	m_baseY = y;
+
+	LayoutSlotViews();
+}
+
+int Inventory::GetItemCnt(ItemID id) const
+{
+	for (const auto& slot : slots)
+	{
+		if (slot.item != ItemID::NONE && slot.item == id)
+		{
+			return slot.count;
+		}
+	}
+
+	return 0;
+}
+
+void Inventory::ConsumeItem(ItemID id, int cnt)
+{
+	for (auto& s : slots)
+	{
+		if (s.item != ItemID::NONE && s.item == id)
+		{
+			s.count -= cnt;
+			if (s.count == 0)
+			{
+				s.item = ItemID::NONE;
+			}
+			break;
+		}
+	}
+}
+
+bool Inventory::AddItem(ItemID item, int count)
+{
+	if (item == ItemID::NONE || count <= 0) return false;
+
+	for (auto& slot : slots)
+	{
+		if (slot.item != ItemID::NONE && slot.item == item)
+		{
+			slot.count += count;
+			return true;
+		}
+	}
+
+	for (auto& slot : slots)
+	{
+		if (slot.item == ItemID::NONE)
+		{
+			slot.item = item;
+			slot.count = count;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void Inventory::ClearItems()
+{
+	for (auto& slot : slots)
+	{
+		slot.item = ItemID::NONE;
+		slot.count = 0;
+	}
+}
+
+ItemSlot* Inventory::GetSlot(int idx)
+{
+	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
+	return &slots[idx];
+}
+
+bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
+{
+	ItemSlot* pSlot = GetSlot(slotIndex);
+	if (!pSlot) return false;
+
+	// 서버가 NONE이나 수량 0을 보내면 슬롯 비우기
+	if (itemId == ItemID::NONE || count <= 0)
+	{
+		pSlot->item = ItemID::NONE;
+		pSlot->count = 0;
+		return true;
+	}
+	else {
+		pSlot->item = itemId;
+		pSlot->count = count;
+	}
+
+	// 슬롯에 이미 뭐가 있으면 수정하지 않음 --> 수정하되 로그 찍기? 나중에 수정
+	//if (pSlot->item != ItemID::NONE || pSlot->count > 0)
+	//{
+	//	return false;
+	//}
+
+	return true;
+}
+
+
+EquipUI::EquipUI(CPlayer* p)
+{
+	player = p->GetEquips();
+
+}
+
+void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	base = make_unique<UIObject>();
+	base->SetLocate(0.5, 0.0, 0.5);
+	base->SetScale(0.4f, 0.6f, 1.0f);
+	base->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
+}
+
+void EquipUI::EquipItem(ItemID item)
+{
+	switch (item)
+	{
+	case ItemID::ARMOR_HELMET_01:
+	case ItemID::ARMOR_HELMET_02:
+	case ItemID::ARMOR_HELMET_03:
+	case ItemID::ARMOR_HELMET_04:
+		player->helmet = ArmorItem(ItemType::ARMOR_HELMET, item);
+		helmet = item;
+		break;
+
+	case ItemID::ARMOR_BODY_01:
+	case ItemID::ARMOR_BODY_02:
+	case ItemID::ARMOR_BODY_03:
+	case ItemID::ARMOR_BODY_04:
+		player->helmet = ArmorItem(ItemType::ARMOR_BODY, item);
+		body = item;
+		break;
+
+	case ItemID::ARMOR_SHOES_01:
+	case ItemID::ARMOR_SHOES_02:
+	case ItemID::ARMOR_SHOES_03:
+	case ItemID::ARMOR_SHOES_04:
+		player->helmet = ArmorItem(ItemType::ARMOR_SHOES, item);
+		shoes = item;
+		break;
+	case ItemID::ARMOR_PLATE:
+		player->plate = Plate(ItemType::PLATE, item);
+		plate = item;
+		break;
+	}
+}
+
+
+bool EquipUI::ProcessClick(POINT mouse)
+{
+	for (auto& p : UIs)
+	{
+		if (p.second->GetBox().Intersects(mouse))
+		{
+			p.second->HandleClick();
+		}
+	}
+}
+
+void EquipUI::SubmitToShader(UIObjectShader* shader)
+{
+	if (not isOpen)return;
+	for (auto& p : UIs)
+	{
+		shader->addObjects(p.second.get());
+	}
+	shader->addObjects(base.get());
+}
+
+
+
 
 void HUDManager::SubmitToShader(UIObjectShader* shader)
 {

@@ -12,7 +12,7 @@
 #include "ShadowMap.h"
 #include "EffectShader.h"
 #include "Collision.h"
-#include "UI.h"
+
 #include "Item.h"
 #include "AI.h"
 #include "EffectManager.h"
@@ -1300,6 +1300,13 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	frame->mouseMove = true;
 	BuildDefaultLightsAndMaterials();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	UIObject* lobbyBg = new UIObject();
+	lobbyBg->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_BACKGROUND));
+	lobbyBg->SetScale(2.0, 2.0, 1.0);
+	lobbyBg->SetLocate(0.0, 0.0, 0.5);
+	uiManager->AddToManager(lobbyBg);
+
 	UIObject* lobbybutton = new UIObject();
 	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
 	lobbybutton->SetScale(0.5, 0.5, 1.0);
@@ -1311,6 +1318,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		});
 	
 	uiManager->AddToManager(lobbybutton);
+
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);

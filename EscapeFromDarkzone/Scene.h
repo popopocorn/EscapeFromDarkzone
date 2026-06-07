@@ -10,6 +10,7 @@
 #include "Effect.h"
 #include "ResourceManager.h"
 #include "Network.h"	// 05.14 추가: 네트워크 피격
+#include "UI.h"
 
 #define MAX_LIGHTS						16 
 
