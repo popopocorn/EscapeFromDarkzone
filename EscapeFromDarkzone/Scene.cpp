@@ -544,7 +544,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			return true;
 		}
 
-		case 'I':
+		case 'E':
 		{
 			if (wasDownBefore) return true;
 

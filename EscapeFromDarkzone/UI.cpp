@@ -180,7 +180,7 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	m_slotH = totalH / static_cast<float>(MAX_SLOTS);
 	m_slotGap = 0.025f;
 
-	m_pSharedMesh = std::make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	m_pSharedMesh = ResourceManager::Instance().GetUIMesh(UIName::TABLE_VERTICAL);
 
 	BuildSlotViews();
 	SetPosition(0.0f, 0.0f);
@@ -215,21 +215,21 @@ void Inventory::BuildSlotViews()
 		if (!slotViews[i].iconCell)
 		{
 			slotViews[i].iconCell = std::make_unique<UIObject>();
-			slotViews[i].iconCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].iconCell->SetUIMesh(m_pSharedMesh);
 			slotViews[i].iconCell->SetScale(iconRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].textCell)
 		{
 			slotViews[i].textCell = std::make_unique<UIObject>();
-			slotViews[i].textCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].textCell->SetUIMesh(m_pSharedMesh);
 			slotViews[i].textCell->SetScale(textRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].countCell)
 		{
 			slotViews[i].countCell = std::make_unique<UIObject>();
-			slotViews[i].countCell->SetUIMesh(m_pSharedMesh.get());
+			slotViews[i].countCell->SetUIMesh(m_pSharedMesh);
 			slotViews[i].countCell->SetScale(countRenderW, renderH, 1.0f);
 		}
 	}

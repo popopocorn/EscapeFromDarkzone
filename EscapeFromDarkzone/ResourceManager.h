@@ -200,6 +200,8 @@ static vector<string>s_mapFiles = {
 enum class UIName {
 	LOBBY_BACKGROUND = 0,
 	LOBBY_START_BUTTON,
+	TABLE_VERTICAL,
+
 
 };
 // 전방 선언

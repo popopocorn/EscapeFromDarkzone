@@ -88,7 +88,7 @@ private:
 
 	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
 
-	std::unique_ptr<UIMesh> m_pSharedMesh; // UI 공용 메쉬
+	UIMesh* m_pSharedMesh; // UI 공용 메쉬
 
 private:
 	void BuildSlotViews();  // 3칸 UI 생성
@@ -134,7 +134,7 @@ private:
 	unordered_map<ItemType, unique_ptr<UIObject>> UIs;
 	unique_ptr<UIObject>base;
 public:
-	EquipUI() = default;
+	//EquipUI() = default;
 	EquipUI(CPlayer* player);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void EquipItem(ItemID item);
@@ -154,4 +154,5 @@ public:
 	void SubmitToShader(UIObjectShader* shader);
 	void release();
 	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
+	void AddToManager(UIPannel* obj) { pannels.push_back(unique_ptr<UIPannel>(obj)); }
 };
