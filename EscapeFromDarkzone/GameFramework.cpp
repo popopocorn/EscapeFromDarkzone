@@ -1108,6 +1108,10 @@ void CGameFramework::ProcessNetworkPackets()
 				case NPC_STATE_ATTACK:
 					pNpc->ChangeState(std::make_unique<EnemyAttack>());
 					break;
+				case NPC_STATE_RELOAD:
+					pNpc->ChangeState(std::make_unique<EnemyAttack>());   // 이미 ATTACK이면 무시됨
+					pNpc->StartReload();
+					break;
 				case NPC_STATE_DIE:
 					// EnemyDie::Enter가 m_bDying / m_fDieElapsed 설정
 					// Scene::AnimateObjects가 1.2초 후 자체 루팅 박스 생성.

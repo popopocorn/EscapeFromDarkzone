@@ -69,6 +69,7 @@ constexpr char NPC_STATE_RUN = 1;
 constexpr char NPC_STATE_DIE = 2;
 constexpr char NPC_STATE_RETURN = 3;
 constexpr char NPC_STATE_ATTACK = 4;
+constexpr char NPC_STATE_RELOAD = 5;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {

@@ -646,16 +646,18 @@ static void StartNpcReload(SERVER_NPC& npc)
 	std::cout << "[NPC " << npc.id << "] Reload Start\n";
 }
 
-static void UpdateNpcReload(SERVER_NPC& npc, float dt)
+static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 {
-	if (!npc.reloading) return;
+	if (!npc.reloading) return false;
 	npc.reload_timer -= dt;
 	if (npc.reload_timer <= 0.0f) {
 		npc.reloading = false;
 		npc.reload_timer = 0.0f;
 		npc.current_ammo = NPC_MAG_AMMO;
 		std::cout << "[NPC " << npc.id << "] Reload Finish\n";
+		return true;
 	}
+	return false;
 }
 
 static void BroadcastAttachedEffect(
@@ -692,11 +694,17 @@ static void BroadcastWorldEffect(
 	}
 }
 
+static void ChangeNpcState(SERVER_NPC&, char, const std::array<PlayerSnapshot, MAX_USER>&);
+
 static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
-	if (npc.current_ammo <= 0) { StartNpcReload(npc); return; }
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc); 
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot); 
+		return; 
+	}
 
 	npc.current_ammo--;
 
@@ -759,7 +767,10 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	// 발사 이펙트: 머즐 플래시
 	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
 
-	if (npc.current_ammo <= 0) StartNpcReload(npc);
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+	}
 }
 
 static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
@@ -1301,12 +1312,16 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	bool can_detect = CanDetectPlayer(npc, player_pos);
 	bool can_shoot = CanShootPlayer(npc, player_pos);
 
-	// 2. 재장전 중 정지, 조준만
+	// 2. 재장전
 	if (npc.reloading) {
-		UpdateNpcReload(npc, dt);
+		bool justFinished = UpdateNpcReload(npc, dt);
 		if (can_detect) {
 			RefreshLastSeenPlayer(npc, player_pos);
 			npc.yaw = std::atan2(player_pos.x - npc.position.x, player_pos.z - npc.position.z);
+		}
+		if (justFinished) {
+			// 재장전 종료 -> ATTACK 복귀 통지
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
 		}
 		return;  // 이동 없음
 	}
@@ -1342,6 +1357,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	// 5. 탄약 0이면 재장전
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);   // 클라에 재장전 시작 통지
 		return;
 	}
 
@@ -1447,6 +1463,7 @@ static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot
 		UpdateNpcReturn(npc, dt, player_snapshot);
 		break;
 	case NPC_STATE_ATTACK: 
+	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
 		UpdateNpcAttack(npc, dt, player_snapshot);
 		break;
 	case NPC_STATE_DIE:  

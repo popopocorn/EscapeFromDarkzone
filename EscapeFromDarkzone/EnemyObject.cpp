@@ -1137,6 +1137,13 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	if (NetworkManager::Instance().IsConnected())
 	{
+		if (pEnemy->IsReloading())
+		{
+			pEnemy->UpdateReload(fTimeElapsed);
+			pEnemy->SetEnemyAnimation(pEnemy->GetReloadAnimationByWeapon(), false, false);
+			return;
+		}
+
 		if (pEnemy->m_fShootAnimTimer > 0.0f) {
 			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 			return;
