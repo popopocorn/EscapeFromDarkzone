@@ -42,7 +42,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-//#define _DEBUG
+#define _DEBUG
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -372,6 +372,12 @@ namespace Matrix4x4
 		XMStoreFloat4x4(&xmf4x4Result, XMMatrixLookAtLH(XMLoadFloat3(&xmf3EyePosition), XMLoadFloat3(&xmf3LookAtPosition), XMLoadFloat3(&xmf3UpDirection)));
 		return(xmf4x4Result);
 	}
+}
+inline float clamp(float x, float min, float max)
+{
+	if (x < min)return min;
+	if (x > max)return max;
+	return x;
 }
 
 namespace Triangle

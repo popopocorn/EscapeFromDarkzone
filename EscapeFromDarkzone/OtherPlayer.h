@@ -18,6 +18,12 @@ public:
 
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
+	virtual void Render(
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		bool batch,
+		int nPipelineState,
+		CCamera* pCamera = NULL
+	) override;
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 
 	void ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState);
@@ -32,6 +38,15 @@ public:
 	void UpdatePosition(float x, float y, float z);
 	void SetServerYaw(float yawRad);
 	void Kill() { CGameObject::Kill(); }
+private:
+	CGameObject* m_pWeapon = nullptr;
+	CGameObject* m_pWeaponSocket = nullptr;
+	CGameObject* m_pWeaponMuzzleSocket = nullptr;
+	CGameObject* m_pRenderWeapon = nullptr;
+public:
+	void EquipDefaultPistol();
+	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+	void SubmitWeaponToShader(CShader* shader);
 };
 
 

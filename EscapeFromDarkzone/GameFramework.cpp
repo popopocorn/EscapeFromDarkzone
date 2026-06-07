@@ -8,17 +8,9 @@
 #include "InventoryManager.h"
 #include "ResourceManager.h"
 #include"ShaderManager.h"
+#include"SoundManager.h"
 #include "GameFramework.h"
 
-static CGameObject* FindSocketMuzzleFrame(CGameObject* pTarget)
-{
-	if (!pTarget) return nullptr;
-
-	CGameObject* pMuzzle = pTarget->FindFrame("Socket_Muzzle");
-	if (pMuzzle) return pMuzzle;
-
-	return nullptr;
-}
 static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 {
 	if (Vector3::Length(v) < 0.0001f)
@@ -26,6 +18,50 @@ static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 
 	return Vector3::Normalize(v);
 }
+static bool GetAttachedEffectMuzzleInfo(
+	CGameObject* pTarget,
+	XMFLOAT3& outPos,
+	XMFLOAT3& outDir)
+{
+	if (!pTarget)
+		return false;
+
+	pTarget->UpdateTransform(NULL);
+
+	CGameObject* pMuzzle = nullptr;
+
+	if (CEnemyObject* pNpc = dynamic_cast<CEnemyObject*>(pTarget))
+	{
+		pMuzzle = pNpc->GetWeaponMuzzleSocket();
+	}
+	else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pTarget))
+	{
+		pMuzzle = pOther->GetWeaponMuzzleSocket();
+	}
+
+	if (!pMuzzle)
+	{
+		pMuzzle = pTarget->FindFrame("Socket_Muzzle");
+	}
+
+	if (!pMuzzle)
+	{
+		OutputDebugString(L"[Effect] Socket_Muzzle not found. attached effect skipped.\n");
+		return false;
+	}
+
+	outPos = pMuzzle->GetPosition();
+
+	outDir = pTarget->GetLook();
+	outDir = SafeNormalizeOrDefault(outDir, XMFLOAT3(0.0f, 0.0f, 1.0f));
+
+	outPos.x += outDir.x * 0.05f;
+	outPos.y += outDir.y * 0.05f;
+	outPos.z += outDir.z * 0.05f;
+
+	return true;
+}
+
 
 
 CGameFramework::CGameFramework()
@@ -69,6 +105,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	m_hWnd = hMainWnd;
 
 	InputManager::Instance().init(hMainWnd);
+	SoundManager::Instance().Init();
 	CreateDirect3DDevice();
 	root = make_unique<RootSignature>(m_pd3dDevice);
 	
@@ -84,7 +121,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	shadowmap->Create(m_pd3dDevice);
 
 	shadermanager = make_unique<ShaderManager>();
-	
+	SoundManager::Instance().BuildSound();
 	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
@@ -466,6 +503,7 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 	case WM_LBUTTONUP:
 	case WM_RBUTTONUP:
 	case WM_MOUSEMOVE:
+	case WM_MOUSEWHEEL:
 		OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 		break;
 	case WM_KEYDOWN:
@@ -565,7 +603,7 @@ void CGameFramework::BuildObjects()
 		m_pd3dCommandList,
 		root->GetRoot(),
 		shadermanager->GetShader(ShaderType::PLAYER),
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
+		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
 
@@ -599,7 +637,6 @@ void CGameFramework::BuildObjects()
 
 	m_GameTimer.Reset();
 }
-
 void CGameFramework::ReleaseObjects()
 {
 	
@@ -734,7 +771,12 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	AnimateObjects(fTimeElapsed);
-
+	SoundManager::Instance().UpdateListener(
+		m_pPlayer->GetPosition(),
+		m_pPlayer->GetLookVector(),
+		m_pPlayer->GetUpVector()
+	);
+	SoundManager::Instance().Update();
 	
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())
@@ -913,8 +955,9 @@ void CGameFramework::ProcessNetworkPackets()
 				pOther->Kill();
 				break;
 			}
-
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pOther));
+			pOther->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
+			m_pScene.back()->AddObj(pOther);
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pOther);
 
 			break;
 		}
@@ -988,7 +1031,7 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01);
+			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1);
 			{
 				wchar_t szLog[256];
 				swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
@@ -1003,8 +1046,8 @@ void CGameFramework::ProcessNetworkPackets()
 				m_pd3dDevice,
 				m_pd3dCommandList,
 				root->GetRoot(),
-				NULL,
-				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01)
+				shadermanager->GetShader(ShaderType::SKINNED),
+				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
 			);
 			{
 				wchar_t szLog[256];
@@ -1016,15 +1059,15 @@ void CGameFramework::ProcessNetworkPackets()
 			pNpc->SetPosition(p->x, p->y, p->z);
 			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
 			pNpc->SetServerYaw(p->yaw);
-
+			pNpc->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
 			if (!AddNpc(p->npc_id, pNpc)) {
 				OutputDebugString(L"[Network] NPC slot full.\n");
 				pNpc->Kill();
 				break;
 			}
 
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(std::unique_ptr<CGameObject>(pNpc));
-
+			m_pScene.back()->AddObj(pNpc);
+			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pNpc);
 			break;
 		}
 		case SC_REMOVE_NPC:
@@ -1161,25 +1204,33 @@ void CGameFramework::ProcessNetworkPackets()
 			}
 			break;
 		}
-		case SC_PLAY_EFFECT_ATTACHED: {
-			// 머즐 플래시 (NPC, OtherPlayer)
+		case SC_PLAY_EFFECT_ATTACHED:
+		{
 			SC_PLAY_EFFECT_ATTACHED_PACKET* p =
 				reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
 
-			// 패킷 언팩
-			EffectID  effectId = static_cast<EffectID>(p->effect_id);
-			const unsigned char entityKind = p->entity_kind;   // 0=NPC, 1=OtherPlayer
-			const short         entityId = p->entity_id;
+			EffectID effectId = static_cast<EffectID>(p->effect_id);
+			const unsigned char entityKind = p->entity_kind;   // 0 = NPC, 1 = OtherPlayer
+			const short entityId = p->entity_id;
 
 			CGameObject* pTarget = nullptr;
-			if (entityKind == 0) {
+
+			if (entityKind == 0)
+			{
 				pTarget = FindNpc(entityId);
 			}
-			else if (entityKind == 1) {
+			else if (entityKind == 1)
+			{
 				pTarget = FindOtherPlayer(entityId);
 			}
 
 			if (!pTarget)
+			{
+				OutputDebugString(L"[Effect] attached target not found.\n");
+				break;
+			}
+
+			if (m_pScene.empty())
 			{
 				break;
 			}
@@ -1196,34 +1247,12 @@ void CGameFramework::ProcessNetworkPackets()
 				break;
 			}
 
-			pTarget->UpdateTransform(NULL);
-
-			CGameObject* pMuzzle = FindSocketMuzzleFrame(pTarget);
-
 			XMFLOAT3 effectPos;
 			XMFLOAT3 effectDir;
 
-			if (pMuzzle)
+			if (!GetAttachedEffectMuzzleInfo(pTarget, effectPos, effectDir))
 			{
-				effectPos = pMuzzle->GetPosition();
-				effectDir = pMuzzle->GetLook();
-
-				effectDir = SafeNormalizeOrDefault(effectDir, pTarget->GetLook());
-			}
-			//소켓 없는 경우, 대충 머리 위쪽에서 앞쪽으로
-			else
-			{
-				XMFLOAT3 targetPos = pTarget->GetPosition();
-				XMFLOAT3 targetLook = SafeNormalizeOrDefault(pTarget->GetLook(), XMFLOAT3(0.0f, 0.0f, 1.0f));
-				XMFLOAT3 targetUp = SafeNormalizeOrDefault(pTarget->GetUp(), XMFLOAT3(0.0f, 1.0f, 0.0f));
-
-				effectPos.x = targetPos.x + targetLook.x * 0.8f + targetUp.x * 1.2f;
-				effectPos.y = targetPos.y + targetLook.y * 0.8f + targetUp.y * 1.2f;
-				effectPos.z = targetPos.z + targetLook.z * 0.8f + targetUp.z * 1.2f;
-
-				effectDir = targetLook;
-
-				OutputDebugString(L"[Effect] Socket_Muzzle not found. fallback used.\n");
+				break;
 			}
 
 			int ownerId =

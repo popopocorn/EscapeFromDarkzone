@@ -88,7 +88,7 @@ public:
 	virtual void AnimateObjects(float fTimeElapsed) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
-
+	void AddObj(CGameObject* obj) { GameObjects.push_back(unique_ptr<CGameObject>(obj)); }
 	virtual void ReleaseUploadBuffers() {
 		if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
@@ -108,6 +108,7 @@ protected:
 	LightCameraManager*					ShadowCameraManager;
 	CGameFramework*						frame;
 	unique_ptr<HUDManager>				uiManager;
+	vector<unique_ptr<CGameObject>>		GameObjects;
 
 public:
 
@@ -190,14 +191,11 @@ public:
 
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
-	CGameObject* m_pLaserMuzzle = nullptr;
 	float m_fLaserLength = 15.0f;
 
 	bool m_bSparkFireActive = false;
 	float m_fSparkSpawnTimer = 0.0f;
 	float m_fSparkSpawnInterval = 0.03f;
-
-	CGameObject* m_pWeaponMuzzle = nullptr;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:

@@ -26,10 +26,11 @@ public:
 private:
 	int									m_nReferences = 0;
 	bool								do_shadow = false;
+protected:
+	std::vector<CGameObject*>			m_ppObjects;
 public:
 	void AddRef() { m_nReferences++; }
 	void Release() { if (--m_nReferences <= 0) delete this; }
-	virtual void addObjects(std::unique_ptr<CGameObject> obj) { }
 	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
 	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
 	virtual D3D12_BLEND_DESC CreateBlendState();
@@ -58,11 +59,13 @@ public:
 	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL) { }
 	virtual void AnimateObjects(float fTimeElapsed) { }
 	virtual void ReleaseObjects() { }
-	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return NULL; }
+
 	bool DoShadow() { return do_shadow; }
 	virtual void DeleteObject(UINT64 fence ) {};
 	virtual void ProcessingGarbageQueue(UINT64 completed) {};
-	
+	virtual void addObjects(CGameObject* obj) { m_ppObjects.push_back(obj); }
+	std::vector<CGameObject*>* GetObj() { return &m_ppObjects; }
+
 protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
@@ -155,7 +158,6 @@ public:
 
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CLoadedModelInfo* pModel, void* pContext = NULL);
 	virtual void AnimateObjects(float fTimeElapsed);
-	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void ReleaseObjects();
 
 	virtual void ReleaseUploadBuffers();
@@ -163,10 +165,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 	virtual void DeleteObject(UINT64 fence);
 	virtual void ProcessingGarbageQueue(UINT64 completed);
-
-	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
-protected:
-	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
+	
 };
 
 class CLaserShader : public CStandardObjectsShader
@@ -203,15 +202,11 @@ public:
 	virtual void BuildObjects(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CLoadedModelInfo *pModel, void *pContext = NULL);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void ReleaseObjects();
-	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
-	virtual std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
 	virtual void ReleaseUploadBuffers();
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
 	virtual void DeleteObject(UINT64 fence);
-	virtual void ProcessingGarbageQueue(UINT64 completed);
-protected:
-	std::vector<std::unique_ptr<CGameObject>>		m_ppObjects;
+	virtual void ProcessingGarbageQueue(UINT64 completed);	
 };
 
 class ViewShader : public CStandardShader
@@ -232,13 +227,7 @@ public:
 	virtual void ReleaseObjects();
 	//시야 오브젝트 갱신
 	virtual void AnimateObjects(float fTimeElapsed);
-	virtual void addObjects(std::unique_ptr<CGameObject> obj) { m_ppObjects.push_back(std::move(obj)); }
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
-
-	std::vector<std::unique_ptr<CGameObject>>* GetObj() { return &m_ppObjects; }
-
-private:
-	std::vector<std::unique_ptr<CGameObject>> m_ppObjects;
 };
 
 class PlayerShader : public CSkinnedAnimationStandardShader {

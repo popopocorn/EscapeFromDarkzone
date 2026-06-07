@@ -4,7 +4,9 @@
 #include "OtherPlayer.h"
 #include "AI.h"
 #include "Shader.h"
-
+#include"ShaderManager.h"
+#include "ResourceManager.h"
+#include"SoundManager.h"
 #include "Network.h"
 
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
@@ -13,7 +15,6 @@ static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
 	float dz = a.z - b.z;
 	return sqrtf(dx * dx + dz * dz);
 }
-
 static XMFLOAT3 NormalizeXZ(const XMFLOAT3& v)
 {
 	XMFLOAT3 result = v;
@@ -24,7 +25,6 @@ static XMFLOAT3 NormalizeXZ(const XMFLOAT3& v)
 
 	return Vector3::Normalize(result);
 }
-
 static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
 {
 	XMFLOAT3 dir = NormalizeXZ(forward);
@@ -34,92 +34,25 @@ static XMFLOAT3 GetRightFromForwardXZ(const XMFLOAT3& forward)
 
 	return XMFLOAT3(dir.z, 0.0f, -dir.x);
 }
-
 static float NormalizeAngleDeg(float angle)
 {
 	while (angle > 180.0f) angle -= 360.0f;
 	while (angle < -180.0f) angle += 360.0f;
 	return angle;
 }
-
-// 임시 코드 (서버 연결 시 NPC가 투명하게 보이는 현상 해결 용도)
-/*CEnemyObject::CEnemyObject(
-	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	ID3D12RootSignature* pd3dGraphicsRootSignature,
-	CShader* pShader,
-	CLoadedModelInfo* pEnemyModelInstance)
+static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const* ppNames, int nCount)
 {
-	UNREFERENCED_PARAMETER(pShader);
+	if (!pRoot) return nullptr;
 
-	// OtherPlayer와 동일하게 인스턴스마다 모델을 독립적으로 로드한다.
-	// (공유 메쉬의 m_ppSkinningBoneFrameCaches가 인스턴스 간 충돌하는 문제 회피)
-	// 외부에서 넘어온 공유 인스턴스는 사용하지 않고, 누수 방지를 위해 정리한다.
-	if (pEnemyModelInstance)
+	for (int i = 0; i < nCount; ++i)
 	{
-		delete pEnemyModelInstance;
-		pEnemyModelInstance = nullptr;
+		CGameObject* pFrame = pRoot->FindFrame(ppNames[i]);
+		if (pFrame) return pFrame;
 	}
 
-	CLoadedModelInfo* pEnemyModel = CGameObject::LoadGeometryAndAnimationFromFile(
-		pd3dDevice,
-		pd3dCommandList,
-		pd3dGraphicsRootSignature,
-		"Model/SM_Gangster.bin",
-		NULL);
+	return nullptr;
+}
 
-	if (!pEnemyModel || !pEnemyModel->m_pModelRootObject)
-	{
-		OutputDebugString(L"Error: Failed to load enemy model.\n");
-		if (pEnemyModel) delete pEnemyModel;
-		return;
-	}
-
-	if (!pEnemyModel->m_pAnimationSets)
-	{
-		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
-	}
-
-	SetChild(pEnemyModel->m_pModelRootObject, true);
-
-	ClearOOBB(false);
-
-	if (pEnemyModel->m_pModelRootObject)
-	{
-		pEnemyModel->m_pModelRootObject->ClearOOBB(true);
-	}
-
-	BoundingOrientedBox enemyBox;
-	enemyBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	enemyBox.Extents = XMFLOAT3(0.35f, 1.0f, 0.35f);
-	enemyBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-	SetOOBB(enemyBox);
-
-	m_pSkinnedAnimationController = new CAnimationController(
-		pd3dDevice,
-		pd3dCommandList,
-		1,
-		pEnemyModel
-	);
-
-	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
-	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
-	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-
-	CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
-	ConfigureWeaponStats();
-
-	if (pEnemyModel)
-	{
-		delete pEnemyModel;
-	}
-
-	ChangeState(std::make_unique<EnemyIdle>());
-}*/
-///*
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
 	ID3D12GraphicsCommandList* pd3dCommandList,
@@ -142,6 +75,8 @@ CEnemyObject::CEnemyObject(
 	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
+	m_pRenderWeapon = new CGameObject();
+	EquipDefaultPistol();
 
 	ClearOOBB(false);
 
@@ -180,12 +115,15 @@ CEnemyObject::CEnemyObject(
 
 	ChangeState(std::make_unique<EnemyIdle>());
 }
-//*/
-
 
 CEnemyObject::~CEnemyObject()
 {
 
+}
+
+void CEnemyObject::SubmitWeaponToShader(CShader* shader)
+{
+	shader->addObjects(m_pRenderWeapon);
 }
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
@@ -291,6 +229,12 @@ void CEnemyObject::Update(float fTimeElapsed)
 	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 
 	UpdateTransform(NULL);
+
+	if (m_pRenderWeapon && m_pWeaponSocket)
+	{
+		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+	}
+
 }
 
 void CEnemyObject::HandleCollision(XMFLOAT3 normal)
@@ -345,7 +289,11 @@ void CEnemyObject::SetPosition(float x, float y, float z)
 
 }
 
-void CEnemyObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
+void CEnemyObject::Render(
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	bool batch,
+	int nPipelineState,
+	CCamera* pCamera)
 {
 	if (m_pSkinnedAnimationController)
 	{
@@ -353,6 +301,7 @@ void CEnemyObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch
 	}
 
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
+
 }
 
 float CEnemyObject::GetDistanceToPlayerXZ() const
@@ -362,12 +311,10 @@ float CEnemyObject::GetDistanceToPlayerXZ() const
 	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 	return DistanceXZ(m_xmf3Position, playerPos);
 }
-
 float CEnemyObject::GetDistanceFromSpawnXZ() const
 {
 	return DistanceXZ(m_xmf3Position, m_xmf3SpawnPosition);
 }
-
 float CEnemyObject::GetDistanceToSpawnXZ() const
 {
 	return DistanceXZ(m_xmf3Position, m_xmf3SpawnPosition);
@@ -377,22 +324,18 @@ bool CEnemyObject::IsPlayerInDetectRange() const
 {
 	return GetDistanceToPlayerXZ() <= m_fDetectionRange;
 }
-
 bool CEnemyObject::IsPlayerInAttackRange() const
 {
 	return GetDistanceToPlayerXZ() <= m_fAttackRange;
 }
-
 bool CEnemyObject::IsPlayerOutOfAttackRange() const
 {
 	return GetDistanceToPlayerXZ() >= m_fAttackExitRange;
 }
-
 bool CEnemyObject::IsOutsideLeashRange() const
 {
 	return GetDistanceFromSpawnXZ() > m_fLeashRange;
 }
-
 bool CEnemyObject::IsNearSpawn() const
 {
 	return GetDistanceToSpawnXZ() <= m_fReturnStopDistance;
@@ -540,6 +483,98 @@ void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
 	}
 }
 
+void CEnemyObject::EquipWeaponModel(ModelName modelName)
+{
+	CGameObject* pWeaponPrototype =
+		ResourceManager::Instance().GetModelPrototype(modelName);
+
+	if (!pWeaponPrototype)
+	{
+		OutputDebugString(L"[Enemy] weapon prototype not found.\n");
+		return;
+	}
+
+	CGameObject* pWeaponInstance =
+		CGameObject::CreateModelInstance(pWeaponPrototype);
+
+	if (!pWeaponInstance)
+	{
+		OutputDebugString(L"[Enemy] weapon instance create failed.\n");
+		return;
+	}
+
+	static const char* s_ppRightHandNames[] =
+	{
+		"mixamorig:RightHand",
+		"RightHand",
+		"Bip001 R Hand",
+		"mixamorig:RightHandIndex1"
+	};
+
+	CGameObject* pRightHand =
+		FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
+
+	if (!pRightHand)
+	{
+		OutputDebugString(L"[Enemy] RightHand frame not found. weapon not equipped.\n");
+		delete pWeaponInstance;
+		return;
+	}
+	if (m_pRenderWeapon->m_pChild)
+	{
+		delete m_pRenderWeapon->m_pChild;
+		m_pRenderWeapon->m_pChild = nullptr;
+	}
+
+	m_pWeapon = pWeaponInstance;
+	m_pWeaponSocket = pRightHand;
+	
+	m_pRenderWeapon->SetChild(m_pWeapon);
+	m_pRenderWeapon->SetOOBB(NULL);
+	m_pRenderWeapon->isColl = false;
+
+	// 기본값. 나중에 무기별로 조정 가능.
+	switch (modelName)
+	{
+	case ModelName::SMG:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(0.9f, 0.9f, 0.9f);
+		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		break;
+
+	case ModelName::RIFLE:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(1.2f, 1.2f, 1.2f);
+		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+		break;
+
+	case ModelName::PISTOL:
+	default:
+		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
+		m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
+		m_pWeapon->Rotate(90.0f, -90.0f, 14.0f);
+		break;
+	}
+
+	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
+
+	if (m_pWeaponMuzzleSocket)
+	{
+		OutputDebugString(L"[Enemy] Socket_Muzzle found.\n");
+	}
+	else
+	{
+		OutputDebugString(L"[Enemy] Socket_Muzzle not found.\n");
+	}
+
+	//m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+}
+
+void CEnemyObject::EquipDefaultPistol()
+{
+	EquipWeaponModel(ModelName::PISTOL);
+}
+
 // 총기 타입을 설정하고 해당 총기 스탯을 적용한다.
 void CEnemyObject::SetEnemyWeaponType(EnemyWeaponType eWeaponType)
 {
@@ -615,6 +650,20 @@ int CEnemyObject::GetAttackAnimationByWeapon() const
 	case EnemyWeaponType::Rifle:
 	default:
 		return ENEMY_RIFLE_SMG_SHOOT;
+	}
+}
+
+int CEnemyObject::GetReloadAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_RELOAD;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_RELOAD;
 	}
 }
 
@@ -741,7 +790,7 @@ void CEnemyObject::StartReload()
 	m_fBurstShotTimer = 0.0f;
 	m_fBurstRestTimer = 0.0f;
 	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	SetEnemyAnimation(GetAttackAnimationByWeapon(), true, false);
+	SetEnemyAnimation(GetReloadAnimationByWeapon(), false, true);
 
 	OutputDebugString(L"[Enemy AI] Reload Start\n");
 }
@@ -751,6 +800,8 @@ void CEnemyObject::UpdateReload(float fTimeElapsed)
 	if (!m_bReloading)
 		return;
 
+	SetEnemyAnimation(GetReloadAnimationByWeapon(), false, false);
+
 	m_fReloadTimer -= fTimeElapsed;
 
 	if (m_fReloadTimer <= 0.0f)
@@ -758,6 +809,10 @@ void CEnemyObject::UpdateReload(float fTimeElapsed)
 		m_bReloading = false;
 		m_fReloadTimer = 0.0f;
 		m_nCurrentAmmo = m_nMagazineAmmo;
+		m_nBurstShotsLeft = 0;
+		m_fBurstShotTimer = 0.0f;
+		m_fBurstRestTimer = 0.0f;
+		m_fAimTimer = 0.0f;
 
 		OutputDebugString(L"[Enemy AI] Reload Finish\n");
 	}
@@ -973,6 +1028,15 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
 
+	static float timeacu = 0.0f;
+	timeacu += fTimeElapsed;
+
+	if (timeacu > 0.5f)
+	{
+		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+		timeacu -= 0.5f;
+	}
+
 	if (pEnemy->IsOutsideLeashRange())
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1038,20 +1102,7 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	XMFLOAT3 myPos = pEnemy->GetPosition();
-	XMFLOAT3 dirToTarget = Vector3::Subtract(targetPos, myPos);
-	dirToTarget.y = 0.0f;
-
-	if (Vector3::Length(dirToTarget) > 0.0001f)
-	{
-		dirToTarget = Vector3::Normalize(dirToTarget);
-		pEnemy->SetMoveDir(dirToTarget);
-		pEnemy->FaceToPosition(targetPos);
-	}
-	else
-	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	}
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 }
 
 void EnemyRun::Exit(CEnemyObject* pEnemy)
@@ -1141,7 +1192,6 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsReloading())
 	{
 		pEnemy->UpdateReload(fTimeElapsed);
-		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 
 		if (pEnemy->CanDetectPlayer())
 		{

@@ -4,6 +4,7 @@
 #include "State.h"
 #include "Item.h"
 #include "Shader.h"
+#include "ResourceManager.h"
 
 class CPlayer;
 class Inventory;
@@ -43,7 +44,10 @@ class CEnemyObject : public CGameObject
 protected:
 	AstarNavigation* AStarNav = NULL;
 
-
+	CGameObject* m_pWeapon = nullptr;
+	CGameObject* m_pWeaponSocket = nullptr;
+	CGameObject* m_pWeaponMuzzleSocket = nullptr;
+	CGameObject* m_pRenderWeapon = nullptr;
 
 public:
 	CEnemyObject(
@@ -54,13 +58,18 @@ public:
 		CLoadedModelInfo* pEnemyModelInstance = nullptr
 	);
 	virtual ~CEnemyObject();
-
+	void SubmitWeaponToShader(CShader* shader);
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
 	virtual void HandleCollision(XMFLOAT3 normal);
 	virtual void SetPosition(float x, float y, float z);
 	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
-	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void Render(
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		bool batch,
+		int nPipelineState,
+		CCamera* pCamera = NULL
+	) override;
 
 	void ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState);
 
@@ -86,7 +95,10 @@ public:
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
-	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Rifle;
+	void EquipWeaponModel(ModelName modelName);
+	void EquipDefaultPistol();
+	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Pistol;
 
 	float m_fMoveSpeed = 5.0f;
 	float m_fDetectionRange = 20.0f;
@@ -202,6 +214,7 @@ public:
 	int GetLeftRunAnimationByWeapon() const;
 	int GetRightRunAnimationByWeapon() const;
 	int GetAttackAnimationByWeapon() const;
+	int GetReloadAnimationByWeapon() const;
 	int GetDieAnimationByWeapon() const;
 
 	void ConfigureWeaponStats();

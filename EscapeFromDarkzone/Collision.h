@@ -14,7 +14,7 @@ class CollisionManager{
 public:
 	void DoCollision(
 		CGameObject* main, 
-		std::vector<std::unique_ptr<CGameObject>>* target
+		std::vector<CGameObject*>* target
 	);
 	void CheckCollision(
 		CGameObject* main, 

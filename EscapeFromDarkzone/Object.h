@@ -349,7 +349,7 @@ public:
     virtual ~CGameObject();
 	virtual void init();
 	virtual void initWithObj(CGameObject* child) {};
-
+	bool							isColl = true;
 public:
 	bool							HasOOBB = false;
 

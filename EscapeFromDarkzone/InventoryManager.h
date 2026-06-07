@@ -16,6 +16,8 @@ private:
 	std::unique_ptr<Inventory> m_pLootInventory;
 	std::unique_ptr<Inventory> m_pCraftInventory;
 
+	std::vector<std::unique_ptr<CLootContainerObject>> m_vLootContainers;
+
 	CLootContainerObject* m_pOpenedLoot = nullptr;
 
 	bool m_bTabInventoryHold = false;
@@ -28,14 +30,9 @@ private:
 
 public:
 	InventoryManager() = default;
-	~InventoryManager() = default;
+	~InventoryManager();
 
-	void Initialize(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pUIShader
-	);
+	void Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pUIShader);
 
 	void Release();
 
@@ -43,18 +40,15 @@ public:
 
 	void UpdateLootWorld(float fTimeElapsed);
 
+	void RenderLootWorld(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
+
 	/*void ProcessEnemyLootSpawnRequests(CShader* pEnemyShader);*/
 
 	void SubmitToShader(UIObjectShader* shader);
 
 	bool ProcessClick(POINT mouse);
 
-	void BindLootWorld(
-		CPlayer* pPlayer,
-		CStandardObjectsShader* pLootShader,
-		CBoundingBoxShader* pDebugShader,
-		CBoundingBoxShader* pLootBoxShader
-	);
+	void BindLootWorld(CPlayer* pPlayer, CStandardObjectsShader* pLootShader, CBoundingBoxShader* pDebugShader, CBoundingBoxShader* pLootBoxShader);
 	void SetPlayer(CPlayer* pPlayer) { m_pPlayer = pPlayer; }
 
 	void OpenPlayerInventory();
@@ -78,7 +72,7 @@ public:
 	CLootContainerObject* FindNearestLootContainer(float fMaxDistance) const;
 
 	void SpawnLootContainerFromEnemy(CEnemyObject* pEnemy);
-	void SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount);	// 서버로부터 받은 정보로 루트박스 즉시 생성
+	void SpawnLootContainer(short npc_id, const XMFLOAT3& pos, const ItemID* items, const int* counts, int slotCount);
 
 	bool IsAnyInventoryOpen() const;
 	bool IsPlayerInventoryOpen() const;

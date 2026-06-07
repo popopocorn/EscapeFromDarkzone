@@ -120,7 +120,7 @@ void EffectManager::Initialize(
 		pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
 		pLaserObject->SetShader(m_pLaserShader);
 
-		m_pLaserShader->addObjects(std::unique_ptr<CGameObject>(pLaserObject));
+		m_pLaserShader->addObjects(pLaserObject);
 
 		XMStoreFloat4x4(&pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
 		pLaserObject->UpdateTransform(NULL);
