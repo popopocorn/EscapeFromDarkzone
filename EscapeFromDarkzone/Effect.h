@@ -52,6 +52,8 @@ struct EFFECT_INFO
 
     XMFLOAT3 vUp;
     float    padding2;
+
+    XMFLOAT4 vColor;
 };
 class CEffect : public CGameObject
 {

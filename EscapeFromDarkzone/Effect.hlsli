@@ -13,6 +13,7 @@ struct VS_PARTICLE_INPUT
     float2 instSize : INST_SIZE;
     float3 instRight : INST_RIGHT;
     float3 instUp : INST_UP;
+    float4 instColor : INST_COLOR;
 };
 
 struct VS_PARTICLE_OUTPUT
@@ -21,6 +22,7 @@ struct VS_PARTICLE_OUTPUT
     float2 uv : TEXCOORD0;
     float2 localUV : TEXCOORD1;
     float progress : TEXCOORD2;
+    float4 effectColor : COLOR0;
 };
 
 VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
@@ -67,6 +69,7 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
 
     output.localUV = input.uv;
     output.progress = progress;
+    output.effectColor = input.instColor;
 
     return output;
 }
@@ -83,13 +86,18 @@ float4 PSParticle(VS_PARTICLE_OUTPUT input) : SV_TARGET
     float alpha = saturate((brightness - 0.035f) / 0.24f);
     alpha = pow(alpha, 0.85f);
 
-    float3 warmTint = float3(1.0f, 0.58f, 0.20f);
+    float3 tint = input.effectColor.rgb;
 
     color.rgb = pow(saturate(color.rgb), 0.75f);
-    color.rgb *= warmTint;
+    color.rgb *= tint;
     color.rgb *= 2.7f;
 
-    color.rgb = min(color.rgb, float3(1.0f, 0.72f, 0.36f));
+    float3 maxColor;
+    maxColor.r = 1.0f;
+    maxColor.g = min(0.95f, max(0.72f, tint.g * 1.24f));
+    maxColor.b = min(0.80f, max(0.36f, tint.b * 1.80f));
+
+    color.rgb = min(color.rgb, maxColor);
     color.a = alpha;
 
     float tailFade = smoothstep(1.0f, 0.68f, input.progress);

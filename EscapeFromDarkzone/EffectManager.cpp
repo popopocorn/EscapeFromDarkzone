@@ -449,26 +449,32 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 			{
 			case EFFECT_BOMB:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.86f, 0.65f, 1.0f);
 				break;
 
 			case EFFECT_SPARK_RIFLE_SMG:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.45f, 1.45f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 
 			case EFFECT_SPARK_SHOTGUN:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.8f, 1.8f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 
 			case EFFECT_SPARK_PISTOL:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(0.75f, 0.75f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 
 			case EFFECT_BLOOD:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.15f, 0.10f, 1.0f);
 				break;
 
 			default:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.0f, 1.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 			}
 
