@@ -649,6 +649,20 @@ int CEnemyObject::GetAttackAnimationByWeapon() const
 	}
 }
 
+int CEnemyObject::GetReloadAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ENEMY_PISTOL_RELOAD;
+
+	case EnemyWeaponType::SMG:
+	case EnemyWeaponType::Rifle:
+	default:
+		return ENEMY_RIFLE_SMG_RELOAD;
+	}
+}
+
 int CEnemyObject::GetDieAnimationByWeapon() const
 {
 	return ENEMY_DIE;
@@ -772,7 +786,7 @@ void CEnemyObject::StartReload()
 	m_fBurstShotTimer = 0.0f;
 	m_fBurstRestTimer = 0.0f;
 	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	SetEnemyAnimation(GetAttackAnimationByWeapon(), true, false);
+	SetEnemyAnimation(GetReloadAnimationByWeapon(), false, true);
 
 	OutputDebugString(L"[Enemy AI] Reload Start\n");
 }
@@ -782,6 +796,8 @@ void CEnemyObject::UpdateReload(float fTimeElapsed)
 	if (!m_bReloading)
 		return;
 
+	SetEnemyAnimation(GetReloadAnimationByWeapon(), false, false);
+
 	m_fReloadTimer -= fTimeElapsed;
 
 	if (m_fReloadTimer <= 0.0f)
@@ -789,6 +805,10 @@ void CEnemyObject::UpdateReload(float fTimeElapsed)
 		m_bReloading = false;
 		m_fReloadTimer = 0.0f;
 		m_nCurrentAmmo = m_nMagazineAmmo;
+		m_nBurstShotsLeft = 0;
+		m_fBurstShotTimer = 0.0f;
+		m_fBurstRestTimer = 0.0f;
+		m_fAimTimer = 0.0f;
 
 		OutputDebugString(L"[Enemy AI] Reload Finish\n");
 	}
@@ -1003,13 +1023,16 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
 	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
-	static float timeacu = 0;
+
+	static float timeacu = 0.0f;
 	timeacu += fTimeElapsed;
-	if (timeacu > 0.5)
+
+	if (timeacu > 0.5f)
 	{
 		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
-		timeacu -= 0.5;
+		timeacu -= 0.5f;
 	}
+
 	if (pEnemy->IsOutsideLeashRange())
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1075,20 +1098,7 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	XMFLOAT3 myPos = pEnemy->GetPosition();
-	XMFLOAT3 dirToTarget = Vector3::Subtract(targetPos, myPos);
-	dirToTarget.y = 0.0f;
-
-	if (Vector3::Length(dirToTarget) > 0.0001f)
-	{
-		dirToTarget = Vector3::Normalize(dirToTarget);
-		pEnemy->SetMoveDir(dirToTarget);
-		pEnemy->FaceToPosition(targetPos);
-	}
-	else
-	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	}
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 }
 
 void EnemyRun::Exit(CEnemyObject* pEnemy)
@@ -1138,7 +1148,6 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsReloading())
 	{
 		pEnemy->UpdateReload(fTimeElapsed);
-		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 
 		if (pEnemy->CanDetectPlayer())
 		{

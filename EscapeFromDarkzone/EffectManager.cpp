@@ -46,7 +46,7 @@ void EffectManager::Initialize(
 	// Bomb
 	{
 		CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+		pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion3.dds", RESOURCE_TEXTURE2D, 0);
 		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
 
 		m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
@@ -54,27 +54,48 @@ void EffectManager::Initialize(
 		m_pEffectMaterials[EFFECT_BOMB]->SetShader(m_pEffectShader);
 	}
 
-	// Spark
+	// Spark - Rifle / SMG
 	{
-		CTexture* pSparkTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pSparkTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkTexture, 0, 3);
+		CTexture* pSparkRifleSMGTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+		pSparkRifleSMGTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Rifle_SMG.dds", RESOURCE_TEXTURE2D, 0);
+		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkRifleSMGTexture, 0, 3);
 
-		m_pEffectMaterials[EFFECT_SPARK] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_SPARK]->SetTexture(pSparkTexture);
-		m_pEffectMaterials[EFFECT_SPARK]->SetShader(m_pEffectShader);
+		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG] = new CMaterial(1);
+		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG]->SetTexture(pSparkRifleSMGTexture);
+		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG]->SetShader(m_pEffectShader);
 	}
 
-	// Blood
+	// Spark - Shotgun
 	{
-		CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
+		CTexture* pSparkShotgunTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+		pSparkShotgunTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Shotgun.dds", RESOURCE_TEXTURE2D, 0);
+		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkShotgunTexture, 0, 3);
 
-		m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
-		m_pEffectMaterials[EFFECT_BLOOD]->SetShader(m_pEffectShader);
+		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN] = new CMaterial(1);
+		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN]->SetTexture(pSparkShotgunTexture);
+		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN]->SetShader(m_pEffectShader);
 	}
+
+	// Spark - Pistol, Rifle/SMG 이펙트 재사용 + 크기만 작게
+	{
+		CTexture* pSparkPistolTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+		pSparkPistolTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Rifle_SMG.dds", RESOURCE_TEXTURE2D, 0);
+		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkPistolTexture, 0, 3);
+
+		m_pEffectMaterials[EFFECT_SPARK_PISTOL] = new CMaterial(1);
+		m_pEffectMaterials[EFFECT_SPARK_PISTOL]->SetTexture(pSparkPistolTexture);
+		m_pEffectMaterials[EFFECT_SPARK_PISTOL]->SetShader(m_pEffectShader);
+	}
+	//// Blood
+	//{
+	//	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+	//	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	//	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
+
+	//	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
+	//	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
+	//	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(m_pEffectShader);
+	//}
 
 	for (int i = 0; i < EFFECT_MAX; ++i)
 	{
@@ -106,7 +127,9 @@ void EffectManager::Initialize(
 	for (int i = 0; i < INITIAL_EFFECT_POOL_SIZE; ++i)
 	{
 		m_vEffectPools[EFFECT_BOMB].push_back(std::make_unique<CEffect>(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK].push_back(std::make_unique<CEffect>(EFFECT_SPARK, 0.1f));
+		m_vEffectPools[EFFECT_SPARK_RIFLE_SMG].push_back(std::make_unique<CEffect>(EFFECT_SPARK_RIFLE_SMG, 0.055f));
+		m_vEffectPools[EFFECT_SPARK_SHOTGUN].push_back(std::make_unique<CEffect>(EFFECT_SPARK_SHOTGUN, 0.045f));
+		m_vEffectPools[EFFECT_SPARK_PISTOL].push_back(std::make_unique<CEffect>(EFFECT_SPARK_PISTOL, 0.045f));
 		m_vEffectPools[EFFECT_BLOOD].push_back(std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
 	}
 
@@ -211,9 +234,29 @@ void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 r
 
 	switch (type)
 	{
-	case EFFECT_BOMB:  lifeTime = 1.0f; break;
-	case EFFECT_SPARK: lifeTime = 0.1f; break;
-	case EFFECT_BLOOD: lifeTime = 0.8f; break;
+	case EFFECT_BOMB:
+		lifeTime = 1.0f;
+		break;
+
+	case EFFECT_SPARK_RIFLE_SMG:
+		lifeTime = 0.055f;
+		break;
+
+	case EFFECT_SPARK_SHOTGUN:
+		lifeTime = 0.045f;
+		break;
+
+	case EFFECT_SPARK_PISTOL:
+		lifeTime = 0.045f;
+		break;
+
+	case EFFECT_BLOOD:
+		lifeTime = 0.8f;
+		break;
+
+	default:
+		lifeTime = 0.5f;
+		break;
 	}
 
 	auto pNewEffect = std::make_unique<CEffect>(type, lifeTime);
@@ -280,12 +323,7 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 
 	case EffectID::SPARK:
 	{
-		RequestPlayEffect(
-			EFFECT_SPARK,
-			desc.position,
-			right,
-			up
-		);
+		RequestPlayEffect(EFFECT_SPARK_RIFLE_SMG, desc.position, right, up);
 		break;
 	}
 
@@ -302,12 +340,7 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 
 	case EffectID::HIT:
 	{
-		RequestPlayEffect(
-			EFFECT_SPARK,
-			desc.position,
-			right,
-			up
-		);
+		RequestPlayEffect(EFFECT_SPARK_RIFLE_SMG, desc.position, right, up);
 		break;
 	}
 
@@ -388,13 +421,11 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 {
 	if (nPipelineState == SHADOW) return;
 
-	// 레이저 렌더
 	if (m_pLaserShader)
 	{
 		m_pLaserShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	// 파티클 이펙트 렌더
 	if (m_pEffectShader)
 	{
 		m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
@@ -418,18 +449,32 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 			{
 			case EFFECT_BOMB:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.86f, 0.65f, 1.0f);
 				break;
 
-			case EFFECT_SPARK:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.2f, 1.2f);
+			case EFFECT_SPARK_RIFLE_SMG:
+				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.45f, 1.45f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
+				break;
+
+			case EFFECT_SPARK_SHOTGUN:
+				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.8f, 1.8f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
+				break;
+
+			case EFFECT_SPARK_PISTOL:
+				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(0.75f, 0.75f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 
 			case EFFECT_BLOOD:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.15f, 0.10f, 1.0f);
 				break;
 
 			default:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.0f, 1.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
 				break;
 			}
 

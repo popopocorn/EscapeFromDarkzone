@@ -452,51 +452,64 @@ static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
 }
 static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-
-	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
-	// SMG 기준값
-	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
-	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
-	const XMFLOAT3 smgShootPos = XMFLOAT3(0.02f, -0.10f, -0.20f);
-
-	const XMFLOAT3 smgIdleRot = XMFLOAT3(-90.0f, 0.0f, 28.0f);
-	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 90.0f, 0.0f);
-	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 90.0f, 0.0f);
-
-	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
-
 	// Rifle 테스트값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
-	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.4f, 0.2f, 0.2f);
-	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
-	const XMFLOAT3 rifleShootPos = XMFLOAT3(0.02f, 0.0f, -0.20f);
+	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
+	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.15f, 0.2f, 0.1f);
+	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.0f, 0.10f, -0.0f);
+	const XMFLOAT3 rifleShootPos = XMFLOAT3(-0.10f, 0.0f, -0.0f);
 
-	const XMFLOAT3 rifleIdleRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
+	const XMFLOAT3 rifleIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
 	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 rifleShootRot = XMFLOAT3(90.0f, 90.0f, 0.0f);
+	const XMFLOAT3 rifleShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(-90.0f, 90.0f, 0.0f);
+	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
 
 	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
+	// SMG 기준값
+	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
+	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.10f, 0.16f);
+	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
+	const XMFLOAT3 smgShootPos = XMFLOAT3(0.20f, -0.10f, -0.20f);
+
+	const XMFLOAT3 smgIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
+	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
+	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
+	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
+
 	// Shotgun 테스트값
-	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.4f, 0.2f, 0.10f);
-	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.20f, 0.20f);
-	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.45f, 0.20f, 0.20f);
+	// x값 수정 시 좌+ 우-, y값 수정 시 앞+ 뒤-, z값 수정 시 위- 아래+
+	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.15f, 0.3f, 0.05f);
+	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
+	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
 
 	const XMFLOAT3 shotgunIdleRot = XMFLOAT3(180.0f, 0.0f, 90.0f);
 	const XMFLOAT3 shotgunRunRot = XMFLOAT3(0.0f, 0.0f, -0.50f);
 	const XMFLOAT3 shotgunShootRot = XMFLOAT3(0.40f, 0.0f, -0.0f);
 
-	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(-0.50f, 0.15f, 0.45f);
-	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
+	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(0.0f, 0.10f, 0.0f);
+	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, -90.0f, 180.0f);
 
-	const XMFLOAT3 shotgunScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
+	const XMFLOAT3 shotgunScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
+
+	// 권총 테스트값
+	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
+	const XMFLOAT3 pistolIdlePos = XMFLOAT3(-0.0f, 0.3f, 0.05f);
+	const XMFLOAT3 pistolRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
+	const XMFLOAT3 pistolShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
+
+	const XMFLOAT3 pistolIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
+	const XMFLOAT3 pistolRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
+	const XMFLOAT3 pistolShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	const XMFLOAT3 pistolGrenadePos = XMFLOAT3(-0.0f, 0.f, 0.0f);
+	const XMFLOAT3 pistolGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
+
+
 	PlayerWeaponVisualConfig config{};
-
 	switch (weaponType)
 	{
 	case PlayerWeaponType::SMG:
@@ -543,16 +556,15 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 		config.modelName = ModelName::PISTOL;
 		config.itemType = ItemType::PISTOL;
 
-		// 권총은 나중에 따로 맞출 예정. 일단 임시값.
-		config.idlePos = rifleIdlePos;
-		config.idleRot = rifleIdleRot;
-		config.runPos = rifleRunPos;
-		config.runRot = rifleRunRot;
-		config.grenadePos = rifleGrenadePos;
-		config.grenadeRot = rifleGrenadeRot;
-		config.shootPos = rifleShootPos;
-		config.shootRot = rifleShootRot;
-		config.scale = XMFLOAT3(0.85f, 0.85f, 0.85f);
+		config.idlePos = pistolIdlePos;
+		config.idleRot = pistolIdleRot;
+		config.runPos = pistolRunPos;
+		config.runRot = pistolRunRot;
+		config.grenadePos = pistolGrenadePos;
+		config.grenadeRot = pistolGrenadeRot;
+		config.shootPos = pistolShootPos;
+		config.shootRot = pistolShootRot;
+		config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
 		break;
 
 	case PlayerWeaponType::Rifle:

@@ -101,12 +101,7 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
-static bool GetCurrentPlayerMuzzleInfo(
-	CPlayer* pPlayer,
-	XMFLOAT3& outPos,
-	XMFLOAT3& outLook,
-	XMFLOAT3& outRight,
-	XMFLOAT3& outUp)
+static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer,XMFLOAT3& outPos,XMFLOAT3& outLook,XMFLOAT3& outRight,XMFLOAT3& outUp)
 {
 	if (!pPlayer)
 		return false;
@@ -152,7 +147,67 @@ static bool GetCurrentPlayerMuzzleInfo(
 
 	return false;
 }
+static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
+{
+	switch (weaponType)
+	{
+	case PlayerWeaponType::Shotgun:
+		return EFFECT_SPARK_SHOTGUN;
 
+	case PlayerWeaponType::Pistol:
+		return EFFECT_SPARK_PISTOL;
+
+	case PlayerWeaponType::Rifle:
+	case PlayerWeaponType::SMG:
+	default:
+		return EFFECT_SPARK_RIFLE_SMG;
+	}
+}
+static XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+{
+	XMFLOAT3 sparkPos = muzzlePos;
+
+	float forwardOffset = 0.0f;
+	float upOffset = 0.0f;
+
+	switch (weaponType)
+	{
+	case PlayerWeaponType::Rifle:
+		forwardOffset = -0.1f;
+		upOffset = -0.0f;
+		break;
+
+	case PlayerWeaponType::SMG:
+		forwardOffset = -0.08f;
+		upOffset = -0.0f;
+		break;
+
+	case PlayerWeaponType::Shotgun:
+		forwardOffset = 0.12f;
+		upOffset = 0.0f;
+		break;
+
+	case PlayerWeaponType::Pistol:
+		forwardOffset = 0.1f;
+		upOffset = 0.0f;
+		break;
+
+	default:
+		forwardOffset = 0.0f;
+		upOffset = 0.0f;
+		break;
+	}
+
+	sparkPos.x += muzzleLook.x * forwardOffset;
+	sparkPos.y += muzzleLook.y * forwardOffset;
+	sparkPos.z += muzzleLook.z * forwardOffset;
+
+	sparkPos.x += muzzleUp.x * upOffset;
+	sparkPos.y += muzzleUp.y * upOffset;
+	sparkPos.z += muzzleUp.z * upOffset;
+
+	return sparkPos;
+}
 
 CScene::CScene(CGameFramework* game)
 {
@@ -377,20 +432,16 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			muzzleUp
 		);
 
-		XMFLOAT3 sparkPos;
-		sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-		sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-		sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
-
-		XMFLOAT3 sparkRight = muzzleRight;
-		XMFLOAT3 sparkUp = muzzleLook;
+		PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
+		EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
+		XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
 
 		if (m_pEffectManager)
 		{
-			m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 			m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 		}
-
+		
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
 			if (NetworkManager::Instance().IsConnected())
@@ -1011,14 +1062,13 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				muzzleUp
 			);
 
-			XMFLOAT3 sparkPos;
-			sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-			sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-			sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
+			PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
+			EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
+			XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
 
 			if (m_pEffectManager)
 			{
-				m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, muzzleRight, muzzleLook);
+				m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 

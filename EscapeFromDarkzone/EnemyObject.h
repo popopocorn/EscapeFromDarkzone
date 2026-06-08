@@ -217,6 +217,7 @@ public:
 	int GetLeftRunAnimationByWeapon() const;
 	int GetRightRunAnimationByWeapon() const;
 	int GetAttackAnimationByWeapon() const;
+	int GetReloadAnimationByWeapon() const;
 	int GetDieAnimationByWeapon() const;
 
 	void ConfigureWeaponStats();

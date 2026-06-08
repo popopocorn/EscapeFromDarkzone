@@ -11,7 +11,9 @@ enum class ModelName
 	ENEMY_01_1,
 	ENEMY_01_2,
 	ENEMY_01_3,
-	ENEMY_02,
+	ENEMY_02_1,
+	ENEMY_02_2,
+	ENEMY_02_3,
 	ENEMY_03_1,
 	ENEMY_03_2,
 	ENEMY_03_3,
@@ -263,6 +265,7 @@ private:
 		CShader* pShader
 	);
 
+	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
 	void ReleaseSkinnedModelPrototypes();
 
 public:
