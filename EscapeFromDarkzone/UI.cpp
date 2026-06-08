@@ -466,9 +466,82 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	float BtnSize = 0.15f;
 	XMFLOAT3 scale = CalcPixelByRatio(1.0f);
 	UIs[ItemType::ARMOR_HELMET] = make_unique<UIObject>();
-	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.35, 0.0, 0.5);
+	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.35, 0.2, 0.5);
 	UIs[ItemType::ARMOR_HELMET]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
+	UIs[ItemType::ARMOR_HELMET]->SetFunc([this]() {
+		ItemID i = this->helmet;
+		switch (i)
+		{
+		case ItemID::NONE:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_HELMET_01);
+			}
+			break;
+		case ItemID::ARMOR_HELMET_01:
+		case ItemID::ARMOR_HELMET_02:
+		case ItemID::ARMOR_HELMET_03:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(++i);
+			}
+			break;
+		}
+
+		});
+	UIs[ItemType::ARMOR_HELMET]->setAABB();
+
+
+	UIs[ItemType::ARMOR_BODY] = make_unique<UIObject>();
+	UIs[ItemType::ARMOR_BODY]->SetLocate(0.35, 0.0, 0.5);
+	UIs[ItemType::ARMOR_BODY]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
+	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
+	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
+		ItemID i = this->helmet;
+		switch (i)
+		{
+		case ItemID::NONE:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+			}
+			break;
+		case ItemID::ARMOR_BODY_01:
+		case ItemID::ARMOR_BODY_02:
+		case ItemID::ARMOR_BODY_03:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(++i);
+			}
+			break;
+		}
+
+		});
+	UIs[ItemType::ARMOR_BODY]->setAABB();
+
+
+	UIs[ItemType::ARMOR_SHOES] = make_unique<UIObject>();
+	UIs[ItemType::ARMOR_SHOES]->SetLocate(0.35, -0.2, 0.5);
+	UIs[ItemType::ARMOR_SHOES]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
+	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
+	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
+		ItemID i = this->helmet;
+		switch (i)
+		{
+		case ItemID::NONE:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_SHOES_01);
+			}
+			break;
+		case ItemID::ARMOR_SHOES_01:
+		case ItemID::ARMOR_SHOES_02:
+		case ItemID::ARMOR_SHOES_03:
+			if (NetworkManager::Instance().IsConnected()) {
+				NetworkManager::Instance().SendCraftRequest(++i);
+			}
+			break;
+		}
+
+		});
+	UIs[ItemType::ARMOR_SHOES]->setAABB();
+
 
 }
 
@@ -558,6 +631,14 @@ bool HUDManager::ProcessClick(POINT mouse)
 		{
 			o->HandleClick();
 			return true;
+		}
+	}
+	for (auto& o : pannels)
+	{
+		if (o->isOpen)
+		{
+			o->ProcessClick(mouse);
+			
 		}
 	}
 	return false;

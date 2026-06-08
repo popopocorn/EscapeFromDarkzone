@@ -442,7 +442,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			m_pEffectManager->HideLaser(0);
 		}
-
+		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		break;
 	}
 	case WM_MOUSEWHEEL:
