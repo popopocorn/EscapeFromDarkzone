@@ -21,6 +21,7 @@
 #include "GameFramework.h"
 
 #include "Network.h"
+#include "NetSession.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
 {
@@ -395,7 +396,8 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (NetworkManager::Instance().IsConnected())
 			{
-				NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+				//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+				NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 			}
 			else
 			{
@@ -572,7 +574,8 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+				//NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
 			}
 			return true;
 		}
@@ -580,7 +583,8 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+				//NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
 			}
 			return true;
 		}
@@ -1016,7 +1020,8 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 			{
 				if (NetworkManager::Instance().IsConnected())
 				{
-					NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+					//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+					NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 				}
 				else
 				{

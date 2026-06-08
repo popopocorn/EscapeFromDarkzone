@@ -55,6 +55,22 @@ void OtherPlayer::Update(float fTimeElapsed)
 	if (m_pState)
 		m_pState->Update(this, fTimeElapsed);
 
+	// 서버 위치 보간 (NPC와 동일, ALPHA= 0.08)
+	if (m_bUseServerLerp)
+	{
+		constexpr float ALPHA = 0.08f;
+		XMFLOAT3 cur = GetPosition();
+		cur.x += (m_xmf3ServerPosition.x - cur.x) * ALPHA;
+		cur.y += (m_xmf3ServerPosition.y - cur.y) * ALPHA;
+		cur.z += (m_xmf3ServerPosition.z - cur.z) * ALPHA;
+		SetPosition(cur);
+
+		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fServerYawDeg, 0.0f);
+		m_xmf4x4ToParent._41 = cur.x;
+		m_xmf4x4ToParent._42 = cur.y;
+		m_xmf4x4ToParent._43 = cur.z;
+	}
+
 	UpdateTransform(NULL);
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
@@ -167,24 +183,21 @@ OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 {
 	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature); 
 	pOther->SetPosition(XMFLOAT3(x, y, z));
+	pOther->m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표 초기화(첫 프레임 튐 방지)
+	pOther->m_bUseServerLerp = true;
 	pOther->SetOOBB(NULL);
 	return pOther;
 }
 
 void OtherPlayer::UpdatePosition(float x, float y, float z) 
 {
-	SetPosition(XMFLOAT3(x, y, z));
+	m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표
+	m_bUseServerLerp = true;
 }
 
 void OtherPlayer::SetServerYaw(float yawRad)
 {
-	float yawDeg = XMConvertToDegrees(yawRad);
-
-	XMFLOAT3 pos = GetPosition();
-	m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, yawDeg, 0.0f);
-	m_xmf4x4ToParent._41 = pos.x;
-	m_xmf4x4ToParent._42 = pos.y;
-	m_xmf4x4ToParent._43 = pos.z;
+	m_fServerYawDeg = XMConvertToDegrees(yawRad);
 }
 
 void OtherPlayer::EquipDefaultPistol()

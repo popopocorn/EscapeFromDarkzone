@@ -4,6 +4,7 @@
 #include "Shader.h"
 #include "Object.h"
 #include "Network.h"	// 05.08 추가: 아이템 클릭 패킷 전송
+#include "NetSession.h"
 
 
 
@@ -282,12 +283,18 @@ void Inventory::SlotClicked(int slotidx)
 	}
 
 	if (ID >= 0) {
-		NetworkManager::Instance().SendLootPickup(
+		//NetworkManager::Instance().SendLootPickup(
+		//	static_cast<short>(ID),
+		//	static_cast<short>(slotidx));
+		NetSession::Instance().LootPickup(
 			static_cast<short>(ID),
 			static_cast<short>(slotidx));
 	}
 	else {
-		NetworkManager::Instance().SendInventoryClick(
+		//NetworkManager::Instance().SendInventoryClick(
+		//	INV_ACTION_CLICK,
+		//	static_cast<short>(slotidx));
+		NetSession::Instance().InventoryClick(
 			INV_ACTION_CLICK,
 			static_cast<short>(slotidx));
 	}

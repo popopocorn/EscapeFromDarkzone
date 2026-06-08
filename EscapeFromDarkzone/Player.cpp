@@ -12,6 +12,7 @@
 #include"SoundManager.h"
 
 #include "Network.h"	// 03.27 추가
+#include "NetSession.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -237,16 +238,20 @@ void CPlayer::Update(float fTimeElapsed)
 		bool bHasInput = (inputs != 0);
 
 		if (bHasInput) {
-			NetworkManager::Instance().SendMove(
-				inputs, m_fYaw,
-				static_cast<unsigned int>(GetTickCount())
-			);
+			NetSession::Instance().Move(inputs, m_fYaw,
+				static_cast<unsigned int>(GetTickCount()));
+			//NetworkManager::Instance().SendMove(
+			//	inputs, m_fYaw,
+			//	static_cast<unsigned int>(GetTickCount())
+			//);
 		}
 		else if (m_bWasMoving) {
-			NetworkManager::Instance().SendMove(
-				0, m_fYaw,
-				static_cast<unsigned int>(GetTickCount())
-			);
+			NetSession::Instance().Move(0, m_fYaw,
+				static_cast<unsigned int>(GetTickCount()));
+			//NetworkManager::Instance().SendMove(
+			//	0, m_fYaw,
+			//	static_cast<unsigned int>(GetTickCount())
+			//);
 		}
 
 		m_bWasMoving = bHasInput;
