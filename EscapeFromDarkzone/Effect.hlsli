@@ -5,11 +5,9 @@
 
 struct VS_PARTICLE_INPUT
 {
-    // 정점 데이터
     float3 position : POSITION;
     float2 uv : TEXCOORD0;
-    
-    // 인스턴스 데이터
+
     float3 instPosition : INST_POSITION;
     float instProgress : INST_PROGRESS;
     float2 instSize : INST_SIZE;
@@ -41,8 +39,8 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
 
     output.position = mul(mul(float4(posW, 1), gmtxView), gmtxProjection);
 
-    int numCols = 8;
-    int numRows = 4;
+    int numCols = 7;
+    int numRows = 6;
     int totalFrames = numCols * numRows;
 
     int currentFrame = clamp((int) (progress * totalFrames), 0, totalFrames - 1);
@@ -53,8 +51,8 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     float uvWidth = 1.0f / numCols;
     float uvHeight = 1.0f / numRows;
 
-    float cropX = 7.0f / 1456.0f;
-    float cropY = 7.0f / 720.0f;
+    float cropX = uvWidth * 0.05f;
+    float cropY = uvHeight * 0.05f;
 
     float minU = (col * uvWidth) + cropX;
     float maxU = ((col + 1) * uvWidth) - cropX;
@@ -77,16 +75,25 @@ float4 PSParticle(VS_PARTICLE_OUTPUT input) : SV_TARGET
 {
     float4 color = gtxtAlbedoTexture.Sample(gssClamp, input.uv);
 
-    color.rgb *= 1.2;
+    float brightness = max(color.r, max(color.g, color.b));
 
-    if (color.a < 0.01f)
+    if (brightness < 0.035f)
         discard;
 
-    float dist = distance(input.localUV, float2(0.5f, 0.5f));
-    float edgeFade = smoothstep(0.5f, 0.35f, dist);
-    color.a *= edgeFade;
-    
-    color.a *= smoothstep(1.0f, 0.0f, input.progress);
+    float alpha = saturate((brightness - 0.035f) / 0.24f);
+    alpha = pow(alpha, 0.85f);
+
+    float3 warmTint = float3(1.0f, 0.58f, 0.20f);
+
+    color.rgb = pow(saturate(color.rgb), 0.75f);
+    color.rgb *= warmTint;
+    color.rgb *= 2.7f;
+
+    color.rgb = min(color.rgb, float3(1.0f, 0.72f, 0.36f));
+    color.a = alpha;
+
+    float tailFade = smoothstep(1.0f, 0.68f, input.progress);
+    color.a *= tailFade;
 
     return color;
 }

@@ -8,9 +8,15 @@ class CEffectShader;
 enum EFFECT_TYPE
 {
     EFFECT_BOMB = 0,
-    EFFECT_SPARK,
+
+    EFFECT_SPARK_RIFLE_SMG,
+    EFFECT_SPARK_SHOTGUN,
+    EFFECT_SPARK_PISTOL,
+
     EFFECT_BLOOD,
-    EFFECT_MAX //ÃÑ °³¼ö
+    EFFECT_MAX,
+
+    EFFECT_SPARK = EFFECT_SPARK_RIFLE_SMG
 };
 enum class EffectID : unsigned char
 {
