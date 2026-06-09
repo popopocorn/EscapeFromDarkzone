@@ -449,7 +449,7 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 			{
 			case EFFECT_BOMB:
 				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.86f, 0.65f, 1.0f);
+				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.86f, 0.65f, 0.45f);
 				break;
 
 			case EFFECT_SPARK_RIFLE_SMG:
