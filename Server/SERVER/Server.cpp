@@ -948,7 +948,9 @@ static float WeaponRange(char weapon_id)
 	}
 }
 
-static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void EnterNpcAttack(SERVER_NPC&);
+
+static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (NPC_STATE_DIE == npc.state) return;
 
@@ -969,6 +971,27 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSn
 
 	if (npc.hp <= 0) {
 		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+	}
+
+	if (NPC_STATE_IDLE == npc.state) {
+		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
+		if (!player_snapshot[attacker_client_id].in_game) return;
+
+		XMFLOAT3 attacker_pos = {
+			player_snapshot[attacker_client_id].x,
+			player_snapshot[attacker_client_id].y,
+			player_snapshot[attacker_client_id].z
+		};
+
+		RefreshLastSeenPlayer(npc, attacker_pos);
+
+		if (CanShootPlayer(npc, attacker_pos)) {
+			EnterNpcAttack(npc);
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		}
+		else {
+			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+		}
 	}
 }
 
@@ -997,7 +1020,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		if (best_id >= 0) {
 			short damage = WeaponDamage(e.weapon_id);
-			ApplyDamage(g_npcs[best_id], damage, player_snapshot);
+			ApplyDamage(g_npcs[best_id], damage, e.attacker_client_id, player_snapshot);
 		}
 	}
 
