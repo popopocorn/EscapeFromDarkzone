@@ -1,6 +1,5 @@
 #pragma once
 
-#include "UI.h"
 #include<algorithm>
 #include "ItemDef.h"
 
@@ -44,6 +43,7 @@ class Item {
 public:
 	Item() = default;
 	virtual ~Item() = default;
+	Item(ItemType t, ItemID i) { type = t; id = i; }
 
 	//모델 원본 관련 함수
 	void SetModelPrototype(CGameObject* pPrototype) { model = pPrototype; }
@@ -75,64 +75,15 @@ struct ItemSlotView {
 	std::unique_ptr<UIObject> countCell;
 };
 
-const int MAX_SLOTS = 10;
-
-class Inventory {
-private:
-	std::array<ItemSlot, MAX_SLOTS> slots;
-	std::array<ItemSlotView, MAX_SLOTS> slotViews;
-	CheckBox box;
-
-	float m_baseX = 0.0f;
-	float m_baseY = 0.0f;
-	float m_slotW = 0.0f;
-	float m_slotH = 0.0f;
-	float m_slotGap = 0.025f;
-
-	float m_iconRatio = 0.20f;
-	float m_textRatio = 0.60f;
-	float m_countRatio = 0.20f;
-
-	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
-
-	std::unique_ptr<UIMesh> m_pSharedMesh; // UI 공용 메쉬
-
-private:
-	void BuildSlotViews();  // 3칸 UI 생성
-	void LayoutSlotViews(); // 3칸 위치 배치
-
-public:
-	Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
-		ID3D12RootSignature* pd3dGraphicsRootSignature,
-		CShader* pShader);
-
-	void SubmitToShader(UIObjectShader* shader);
-	void SlotClicked(int slotidx);
-	bool ProcessClick(POINT mouse);
-	//드래그 앤 드롭 처리 함수 추가
-	bool AddItem(ItemID item, int count = 1);
-	ItemSlot* GetSlot(int idx);
-
-	bool ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count);
-
-	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
-	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동
-	void SetId(int x) { ID = x; }
-	int GetItemCnt(ItemID id)const;
-	void ConsumeItem(ItemID id, int cnt);
-
-	bool isOpen = false;
-};
-
 //아이템 제작시스템
-class CraftBox {
-private:
-	map<ItemID, Recipe> recipeTable;
-public:
-	void Init();
-
-	bool TryCraft(ItemID target, Inventory* playerinventory);
-};
+//class CraftBox {
+//private:
+//	map<ItemID, Recipe> recipeTable;
+//public:
+//	void Init();
+//
+//	bool TryCraft(ItemID target, Inventory* playerinventory);
+//};
 
 
 //무기 선언
@@ -154,24 +105,26 @@ private:
 	WeaponSpec m_Spec;
 };
 
+class Plate : public Item {
+private:
+	short hp = 100;
+	bool broken = false;
+public:
+	Plate(ItemType t, ItemID i) : Item(t, i) {};
+	short GetHp() { return hp; }
+	short DoDamage(short d) { hp -= d; if (hp < 0)broken = true; }
+};
 class ArmorItem : public Item
 {
 public:
-	ArmorItem()
-	{
-	}
+	ArmorItem() = default;
+	ArmorItem(ItemType t, ItemID i) : Item(t, i) {};
 };
 
-class EquipUI {
-private:
-	CPlayer*	player;
-	ItemID		helmet;
-	ItemID		body;
-	ItemID		shoes;
-	unordered_map<ItemType, UIObject> UIs;
-public:
-	EquipUI(CPlayer* player);
-	void SetItem(ItemID item);
-	bool ProcessClick(POINT mouse);
-
+struct Equip {
+	ArmorItem	helmet;
+	ArmorItem	body;
+	ArmorItem	shoes;
+	Plate		plate;
 };
+

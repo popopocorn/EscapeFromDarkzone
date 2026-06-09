@@ -568,7 +568,8 @@ void CGameFramework::BuildObjects()
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
 	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 
-	m_pScene.push_back(make_unique<LobbyScene>(this));
+	//m_pScene.push_back(make_unique<LobbyScene>(this));
+	m_pScene.push_back(make_unique<MainScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
 	

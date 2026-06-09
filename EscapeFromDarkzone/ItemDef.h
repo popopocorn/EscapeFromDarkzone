@@ -31,8 +31,19 @@ enum class ItemID : short {
 	ARMOR_SHOES_02,
 	ARMOR_SHOES_03,
 	ARMOR_SHOES_04,
+
+
+	ITEMID_END
 };
 
+inline ItemID& operator++(ItemID& e)
+{
+	if (e == ItemID::ITEMID_END)
+		return e; // 또는 assert
+
+	e = static_cast<ItemID>(static_cast<int>(e) + 1);
+	return e;
+}
 enum class ItemType {
 	PISTOL,
 	RIFLE,

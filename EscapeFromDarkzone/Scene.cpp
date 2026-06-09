@@ -12,7 +12,7 @@
 #include "ShadowMap.h"
 #include "EffectShader.h"
 #include "Collision.h"
-#include "UI.h"
+
 #include "Item.h"
 #include "AI.h"
 #include "EffectManager.h"
@@ -493,7 +493,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			m_pEffectManager->HideLaser(0);
 		}
-
+		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		break;
 	}
 	case WM_MOUSEWHEEL:
@@ -595,13 +595,20 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			return true;
 		}
 
-		case 'I':
+		case 'E':
 		{
 			if (wasDownBefore) return true;
 
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
+			}
+			if (uiManager)
+			{
+				for (auto& o : *uiManager->GetPannels())
+				{
+					o->ToggleOpen();
+				}
 			}
 			return true;
 		}
@@ -889,6 +896,9 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		}
 	}
 	LinkToPlayer();
+	EquipUI* e = new EquipUI(m_pPlayer);
+	e->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(e);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -1211,7 +1221,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
-
+	uiManager->SubmitToShader(UIShader.get());
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -1350,6 +1360,13 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	frame->mouseMove = true;
 	BuildDefaultLightsAndMaterials();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	UIObject* lobbyBg = new UIObject();
+	lobbyBg->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_BACKGROUND));
+	lobbyBg->SetScale(2.0, 2.0, 1.0);
+	lobbyBg->SetLocate(0.0, 0.0, 0.5);
+	uiManager->AddToManager(lobbyBg);
+
 	UIObject* lobbybutton = new UIObject();
 	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
 	lobbybutton->SetScale(0.5, 0.5, 1.0);
@@ -1361,6 +1378,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		});
 	
 	uiManager->AddToManager(lobbybutton);
+
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);

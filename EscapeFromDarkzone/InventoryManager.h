@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Item.h"
+#include "UI.h"
 
 class UIObjectShader;
 class CLootContainerObject;
