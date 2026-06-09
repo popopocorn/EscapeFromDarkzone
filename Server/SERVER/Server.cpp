@@ -1232,8 +1232,10 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		}
 	}
 
-	// 스폰 위치 도착 → IDLE (잠깐 감지 무시 타이머 세팅)
+	// 스폰 위치 도착 -> IDLE (잠깐 감지 무시 타이머 세팅)
 	if (IsNearSpawn(npc)) {
+		npc.hp = npc.max_hp;
+
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
 		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
