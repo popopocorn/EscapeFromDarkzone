@@ -87,15 +87,16 @@ float4 PSParticle(VS_PARTICLE_OUTPUT input) : SV_TARGET
     alpha = pow(alpha, 0.85f);
 
     float3 tint = input.effectColor.rgb;
+    float brightnessScale = input.effectColor.a;
 
     color.rgb = pow(saturate(color.rgb), 0.75f);
     color.rgb *= tint;
-    color.rgb *= 2.7f;
+    color.rgb *= 2.7f * brightnessScale;
 
     float3 maxColor;
-    maxColor.r = 1.0f;
-    maxColor.g = min(0.95f, max(0.72f, tint.g * 1.24f));
-    maxColor.b = min(0.80f, max(0.36f, tint.b * 1.80f));
+    maxColor.r = 1.0f * brightnessScale;
+    maxColor.g = min(0.95f, max(0.72f, tint.g * 1.24f)) * brightnessScale;
+    maxColor.b = min(0.80f, max(0.36f, tint.b * 1.80f)) * brightnessScale;
 
     color.rgb = min(color.rgb, maxColor);
     color.a = alpha;

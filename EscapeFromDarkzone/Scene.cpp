@@ -852,16 +852,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
-	CEnemyObject* pEnemy = new CEnemyObject(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pSkinnedShader,
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
-	);
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1));
+	pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+	pEnemy->ApplyDefaultWeaponByEnemyModelType();
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->setNav(AStarNav.get());
 	pEnemy->SubmitWeaponToShader(stdshader);

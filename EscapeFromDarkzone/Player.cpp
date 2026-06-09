@@ -468,7 +468,7 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
 	// SMG 기준값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
+	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
 	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.10f, 0.16f);
 	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
 	const XMFLOAT3 smgShootPos = XMFLOAT3(0.20f, -0.10f, -0.20f);
