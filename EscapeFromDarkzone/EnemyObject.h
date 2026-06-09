@@ -36,6 +36,13 @@ enum class EnemyWeaponType
 	Rifle
 };
 
+enum class EnemyModelType
+{
+	Enemy01,
+	Enemy02,
+	Enemy03
+};
+
 constexpr int MAX_LOOT_SLOTS = 10;
 
 class AstarNavigation;
@@ -95,9 +102,15 @@ public:
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
+	void SetEnemyModelType(EnemyModelType eModelType);
+	void ApplyDefaultWeaponByEnemyModelType();
+	void EquipWeaponByType(EnemyWeaponType eWeaponType);
 	void EquipWeaponModel(ModelName modelName);
 	void EquipDefaultPistol();
+	ModelName GetWeaponModelNameByType(EnemyWeaponType eWeaponType) const;
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+
+	EnemyModelType m_eEnemyModelType = EnemyModelType::Enemy01;
 	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Pistol;
 
 	float m_fMoveSpeed = 5.0f;
@@ -120,9 +133,10 @@ public:
 	float m_fReturnIgnoreDuration = 1.0f;
 
 	//거리 유지
-	float m_fPreferredCombatRange = 7.0f;
+	//float m_fPreferredCombatRange = 7.0f;
+	float m_fPreferredCombatRange = 0.0f;
+	//float m_fTooCloseRange = 4.0f;
 	float m_fTooCloseRange = 4.0f;
-
 	//버스트 사격
 	int m_nBurstShotsLeft = 0;
 	int m_nBurstShotMin = 2;
@@ -137,8 +151,10 @@ public:
 
 	//좌우 이동
 	float m_fStrafeTimer = 0.0f;
+	//float m_fStrafeDuration = 1.2f;
 	float m_fStrafeDuration = 1.2f;
 	float m_fStrafeSign = 1.0f;
+	//float m_fStrafeSign = 1.0f;
 	float m_fCombatMoveSpeedMultiplier = 0.45f;
 
 	//재장전

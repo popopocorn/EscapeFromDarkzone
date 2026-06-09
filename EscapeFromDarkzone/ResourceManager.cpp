@@ -378,7 +378,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
 	);
-
+	*/
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_1,
 		pd3dDevice,
@@ -387,6 +387,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster2_1.bin",
 		SkinnedShader
 	);
+	/*
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_2,
 		pd3dDevice,
@@ -403,6 +404,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster2_3.bin",
 		SkinnedShader
 	);
+	*/
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
@@ -411,6 +413,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
 	);
+	/*
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
 		pd3dDevice,
@@ -447,7 +450,7 @@ void ResourceManager::BuildModelPrototypes(
 		Standardshader
 	);
 
-	/*LoadAndRegisterModelPrototype(
+	LoadAndRegisterModelPrototype(
 		ModelName::PISTOL,
 		pd3dDevice,
 		pd3dCommandList,
@@ -472,7 +475,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/Shotgun.bin",
 		Standardshader
-	);*/
+	);
 
 	ModelName name = ModelName::MAP_FLOOR;
 	for (const string& s : s_mapFiles)
