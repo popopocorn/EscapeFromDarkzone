@@ -900,6 +900,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 
+	PlayerStatus* s = new PlayerStatus(m_pPlayer);
+	s->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(s);
+
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -1163,7 +1167,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
-
+	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 

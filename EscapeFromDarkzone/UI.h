@@ -89,6 +89,7 @@ private:
 	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
 
 	UIMesh* m_pSharedMesh; // UI 공용 메쉬
+	UIMesh* m_pSharedMiddleMesh; // UI 공용 메쉬
 
 private:
 	void BuildSlotViews();  // 3칸 UI 생성
@@ -123,6 +124,7 @@ public:
 	virtual bool ProcessClick(POINT mouse) = 0;
 	virtual void SubmitToShader(UIObjectShader* shader) = 0;
 	virtual void ToggleOpen() { isOpen = !isOpen; }
+	virtual void Update(float fTimeElapsed) {};
 };
 class EquipUI :public UIPannel{
 private:
@@ -142,6 +144,31 @@ public:
 	void SubmitToShader(UIObjectShader* shader);
 	
 };
+enum StatusType {
+	HP_BASE,
+	HP_MAIN,
+	MAG_BASE,
+	WEAPON_SLOT_1,
+	WEAPON_SLOT_2,
+	WEAPON_SLOT_3,
+	WEAPON_SLOT_4,
+};
+class PlayerStatus : public UIPannel {
+public:
+	PlayerStatus(CPlayer* p);
+	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual bool ProcessClick(POINT mouse);
+	virtual void SubmitToShader(UIObjectShader* shader);
+	virtual void Update(float fTimeElapsed);
+private:
+	CPlayer* player;
+	short hp;
+	short FullHp;
+	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
+	vector<unique_ptr<UIObject>>Bullets;
+public:
+	virtual void ToggleOpen() {};
+};
 
 class UIObjectShader;
 
@@ -152,7 +179,8 @@ private:
 public:
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
-	void release();
+	void Release();
+	void Update(float fTimeElapsed);
 	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
 	void AddToManager(UIPannel* obj) { pannels.push_back(unique_ptr<UIPannel>(obj)); }
 	vector<unique_ptr<UIPannel>>* GetPannels() { return &pannels; }

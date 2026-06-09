@@ -56,8 +56,8 @@ extern HINSTANCE						ghAppInstance;
 
 //#define _WITH_SWAPCHAIN_FULLSCREEN_STATE
 
-#define FRAME_BUFFER_WIDTH				1392
-#define FRAME_BUFFER_HEIGHT				738
+extern int FRAME_BUFFER_WIDTH;
+extern int FRAME_BUFFER_HEIGHT;
 const int CASCADE_COUNT = 4;
 static const UINT SHADOW_MAP_SIZE = 2048;
 

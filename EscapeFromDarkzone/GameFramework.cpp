@@ -11,6 +11,10 @@
 #include"SoundManager.h"
 #include "GameFramework.h"
 
+int FRAME_BUFFER_WIDTH = 1392;
+int FRAME_BUFFER_HEIGHT = 738;
+
+
 static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 {
 	if (Vector3::Length(v) < 0.0001f)
@@ -91,8 +95,8 @@ CGameFramework::CGameFramework()
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
 
-	m_ptOldCursorPos.x = 1300;
-	m_ptOldCursorPos.y = 600;
+	m_ptOldCursorPos.x = FRAME_BUFFER_WIDTH/2.0;
+	m_ptOldCursorPos.y = FRAME_BUFFER_HEIGHT/2.0;
 }
 
 CGameFramework::~CGameFramework()
@@ -244,6 +248,7 @@ void CGameFramework::CreateDirect3DDevice()
 		m_pdxgiFactory->EnumWarpAdapter(_uuidof(IDXGIFactory4), (void**)&pd3dAdapter);
 		hResult = D3D12CreateDevice(pd3dAdapter, D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), (void**)&m_pd3dDevice);
 	}
+	
 
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
 	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;

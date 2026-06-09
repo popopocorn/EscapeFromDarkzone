@@ -130,9 +130,9 @@ UIObject::UIObject()
 
 void UIObject::SetScale(float x, float y, float z)
 {
-	XMMATRIX mtxScale = XMMatrixScaling(x, y, z);
-	world = Matrix4x4::Multiply(mtxScale, world);
-
+	world._11 = x;
+	world._22 = y;
+	world._33 = z;
 }
 
 void UIObject::SetLocate(float x, float y, float z)
@@ -158,6 +158,7 @@ void UIObject::setAABB()
 
 void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
 {
+	if (not object)return;
 	XMFLOAT4X4 xmf4x4World;
 	XMStoreFloat4x4(&xmf4x4World, XMMatrixTranspose(XMLoadFloat4x4(&world)));
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4World, 0);
@@ -168,8 +169,8 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 
 Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
 {
-	box.maxY = 0.5f;
-	box.minY = -0.5f;
+	box.maxY = 0.55f;
+	box.minY = -0.75f;
 	box.minX = -0.4f;
 	box.maxX = 0.0f;
 
@@ -181,6 +182,7 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	m_slotGap = 0.025f;
 
 	m_pSharedMesh = ResourceManager::Instance().GetUIMesh(UIName::TABLE_VERTICAL);
+	m_pSharedMiddleMesh = ResourceManager::Instance().GetUIMesh(UIName::DIVIDER_001);
 
 	BuildSlotViews();
 	SetPosition(0.0f, 0.0f);
@@ -209,27 +211,28 @@ void Inventory::BuildSlotViews()
 			slotViews[i].hitBox->SetFunc([this, i]() {
 				this->SlotClicked(i);
 				});
+			slotViews[i].hitBox->SetUIMesh(m_pSharedMesh);
 			slotViews[i].hitBox->SetScale(m_slotW, rowH, 1.0f);
 		}
 
 		if (!slotViews[i].iconCell)
 		{
 			slotViews[i].iconCell = std::make_unique<UIObject>();
-			slotViews[i].iconCell->SetUIMesh(m_pSharedMesh);
+			//slotViews[i].iconCell->SetUIMesh(m_pSharedMesh);
 			slotViews[i].iconCell->SetScale(iconRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].textCell)
 		{
 			slotViews[i].textCell = std::make_unique<UIObject>();
-			slotViews[i].textCell->SetUIMesh(m_pSharedMesh);
+			//slotViews[i].textCell->SetUIMesh(m_pSharedMiddleMesh);
 			slotViews[i].textCell->SetScale(textRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].countCell)
 		{
 			slotViews[i].countCell = std::make_unique<UIObject>();
-			slotViews[i].countCell->SetUIMesh(m_pSharedMesh);
+			//slotViews[i].countCell->SetUIMesh(m_pSharedMesh);
 			slotViews[i].countCell->SetScale(countRenderW, renderH, 1.0f);
 		}
 	}
@@ -283,6 +286,10 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
+		if (slotViews[i].hitBox)
+		{
+			shader->addObjects(slotViews[i].hitBox.get());
+		}
 		if (slotViews[i].iconCell)
 		{
 			shader->addObjects(slotViews[i].iconCell.get());
@@ -409,6 +416,34 @@ void Inventory::ClearItems()
 	}
 }
 
+UIName MapItemIDToUIName(ItemID id)
+{
+	switch (id)
+	{
+	case ItemID::MAT_1_FIBER:
+		return UIName::ICON_FIBER;
+		break;
+	case ItemID::MAT_2_METAL_PLATE:
+		return UIName::ICON_METAL;
+		break;
+	case ItemID::MAT_3_BOLT_AND_NUT:
+		return UIName::ICON_NEEDLE;
+		break;
+	case ItemID::WEAPON_UPGRADE_1:
+		break;
+	case ItemID::WEAPON_UPGRADE_2:
+		break;
+	case ItemID::WEAPON_UPGRADE_3:
+		break;
+	case ItemID::WEAPON_UPGRADE_4:
+		break;
+	case ItemID::ARMOR_PLATE:
+		break;
+	default:
+		break;
+	}
+}
+
 ItemSlot* Inventory::GetSlot(int idx)
 {
 	if (idx < 0 || idx >= MAX_SLOTS) return nullptr;
@@ -425,11 +460,17 @@ bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
 	{
 		pSlot->item = ItemID::NONE;
 		pSlot->count = 0;
+		slotViews[slotIndex].iconCell->SetUIMesh(NULL);
+		/*slotViews[slotIndex].countCell->SetUIMesh(m_pSharedMiddleMesh);
+		slotViews[slotIndex].textCell->SetUIMesh(m_pSharedMesh);*/
 		return true;
 	}
 	else {
 		pSlot->item = itemId;
 		pSlot->count = count;
+		UIName n = MapItemIDToUIName(itemId);
+		UIMesh* mesh = ResourceManager::Instance().GetUIMesh(n);
+		slotViews[slotIndex].iconCell->SetUIMesh(mesh);
 	}
 
 	// 슬롯에 이미 뭐가 있으면 수정하지 않음 --> 수정하되 로그 찍기? 나중에 수정
@@ -603,7 +644,66 @@ void EquipUI::SubmitToShader(UIObjectShader* shader)
 }
 
 
+PlayerStatus::PlayerStatus(CPlayer* p)
+{
+	player = p;
+	FullHp = p->GetHP();
+	hp = p->GetHP();
+	isOpen = true;
+}
 
+void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	UIs[HP_BASE] = make_unique<UIObject>();
+	UIs[HP_BASE]->SetScale(0.4, 0.07, 1);
+	UIs[HP_BASE]->SetLocate(0.0, -0.9, 0.5);
+	UIs[HP_BASE]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_BAR));
+
+	UIs[HP_MAIN] = make_unique<UIObject>();
+	UIs[HP_MAIN]->SetScale(0.33, 0.04, 1);
+	UIs[HP_MAIN]->SetLocate(-0.029, -0.9, 0.5);
+	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
+
+}
+
+bool PlayerStatus::ProcessClick(POINT mouse)
+{
+	for (auto& p : UIs)
+	{
+		if (p.second->GetBox().Intersects(mouse))
+		{
+			p.second->HandleClick();
+		}
+	}
+}
+
+void PlayerStatus::SubmitToShader(UIObjectShader* shader)
+{
+	for (auto& p : UIs)
+	{
+		shader->addObjects(p.second.get());
+	}
+}
+
+void PlayerStatus::Update(float fTimeElapsed)
+{
+	if (!player) return;
+	hp = player->GetHP();
+
+	float ratio = static_cast<float>(hp) / static_cast<float>(FullHp);
+	if (ratio < 0.0f) ratio = 0.0f;
+	if (ratio > 1.0f) ratio = 1.0f;
+
+	float maxWidth = 0.33f;
+	float defaultX = -0.029f;
+	float currentWidth = maxWidth * ratio;
+	float currentX = defaultX - (maxWidth * (1.0f - ratio) / 2.0f);
+	if (UIs[HP_MAIN])
+	{
+		UIs[HP_MAIN]->SetScale(currentWidth, 0.04f, 1.0f);
+		UIs[HP_MAIN]->SetLocate(currentX, -0.9f, 0.5f);
+	}
+}
 
 void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
@@ -617,9 +717,18 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 	}
 }
 
-void HUDManager::release()
+void HUDManager::Release()
 {
 	objs.clear();
+	pannels.clear();
+}
+
+void HUDManager::Update(float fTimeElapsed)
+{
+	for (auto& o : pannels)
+	{
+		o->Update(fTimeElapsed);
+	}
 }
 
 
