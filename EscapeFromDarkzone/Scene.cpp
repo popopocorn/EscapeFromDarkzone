@@ -589,6 +589,31 @@ void MainScene::ThrowGrenade()
 		m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
 	}
 
+	if (!m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject = new CGameObject();
+
+		BoundingOrientedBox grenadeDebugOOBB;
+		grenadeDebugOOBB.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		grenadeDebugOOBB.Extents = XMFLOAT3(0.12f, 0.12f, 0.12f);
+		grenadeDebugOOBB.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+
+		m_pGrenadeDebugObject->SetOOBB(grenadeDebugOOBB);
+		m_pGrenadeDebugObject->isColl = false;
+		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+
+		GameObjects.push_back(unique_ptr<CGameObject>(m_pGrenadeDebugObject));
+
+		if (m_pDebugShader)
+		{
+			m_pDebugShader->AddObject(m_pGrenadeDebugObject);
+		}
+	}
+	else
+	{
+		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+	}
+
 	OutputDebugString(L"[Grenade] Throw\n");
 }
 
@@ -619,6 +644,11 @@ void MainScene::UpdateGrenade(float fTimeElapsed)
 		}
 	}
 
+	if (m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+	}
+
 	if (m_fGrenadeLifeTimer >= m_fGrenadeExplodeDelay)
 	{
 		ExplodeGrenade();
@@ -631,6 +661,11 @@ void MainScene::ExplodeGrenade()
 
 	m_bGrenadeFlying = false;
 	m_fGrenadeLifeTimer = 0.0f;
+
+	if (m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject->SetPosition(0.0f, -10000.0f, 0.0f);
+	}
 
 	if (!m_pEffectManager) return;
 

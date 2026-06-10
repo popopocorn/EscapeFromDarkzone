@@ -211,6 +211,7 @@ public:
 	float m_fGrenadeGravity = -9.8f;
 	float m_fGrenadeBounceDamping = 0.45f;
 	float m_fGrenadeGroundY = 0.2f;
+	CGameObject* m_pGrenadeDebugObject = nullptr;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker¿ë º¤ÅÍ
 private:
