@@ -305,6 +305,8 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	return true;
 }
 
+
+
 bool ResourceManager::ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey)
 {
 	auto targetIt = m_SkinnedModelPrototypes.find(targetKey);
@@ -338,14 +340,14 @@ void ResourceManager::BuildPlayerModelPrototypes(ID3D12Device* pd3dDevice, ID3D1
 	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_01, pd3dDevice, pd3dCommandList, 
 		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_black.bin", PlayerShader);
 
-	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, 
+	/*LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, 
 		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
 
 	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_03, pd3dDevice, pd3dCommandList, 
 		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_green.bin", PlayerShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
-	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);*/
 }
 
 void ResourceManager::BuildSkinnedModelPrototypes(
@@ -362,7 +364,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
 	);
-	LoadAndRegisterSkinnedModelPrototype(
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
@@ -378,7 +380,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
 	);
-
+	*/
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_1,
 		pd3dDevice,
@@ -387,6 +389,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster2_1.bin",
 		SkinnedShader
 	);
+	/*
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_2,
 		pd3dDevice,
@@ -403,6 +406,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster2_3.bin",
 		SkinnedShader
 	);
+	*/
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
@@ -411,6 +415,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
 	);
+	/*
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
 		pd3dDevice,
@@ -426,7 +431,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_3.bin",
 		SkinnedShader
-	);
+	);*/
 }
 
 void ResourceManager::BuildModelPrototypes(
@@ -499,14 +504,93 @@ void ResourceManager::BuildModelPrototypes(
 	);
 }
 
-
-void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path)
 {
-	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	//m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"");
+	m_UIPrototypes[name] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	m_UIPrototypes[name]->LoadTexture(pd3dDevice, pd3dCommandList,path);
 
-	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"Model/Textures/Start_BTN.dds");
+}
+void ResourceManager::BuildUIMesh(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature)
+{
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::LOBBY_BACKGROUND,
+		L"UI/Lobby.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::LOBBY_START_BUTTON,
+		L"UI/Start_BTN.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::TABLE_VERTICAL,
+		L"UI/Table_02.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::WINDOW_BASE,
+		L"UI/Window.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::PANEL_001,
+		L"UI/panel001.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::DIVIDER_001,
+		L"UI/divider-002.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_FIBER,
+		L"UI/yarn.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_NEEDLE,
+		L"UI/needle.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_METAL,
+		L"UI/metalbar.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_HEALTH_BAR,
+		L"UI/Health_Bar_Table.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_HEALTH_DOT,
+		L"UI/Health_Dot.dds"
+	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const

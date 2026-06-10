@@ -43,11 +43,11 @@ enum class PlayerWeaponType
 	Shotgun,
 	Rifle
 };
-
 class PlayerState;
 class CPlayerAnimationController;
 class WeaponItem;
 class Inventory;
+class Equip;
 
 class CPlayer : public CGameObject
 {
@@ -148,8 +148,9 @@ protected:
 
 	short m_hp = 100;		// 임시 체력 추가
 
-	std::unique_ptr<Inventory> m_pInventory;
+	std::unique_ptr<Inventory>	m_pInventory;
 	//equips
+	unique_ptr<Equip>			Equipments;
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -307,6 +308,7 @@ public:
 	void SetHP(short hp) { m_hp = hp; }			// 임시 체력 추가
 	short GetHP() const { return m_hp; }
 	float	cameraDistance = 15.0f;
+	Equip* GetEquips() { return Equipments.get(); }
 };
 
 class CPlayerAnimationController : public CAnimationController

@@ -12,7 +12,7 @@
 #include "ShadowMap.h"
 #include "EffectShader.h"
 #include "Collision.h"
-#include "UI.h"
+
 #include "Item.h"
 #include "AI.h"
 #include "EffectManager.h"
@@ -102,12 +102,7 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
-static bool GetCurrentPlayerMuzzleInfo(
-	CPlayer* pPlayer,
-	XMFLOAT3& outPos,
-	XMFLOAT3& outLook,
-	XMFLOAT3& outRight,
-	XMFLOAT3& outUp)
+static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer,XMFLOAT3& outPos,XMFLOAT3& outLook,XMFLOAT3& outRight,XMFLOAT3& outUp)
 {
 	if (!pPlayer)
 		return false;
@@ -153,7 +148,67 @@ static bool GetCurrentPlayerMuzzleInfo(
 
 	return false;
 }
+static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
+{
+	switch (weaponType)
+	{
+	case PlayerWeaponType::Shotgun:
+		return EFFECT_SPARK_SHOTGUN;
 
+	case PlayerWeaponType::Pistol:
+		return EFFECT_SPARK_PISTOL;
+
+	case PlayerWeaponType::Rifle:
+	case PlayerWeaponType::SMG:
+	default:
+		return EFFECT_SPARK_RIFLE_SMG;
+	}
+}
+static XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+{
+	XMFLOAT3 sparkPos = muzzlePos;
+
+	float forwardOffset = 0.0f;
+	float upOffset = 0.0f;
+
+	switch (weaponType)
+	{
+	case PlayerWeaponType::Rifle:
+		forwardOffset = -0.1f;
+		upOffset = -0.0f;
+		break;
+
+	case PlayerWeaponType::SMG:
+		forwardOffset = -0.08f;
+		upOffset = -0.0f;
+		break;
+
+	case PlayerWeaponType::Shotgun:
+		forwardOffset = 0.12f;
+		upOffset = 0.0f;
+		break;
+
+	case PlayerWeaponType::Pistol:
+		forwardOffset = 0.1f;
+		upOffset = 0.0f;
+		break;
+
+	default:
+		forwardOffset = 0.0f;
+		upOffset = 0.0f;
+		break;
+	}
+
+	sparkPos.x += muzzleLook.x * forwardOffset;
+	sparkPos.y += muzzleLook.y * forwardOffset;
+	sparkPos.z += muzzleLook.z * forwardOffset;
+
+	sparkPos.x += muzzleUp.x * upOffset;
+	sparkPos.y += muzzleUp.y * upOffset;
+	sparkPos.z += muzzleUp.z * upOffset;
+
+	return sparkPos;
+}
 
 CScene::CScene(CGameFramework* game)
 {
@@ -378,20 +433,16 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			muzzleUp
 		);
 
-		XMFLOAT3 sparkPos;
-		sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-		sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-		sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
-
-		XMFLOAT3 sparkRight = muzzleRight;
-		XMFLOAT3 sparkUp = muzzleLook;
+		PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
+		EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
+		XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
 
 		if (m_pEffectManager)
 		{
-			m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, sparkRight, sparkUp);
+			m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 			m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 		}
-
+		
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
 			if (NetworkManager::Instance().IsConnected())
@@ -444,7 +495,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			m_pEffectManager->HideLaser(0);
 		}
-
+		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		break;
 	}
 	case WM_MOUSEWHEEL:
@@ -546,13 +597,20 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			return true;
 		}
 
-		case 'I':
+		case 'E':
 		{
 			if (wasDownBefore) return true;
 
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
+			}
+			if (uiManager)
+			{
+				for (auto& o : *uiManager->GetPannels())
+				{
+					o->ToggleOpen();
+				}
 			}
 			return true;
 		}
@@ -798,16 +856,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
-	CEnemyObject* pEnemy = new CEnemyObject(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pSkinnedShader,
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
-	);
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1));
+	pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+	pEnemy->ApplyDefaultWeaponByEnemyModelType();
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->setNav(AStarNav.get());
 	pEnemy->SubmitWeaponToShader(stdshader);
@@ -842,6 +895,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		}
 	}
 	LinkToPlayer();
+	EquipUI* e = new EquipUI(m_pPlayer);
+	e->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(e);
+
+	PlayerStatus* s = new PlayerStatus(m_pPlayer);
+	s->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(s);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -1005,14 +1065,13 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				muzzleUp
 			);
 
-			XMFLOAT3 sparkPos;
-			sparkPos.x = muzzlePos.x + muzzleLook.x * 0.1f;
-			sparkPos.y = muzzlePos.y + muzzleLook.y * 0.1f;
-			sparkPos.z = muzzlePos.z + muzzleLook.z * 0.1f;
+			PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
+			EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
+			XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
 
 			if (m_pEffectManager)
 			{
-				m_pEffectManager->RequestPlayEffect(EFFECT_SPARK, sparkPos, muzzleRight, muzzleLook);
+				m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
@@ -1108,7 +1167,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
-
+	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
@@ -1166,7 +1225,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
-
+	uiManager->SubmitToShader(UIShader.get());
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -1305,6 +1364,13 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	frame->mouseMove = true;
 	BuildDefaultLightsAndMaterials();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	UIObject* lobbyBg = new UIObject();
+	lobbyBg->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_BACKGROUND));
+	lobbyBg->SetScale(2.0, 2.0, 1.0);
+	lobbyBg->SetLocate(0.0, 0.0, 0.5);
+	uiManager->AddToManager(lobbyBg);
+
 	UIObject* lobbybutton = new UIObject();
 	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
 	lobbybutton->SetScale(0.5, 0.5, 1.0);
@@ -1316,6 +1382,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		});
 	
 	uiManager->AddToManager(lobbybutton);
+
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);

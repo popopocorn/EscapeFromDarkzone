@@ -202,6 +202,17 @@ static vector<string>s_mapFiles = {
 enum class UIName {
 	LOBBY_BACKGROUND = 0,
 	LOBBY_START_BUTTON,
+	TABLE_VERTICAL,
+	WINDOW_BASE,
+	PANEL_001,
+	DIVIDER_001,
+	ICON_FIBER,
+	ICON_NEEDLE,
+	ICON_METAL,
+	STATUS_HEALTH_BAR,
+	STATUS_HEALTH_DOT,
+
+
 
 };
 // 전방 선언
@@ -259,6 +270,8 @@ private:
 		const char* modelPath,
 		CShader* pShader
 	);
+
+	void LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path);
 
 	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
 	void ReleaseSkinnedModelPrototypes();
