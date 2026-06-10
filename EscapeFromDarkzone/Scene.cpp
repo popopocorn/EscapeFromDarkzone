@@ -1075,6 +1075,11 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
+			if (NetworkManager::Instance().IsConnected()) 
+			{
+				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, 0);
+			}
+
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
 				if (NetworkManager::Instance().IsConnected())

@@ -53,6 +53,9 @@ constexpr char SC_PLAY_EFFECT_WORLD = 21;
 constexpr char CS_CRAFT_REQUEST = 22;
 constexpr char SC_EQUIPMENT_UPDATE = 23;
 
+// PvP 패킷
+constexpr char CS_HIT_PLAYER = 24;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -253,6 +256,15 @@ struct SC_EQUIPMENT_UPDATE_PACKET {
 	unsigned char size;
 	char          type;
 	ItemID        equip_id;
+};
+
+struct CS_HIT_PLAYER_PACKET {
+	unsigned char size;
+	char          type;
+	float         ray_ox, ray_oy, ray_oz;
+	float         ray_dx, ray_dy, ray_dz;
+	char          weapon_id;				// 나중에
+	unsigned int  fire_time;				// 나중에
 };
 
 #pragma pack (pop)

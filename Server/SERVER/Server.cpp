@@ -68,6 +68,10 @@ constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STO
 constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
 constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
+// PvP 사격
+constexpr short PVP_FIRE_DAMAGE = 15;
+constexpr float PVP_FIRE_RANGE = 100.0f;
+
 // NPC 사격 (플레이어 무기와 분리 — 밸런스 독립 조절)
 constexpr short NPC_FIRE_DAMAGE = 5;       // 발당 데미지
 constexpr float NPC_FIRE_RANGE = 12.0f;   // 사격 유효 사거리 (attack range보다 약간 길게)
@@ -658,6 +662,25 @@ static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 		return true;
 	}
 	return false;
+}
+
+static void BroadcastAttachedEffectNoSnapshot(
+	EffectID id, EffectEntityKind kind, short entity_id)
+{
+	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
+	ep.size = sizeof(ep);
+	ep.type = SC_PLAY_EFFECT_ATTACHED;
+	ep.effect_id = static_cast<unsigned char>(id);
+	ep.entity_kind = static_cast<unsigned char>(kind);
+	ep.entity_id = entity_id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		{
+			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+			if (clients[i]._state != ST_INGAME) continue;
+		}
+		clients[i].do_send(&ep);
+	}
 }
 
 static void BroadcastAttachedEffect(
@@ -1841,6 +1864,69 @@ void process_packet(int c_id, char* packet)
 		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
 
 		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+	case CS_HIT_PLAYER: {
+		CS_HIT_PLAYER_PACKET* p =
+			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
+
+		XMVECTOR origin = XMVectorSet(p->ray_ox, p->ray_oy, p->ray_oz, 0.0f);
+		XMVECTOR dir = XMVector3Normalize(
+			XMVectorSet(p->ray_dx, p->ray_dy, p->ray_dz, 0.0f));
+
+		// 락 잡아서 후보만 스냅샷
+		short  best_id = -1;
+		float  best_t = PVP_FIRE_RANGE;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (i == c_id) continue;   // 자기 자신 제외
+
+			XMFLOAT3 tpos;
+			float    tyaw;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;     // 이미 사망
+				tpos = { clients[i].x, clients[i].y, clients[i].z };
+				tyaw = clients[i].yaw;
+			}   // 좌표 복사 끝, 락 해제
+
+			BoundingOrientedBox pbox = MakePlayerOOBB(tpos, tyaw);
+			float t;
+			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_id = (short)i;
+			}
+		}
+
+		// 명중 1번만 짧게 락, hp조정
+		if (best_id >= 0) {
+			short new_hp = 0;
+			{
+				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
+				if (clients[best_id]._state == ST_INGAME) {
+					clients[best_id].hp -= PVP_FIRE_DAMAGE;
+					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
+					new_hp = clients[best_id].hp;
+				}
+			}
+
+			std::cout << "[PvP] client " << c_id << " HIT player "
+				<< best_id << " (hp=" << new_hp << ")\n";
+
+			// 피격자 본인에게만 HP 통지
+			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+			hp_pkt.size = sizeof(hp_pkt);
+			hp_pkt.type = SC_PLAYER_HP_UPDATE;
+			hp_pkt.id = best_id;
+			hp_pkt.hp = new_hp;
+			clients[best_id].do_send(&hp_pkt);
+		}
+
+		// 머즐 플래시 전체 브로드캐스트
+		BroadcastAttachedEffectNoSnapshot(
+			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
 		break;
 	}
