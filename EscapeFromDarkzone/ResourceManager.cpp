@@ -305,6 +305,8 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	return true;
 }
 
+
+
 bool ResourceManager::ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey)
 {
 	auto targetIt = m_SkinnedModelPrototypes.find(targetKey);
@@ -502,25 +504,93 @@ void ResourceManager::BuildModelPrototypes(
 	);
 }
 
-
-void ResourceManager::BuildUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path)
 {
-	m_UIPrototypes[UIName::LOBBY_BACKGROUND] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::LOBBY_BACKGROUND]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Lobby.dds");
+	m_UIPrototypes[name] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
+	m_UIPrototypes[name]->LoadTexture(pd3dDevice, pd3dCommandList,path);
 
-	m_UIPrototypes[UIName::LOBBY_START_BUTTON] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::LOBBY_START_BUTTON]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Start_BTN.dds");
+}
+void ResourceManager::BuildUIMesh(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature)
+{
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::LOBBY_BACKGROUND,
+		L"UI/Lobby.dds"
+	);
 
-	m_UIPrototypes[UIName::TABLE_VERTICAL] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::TABLE_VERTICAL]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Table_02.dds");
-	
-	m_UIPrototypes[UIName::WINDOW_BASE] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::WINDOW_BASE]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/Window.dds");
-	
-	m_UIPrototypes[UIName::PANEL_001] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[UIName::PANEL_001]->LoadTexture(pd3dDevice, pd3dCommandList, L"UI/panel001.dds");
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::LOBBY_START_BUTTON,
+		L"UI/Start_BTN.dds"
+	);
 
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::TABLE_VERTICAL,
+		L"UI/Table_02.dds"
+	);
 
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::WINDOW_BASE,
+		L"UI/Window.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::PANEL_001,
+		L"UI/panel001.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::DIVIDER_001,
+		L"UI/divider-002.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_FIBER,
+		L"UI/yarn.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_NEEDLE,
+		L"UI/needle.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_METAL,
+		L"UI/metalbar.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_HEALTH_BAR,
+		L"UI/Health_Bar_Table.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_HEALTH_DOT,
+		L"UI/Health_Dot.dds"
+	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const

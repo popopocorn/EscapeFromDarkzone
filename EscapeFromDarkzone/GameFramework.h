@@ -15,20 +15,15 @@
 
 #include "RootSignature.h"
 
-struct OtherPlayerSlot {
-	short id = -1;
-	OtherPlayer* pPlayer = nullptr;
-};
+class NetPacketDispatcher;
+class NetEntityManager;
 
-struct NpcSlot {
-	short id;
-	CEnemyObject* pNpc;
-	NpcSlot() : id(-1), pNpc(nullptr) {}
-};
 class ShaderManager;
 
 class CGameFramework
 {
+	friend class NetPacketDispatcher;
+
 public:
 	CGameFramework();
 	~CGameFramework();
@@ -64,9 +59,8 @@ public:
 
 	void ProcessNetworkPackets();	// 03.27 추가
 
-	CEnemyObject* FindNpc(short id);		// 05.10 추가
-	bool AddNpc(short id, CEnemyObject* p);	// 05.10 추가
-	void RemoveNpc(short id);				// 05.10 추가
+	NetEntityManager* GetNetEntityManager() { return m_pNetEntityMgr.get(); }	// 06.07 추가
+
 	CScene*						nextScene;
 	void ChangeScene();
 	bool						mouseMove = false;
@@ -126,17 +120,8 @@ private:
 
 	_TCHAR						m_pszFrameRate[70];
 
-
-	// 05.05 추가: unordered_map에서 array로
-	short m_myId = -1;
-	std::array<OtherPlayerSlot, 16> m_otherPlayers;	
-
-	OtherPlayer* FindOtherPlayer(short id);
-	bool AddOtherPlayer(short id, OtherPlayer* p);
-	void RemoveOtherPlayer(short id);
-	
-	// 05.10 추가: 서버로부터 받아올 NPC 정보 관리
-	
-	std::array<NpcSlot, MAX_NPC> m_npcs;
+	// 06.07 추가
+	std::unique_ptr<NetEntityManager> m_pNetEntityMgr;
+	std::unique_ptr<NetPacketDispatcher> m_pPacketDispatcher;
 };
 

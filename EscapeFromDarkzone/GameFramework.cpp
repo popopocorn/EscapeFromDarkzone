@@ -2,14 +2,21 @@
 // File: CGameFramework.cpp
 //-----------------------------------------------------------------------------
 
+#include "NetPacketDispatcher.h"
+#include "NetEntityManager.h"
+
 #include "stdafx.h"
 #include "InputManager.h"
 #include "EffectManager.h"
 #include "InventoryManager.h"
 #include "ResourceManager.h"
-#include"ShaderManager.h"
-#include"SoundManager.h"
+#include "ShaderManager.h"
+#include "SoundManager.h"
 #include "GameFramework.h"
+
+int FRAME_BUFFER_WIDTH = 1392;
+int FRAME_BUFFER_HEIGHT = 738;
+
 
 static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 {
@@ -91,8 +98,8 @@ CGameFramework::CGameFramework()
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
 
-	m_ptOldCursorPos.x = 1300;
-	m_ptOldCursorPos.y = 600;
+	m_ptOldCursorPos.x = FRAME_BUFFER_WIDTH/2.0;
+	m_ptOldCursorPos.y = FRAME_BUFFER_HEIGHT/2.0;
 }
 
 CGameFramework::~CGameFramework()
@@ -244,6 +251,7 @@ void CGameFramework::CreateDirect3DDevice()
 		m_pdxgiFactory->EnumWarpAdapter(_uuidof(IDXGIFactory4), (void**)&pd3dAdapter);
 		hResult = D3D12CreateDevice(pd3dAdapter, D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), (void**)&m_pd3dDevice);
 	}
+	
 
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
 	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -616,6 +624,12 @@ void CGameFramework::BuildObjects()
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
 	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
+	// 06.07 추가
+	m_pNetEntityMgr = std::make_unique<NetEntityManager>();
+	m_pNetEntityMgr->Init(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(),
+		shadermanager.get(), m_pPlayer);
+	m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());
+
 	m_GameTimer.Reset();
 }
 void CGameFramework::ReleaseObjects()
@@ -933,6 +947,9 @@ void CGameFramework::ProcessNetworkPackets()
 {
 	if (!NetworkManager::Instance().IsConnected()) return;
 
+	if (!m_pPacketDispatcher)
+		m_pPacketDispatcher = std::make_unique<NetPacketDispatcher>(this);
+
 	NetworkManager::Instance().Recv();
 
 	while (true)
@@ -940,428 +957,7 @@ void CGameFramework::ProcessNetworkPackets()
 		std::vector<char> packet = NetworkManager::Instance().PopPacket();
 		if (packet.empty()) break;
 
-		char type = packet[1]; // 패킷 타입 확인
-		switch (type)
-		{
-		case SC_LOGIN_INFO:
-		{
-			SC_LOGIN_INFO_PACKET* p = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(packet.data());
-			//wchar_t szLog[128];
-			//swprintf_s(szLog, L"[Network] SC_LOGIN_INFO - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
-			//OutputDebugString(szLog);
-			// 03.30 추가: 서버로부터 받아온 초기 위치로 이동
-			m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
-			m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z)); // 04.10 추가: 서버 위치 초기화
-			m_myId = p->id; // 03.30 추가: 내 ID 저장
-			break;
-		}
-		case SC_ADD_PLAYER:
-		{
-			SC_ADD_PLAYER_PACKET* p = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(packet.data());
-			//wchar_t szLog[128];
-			//swprintf_s(szLog, L"[Network] SC_ADD_PLAYER - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
-			//OutputDebugStringW(szLog);
-
-			// 03.30 추가: 잘못된 패킷 넘기기 (Broadcast 관련 오류?)
-			if (p->id == m_myId) {
-				break;
-			}
-			if (FindOtherPlayer(p->id)) {
-				break;
-			}
-
-			OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(), p->x, p->y, p->z);
-			pOther->SetServerYaw(p->yaw);
-
-			// 상태 변경
-			switch (p->state) {
-			case PLAYER_STATE_IDLE:
-				pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
-				break;
-			case PLAYER_STATE_RUN:
-				pOther->ChangeState(std::make_unique<OtherPlayerRun>());
-				break;
-			}
-			
-			if (!AddOtherPlayer(p->id, pOther)) {	// 슬롯 부족 — 생성 취소
-				OutputDebugString(L"[Network] OtherPlayer slot full.\n");
-				pOther->Kill();
-				break;
-			}
-			pOther->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
-			m_pScene.back()->AddObj(pOther);
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pOther);
-
-			break;
-		}
-		case SC_REMOVE_PLAYER:
-		{
-			SC_REMOVE_PLAYER_PACKET* p = reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(packet.data());
-			//wchar_t szLog[128];
-			//swprintf_s(szLog, L"[Network] SC_REMOVE_PLAYER - id: %d\n", p->id);
-			//OutputDebugStringW(szLog);
-
-			// 03.30 추가: OtherPlayer 제거
-			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
-				pOther->Kill();
-				RemoveOtherPlayer(p->id);
-			}
-
-			break;
-		}
-		case SC_MOVE_PLAYER:
-		{
-			SC_MOVE_PLAYER_PACKET* p = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(packet.data());
-			//wchar_t szLog[128];
-			//swprintf_s(szLog, L"[Network] SC_MOVE_PLAYER - id: %d, pos(%.2f, %.2f, %.2f)\n", p->id, p->x, p->y, p->z);
-			//OutputDebugStringW(szLog);
-
-			// 03.30 추가: OtherPlayer 위치 업데이트 (플레이어 위치 보정 미구현)
-			if (p->id == m_myId) {
-				m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));	// 04.10 추가: 보간용 서버 위치
-				break;
-			}
-
-			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
-				pOther->UpdatePosition(p->x, p->y, p->z);
-				pOther->SetServerYaw(p->yaw);
-			}
-
-			break;
-		}
-		case SC_PLAYER_STATE_CHANGE:
-		{
-			SC_PLAYER_STATE_CHANGE_PACKET* p =
-				reinterpret_cast<SC_PLAYER_STATE_CHANGE_PACKET*>(packet.data());
-
-			if (p->id == m_myId) break;		// 서버에서 한 번 거르긴 했는데, 혹시 모르니까
-
-			if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
-				switch (p->state) {
-				case PLAYER_STATE_IDLE:
-					pOther->ChangeState(std::make_unique<OtherPlayerIdle>());
-					break;
-				case PLAYER_STATE_RUN:
-					pOther->ChangeState(std::make_unique<OtherPlayerRun>());
-					break;
-				}
-			}
-			break;
-		}
-		case SC_ADD_NPC: 
-		{
-
-			SC_ADD_NPC_PACKET* p = reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data());
-
-			 // 디버그 로그 추가
-			wchar_t szLog[128];
-			swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, pos=(%.1f, %.1f, %.1f)\n",
-				p->npc_id, p->x, p->y, p->z);
-			OutputDebugStringW(szLog);
-
-			// 중복 방지
-			if (FindNpc(p->npc_id)) {
-				break;
-			}
-
-			CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1);
-			{
-				wchar_t szLog[256];
-				swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
-					p->npc_id,
-					pModel ? L"OK" : L"NULL",
-					(pModel && pModel->m_pModelRootObject) ? L"OK" : L"NULL");
-				OutputDebugStringW(szLog);
-			}
-
-			// CEnemyObject 동적 스폰 (생성자 시그니처는 BuildObjects의 고정 스폰과 동일)
-			CEnemyObject* pNpc = new CEnemyObject(
-				m_pd3dDevice,
-				m_pd3dCommandList,
-				root->GetRoot(),
-				shadermanager->GetShader(ShaderType::SKINNED),
-				ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
-			);
-			{
-				wchar_t szLog[256];
-				swprintf_s(szLog, L"[SC_ADD_NPC] pNpc->m_pChild=%s, controller=%s\n",
-					pNpc->m_pChild ? L"OK" : L"NULL",
-					pNpc->m_pSkinnedAnimationController ? L"OK" : L"NULL");
-				OutputDebugStringW(szLog);
-			}
-			pNpc->SetPosition(p->x, p->y, p->z);
-			pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
-			pNpc->SetServerYaw(p->yaw);
-			pNpc->SubmitWeaponToShader(shadermanager->GetShader(ShaderType::STANDARD));
-			if (!AddNpc(p->npc_id, pNpc)) {
-				OutputDebugString(L"[Network] NPC slot full.\n");
-				pNpc->Kill();
-				break;
-			}
-
-			m_pScene.back()->AddObj(pNpc);
-			m_pScene.back()->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pNpc);
-			break;
-		}
-		case SC_REMOVE_NPC:
-		{
-			SC_REMOVE_NPC_PACKET* p = reinterpret_cast<SC_REMOVE_NPC_PACKET*>(packet.data());
-
-			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
-				pNpc->Kill();
-				RemoveNpc(p->npc_id);
-			}
-
-			break;
-		}
-		case SC_MOVE_NPC:
-		{
-			SC_MOVE_NPC_PACKET* p = reinterpret_cast<SC_MOVE_NPC_PACKET*>(packet.data());
-
-			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
-				pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
-				pNpc->SetServerYaw(p->yaw);
-			}
-
-			break;
-		}
-		case SC_NPC_STATE_CHANGE: {
-			SC_NPC_STATE_CHANGE_PACKET* p = reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data());
-
-			if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {
-				switch (p->state) {
-				case NPC_STATE_IDLE:
-					pNpc->ChangeState(std::make_unique<EnemyIdle>());
-					pNpc->SnapToServerPosition();
-					break;
-				case NPC_STATE_RUN:
-				case NPC_STATE_RETURN:
-					pNpc->ChangeState(std::make_unique<EnemyRun>());
-					break;
-				case NPC_STATE_ATTACK:
-					pNpc->ChangeState(std::make_unique<EnemyAttack>());
-					break;
-				case NPC_STATE_DIE:
-					// EnemyDie::Enter가 m_bDying / m_fDieElapsed 설정
-					// Scene::AnimateObjects가 1.2초 후 자체 루팅 박스 생성.
-					// 서버는 같은 1.2초 후 SC_REMOVE_NPC 송신 → NPC 객체 자체 제거.
-					// (루팅 박스는 별도 컨테이너로 남아 있음)
-					pNpc->ChangeState(std::make_unique<EnemyDie>());
-					break;
-				}
-			}
-
-			break;
-		}
-		case SC_INVENTORY_UPDATE: {
-			SC_INVENTORY_UPDATE_PACKET* p =
-				reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());
-
-			if (m_pScene.empty()) break;
-			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
-			if (!pInvMgr) break;
-
-			bool ok = pInvMgr->ApplyPlayerInventorySlotUpdate(
-				p->item_id, p->count, p->slotidx);
-
-			// 서버로부터 받은 패킷을 디버그콘솔에 출력
-			//wchar_t buf[256];
-			//swprintf_s(buf, L"[INV_APPLY] slot:%d item:%d count:%d %s\n",
-			//	p->slotidx, static_cast<int>(p->item_id), p->count);
-			//OutputDebugStringW(buf);
-
-			break;
-		}
-		case SC_EQUIPMENT_UPDATE: {
-			SC_EQUIPMENT_UPDATE_PACKET* p =
-				reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
-
-			// 장비 시스템 미구현 — 현재는 콘솔 출력만
-			wchar_t buf[128];
-			swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n",
-				static_cast<int>(p->equip_id));
-			OutputDebugStringW(buf);
-			break;
-		}
-		case SC_ADD_LOOT_BOX: {
-			SC_ADD_LOOT_BOX_PACKET* p =
-				reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
-
-			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
-
-			pInvMgr->SpawnLootContainer(p->npc_id,
-				XMFLOAT3(p->x, p->y, p->z),
-				p->items, p->counts, INVENTORY_SIZE);
-
-			//wchar_t buf[256];
-			//swprintf_s(buf, L"[LOOT_BOX_ADD] id:%d pos:(%.2f,%.2f,%.2f)\n",
-			//	p->npc_id, p->x, p->y, p->z);
-			//OutputDebugStringW(buf);
-
-			break;
-		}
-		case SC_LOOT_BOX_SLOT_UPDATE: {
-			SC_LOOT_BOX_SLOT_UPDATE_PACKET* p =
-				reinterpret_cast<SC_LOOT_BOX_SLOT_UPDATE_PACKET*>(packet.data());
-
-			if (m_pScene.empty()) break;
-			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
-			if (!pInvMgr) break;
-
-			pInvMgr->ApplyLootBoxSlotUpdate(p->box_id, p->slotidx, p->item_id, p->count);
-
-			//wchar_t buf[256];
-			//swprintf_s(buf, L"[BOX_APPLY] box_id: %d slot:%d item:%d count:%d %s\n",
-			//	p->box_id, p->slotidx, static_cast<int>(p->item_id), p->count);
-			//OutputDebugStringW(buf);
-
-			break;
-		}
-		case SC_DEACTIVATE_LOOT_BOX: {
-			SC_DEACTIVATE_LOOT_BOX_PACKET* p =
-				reinterpret_cast<SC_DEACTIVATE_LOOT_BOX_PACKET*>(packet.data());
-
-			if (m_pScene.empty()) break;
-			InventoryManager* pInvMgr = m_pScene.back()->GetInventoryManager();
-			if (!pInvMgr) break;
-
-			pInvMgr->DeactivateLootBox(p->npc_id);
-			break;
-		}
-		case SC_PLAYER_HP_UPDATE: {
-			SC_PLAYER_HP_UPDATE_PACKET* p =
-				reinterpret_cast<SC_PLAYER_HP_UPDATE_PACKET*>(packet.data());
-			// 본인 플레이어 HP 갱신 (UI 체력바 등 연결은 후속)
-			if (m_pPlayer) {
-				m_pPlayer->SetHP(p->hp);   // 임시 체력 추가
-			}
-			break;
-		}
-		case SC_PLAY_EFFECT_ATTACHED:
-		{
-			SC_PLAY_EFFECT_ATTACHED_PACKET* p =
-				reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
-
-			EffectID effectId = static_cast<EffectID>(p->effect_id);
-			const unsigned char entityKind = p->entity_kind;   // 0 = NPC, 1 = OtherPlayer
-			const short entityId = p->entity_id;
-
-			CGameObject* pTarget = nullptr;
-
-			if (entityKind == 0)
-			{
-				pTarget = FindNpc(entityId);
-			}
-			else if (entityKind == 1)
-			{
-				pTarget = FindOtherPlayer(entityId);
-			}
-
-			if (!pTarget)
-			{
-				OutputDebugString(L"[Effect] attached target not found.\n");
-				break;
-			}
-
-			if (m_pScene.empty())
-			{
-				break;
-			}
-
-			MainScene* pMainScene = dynamic_cast<MainScene*>(m_pScene.back().get());
-			if (!pMainScene)
-			{
-				break;
-			}
-
-			XMFLOAT3 effectPos;
-			XMFLOAT3 effectDir;
-
-			if (!GetAttachedEffectMuzzleInfo(pTarget, effectPos, effectDir))
-			{
-				break;
-			}
-
-			int ownerId =
-				(static_cast<int>(entityKind) << 16) |
-				static_cast<unsigned short>(entityId);
-
-			pMainScene->PlayEffectFromServerLikeRequest(
-				effectId,
-				effectPos,
-				effectDir,
-				ownerId,
-				0.0f
-			);
-
-			break;
-		}
-		case SC_PLAY_EFFECT_WORLD: {
-			// 수류탄 등등?
-			SC_PLAY_EFFECT_WORLD_PACKET* p =
-				reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
-
-			// 패킷 언팩
-			EffectID effectId = static_cast<EffectID>(p->effect_id);
-			XMFLOAT3 pos = { p->x, p->y, p->z };
-			XMFLOAT3 dir = { p->dx, p->dy, p->dz };
-
-			// 이펙트 붙이기
-
-			break;
-		}
-		default:
-			break;
-		}
-	}
-}
-
-// 05.08 추가: unordered_map에서 array로, 함수 추가
-
-OtherPlayer* CGameFramework::FindOtherPlayer(short id)
-{
-	for (auto& s : m_otherPlayers)
-		if (s.id == id) return s.pPlayer;
-	return nullptr;
-}
-bool CGameFramework::AddOtherPlayer(short id, OtherPlayer* p)
-{
-	for (auto& s : m_otherPlayers) {
-		if (s.id == -1) { s.id = id; s.pPlayer = p; return true; }
-	}
-	return false;
-}
-void CGameFramework::RemoveOtherPlayer(short id)
-{
-	for (auto& s : m_otherPlayers) {
-		if (s.id == id) {
-			s.id = -1; s.pPlayer = nullptr;
-			return;
-		}
-	}
-}
-
-CEnemyObject* CGameFramework::FindNpc(short id)
-{
-	for (auto& s : m_npcs)
-		if (s.id == id) return s.pNpc;
-	return nullptr;
-}
-bool CGameFramework::AddNpc(short id, CEnemyObject* p)
-{
-	for (auto& s : m_npcs) {
-		if (s.id == -1) { s.id = id; s.pNpc = p; return true; }
-	}
-	return false;
-}
-void CGameFramework::RemoveNpc(short id)
-{
-	for (auto& s : m_npcs) {
-		if (s.id == id) {
-			s.id = -1;
-			s.pNpc = nullptr;
-			return;
-		}
+		m_pPacketDispatcher->Handle(packet);
 	}
 }
 
@@ -1373,6 +969,8 @@ void CGameFramework::ChangeScene()
 	m_pScene.back()->SetPlayer(m_pPlayer);
 	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
+
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
 
 	nextScene = nullptr;
 }

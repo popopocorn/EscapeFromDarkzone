@@ -68,6 +68,10 @@ constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STO
 constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
 constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
+// PvP 사격
+constexpr short PVP_FIRE_DAMAGE = 15;
+constexpr float PVP_FIRE_RANGE = 100.0f;
+
 // NPC 사격 (플레이어 무기와 분리 — 밸런스 독립 조절)
 constexpr short NPC_FIRE_DAMAGE = 5;       // 발당 데미지
 constexpr float NPC_FIRE_RANGE = 12.0f;   // 사격 유효 사거리 (attack range보다 약간 길게)
@@ -646,15 +650,36 @@ static void StartNpcReload(SERVER_NPC& npc)
 	std::cout << "[NPC " << npc.id << "] Reload Start\n";
 }
 
-static void UpdateNpcReload(SERVER_NPC& npc, float dt)
+static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 {
-	if (!npc.reloading) return;
+	if (!npc.reloading) return false;
 	npc.reload_timer -= dt;
 	if (npc.reload_timer <= 0.0f) {
 		npc.reloading = false;
 		npc.reload_timer = 0.0f;
 		npc.current_ammo = NPC_MAG_AMMO;
 		std::cout << "[NPC " << npc.id << "] Reload Finish\n";
+		return true;
+	}
+	return false;
+}
+
+static void BroadcastAttachedEffectNoSnapshot(
+	EffectID id, EffectEntityKind kind, short entity_id)
+{
+	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
+	ep.size = sizeof(ep);
+	ep.type = SC_PLAY_EFFECT_ATTACHED;
+	ep.effect_id = static_cast<unsigned char>(id);
+	ep.entity_kind = static_cast<unsigned char>(kind);
+	ep.entity_id = entity_id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		{
+			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+			if (clients[i]._state != ST_INGAME) continue;
+		}
+		clients[i].do_send(&ep);
 	}
 }
 
@@ -692,11 +717,17 @@ static void BroadcastWorldEffect(
 	}
 }
 
+static void ChangeNpcState(SERVER_NPC&, char, const std::array<PlayerSnapshot, MAX_USER>&);
+
 static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
-	if (npc.current_ammo <= 0) { StartNpcReload(npc); return; }
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc); 
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot); 
+		return; 
+	}
 
 	npc.current_ammo--;
 
@@ -759,7 +790,10 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	// 발사 이펙트: 머즐 플래시
 	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
 
-	if (npc.current_ammo <= 0) StartNpcReload(npc);
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+	}
 }
 
 static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
@@ -937,7 +971,9 @@ static float WeaponRange(char weapon_id)
 	}
 }
 
-static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void EnterNpcAttack(SERVER_NPC&);
+
+static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (NPC_STATE_DIE == npc.state) return;
 
@@ -958,6 +994,27 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSn
 
 	if (npc.hp <= 0) {
 		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+	}
+
+	if (NPC_STATE_IDLE == npc.state) {
+		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
+		if (!player_snapshot[attacker_client_id].in_game) return;
+
+		XMFLOAT3 attacker_pos = {
+			player_snapshot[attacker_client_id].x,
+			player_snapshot[attacker_client_id].y,
+			player_snapshot[attacker_client_id].z
+		};
+
+		RefreshLastSeenPlayer(npc, attacker_pos);
+
+		if (CanShootPlayer(npc, attacker_pos)) {
+			EnterNpcAttack(npc);
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		}
+		else {
+			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+		}
 	}
 }
 
@@ -986,7 +1043,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		if (best_id >= 0) {
 			short damage = WeaponDamage(e.weapon_id);
-			ApplyDamage(g_npcs[best_id], damage, player_snapshot);
+			ApplyDamage(g_npcs[best_id], damage, e.attacker_client_id, player_snapshot);
 		}
 	}
 
@@ -1221,8 +1278,10 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		}
 	}
 
-	// 스폰 위치 도착 → IDLE (잠깐 감지 무시 타이머 세팅)
+	// 스폰 위치 도착 -> IDLE (잠깐 감지 무시 타이머 세팅)
 	if (IsNearSpawn(npc)) {
+		npc.hp = npc.max_hp;
+
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
 		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
@@ -1301,12 +1360,16 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	bool can_detect = CanDetectPlayer(npc, player_pos);
 	bool can_shoot = CanShootPlayer(npc, player_pos);
 
-	// 2. 재장전 중 정지, 조준만
+	// 2. 재장전
 	if (npc.reloading) {
-		UpdateNpcReload(npc, dt);
+		bool justFinished = UpdateNpcReload(npc, dt);
 		if (can_detect) {
 			RefreshLastSeenPlayer(npc, player_pos);
 			npc.yaw = std::atan2(player_pos.x - npc.position.x, player_pos.z - npc.position.z);
+		}
+		if (justFinished) {
+			// 재장전 종료 -> ATTACK 복귀 통지
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
 		}
 		return;  // 이동 없음
 	}
@@ -1342,6 +1405,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	// 5. 탄약 0이면 재장전
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);   // 클라에 재장전 시작 통지
 		return;
 	}
 
@@ -1447,6 +1511,7 @@ static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot
 		UpdateNpcReturn(npc, dt, player_snapshot);
 		break;
 	case NPC_STATE_ATTACK: 
+	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
 		UpdateNpcAttack(npc, dt, player_snapshot);
 		break;
 	case NPC_STATE_DIE:  
@@ -1799,6 +1864,69 @@ void process_packet(int c_id, char* packet)
 		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
 
 		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+	case CS_HIT_PLAYER: {
+		CS_HIT_PLAYER_PACKET* p =
+			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
+
+		XMVECTOR origin = XMVectorSet(p->ray_ox, p->ray_oy, p->ray_oz, 0.0f);
+		XMVECTOR dir = XMVector3Normalize(
+			XMVectorSet(p->ray_dx, p->ray_dy, p->ray_dz, 0.0f));
+
+		// 락 잡아서 후보만 스냅샷
+		short  best_id = -1;
+		float  best_t = PVP_FIRE_RANGE;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (i == c_id) continue;   // 자기 자신 제외
+
+			XMFLOAT3 tpos;
+			float    tyaw;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;     // 이미 사망
+				tpos = { clients[i].x, clients[i].y, clients[i].z };
+				tyaw = clients[i].yaw;
+			}   // 좌표 복사 끝, 락 해제
+
+			BoundingOrientedBox pbox = MakePlayerOOBB(tpos, tyaw);
+			float t;
+			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_id = (short)i;
+			}
+		}
+
+		// 명중 1번만 짧게 락, hp조정
+		if (best_id >= 0) {
+			short new_hp = 0;
+			{
+				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
+				if (clients[best_id]._state == ST_INGAME) {
+					clients[best_id].hp -= PVP_FIRE_DAMAGE;
+					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
+					new_hp = clients[best_id].hp;
+				}
+			}
+
+			std::cout << "[PvP] client " << c_id << " HIT player "
+				<< best_id << " (hp=" << new_hp << ")\n";
+
+			// 피격자 본인에게만 HP 통지
+			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+			hp_pkt.size = sizeof(hp_pkt);
+			hp_pkt.type = SC_PLAYER_HP_UPDATE;
+			hp_pkt.id = best_id;
+			hp_pkt.hp = new_hp;
+			clients[best_id].do_send(&hp_pkt);
+		}
+
+		// 머즐 플래시 전체 브로드캐스트
+		BroadcastAttachedEffectNoSnapshot(
+			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
 		break;
 	}

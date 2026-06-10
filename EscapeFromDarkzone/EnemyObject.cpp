@@ -299,6 +299,10 @@ void CEnemyObject::Update(float fTimeElapsed)
 {
 	m_xmf3PrevPos = m_xmf3Position;
 
+	if (m_fShootAnimTimer > 0.0f) {
+		m_fShootAnimTimer -= fTimeElapsed;
+	}
+
 	if (m_pState)
 	{
 		m_pState->Update(this, fTimeElapsed);
@@ -1264,14 +1268,61 @@ bool EnemyAttack::Enter(CEnemyObject* pEnemy)
 
 void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
 
 	if (NetworkManager::Instance().IsConnected())
 	{
-		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		if (pEnemy->IsReloading())
+		{
+			pEnemy->UpdateReload(fTimeElapsed);
+			pEnemy->SetEnemyAnimation(pEnemy->GetReloadAnimationByWeapon(), false, false);
+			return;
+		}
+
+		if (pEnemy->m_fShootAnimTimer > 0.0f) {
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+			return;
+		}
+
+		XMFLOAT3 toServer;
+		toServer.x = pEnemy->m_xmf3ServerPosition.x - pEnemy->m_xmf3Position.x;
+		toServer.y = 0.0f;
+		toServer.z = pEnemy->m_xmf3ServerPosition.z - pEnemy->m_xmf3Position.z;
+
+		float moveLen = Vector3::Length(toServer);
+
+		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;		// 임시
+
+		if (moveLen < MOVE_ANIM_THRESHOLD) {				// 안움직임
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		}
+		else {												// 움직임
+			XMFLOAT3 moveDir = NormalizeXZ(toServer);
+			XMFLOAT3 forward = pEnemy->GetForwardXZ();
+			XMFLOAT3 right = GetRightFromForwardXZ(forward);
+
+			float fwdDot = moveDir.x * forward.x + moveDir.z * forward.z;   // 전후 성분
+			float rightDot = moveDir.x * right.x + moveDir.z * right.z;     // 좌우 성분
+
+			if (fabsf(rightDot) > fabsf(fwdDot))
+			{
+				// 옆걸음
+				if (rightDot >= 0.0f)
+					pEnemy->SetEnemyAnimation(pEnemy->GetRightRunAnimationByWeapon(), true, false);
+				else
+					pEnemy->SetEnemyAnimation(pEnemy->GetLeftRunAnimationByWeapon(), true, false);
+			}
+			else
+			{
+				// 전진 
+				pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+			}
+		}
+
 		return;
 	}
+
+	if (!pEnemy->m_pPlayer) return;
 
 	if (pEnemy->IsOutsideLeashRange())
 	{
@@ -1639,3 +1690,4 @@ void CEnemyObject::SnapToServerPosition()
 	m_xmf4x4ToParent._42 = m_xmf3Position.y;
 	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 }
+

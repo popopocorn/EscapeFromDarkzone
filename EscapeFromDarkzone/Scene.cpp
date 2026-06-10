@@ -21,6 +21,7 @@
 #include "GameFramework.h"
 
 #include "Network.h"
+#include "NetSession.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
 {
@@ -774,7 +775,8 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (NetworkManager::Instance().IsConnected())
 			{
-				NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+				//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+				NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 			}
 			else
 			{
@@ -1033,7 +1035,8 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+				//NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
 			}
 			return true;
 		}
@@ -1042,7 +1045,8 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+				//NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
 			}
 			return true;
 		}
@@ -1318,6 +1322,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 
+	PlayerStatus* s = new PlayerStatus(m_pPlayer);
+	s->Init(pd3dDevice, pd3dCommandList);
+	uiManager->AddToManager(s);
+
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -1490,11 +1498,17 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
+			if (NetworkManager::Instance().IsConnected()) 
+			{
+				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, 0);
+			}
+
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
 				if (NetworkManager::Instance().IsConnected())
 				{
-					NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+					//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+					NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 				}
 				else
 				{
@@ -1583,7 +1597,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
-
+	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 

@@ -189,11 +189,8 @@ public:
 	float m_fDieDuration = 3.4f;
 	bool m_bDeadRemoveRequested = false;
 
-	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
-
-	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
-
-	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+	float m_fShootAnimTimer = 0.0f;				// 서버 패킷으로부터 사격 애니메이션을 구분하기 위해 추가
+	float m_fShootAnimHold = 0.18f;				// 버스트 간격(0.15) 보다 조금 더 길게 해서 안 끊기게 유지
 
 public:
 	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
@@ -252,6 +249,14 @@ public:
 	void UpdateIdleLook(float fTimeElapsed);
 
 	void FireAtPlayer();
+
+	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
+
+	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
+
+	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+
+	void  TriggerShootAnim() { m_fShootAnimTimer = m_fShootAnimHold; }
 
 };
 

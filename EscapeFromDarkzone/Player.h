@@ -43,7 +43,6 @@ enum class PlayerWeaponType
 	Shotgun,
 	Rifle
 };
-
 class PlayerState;
 class CPlayerAnimationController;
 class WeaponItem;
