@@ -198,6 +198,20 @@ public:
 	float m_fSparkSpawnTimer = 0.0f;
 	float m_fSparkSpawnInterval = 0.03f;
 
+	bool m_bGrenadeAimMode = false;
+	float m_fGrenadeAimDistance = 6.0f;
+	float m_fGrenadeAimMinDistance = 2.0f;
+	float m_fGrenadeAimMaxDistance = 18.0f;
+
+	bool m_bGrenadeFlying = false;
+	XMFLOAT3 m_xmf3GrenadePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMFLOAT3 m_xmf3GrenadeVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	float m_fGrenadeLifeTimer = 0.0f;
+	float m_fGrenadeExplodeDelay = 2.5f;
+	float m_fGrenadeGravity = -9.8f;
+	float m_fGrenadeBounceDamping = 0.45f;
+	float m_fGrenadeGroundY = 0.2f;
+
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 private:
 	unique_ptr<CollisionManager> colManager;
@@ -213,6 +227,15 @@ private:
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 	void LinkToPlayer();
+
+	void SetGrenadeAimMode(HWND hWnd, bool bEnable);
+	void ClampGameplayCursorToAimLine(HWND hWnd);
+	void ReleaseGameplayCursor();
+
+	float CalculateGrenadeMaxAimDistance();
+	void ThrowGrenade();
+	void UpdateGrenade(float fTimeElapsed);
+	void ExplodeGrenade();
 public:
 
 	//이펙트	재생용 함수
