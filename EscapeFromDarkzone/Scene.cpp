@@ -164,6 +164,21 @@ static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
 		return EFFECT_SPARK_RIFLE_SMG;
 	}
 }
+static EFFECT_TYPE GetSparkEffectTypeByEnemyWeapon(EnemyWeaponType weaponType)
+{
+	switch (weaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return EFFECT_SPARK_PISTOL;
+
+	case EnemyWeaponType::SMG:
+		return EFFECT_SPARK_RIFLE_SMG;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		return EFFECT_SPARK_RIFLE_SMG;
+	}
+}
 static XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
 {
 	XMFLOAT3 sparkPos = muzzlePos;
@@ -174,28 +189,115 @@ static XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFL
 	switch (weaponType)
 	{
 	case PlayerWeaponType::Rifle:
-		forwardOffset = -0.1f;
-		upOffset = -0.0f;
+		forwardOffset = 0.05f;
+		upOffset = -0.50f;
 		break;
 
 	case PlayerWeaponType::SMG:
-		forwardOffset = -0.08f;
-		upOffset = -0.0f;
+		forwardOffset = -0.1f;
+		upOffset = -0.50f;
 		break;
 
 	case PlayerWeaponType::Shotgun:
-		forwardOffset = 0.12f;
-		upOffset = 0.0f;
+		forwardOffset = 0.1f;
+		upOffset = 0.50f;
 		break;
 
 	case PlayerWeaponType::Pistol:
-		forwardOffset = 0.1f;
-		upOffset = 0.0f;
+		forwardOffset = 0.18f;
+		upOffset = -0.30f;
 		break;
 
 	default:
 		forwardOffset = 0.0f;
 		upOffset = 0.0f;
+		break;
+	}
+
+	sparkPos.x += muzzleLook.x * forwardOffset;
+	sparkPos.y += muzzleLook.y * forwardOffset;
+	sparkPos.z += muzzleLook.z * forwardOffset;
+
+	sparkPos.x += muzzleUp.x * upOffset;
+	sparkPos.y += muzzleUp.y * upOffset;
+	sparkPos.z += muzzleUp.z * upOffset;
+
+	return sparkPos;
+}
+static bool GetCurrentEnemyMuzzleInfo(CEnemyObject* pEnemy, XMFLOAT3& outPos, XMFLOAT3& outLook, XMFLOAT3& outRight, XMFLOAT3& outUp)
+{
+	if (!pEnemy)
+		return false;
+
+	pEnemy->UpdateTransform(NULL);
+
+	outLook = pEnemy->GetForwardXZ();
+	outRight = pEnemy->GetRight();
+	outUp = pEnemy->GetUp();
+
+	if (Vector3::Length(outLook) < 0.0001f)
+	{
+		outLook = pEnemy->GetLook();
+		outLook.y = 0.0f;
+	}
+
+	if (Vector3::Length(outLook) < 0.0001f)
+		outLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	if (Vector3::Length(outRight) < 0.0001f)
+		outRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
+
+	if (Vector3::Length(outUp) < 0.0001f)
+		outUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	outLook = Vector3::Normalize(outLook);
+	outRight = Vector3::Normalize(outRight);
+	outUp = Vector3::Normalize(outUp);
+
+	CGameObject* pMuzzle = pEnemy->GetWeaponMuzzleSocket();
+
+	if (pMuzzle)
+	{
+		outPos = pMuzzle->GetPosition();
+
+		outPos.x += outLook.x * 0.05f;
+		outPos.y += outLook.y * 0.05f;
+		outPos.z += outLook.z * 0.05f;
+
+		return true;
+	}
+
+	outPos = pEnemy->GetPosition();
+
+	outPos.x += outLook.x * 0.8f + outRight.x * 0.25f + outUp.x * 1.2f;
+	outPos.y += outLook.y * 0.8f + outRight.y * 0.25f + outUp.y * 1.2f;
+	outPos.z += outLook.z * 0.8f + outRight.z * 0.25f + outUp.z * 1.2f;
+
+	return false;
+}
+static XMFLOAT3 GetSparkPositionByEnemyWeapon(EnemyWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+{
+	XMFLOAT3 sparkPos = muzzlePos;
+
+	float forwardOffset = 0.0f;
+	float upOffset = 0.0f;
+
+	switch (weaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		forwardOffset = 0.1f;
+		upOffset = -0.30f;
+		break;
+
+	case EnemyWeaponType::SMG:
+		forwardOffset = -0.08f;
+		upOffset = -0.50f;
+		break;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		forwardOffset = -0.1f;
+		upOffset = -0.50f;
 		break;
 	}
 
@@ -1439,11 +1541,50 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pInventoryManager->Update(fTimeElapsed);
 	}
 
+	if (m_pEffectManager && m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+	{
+		auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
+		if (enemyObjs)
+		{
+			for (auto& obj : *enemyObjs)
+			{
+				if (!obj) continue;
+
+				CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
+				if (!pEnemy) continue;
+
+				if (!pEnemy->ConsumeShootEffectRequest())
+					continue;
+
+				XMFLOAT3 muzzlePos;
+				XMFLOAT3 muzzleLook;
+				XMFLOAT3 muzzleRight;
+				XMFLOAT3 muzzleUp;
+
+				GetCurrentEnemyMuzzleInfo(
+					pEnemy,
+					muzzlePos,
+					muzzleLook,
+					muzzleRight,
+					muzzleUp
+				);
+
+				EnemyWeaponType weaponType = pEnemy->GetEnemyWeaponType();
+				EFFECT_TYPE sparkType = GetSparkEffectTypeByEnemyWeapon(weaponType);
+				XMFLOAT3 sparkPos = GetSparkPositionByEnemyWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
+
+				m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
+			}
+		}
+	}
+
 	if (m_pPlayer && m_pLights.size() > 1)
 	{
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
+
 	// 시야 객체 blocker 갱신
 	{
 		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
@@ -1528,7 +1669,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
-			if (NetworkManager::Instance().IsConnected()) 
+			if (NetworkManager::Instance().IsConnected())
 			{
 				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, 0);
 			}
@@ -1627,6 +1768,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
+
 	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }

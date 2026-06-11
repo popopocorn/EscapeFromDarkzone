@@ -1078,6 +1078,7 @@ void CEnemyObject::FireAtPlayer()
 	if (!m_pPlayer) return;
 	if (m_bDying) return;
 	if (m_bReloading) return;
+
 	if (m_nCurrentAmmo <= 0)
 	{
 		StartReload();
@@ -1086,13 +1087,23 @@ void CEnemyObject::FireAtPlayer()
 
 	m_nCurrentAmmo--;
 
-	// 나중에 여기에서 총알, 레이캐스트, 서버 패킷, 이펙트 등을 연결하면 됨.
+	m_fShootAnimTimer = m_fShootAnimHold;
+	m_bShootEffectRequested = true;
+
 	OutputDebugString(L"[Enemy AI] Enemy Burst Fire\n");
 
 	if (m_nCurrentAmmo <= 0)
 	{
 		StartReload();
 	}
+}
+
+bool CEnemyObject::ConsumeShootEffectRequest()
+{
+	if (!m_bShootEffectRequested) return false;
+
+	m_bShootEffectRequested = false;
+	return true;
 }
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
