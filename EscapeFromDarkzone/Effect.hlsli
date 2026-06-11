@@ -3,7 +3,7 @@
 
 #include "common.hlsli"
 
-struct VS_PARTICLE_INPUT
+struct VS_EFFECT_INPUT
 {
     float3 position : POSITION;
     float2 uv : TEXCOORD0;
@@ -16,7 +16,7 @@ struct VS_PARTICLE_INPUT
     float4 instColor : INST_COLOR;
 };
 
-struct VS_PARTICLE_OUTPUT
+struct VS_EFFECT_OUTPUT
 {
     float4 position : SV_POSITION;
     float2 uv : TEXCOORD0;
@@ -25,9 +25,9 @@ struct VS_PARTICLE_OUTPUT
     float4 effectColor : COLOR0;
 };
 
-VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
+VS_EFFECT_OUTPUT VSEffect(VS_EFFECT_INPUT input)
 {
-    VS_PARTICLE_OUTPUT output;
+    VS_EFFECT_OUTPUT output;
 
     float3 centerW = input.instPosition;
     float progress = input.instProgress;
@@ -74,7 +74,7 @@ VS_PARTICLE_OUTPUT VSParticle(VS_PARTICLE_INPUT input)
     return output;
 }
 
-float4 PSParticle(VS_PARTICLE_OUTPUT input) : SV_TARGET
+float4 PSEffect(VS_EFFECT_OUTPUT input) : SV_TARGET
 {
     float4 color = gtxtAlbedoTexture.Sample(gssClamp, input.uv);
 

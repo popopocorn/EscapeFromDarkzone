@@ -660,24 +660,54 @@ void MainScene::ExplodeGrenade()
 {
 	if (!m_bGrenadeFlying) return;
 
+	XMFLOAT3 explosionPos = m_xmf3GrenadePosition;
+
+	if (m_pGrenadeDebugObject)
+	{
+		explosionPos = m_pGrenadeDebugObject->GetPosition();
+	}
+
+	explosionPos.y = m_fGrenadeGroundY;
+
+	XMFLOAT3 effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	if (m_pPlayer)
+	{
+		effectDir = m_pPlayer->GetLookVector();
+		effectDir.y = 0.0f;
+
+		if (Vector3::Length(effectDir) < 0.0001f)
+		{
+			effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+		}
+
+		effectDir = Vector3::Normalize(effectDir);
+	}
+
+	float effectVisualOffset = 1.5f;
+	explosionPos.x -= effectDir.x * effectVisualOffset;
+	explosionPos.z -= effectDir.z * effectVisualOffset;
+
+	m_xmf3GrenadePosition = explosionPos;
+
 	m_bGrenadeFlying = false;
 	m_fGrenadeLifeTimer = 0.0f;
+
+	if (m_pEffectManager)
+	{
+		EffectSpawnDesc desc;
+		desc.id = EffectID::GRENADE_EXPLOSION;
+		desc.position = explosionPos;
+		desc.direction = effectDir;
+		desc.ownerId = 0;
+		desc.value = 0.0f;
+
+		m_pEffectManager->PlayEffectByID(desc);
+	}
 
 	if (m_pGrenadeDebugObject)
 	{
 		m_pGrenadeDebugObject->SetPosition(0.0f, -10000.0f, 0.0f);
 	}
-
-	if (!m_pEffectManager) return;
-
-	EffectSpawnDesc desc;
-	desc.id = EffectID::GRENADE_EXPLOSION;
-	desc.position = m_xmf3GrenadePosition;
-	desc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	desc.ownerId = 0;
-	desc.value = 0.0f;
-
-	m_pEffectManager->PlayEffectByID(desc);
 
 	OutputDebugString(L"[Grenade] Explosion\n");
 }
