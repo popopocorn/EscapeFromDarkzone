@@ -72,9 +72,15 @@ void OtherPlayer::Update(float fTimeElapsed)
 	}
 
 	UpdateTransform(NULL);
+
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+		m_pRenderWeapon->UpdateTransform(NULL);
+	}
+	else if (m_pWeapon && m_pWeaponSocket)
+	{
+		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	}
 }
 

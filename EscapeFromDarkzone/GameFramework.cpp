@@ -449,6 +449,20 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 
 		case 'M':
+			mouseMove = !mouseMove;
+
+			::ClipCursor(NULL);
+			::ShowCursor(TRUE);
+			::GetCursorPos(&m_ptOldCursorPos);
+
+			if (mouseMove)
+			{
+				OutputDebugString(L"[Mouse] Free Mouse Mode ON\n");
+			}
+			else
+			{
+				OutputDebugString(L"[Mouse] Free Mouse Mode OFF\n");
+			}
 			break;
 
 		case 'O':
@@ -656,7 +670,9 @@ void CGameFramework::ProcessInput()
 			bInventoryOpen = m_pScene.back()->GetInventoryManager()->IsAnyInventoryOpen();
 		}
 
-		if (bInventoryOpen)
+		bool bFreeMouseMode = mouseMove || bInventoryOpen;
+
+		if (bFreeMouseMode)
 		{
 			::ClipCursor(NULL);
 			::ShowCursor(TRUE);
