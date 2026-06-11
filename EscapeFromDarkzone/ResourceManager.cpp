@@ -581,12 +581,46 @@ void ResourceManager::BuildUIMesh(
 		UIName::STATUS_HEALTH_BAR,
 		L"UI/Health_Bar_Table.dds"
 	);
-
+	
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_DOT,
 		L"UI/Health_Dot.dds"
+	);
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_RIFLE_BULLET,
+		L"UI/Rifle_Bullet2.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_SMG_BULLET,
+		L"UI/SMG_Bullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_SHOTGUN_BULLET,
+		L"UI/Shotgun_Bullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_PISTOL_BULLET,
+		L"UI/PistolBullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_BULLET_DOT,
+		L"UI/BlueDot.dds"
 	);
 }
 

@@ -10,6 +10,7 @@
 #include"ShaderManager.h"
 #include"SoundManager.h"
 #include "GameFramework.h"
+#include"Scene.h"
 
 int FRAME_BUFFER_WIDTH = 1392;
 int FRAME_BUFFER_HEIGHT = 738;

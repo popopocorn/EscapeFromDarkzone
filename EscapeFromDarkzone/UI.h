@@ -164,6 +164,12 @@ private:
 	CPlayer* player;
 	short hp;
 	short FullHp;
+	int curammo = 0;
+	UIMesh* Rifle = NULL;
+	UIMesh* SMG = NULL;
+	UIMesh* Pistol = NULL;
+	UIMesh* Shotgun = NULL;
+	UIMesh* bullet = NULL;
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
 	vector<unique_ptr<UIObject>>Bullets;
 public:

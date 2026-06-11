@@ -103,10 +103,14 @@ bool OtherPlayerIdle::Enter(OtherPlayer* Player)
 }
 
 void OtherPlayerIdle::Update(OtherPlayer* Player, float fTimeElapsed)
-{}
+{
+	
+}
 
 void OtherPlayerIdle::Exit(OtherPlayer* Player)
-{}
+{
+	
+}
 
 bool OtherPlayerRun::Enter(OtherPlayer* Player)
 {

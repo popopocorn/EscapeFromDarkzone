@@ -23,8 +23,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
-	FRAME_BUFFER_WIDTH = ::GetSystemMetrics(SM_CXSCREEN);
-	FRAME_BUFFER_HEIGHT = ::GetSystemMetrics(SM_CYSCREEN);
+	FRAME_BUFFER_WIDTH = ::GetSystemMetrics(SM_CXSCREEN) * 0.7;
+	FRAME_BUFFER_HEIGHT = ::GetSystemMetrics(SM_CYSCREEN) * 0.7;
 	MSG msg;
 	HACCEL hAccelTable;
 
