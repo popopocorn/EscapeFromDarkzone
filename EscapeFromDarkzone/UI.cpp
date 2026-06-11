@@ -748,7 +748,7 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 	{
 		shader->addObjects(o.get());
 	}
-	for (const auto& o : pannels)
+	for (const auto& o : panels)
 	{
 		o->SubmitToShader(shader);
 	}
@@ -757,12 +757,12 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 void HUDManager::Release()
 {
 	objs.clear();
-	pannels.clear();
+	panels.clear();
 }
 
 void HUDManager::Update(float fTimeElapsed)
 {
-	for (auto& o : pannels)
+	for (auto& o : panels)
 	{
 		o->Update(fTimeElapsed);
 	}
@@ -779,7 +779,7 @@ bool HUDManager::ProcessClick(POINT mouse)
 			return true;
 		}
 	}
-	for (auto& o : pannels)
+	for (auto& o : panels)
 	{
 		if (o->isOpen)
 		{

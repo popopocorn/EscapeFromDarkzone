@@ -605,7 +605,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			}
 			if (uiManager)
 			{
-				for (auto& o : *uiManager->GetPannels())
+				for (auto& o : *uiManager->GetPanels())
 				{
 					o->ToggleOpen();
 				}
