@@ -1,0 +1,37 @@
+#pragma once
+enum class ProjectileType {
+	RIFLE_BULLET,
+};
+
+class Projectile :public CGameObject{
+private:
+	XMFLOAT3 start;
+	XMFLOAT3 end;
+	XMFLOAT3 direction;
+	bool active = false;
+	float speed = 100.0f;
+	float totalDistance = 0.0f;
+	float curDistance = 0.0f;
+public:
+	void Activate(CGameObject* bullet, XMFLOAT3 s, XMFLOAT3 e, float speed, float dist);
+	virtual void Animate(float fTimeElapsed);
+	bool IsActive() { return active; }
+};
+
+class CShader;
+
+class ProjectileManager {
+private:
+	vector<Projectile> bullets;
+	unordered_map<ProjectileType, CGameObject*>projectilePool;
+	int lastUse = 0;
+	const int poolSize = 200;
+	CShader* shader;
+public:
+	void Init(CShader* s);
+	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 e);
+	void Update(float fTimeElapsed);
+	void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch);
+
+
+};

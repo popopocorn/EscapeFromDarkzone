@@ -976,6 +976,12 @@ void CGameObject::SetChild(CGameObject *pChild, bool bReferenceUpdate)
 	}
 }
 
+void CGameObject::ReplaceChild(CGameObject* pChild)
+{
+	if (not pChild)return;
+	m_pChild = pChild;
+}
+
 void CGameObject::SetMesh(CMesh *pMesh)
 {
 	if (m_pMesh) m_pMesh->Release();
