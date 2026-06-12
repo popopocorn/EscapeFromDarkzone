@@ -14,7 +14,7 @@ private:
 	float totalDistance = 0.0f;
 	float curDistance = 0.0f;
 public:
-	void Activate(CGameObject* bullet, XMFLOAT3 s, XMFLOAT3 e, float speed, float dist);
+	void Activate(XMFLOAT3 s, XMFLOAT3 e, float speed, float dist);
 	virtual void Animate(float fTimeElapsed);
 	bool IsActive() { return active; }
 };
@@ -25,10 +25,10 @@ class ProjectileManager :public Singleton<ProjectileManager>{
 	friend class Singleton<ProjectileManager>;
 private:
 	vector<Projectile> bullets;
-	unordered_map<ProjectileType, CGameObject*>projectilePool;
+	//unordered_map<ProjectileType, CGameObject*>projectilePool;
 	int lastUse = 0;
 	const int poolSize = 200;
-	CShader* shader;
+	CShader* shader=NULL;
 public:
 	void Init(CShader* s);
 	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 e);

@@ -5,9 +5,8 @@
 #include"ResourceManager.h"
 #include "Projectile.h"
 
-void Projectile::Activate(CGameObject* bullet, XMFLOAT3 s, XMFLOAT3 e, float sp, float dist)
+void Projectile::Activate(XMFLOAT3 s, XMFLOAT3 e, float sp, float dist)
 {
-	//ReplaceChild(bullet);
 	start = s;
 	end = e;
 	speed = sp;
@@ -16,9 +15,12 @@ void Projectile::Activate(CGameObject* bullet, XMFLOAT3 s, XMFLOAT3 e, float sp,
 	direction = dir;
 	totalDistance = dist;
 	curDistance = 0.0f;
-
 	active = true;
 	SetPosition(s.x, s.y, s.z);
+
+	float yaw = atan2f(dir.x, dir.z);
+	float yawDegree = XMConvertToDegrees(yaw);
+	SetRotate(0.0f, yawDegree, 0.0f);
 }
 
 void Projectile::Animate(float fTimeElapsed)
@@ -43,8 +45,6 @@ void ProjectileManager::Init(CShader*s)
 {
 	bullets.resize(poolSize);
 	shader = s;
-	projectilePool[ProjectileType::RIFLE_BULLET]
-		= ResourceManager::Instance().GetModelPrototype(ModelName::BULLET); // 여기에 리소스 매니저로 불릿 할당;
 	for (int i = 0; i < poolSize; ++i)
 	{
 		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
@@ -60,7 +60,7 @@ void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT
 		if (not bullets[idx].IsActive())
 		{
 			float dist = Vector3::Distance(e, s);
-			bullets[idx].Activate(projectilePool[type], s, e, 50 , dist);
+			bullets[idx].Activate(s, e, 100 , dist);
 
 			lastUse = idx+1;
 			break;

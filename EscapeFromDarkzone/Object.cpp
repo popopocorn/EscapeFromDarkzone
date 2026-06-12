@@ -1237,6 +1237,22 @@ void CGameObject::Rotate(XMFLOAT4 *pxmf4Quaternion)
 	UpdateTransform(NULL);
 }
 
+void CGameObject::SetRotate(float fPitch, float fYaw, float fRoll)
+{
+	XMFLOAT3 pos = XMFLOAT3(m_xmf4x4ToParent._41, m_xmf4x4ToParent._42, m_xmf4x4ToParent._43);
+	XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(
+		XMConvertToRadians(fPitch),
+		XMConvertToRadians(fYaw),
+		XMConvertToRadians(fRoll)
+	);
+	XMStoreFloat4x4(&m_xmf4x4ToParent, mtxRotate);
+	m_xmf4x4ToParent._41 = pos.x;
+	m_xmf4x4ToParent._42 = pos.y;
+	m_xmf4x4ToParent._43 = pos.z;
+
+	UpdateTransform(NULL);
+}
+
 //#define _WITH_DEBUG_FRAME_HIERARCHY
 
 CTexture *CGameObject::FindReplicatedTexture(_TCHAR *pstrTextureName)

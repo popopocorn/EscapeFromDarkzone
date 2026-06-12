@@ -1089,7 +1089,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				{
 					XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-
+					bool isIntersects = false;
 					auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
 
 					for (auto& obj : *objs)
@@ -1111,11 +1111,35 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 								{
 									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
 								}
-
+								isIntersects = true;
 								if (fDist < hitDistance) hitDistance = fDist;
 								break;
 							}
 						}
+					}
+					if (not isIntersects)
+					{
+						auto* maps = m_ppShaders[SHADERIDX::MAP]->GetObj();
+						for (auto& obj : *maps)
+						{
+							if (!obj) continue;
+
+							const auto& oobbs = obj->GetOOBB();
+
+							for (BoundingOrientedBox* pOOBB : oobbs)
+							{
+								if (!pOOBB) continue;
+
+								float fDist = 0.0f;
+
+								if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+								{
+									if (fDist < hitDistance) hitDistance = fDist;
+									break;
+								}
+							}
+						}
+
 					}
 				}
 
