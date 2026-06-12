@@ -23,6 +23,7 @@ enum class ModelName
 	SHOTGUN,
 	SMG,
 
+	GRENADE,
 	LOOT_BOX,
 
 	MAP_FLOOR,

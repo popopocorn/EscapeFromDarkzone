@@ -684,44 +684,59 @@ void MainScene::ThrowGrenade()
 
 	m_fGrenadeLifeTimer = 0.0f;
 	m_bGrenadeFlying = true;
-
 	m_bGrenadeAimMode = false;
-
-	if (m_pPlayer)
-	{
-		m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
-	}
 
 	if (!m_pGrenadeDebugObject)
 	{
-		m_pGrenadeDebugObject = new CGameObject();
+		CGameObject* pGrenadePrototype = ResourceManager::Instance().GetModelPrototype(ModelName::GRENADE);
 
-		BoundingOrientedBox grenadeDebugOOBB;
-		grenadeDebugOOBB.Center = XMFLOAT3(0.0f, 0.0f, 0.0f);
-		grenadeDebugOOBB.Extents = XMFLOAT3(0.12f, 0.12f, 0.12f);
-		grenadeDebugOOBB.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
-
-		m_pGrenadeDebugObject->SetOOBB(grenadeDebugOOBB);
-		m_pGrenadeDebugObject->isColl = false;
-		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
-
-		GameObjects.push_back(unique_ptr<CGameObject>(m_pGrenadeDebugObject));
-
-		if (m_pDebugShader)
+		if (pGrenadePrototype)
 		{
-			m_pDebugShader->AddObject(m_pGrenadeDebugObject);
+			m_pGrenadeDebugObject = CGameObject::CreateModelInstance(pGrenadePrototype);
+			m_pGrenadeDebugObject->SetOOBB(NULL);
+			m_pGrenadeDebugObject->isColl = false;
+			m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+			m_pGrenadeDebugObject->SetScale(1.0f, 1.0f, 1.0f);
+
+			GameObjects.push_back(unique_ptr<CGameObject>(m_pGrenadeDebugObject));
+
+			CShader* pStandardShader = shadermanager->GetShader(ShaderType::STANDARD);
+			if (pStandardShader)
+			{
+				pStandardShader->addObjects(m_pGrenadeDebugObject);
+			}
+		}
+		else
+		{
+			OutputDebugString(L"[Grenade] ModelName::GRENADE prototype not found.\n");
 		}
 	}
 	else
 	{
 		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
 	}
 
-	OutputDebugString(L"[Grenade] Throw\n");
+	OutputDebugString(L"[Grenade] Real Throw\n");
 }
 
 void MainScene::UpdateGrenade(float fTimeElapsed)
 {
+	if (m_bGrenadeThrowPending)
+	{
+		m_fGrenadeThrowTimer += fTimeElapsed;
+
+		if (m_fGrenadeThrowTimer < m_fGrenadeReleaseTime)
+		{
+			return;
+		}
+
+		m_bGrenadeThrowPending = false;
+		m_fGrenadeThrowTimer = 0.0f;
+
+		ThrowGrenade();
+	}
+
 	if (!m_bGrenadeFlying) return;
 
 	m_fGrenadeLifeTimer += fTimeElapsed;
@@ -750,6 +765,7 @@ void MainScene::UpdateGrenade(float fTimeElapsed)
 	if (m_pGrenadeDebugObject)
 	{
 		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
 	}
 
 	if (m_fGrenadeLifeTimer >= m_fGrenadeExplodeDelay)
@@ -809,6 +825,7 @@ void MainScene::ExplodeGrenade()
 	if (m_pGrenadeDebugObject)
 	{
 		m_pGrenadeDebugObject->SetPosition(0.0f, -10000.0f, 0.0f);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
 	}
 
 	OutputDebugString(L"[Grenade] Explosion\n");
@@ -851,7 +868,6 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (m_bGrenadeAimMode)
 		{
-			ThrowGrenade();
 			ClampGameplayCursorToAimLine(hWnd);
 			return;
 		}
@@ -885,13 +901,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		XMFLOAT3 muzzleRight;
 		XMFLOAT3 muzzleUp;
 
-		GetCurrentPlayerMuzzleInfo(
-			m_pPlayer,
-			muzzlePos,
-			muzzleLook,
-			muzzleRight,
-			muzzleUp
-		);
+		GetCurrentPlayerMuzzleInfo(m_pPlayer, muzzlePos, muzzleLook, muzzleRight, muzzleUp);
 
 		PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
 		EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
@@ -907,7 +917,6 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		{
 			if (NetworkManager::Instance().IsConnected())
 			{
-				//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 				NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 			}
 			else
@@ -947,7 +956,24 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 	case WM_LBUTTONUP:
 	{
-		ClampGameplayCursorToAimLine(hWnd);
+		if (m_bGrenadeAimMode)
+		{
+			if (!m_bGrenadeThrowPending && !m_bGrenadeFlying)
+			{
+				m_bGrenadeThrowPending = true;
+				m_fGrenadeThrowTimer = 0.0f;
+
+				if (m_pPlayer && !m_pPlayer->IsGrenadeState())
+				{
+					m_pPlayer->ChangeState(std::make_unique<PlayerGrenade>());
+				}
+
+				OutputDebugString(L"[Grenade] Throw Anim Start. Real grenade delayed.\n");
+			}
+
+			ClampGameplayCursorToAimLine(hWnd);
+			return;
+		}
 
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
@@ -998,7 +1024,6 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			currentDistX10 += 10.0f;
 
 		m_pPlayer->cameraDistance = currentDistX10 / 10.0f;
-
 		m_pPlayer->cameraDistance = clamp(m_pPlayer->cameraDistance, 3.0f, 15.0f);
 
 		if (m_pPlayer->GetCamera())
@@ -1128,8 +1153,20 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 				return true;
 			}
 
-			SetGrenadeAimMode(hWnd, !m_bGrenadeAimMode);
+			if (m_bGrenadeFlying)
+			{
+				return true;
+			}
+
+			if (m_pPlayer && m_pPlayer->IsGrenadeState())
+			{
+				return true;
+			}
+
+			SetGrenadeAimMode(hWnd, true);
 			ClampGameplayCursorToAimLine(hWnd);
+
+			OutputDebugString(L"[Grenade] Aim Mode Enter By G\n");
 			return true;
 		}
 
@@ -1167,7 +1204,6 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				//NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
 				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
 			}
 			return true;
@@ -1177,7 +1213,6 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				//NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
 				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
 			}
 			return true;
