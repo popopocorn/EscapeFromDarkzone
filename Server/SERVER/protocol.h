@@ -264,7 +264,8 @@ struct CS_HIT_PLAYER_PACKET {
 	char          type;
 	float         ray_ox, ray_oy, ray_oz;
 	float         ray_dx, ray_dy, ray_dz;
-	char          weapon_id;				// 나중에
+	short         weapon_type;				// WeaponType
+	short         weapon_grade;				// WeaponGrade
 	unsigned int  fire_time;				// 나중에
 };
 
