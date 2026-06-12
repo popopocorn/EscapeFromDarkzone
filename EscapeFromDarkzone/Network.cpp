@@ -1,7 +1,7 @@
 ﻿//#include "stdafx.h"
 #include "Network.h"
 
-bool NetworkManager::Init(const char* playerName) 
+bool NetworkManager::Init(const char* playerName)
 {
 	// WSAStartup
 	if (WSAStartup(MAKEWORD(2, 2), &m_wsaData) != 0) {
@@ -28,7 +28,7 @@ bool NetworkManager::Init(const char* playerName)
 	// 서버 주소 설정
 	ZeroMemory(&m_serverAddr, sizeof(m_serverAddr));
 	m_serverAddr.sin_family = AF_INET;
-	m_serverAddr.sin_port   = htons(PORT_NUM);
+	m_serverAddr.sin_port = htons(PORT_NUM);
 	inet_pton(AF_INET, SERVER_ADDR, &m_serverAddr.sin_addr);
 
 	// WSAConnect
@@ -116,7 +116,7 @@ bool NetworkManager::IsConnected()
 		return false;
 	}
 
-	int err    = 0;
+	int err = 0;
 	int errLen = sizeof(err);
 	if (getsockopt(m_socket, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&err), &errLen) == SOCKET_ERROR || err != 0) {
 		OutputDebugString(L"[Network] IsConnected() False.\n");
@@ -168,9 +168,9 @@ void NetworkManager::Recv()
 
 		// 패킷 예외처리
 		if (packetSize == 0 || packetSize > BUF_SIZE) {
-		    OutputDebugString(L"[Network] Incorrect packet recieved.\n");
-		    m_bConnected = false;
-		    return;
+			OutputDebugString(L"[Network] Incorrect packet recieved.\n");
+			m_bConnected = false;
+			return;
 		}
 
 		// 패킷이 전부 오지 않았으면 탈출
@@ -289,7 +289,7 @@ bool NetworkManager::SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const Direct
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
-bool NetworkManager::SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId)
+bool NetworkManager::SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade)
 {
 	CS_HIT_PLAYER_PACKET pkt;
 	ZeroMemory(&pkt, sizeof(pkt));
@@ -301,7 +301,8 @@ bool NetworkManager::SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const Dir
 	pkt.ray_dx = rayDirection.x;
 	pkt.ray_dy = rayDirection.y;
 	pkt.ray_dz = rayDirection.z;
-	pkt.weapon_id = weaponId;
+	pkt.weapon_type = weaponType;
+	pkt.weapon_grade = weaponGrade;
 	pkt.fire_time = 0;  // 후속 lag compensation 시 사용
 
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);

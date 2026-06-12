@@ -15,9 +15,9 @@ bool NetSession::FireHit(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFL
 	return NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, weaponType, weaponGrade);
 }
 
-bool NetSession::FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId)
+bool NetSession::FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade)
 {
-	return NetworkManager::Instance().SendHitPlayer(rayOrigin, rayDirection, weaponId);
+	return NetworkManager::Instance().SendHitPlayer(rayOrigin, rayDirection, weaponType, weaponGrade);
 }
 
 bool NetSession::Craft(ItemID target)

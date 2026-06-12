@@ -25,7 +25,7 @@ public:
 	// NetworkManager의 Send*와 인자 1:1 동일
 	bool Move(char inputs, float yaw, unsigned int move_time);
 	bool FireHit(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
-	bool FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId);
+	bool FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
 	bool Craft(ItemID target);
 	bool InventoryClick(char action, short slotidx);
 	bool LootPickup(short box_id, short slotidx);

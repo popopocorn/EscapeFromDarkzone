@@ -442,7 +442,15 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 			m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 		}
-		
+
+		// PvP 송신 (단발 무기도 첫 발에서 전송)
+		if (NetworkManager::Instance().IsConnected())
+		{
+			short wType = m_pPlayer->GetEquippedWeaponTypeForWire();
+			short wGrade = m_pPlayer->GetEquippedWeaponGradeForWire();
+			NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
+		}
+
 		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 		{
 			if (NetworkManager::Instance().IsConnected())
@@ -1081,7 +1089,9 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 			if (NetworkManager::Instance().IsConnected()) 
 			{
-				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, 0);
+				short wType = m_pPlayer->GetEquippedWeaponTypeForWire();
+				short wGrade = m_pPlayer->GetEquippedWeaponGradeForWire();
+				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
 			}
 
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
