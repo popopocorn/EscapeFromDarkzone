@@ -275,6 +275,11 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 			dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
 		}
 
+		if (effectId == EffectID::GRENADE_EXPLOSION)
+		{
+			dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+		}
+
 		if (gf.m_pScene.empty())
 		{
 			break;
@@ -296,12 +301,6 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		}
 
 		pMainScene->PlayEffectFromServerLikeRequest(effectId, pos, dir, ownerId, 0.0f);
-
-		wchar_t buf[256];
-		swprintf_s(buf, L"[EffectWorld] effect=%d pos=(%.2f, %.2f, %.2f) dir=(%.2f, %.2f, %.2f)\n",
-			static_cast<int>(effectId), pos.x, pos.y, pos.z, dir.x, dir.y, dir.z);
-		OutputDebugStringW(buf);
-
 		break;
 	}
 	default:
