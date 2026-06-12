@@ -68,10 +68,6 @@ constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STO
 constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
 constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
-// PvP 사격
-constexpr short PVP_FIRE_DAMAGE = 15;
-constexpr float PVP_FIRE_RANGE = 100.0f;
-
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
@@ -1872,9 +1868,24 @@ void process_packet(int c_id, char* packet)
 		XMVECTOR dir = XMVector3Normalize(
 			XMVectorSet(p->ray_dx, p->ray_dy, p->ray_dz, 0.0f));
 
+		// 공격자 무기 spec (PvE HIT_NPC와 동일 테이블 공유)
+		WeaponSpec spec = LookupWeaponSpec(
+			static_cast<WeaponType>(p->weapon_type),
+			static_cast<WeaponGrade>(p->weapon_grade));
+
+		/*
+		{
+			std::cout << "[debug pvp weapon type]: " << static_cast<int>(p->weapon_type)
+				<< " grade:" << static_cast<int>(p->weapon_grade)
+				<< " range:" << spec.range
+				<< " damage:" << spec.damage
+				<< "\n";
+		}
+		*/
+
 		// 락 잡아서 후보만 스냅샷
 		short  best_id = -1;
-		float  best_t = PVP_FIRE_RANGE;
+		float  best_t = spec.range;
 
 		for (int i = 0; i < MAX_USER; ++i) {
 			if (i == c_id) continue;   // 자기 자신 제외
@@ -1899,11 +1910,12 @@ void process_packet(int c_id, char* packet)
 
 		// 명중 1번만 짧게 락, hp조정
 		if (best_id >= 0) {
+			short dmg = ComputeDamage(spec, best_t);   // 거리 감쇠 포함
 			short new_hp = 0;
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
-					clients[best_id].hp -= PVP_FIRE_DAMAGE;
+					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
 					new_hp = clients[best_id].hp;
 				}
