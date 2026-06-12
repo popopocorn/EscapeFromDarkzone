@@ -10,9 +10,9 @@ bool NetSession::Move(char inputs, float yaw, unsigned int move_time)
 	return NetworkManager::Instance().SendMove(inputs, yaw, move_time);
 }
 
-bool NetSession::FireHit(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId)
+bool NetSession::FireHit(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade)
 {
-	return NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, weaponId);
+	return NetworkManager::Instance().SendHitNpc(rayOrigin, rayDirection, weaponType, weaponGrade);
 }
 
 bool NetSession::FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId)

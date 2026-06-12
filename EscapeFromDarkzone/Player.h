@@ -230,6 +230,10 @@ public:
 	XMFLOAT2 GetMoveInput2D() const;
 	int GetRunAnimationFromInput(const XMFLOAT2& dir) const;
 	PlayerWeaponType GetCurrentPlayerWeaponType() const;
+
+	short GetEquippedWeaponTypeForWire() const;
+	short GetEquippedWeaponGradeForWire() const;
+
 	bool IsCurrentWeaponAutomatic() const;
 	int GetIdleAnimationByWeapon() const;
 	int GetGrenadeAnimationByWeapon() const;

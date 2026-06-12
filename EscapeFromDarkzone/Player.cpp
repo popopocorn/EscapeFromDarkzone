@@ -1294,6 +1294,20 @@ PlayerWeaponType CPlayer::GetCurrentPlayerWeaponType() const
 	return GetPlayerWeaponTypeFromItemType(m_pEquippedWeaponItem->GetType());
 }
 
+short CPlayer::GetEquippedWeaponTypeForWire() const
+{
+	if (!m_pEquippedWeaponItem)
+		return static_cast<short>(ItemType::RIFLE);
+	return static_cast<short>(m_pEquippedWeaponItem->GetType());
+}
+
+short CPlayer::GetEquippedWeaponGradeForWire() const
+{
+	if (!m_pEquippedWeaponItem)
+		return static_cast<short>(ItemGrade::GRADE_1);
+	return static_cast<short>(m_pEquippedWeaponItem->GetGrade());
+}
+
 bool CPlayer::IsCurrentWeaponAutomatic() const
 {
 	switch (GetCurrentPlayerWeaponType())

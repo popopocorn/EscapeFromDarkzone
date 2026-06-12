@@ -270,7 +270,7 @@ bool NetworkManager::SendInventoryClick(char action, short slotidx)
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
-bool NetworkManager::SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, char weaponId)
+bool NetworkManager::SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade)
 {
 	CS_HIT_NPC_PACKET pkt;
 	ZeroMemory(&pkt, sizeof(pkt));
@@ -282,7 +282,8 @@ bool NetworkManager::SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const Direct
 	pkt.ray_dx = rayDirection.x;
 	pkt.ray_dy = rayDirection.y;
 	pkt.ray_dz = rayDirection.z;
-	pkt.weapon_id = weaponId;
+	pkt.weapon_type = weaponType;
+	pkt.weapon_grade = weaponGrade;
 	pkt.fire_time = 0;  // 후속 lag compensation 시 사용
 
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);

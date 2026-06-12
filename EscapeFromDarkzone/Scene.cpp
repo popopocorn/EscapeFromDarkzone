@@ -448,7 +448,11 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			if (NetworkManager::Instance().IsConnected())
 			{
 				//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
-				NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
+				short wType = m_pPlayer->GetEquippedWeaponTypeForWire();
+				short wGrade = m_pPlayer->GetEquippedWeaponGradeForWire();
+				NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
+
+				//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 			}
 			else
 			{
@@ -1085,7 +1089,11 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				if (NetworkManager::Instance().IsConnected())
 				{
 					//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
-					NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
+					//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
+
+					short wType = m_pPlayer->GetEquippedWeaponTypeForWire();
+					short wGrade = m_pPlayer->GetEquippedWeaponGradeForWire();
+					NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
 				}
 				else
 				{
