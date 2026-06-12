@@ -173,8 +173,9 @@ struct CS_HIT_NPC_PACKET {
 	char          type;
 	float         ray_ox, ray_oy, ray_oz;
 	float         ray_dx, ray_dy, ray_dz;
-	char          weapon_id;				// 나중에
-	unsigned int  fire_time;				// 나중에
+	short         weapon_type;     // WeaponType (PISTOL=0..SHOTGUN=3)
+	short         weapon_grade;    // WeaponGrade (BASIC=0..GRADE_4=4)
+	unsigned int  fire_time;
 };
 
 struct SC_INVENTORY_UPDATE_PACKET {
