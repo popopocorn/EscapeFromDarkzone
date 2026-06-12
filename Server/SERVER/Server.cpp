@@ -52,9 +52,8 @@ constexpr float NPC_BURST_SHOT_INTERVAL		= 0.15f;
 constexpr float NPC_BURST_REST_DURATION		= 1.0f;
 
 // 스트레이프 / 재장전
-constexpr float NPC_STRAFE_DURATION			= 1.2f;
-constexpr int   NPC_MAG_AMMO				= 12;
-constexpr float NPC_RELOAD_DURATION			= 2.0f;
+constexpr float NPC_STRAFE_DURATION = 1.2f;
+// 탄창 / 재장전시간은 무기 테이블로 
 
 // 시야각
 constexpr float NPC_VIEW_ANGLE_DEG			= 120.0f;
@@ -637,11 +636,18 @@ static void StartNpcBurst(SERVER_NPC& npc)
 	npc.burst_shot_timer = 0.0f;
 }
 
+static WeaponSpec GetNpcWeaponSpec(const SERVER_NPC& npc)
+{
+	return LookupWeaponSpec(
+		static_cast<WeaponType>(npc.weapon_type),
+		static_cast<WeaponGrade>(npc.weapon_grade));
+}
+
 static void StartNpcReload(SERVER_NPC& npc)
 {
 	if (npc.reloading) return;
 	npc.reloading = true;
-	npc.reload_timer = NPC_RELOAD_DURATION;
+	npc.reload_timer = GetNpcWeaponSpec(npc).reloadTime;
 	npc.burst_shots_left = 0;
 	npc.burst_shot_timer = 0.0f;
 	npc.burst_rest_timer = 0.0f;
@@ -655,7 +661,7 @@ static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 	if (npc.reload_timer <= 0.0f) {
 		npc.reloading = false;
 		npc.reload_timer = 0.0f;
-		npc.current_ammo = NPC_MAG_AMMO;
+		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;
 		std::cout << "[NPC " << npc.id << "] Reload Finish\n";
 		return true;
 	}
@@ -722,9 +728,9 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
 	if (npc.current_ammo <= 0) {
-		StartNpcReload(npc); 
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot); 
-		return; 
+		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		return;
 	}
 
 	npc.current_ammo--;
@@ -871,7 +877,7 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 		box.y = npc.position.y;
 		box.z = npc.position.z;
 
-		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], ["<< box.npc_id << "]\n";
+		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], [" << box.npc_id << "]\n";
 
 		for (int i = 0; i < INVENTORY_SIZE; ++i) {
 			box.items[i] = npc._inventory[i].item;
@@ -1037,7 +1043,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 	}
 
-		break;
+	break;
 	case NpcInputEvent::NEW_CLIENT_JOINED:
 	{
 		std::cout << "[NPC] NEW_CLIENT_JOINED received, client "
@@ -1112,7 +1118,7 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 	ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
 }
 
-static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	// 1. 가장 가까운 플레이어 검색
 	float dist_sq;
@@ -1461,7 +1467,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	}
 }
 
-static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	npc.die_timer += dt;
 	if (npc.die_timer < NPC_DIE_DURATION) return;
@@ -1491,21 +1497,21 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	switch (npc.state) {
-	case NPC_STATE_IDLE: 
-		UpdateNpcIdle(npc, dt, player_snapshot); 
+	case NPC_STATE_IDLE:
+		UpdateNpcIdle(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_RUN:  
-		UpdateNpcRun(npc, dt, player_snapshot); 
+	case NPC_STATE_RUN:
+		UpdateNpcRun(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_RETURN: 
+	case NPC_STATE_RETURN:
 		UpdateNpcReturn(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_ATTACK: 
+	case NPC_STATE_ATTACK:
 	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
 		UpdateNpcAttack(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_DIE:  
-		UpdateNpcDie(npc, dt, player_snapshot); 
+	case NPC_STATE_DIE:
+		UpdateNpcDie(npc, dt, player_snapshot);
 		break;
 	}
 }
@@ -1842,7 +1848,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
-		CS_HIT_NPC_PACKET* p = 
+		CS_HIT_NPC_PACKET* p =
 			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
 
 		NpcInputEvent ev{};
@@ -2053,7 +2059,7 @@ void worker_thread(HANDLE h_iocp)
 				clients[client_id]._prev_remain = 0;
 
 				clients[client_id]._collNormals.clear();
-				
+
 				clients[client_id]._socket = g_c_socket;
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket),
 					h_iocp, client_id, 0);
@@ -2172,6 +2178,7 @@ int main()
 		npc.yaw = 0.0f;
 		npc.hp = 100;
 		npc.max_hp = 100;
+		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;   // 스폰 시 탄창 채움
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
