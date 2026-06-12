@@ -22,6 +22,7 @@ enum class ModelName
 	PISTOL,
 	SHOTGUN,
 	SMG,
+	BULLET,
 
 	LOOT_BOX,
 

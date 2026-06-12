@@ -1,4 +1,5 @@
 #pragma once
+#include"Singletone.h"
 enum class ProjectileType {
 	RIFLE_BULLET,
 };
@@ -20,7 +21,8 @@ public:
 
 class CShader;
 
-class ProjectileManager {
+class ProjectileManager :public Singleton<ProjectileManager>{
+	friend class Singleton<ProjectileManager>;
 private:
 	vector<Projectile> bullets;
 	unordered_map<ProjectileType, CGameObject*>projectilePool;
@@ -33,5 +35,7 @@ public:
 	void Update(float fTimeElapsed);
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch);
 
-
+private:
+	ProjectileManager() {}
+	~ProjectileManager() {}
 };

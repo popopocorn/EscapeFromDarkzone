@@ -19,7 +19,7 @@
 #include "InventoryManager.h"
 #include "ResourceManager.h"
 #include "GameFramework.h"
-
+#include"Projectile.h"
 #include "Network.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
@@ -793,7 +793,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		stdshader->addObjects(map);
 		++name;
 	}
-
+	ProjectileManager::GetInstance()->Init(stdshader);
 
 
 	m_ppShaders.push_back(stdshader);
@@ -1076,6 +1076,9 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 			}
 
+			float maxRange = 1000.0f;
+			float hitDistance = maxRange;
+
 			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 			{
 				if (NetworkManager::Instance().IsConnected())
@@ -1108,11 +1111,22 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 								{
 									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
 								}
+
+								if (fDist < hitDistance) hitDistance = fDist;
 								break;
 							}
 						}
 					}
 				}
+
+				XMFLOAT3 endPos;
+				endPos.x = muzzlePos.x + muzzleLook.x * hitDistance;
+				endPos.y = muzzlePos.y + muzzleLook.y * hitDistance;
+				endPos.z = muzzlePos.z + muzzleLook.z * hitDistance;
+
+				// 매니저를 통해 총알 스폰
+				ProjectileManager::GetInstance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, endPos);
+			
 			}
 		}
 	}
@@ -1167,6 +1181,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
+	ProjectileManager::GetInstance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
@@ -1218,7 +1233,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
-
+	ProjectileManager::GetInstance()->Render(pd3dCommandList, pCamera, true);
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);

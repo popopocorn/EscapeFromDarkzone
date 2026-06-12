@@ -1,13 +1,13 @@
-#include"Object.h"
 #include"stdafx.h"
-#include"Shader.h"
-#include "Projectile.h"
-#include"ResourceManager.h"
 
+#include"Object.h"
+#include"Shader.h"
+#include"ResourceManager.h"
+#include "Projectile.h"
 
 void Projectile::Activate(CGameObject* bullet, XMFLOAT3 s, XMFLOAT3 e, float sp, float dist)
 {
-	ReplaceChild(bullet);
+	//ReplaceChild(bullet);
 	start = s;
 	end = e;
 	speed = sp;
@@ -43,7 +43,13 @@ void ProjectileManager::Init(CShader*s)
 {
 	bullets.resize(poolSize);
 	shader = s;
-	projectilePool[ProjectileType::RIFLE_BULLET]; // 여기에 리소스 매니저로 불릿 할당;
+	projectilePool[ProjectileType::RIFLE_BULLET]
+		= ResourceManager::Instance().GetModelPrototype(ModelName::BULLET); // 여기에 리소스 매니저로 불릿 할당;
+	for (int i = 0; i < poolSize; ++i)
+	{
+		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
+		bullets[i].SetChild(pBulletInstance);
+	}
 }
 
 void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 e)
