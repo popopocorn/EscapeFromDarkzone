@@ -311,6 +311,72 @@ static XMFLOAT3 GetSparkPositionByEnemyWeapon(EnemyWeaponType weaponType, const 
 
 	return sparkPos;
 }
+static XMFLOAT3 SafeNormalizeVector(XMFLOAT3 v, const XMFLOAT3& fallback)
+{
+	if (Vector3::Length(v) < 0.0001f)
+		return fallback;
+
+	return Vector3::Normalize(v);
+}
+static XMFLOAT3 ComputeOOBBHitNormal(const BoundingOrientedBox& box, const XMFLOAT3& hitPoint)
+{
+	XMVECTOR vCenter = XMLoadFloat3(&box.Center);
+	XMVECTOR vOrientation = XMLoadFloat4(&box.Orientation);
+	vOrientation = XMQuaternionNormalize(vOrientation);
+
+	XMVECTOR vInvOrientation = XMQuaternionInverse(vOrientation);
+	XMVECTOR vHit = XMLoadFloat3(&hitPoint);
+	XMVECTOR vLocal = XMVector3Rotate(vHit - vCenter, vInvOrientation);
+
+	XMFLOAT3 localPoint;
+	XMStoreFloat3(&localPoint, vLocal);
+
+	float distX = fabsf(box.Extents.x - fabsf(localPoint.x));
+	float distY = fabsf(box.Extents.y - fabsf(localPoint.y));
+	float distZ = fabsf(box.Extents.z - fabsf(localPoint.z));
+
+	XMFLOAT3 localNormal = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	if (distX <= distY && distX <= distZ)
+	{
+		localNormal = XMFLOAT3((localPoint.x >= 0.0f) ? 1.0f : -1.0f, 0.0f, 0.0f);
+	}
+	else if (distY <= distX && distY <= distZ)
+	{
+		localNormal = XMFLOAT3(0.0f, (localPoint.y >= 0.0f) ? 1.0f : -1.0f, 0.0f);
+	}
+	else
+	{
+		localNormal = XMFLOAT3(0.0f, 0.0f, (localPoint.z >= 0.0f) ? 1.0f : -1.0f);
+	}
+
+	XMVECTOR vLocalNormal = XMLoadFloat3(&localNormal);
+	XMVECTOR vWorldNormal = XMVector3Rotate(vLocalNormal, vOrientation);
+	vWorldNormal = XMVector3Normalize(vWorldNormal);
+
+	XMFLOAT3 worldNormal;
+	XMStoreFloat3(&worldNormal, vWorldNormal);
+
+	return SafeNormalizeVector(worldNormal, XMFLOAT3(0.0f, 0.0f, 1.0f));
+}
+static XMFLOAT3 ReflectVelocityByNormal(const XMFLOAT3& velocity, const XMFLOAT3& normal)
+{
+	XMVECTOR vVelocity = XMLoadFloat3(&velocity);
+	XMVECTOR vNormal = XMLoadFloat3(&normal);
+	vNormal = XMVector3Normalize(vNormal);
+
+	float dot = XMVectorGetX(XMVector3Dot(vVelocity, vNormal));
+
+	if (dot >= 0.0f)
+		return velocity;
+
+	XMVECTOR vReflected = vVelocity - (2.0f * dot * vNormal);
+
+	XMFLOAT3 reflected;
+	XMStoreFloat3(&reflected, vReflected);
+
+	return reflected;
+}
 
 CScene::CScene(CGameFramework* game)
 {
@@ -643,6 +709,83 @@ float MainScene::CalculateGrenadeMaxAimDistance()
 	return nearest;
 }
 
+bool MainScene::CheckGrenadeMapCollision(const XMFLOAT3& prevPos, const XMFLOAT3& nextPos, XMFLOAT3& outHitPos, XMFLOAT3& outHitNormal)
+{
+	XMFLOAT3 move = XMFLOAT3(nextPos.x - prevPos.x, nextPos.y - prevPos.y, nextPos.z - prevPos.z);
+	float moveLength = Vector3::Length(move);
+
+	if (moveLength < 0.0001f)
+		return false;
+
+	XMFLOAT3 moveDir = Vector3::Normalize(move);
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&prevPos);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&moveDir));
+
+	bool bHit = false;
+	float nearestDist = moveLength;
+
+	auto CheckObject = [&](CGameObject* pObj)
+		{
+			if (!pObj) return;
+			if (pObj == m_pGrenadeDebugObject) return;
+
+			const auto& oobbs = pObj->GetOOBB();
+
+			for (BoundingOrientedBox* pOOBB : oobbs)
+			{
+				if (!pOOBB) continue;
+
+				if (pOOBB->Extents.y < 0.30f)
+					continue;
+
+				BoundingOrientedBox expandedBox = *pOOBB;
+				expandedBox.Extents.x += m_fGrenadeRadius;
+				expandedBox.Extents.y += m_fGrenadeRadius;
+				expandedBox.Extents.z += m_fGrenadeRadius;
+
+				float hitDist = 0.0f;
+
+				if (expandedBox.Intersects(rayOrigin, rayDir, hitDist))
+				{
+					if (hitDist >= 0.0f && hitDist <= nearestDist)
+					{
+						nearestDist = hitDist;
+						bHit = true;
+
+						outHitPos.x = prevPos.x + moveDir.x * hitDist;
+						outHitPos.y = prevPos.y + moveDir.y * hitDist;
+						outHitPos.z = prevPos.z + moveDir.z * hitDist;
+
+						outHitNormal = ComputeOOBBHitNormal(expandedBox, outHitPos);
+					}
+				}
+			}
+		};
+
+	if (!m_vVisionMapChunks.empty())
+	{
+		for (CGameObject* pObj : m_vVisionMapChunks)
+		{
+			CheckObject(pObj);
+		}
+	}
+	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		auto* mapObjs = m_ppShaders[SHADERIDX::MAP]->GetObj();
+
+		if (mapObjs)
+		{
+			for (auto& obj : *mapObjs)
+			{
+				CheckObject(obj);
+			}
+		}
+	}
+
+	return bHit;
+}
+
 void MainScene::ThrowGrenade()
 {
 	if (!m_pPlayer) return;
@@ -741,11 +884,44 @@ void MainScene::UpdateGrenade(float fTimeElapsed)
 
 	m_fGrenadeLifeTimer += fTimeElapsed;
 
+	XMFLOAT3 prevPos = m_xmf3GrenadePosition;
+
 	m_xmf3GrenadeVelocity.y += m_fGrenadeGravity * fTimeElapsed;
 
-	m_xmf3GrenadePosition.x += m_xmf3GrenadeVelocity.x * fTimeElapsed;
-	m_xmf3GrenadePosition.y += m_xmf3GrenadeVelocity.y * fTimeElapsed;
-	m_xmf3GrenadePosition.z += m_xmf3GrenadeVelocity.z * fTimeElapsed;
+	XMFLOAT3 nextPos = m_xmf3GrenadePosition;
+	nextPos.x += m_xmf3GrenadeVelocity.x * fTimeElapsed;
+	nextPos.y += m_xmf3GrenadeVelocity.y * fTimeElapsed;
+	nextPos.z += m_xmf3GrenadeVelocity.z * fTimeElapsed;
+
+	XMFLOAT3 hitPos;
+	XMFLOAT3 hitNormal;
+
+	if (CheckGrenadeMapCollision(prevPos, nextPos, hitPos, hitNormal))
+	{
+		m_xmf3GrenadePosition.x = hitPos.x + hitNormal.x * (m_fGrenadeRadius + 0.03f);
+		m_xmf3GrenadePosition.y = hitPos.y + hitNormal.y * (m_fGrenadeRadius + 0.03f);
+		m_xmf3GrenadePosition.z = hitPos.z + hitNormal.z * (m_fGrenadeRadius + 0.03f);
+
+		m_xmf3GrenadeVelocity = ReflectVelocityByNormal(m_xmf3GrenadeVelocity, hitNormal);
+
+		m_xmf3GrenadeVelocity.x *= m_fGrenadeWallBounceDamping;
+		m_xmf3GrenadeVelocity.y *= m_fGrenadeWallBounceDamping;
+		m_xmf3GrenadeVelocity.z *= m_fGrenadeWallBounceDamping;
+
+		m_xmf3GrenadeVelocity.x *= m_fGrenadeWallFriction;
+		m_xmf3GrenadeVelocity.z *= m_fGrenadeWallFriction;
+
+		if (Vector3::Length(m_xmf3GrenadeVelocity) < 0.35f)
+		{
+			m_xmf3GrenadeVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		}
+
+		OutputDebugString(L"[Grenade] Map Collision Bounce\n");
+	}
+	else
+	{
+		m_xmf3GrenadePosition = nextPos;
+	}
 
 	if (m_xmf3GrenadePosition.y <= m_fGrenadeGroundY)
 	{

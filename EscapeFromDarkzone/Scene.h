@@ -212,6 +212,10 @@ public:
 	float m_fGrenadeBounceDamping = 0.45f;
 	float m_fGrenadeGroundY = 0.2f;
 
+	float m_fGrenadeRadius = 0.18f;
+	float m_fGrenadeWallBounceDamping = 0.55f;
+	float m_fGrenadeWallFriction = 0.75f;
+
 	bool m_bGrenadeThrowPending = false;
 	float m_fGrenadeThrowTimer = 0.0f;
 	float m_fGrenadeReleaseTime = 2.1f;
@@ -241,6 +245,7 @@ private:
 	void ThrowGrenade();
 	void UpdateGrenade(float fTimeElapsed);
 	void ExplodeGrenade();
+	bool CheckGrenadeMapCollision(const XMFLOAT3& prevPos, const XMFLOAT3& nextPos, XMFLOAT3& outHitPos, XMFLOAT3& outHitNormal);
 public:
 
 	//이펙트	재생용 함수
