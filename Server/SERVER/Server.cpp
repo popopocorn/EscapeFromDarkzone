@@ -73,9 +73,6 @@ constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPO
 constexpr short PVP_FIRE_DAMAGE = 15;
 constexpr float PVP_FIRE_RANGE = 100.0f;
 
-// NPC 사격 (플레이어 무기와 분리 — 밸런스 독립 조절)
-constexpr short NPC_FIRE_DAMAGE = 5;       // 발당 데미지
-constexpr float NPC_FIRE_RANGE = 12.0f;   // 사격 유효 사거리 (attack range보다 약간 길게)
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
@@ -732,6 +729,11 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 
 	npc.current_ammo--;
 
+	// NPC 무기 spec
+	WeaponSpec spec = LookupWeaponSpec(
+		static_cast<WeaponType>(npc.weapon_type),
+		static_cast<WeaponGrade>(npc.weapon_grade));
+
 	XMFLOAT3 forward = GetForwardXZ(npc.yaw);
 
 	if (NPC_FIRE_SPREAD_RAD > 0.0f) {		// 나중에 원뿔 탄퍼짐 적용시킬 때 if문 삭제할 것
@@ -758,16 +760,19 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		BoundingOrientedBox pbox = MakePlayerOOBB(tpos, player_snapshot[target_id].yaw);
 
 		float t{}; // Intersects out 파라미터
-		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= NPC_FIRE_RANGE) {
+		float hit_dist = 0.0f;
+		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= spec.range) {
 			hit = true;
+			hit_dist = t;
 		}
 
 		if (hit) {
+			short dmg = ComputeDamage(spec, hit_dist);   // 거리 감쇠 포함
 			short new_hp = 0;
 			{
 				std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
 				if (clients[target_id]._state == ST_INGAME) {
-					clients[target_id].hp -= NPC_FIRE_DAMAGE;
+					clients[target_id].hp -= dmg;
 					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 					new_hp = clients[target_id].hp;
 				}

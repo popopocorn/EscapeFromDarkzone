@@ -49,6 +49,9 @@ void init_npcs()
         npc.reloading = false;
         npc.reload_timer = 0.0f;
 
+        npc.weapon_type = static_cast<short>(WeaponType::PISTOL);   // 기본 무기
+        npc.weapon_grade = static_cast<short>(WeaponGrade::BASIC);
+
         // 인벤토리 관련 초기화
         npc._inventory.fill(ItemSlot{});
         npc.loot_active = false;

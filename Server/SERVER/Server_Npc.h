@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 #include <chrono>
 #include "protocol.h"
+#include "Server_Weapon.h"   // WeaponType/WeaponGrade
 
 using namespace DirectX;
 
@@ -25,12 +26,12 @@ struct SERVER_NPC {
     float                  path_update_timer;  // A* 주기 (1초마다)
     std::vector<XMFLOAT3>  waypoints;          // 현재 경로
     int                    way_idx;            // 다음 목표 waypoint 인덱스
-    
+
     float                  die_timer;          // Die 상태 진입 후 경과 시간
 
     std::vector<XMFLOAT3>  coll_normals;       // 이번 틱 누적 충돌 노멀 (아직안씀?)
 
-	float think_timer;          // AI 행동 주기
+    float think_timer;              // AI 행동 주기
 
     float    lose_sight_timer;      // 마지막 목격 처리 관련
     bool     has_last_seen_player;
@@ -53,6 +54,9 @@ struct SERVER_NPC {
     bool     reloading;
     float    reload_timer;
 
+    short    weapon_type;
+    short    weapon_grade;
+
     std::array<ItemSlot, INVENTORY_SIZE>    _inventory;     // 루팅박스 내용물
     bool                                    loot_active;    // 박스 활성 여부
     std::chrono::steady_clock::time_point   death_time;     // lifetime 기준
@@ -70,7 +74,9 @@ struct NpcInputEvent {
     int      attacker_client_id;
     XMFLOAT3 ray_origin;
     XMFLOAT3 ray_direction;
-    char     weapon_id;
+
+    short    weapon_type;
+    short    weapon_grade;
 
     int      new_client_id;
 };
