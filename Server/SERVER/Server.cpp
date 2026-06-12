@@ -18,6 +18,7 @@
 #include "Server_Npc.h"
 #include "Server_AI.h"
 #include "Server_Effect.h"
+#include "Server_Weapon.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -951,26 +952,6 @@ static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
 	normals.clear();
 }
 
-static short WeaponDamage(char weapon_id)
-{
-	switch (weapon_id) {
-	case 0:  
-		return 10;
-	default: 
-		return 0;
-	}
-}
-
-static float WeaponRange(char weapon_id)
-{
-	switch (weapon_id) {
-	case 0:  
-		return 100.0f;
-	default: 
-		return 0.0f;
-	}
-}
-
 static void EnterNpcAttack(SERVER_NPC&);
 
 static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
@@ -1026,7 +1007,9 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
 		XMVECTOR dir = XMVector3Normalize(XMVectorSet(e.ray_direction.x, e.ray_direction.y, e.ray_direction.z, 0.0f));
 
-		float max_range = WeaponRange(e.weapon_id);
+		WeaponSpec spec = LookupWeaponSpec((WeaponType)e.weapon_type, (WeaponGrade)e.weapon_grade);
+
+		float max_range = spec.range;
 		if (max_range <= 0.0f) return;
 
 		short best_id = -1;
@@ -1042,8 +1025,10 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 
 		if (best_id >= 0) {
-			short damage = WeaponDamage(e.weapon_id);
-			ApplyDamage(g_npcs[best_id], damage, e.attacker_client_id, player_snapshot);
+			short dmg = ComputeDamage(spec, best_t);
+			if (dmg > 0) {
+				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
+			}
 		}
 	}
 
@@ -1860,7 +1845,8 @@ void process_packet(int c_id, char* packet)
 		ev.attacker_client_id = c_id;
 		ev.ray_origin = { p->ray_ox, p->ray_oy, p->ray_oz };
 		ev.ray_direction = { p->ray_dx, p->ray_dy, p->ray_dz };
-		ev.weapon_id = p->weapon_id;
+		ev.weapon_type = p->weapon_type;
+		ev.weapon_grade = p->weapon_grade;
 		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
 
 		g_npc_input_queue.Push(std::move(ev));
