@@ -404,8 +404,11 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
+	}
 
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
 	switch (nMessageID)
 	{
 	case WM_LBUTTONDOWN:
@@ -413,12 +416,12 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 		::SetCapture(hWnd);
 		::GetCursorPos(&m_ptOldCursorPos);
 		break;
+
 	case WM_LBUTTONUP:
 	case WM_RBUTTONUP:
 		::ReleaseCapture();
 		break;
-	case WM_MOUSEMOVE:
-		break;
+
 	default:
 		break;
 	}
@@ -426,7 +429,12 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		if (m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam))
+			return;
+	}
+
 	switch (nMessageID)
 	{
 	case WM_KEYUP:
@@ -435,23 +443,28 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
+
 		case VK_F9:
 			ChangeSwapChainState();
 			break;
+
 		case 'M':
 			mouseMove = !mouseMove;
-			if (mouseMove) {
-				::ClipCursor(NULL);
-				::ShowCursor(TRUE);
-			}
-			else {
-				RECT rect;
-				::GetWindowRect(m_hWnd, &rect);
-				::ClipCursor(&rect);
 
-				::GetCursorPos(&m_ptOldCursorPos);
+			::ClipCursor(NULL);
+			::ShowCursor(TRUE);
+			::GetCursorPos(&m_ptOldCursorPos);
+
+			if (mouseMove)
+			{
+				OutputDebugString(L"[Mouse] Free Mouse Mode ON\n");
+			}
+			else
+			{
+				OutputDebugString(L"[Mouse] Free Mouse Mode OFF\n");
 			}
 			break;
+
 		case 'O':
 			observing = !observing;
 			if (observing) {
@@ -461,36 +474,17 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				m_pCamera = m_pPlayer->GetCamera();
 			}
 			break;
-		case VK_SPACE:
-		{
-			if (m_pPlayer && !m_pScene.empty() && m_pScene.back())
-			{
-				XMFLOAT3 pos = m_pPlayer->GetPosition();
-				XMFLOAT3 look = m_pPlayer->GetLookVector();
 
-				XMFLOAT3 bombPos = Vector3::Add(pos, Vector3::ScalarProduct(look, 3.0f, false));
-				//bombPos.y += 5.0f;
-
-				XMFLOAT3 bombRight = m_pPlayer->GetRightVector();
-				XMFLOAT3 bombFlatLook = m_pPlayer->GetLookVector();
-				bombFlatLook.y = 0.0f;
-				bombFlatLook = Vector3::Normalize(bombFlatLook);
-
-				if (!m_pScene.empty() && m_pScene.back() && m_pScene.back()->GetEffectManager())
-				{
-					m_pScene.back()->GetEffectManager()->RequestPlayEffect(EFFECT_BOMB, bombPos, bombRight, bombFlatLook);
-				}
-			}
-			break;
-		}
 		default:
 			break;
 		}
 		break;
+
 	default:
 		break;
 	}
 }
+
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	
@@ -661,23 +655,77 @@ void CGameFramework::ReleaseObjects()
 void CGameFramework::ProcessInput()
 {
 	static UCHAR pKeysBuffer[256];
+	static bool bGameplayCursorInitialized = false;
+
 	bool bProcessedByScene = false;
 	if (GetKeyboardState(pKeysBuffer) && !m_pScene.empty() && m_pScene.back()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
+
 	if (!bProcessedByScene)
 	{
 		float cxDelta = 0.0f, cyDelta = 0.0f;
-		POINT ptCursorPos;
-		//if (GetCapture() == m_hWnd)
-		
-		if (!mouseMove)
-		{
-			::GetCursorPos(&ptCursorPos);
-			::SetCursorPos(m_ptOldCursorPos.x, m_ptOldCursorPos.y);
-			cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
-			cyDelta = (float)(ptCursorPos.y - m_ptOldCursorPos.y) / 3.0f;
+		bool bInventoryOpen = false;
 
+		if (!m_pScene.empty() && m_pScene.back() && m_pScene.back()->GetInventoryManager())
+		{
+			bInventoryOpen = m_pScene.back()->GetInventoryManager()->IsAnyInventoryOpen();
 		}
-		
+
+		bool bFreeMouseMode = mouseMove || bInventoryOpen;
+
+		if (bFreeMouseMode)
+		{
+			::ClipCursor(NULL);
+			::ShowCursor(TRUE);
+			::GetCursorPos(&m_ptOldCursorPos);
+			bGameplayCursorInitialized = false;
+		}
+		else
+		{
+			RECT rc;
+			::GetClientRect(m_hWnd, &rc);
+
+			int width = rc.right - rc.left;
+			int height = rc.bottom - rc.top;
+
+			if (width > 0 && height > 0)
+			{
+				int centerX = width / 2;
+				int centerY = height / 2;
+
+				POINT ptCursorPos;
+				::GetCursorPos(&ptCursorPos);
+
+				POINT ptClientCursor = ptCursorPos;
+				::ScreenToClient(m_hWnd, &ptClientCursor);
+
+				if (ptClientCursor.y < 0) ptClientCursor.y = 0;
+				if (ptClientCursor.y > centerY) ptClientCursor.y = centerY;
+
+				POINT ptFixedClientCursor = { centerX, ptClientCursor.y };
+				POINT ptFixedScreenCursor = ptFixedClientCursor;
+				::ClientToScreen(m_hWnd, &ptFixedScreenCursor);
+
+				if (!bGameplayCursorInitialized)
+				{
+					::ClipCursor(NULL);
+					::ShowCursor(TRUE);
+					::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
+					m_ptOldCursorPos = ptFixedScreenCursor;
+					bGameplayCursorInitialized = true;
+				}
+				else
+				{
+					cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
+					cyDelta = (float)(ptFixedScreenCursor.y - m_ptOldCursorPos.y) / 3.0f;
+
+					::ClipCursor(NULL);
+					::ShowCursor(TRUE);
+					::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
+
+					m_ptOldCursorPos = ptFixedScreenCursor;
+				}
+			}
+		}
 
 		DWORD dwDirection = 0;
 		if (pKeysBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;

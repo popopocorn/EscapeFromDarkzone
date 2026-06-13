@@ -479,6 +479,15 @@ void ResourceManager::BuildModelPrototypes(
 		Standardshader
 	);
 
+	LoadAndRegisterModelPrototype(
+		ModelName::GRENADE,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/grenade.bin",
+		Standardshader
+	);
+
 	ModelName name = ModelName::MAP_FLOOR;
 	for (const string& s : s_mapFiles)
 	{

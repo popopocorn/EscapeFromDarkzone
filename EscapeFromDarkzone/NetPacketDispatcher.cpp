@@ -262,16 +262,45 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		break;
 	}
-	case SC_PLAY_EFFECT_WORLD: {
-		// ¼ö·ùÅº µîµî?
-		SC_PLAY_EFFECT_WORLD_PACKET* p =
-			reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
+	case SC_PLAY_EFFECT_WORLD:
+	{
+		SC_PLAY_EFFECT_WORLD_PACKET* p = reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
 
 		EffectID effectId = static_cast<EffectID>(p->effect_id);
 		XMFLOAT3 pos = { p->x, p->y, p->z };
 		XMFLOAT3 dir = { p->dx, p->dy, p->dz };
 
+		if (Vector3::Length(dir) < 0.0001f)
+		{
+			dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+		}
 
+		if (effectId == EffectID::GRENADE_EXPLOSION)
+		{
+			dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
+		}
+
+		if (gf.m_pScene.empty())
+		{
+			break;
+		}
+
+		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+
+		if (!pMainScene)
+		{
+			break;
+		}
+
+		static int s_nWorldEffectOwnerId = 0x40000000;
+		int ownerId = s_nWorldEffectOwnerId++;
+
+		if (s_nWorldEffectOwnerId < 0)
+		{
+			s_nWorldEffectOwnerId = 0x40000000;
+		}
+
+		pMainScene->PlayEffectFromServerLikeRequest(effectId, pos, dir, ownerId, 0.0f);
 		break;
 	}
 	default:

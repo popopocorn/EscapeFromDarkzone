@@ -191,6 +191,7 @@ public:
 
 	float m_fShootAnimTimer = 0.0f;				// 서버 패킷으로부터 사격 애니메이션을 구분하기 위해 추가
 	float m_fShootAnimHold = 0.18f;				// 버스트 간격(0.15) 보다 조금 더 길게 해서 안 끊기게 유지
+	bool m_bShootEffectRequested = false;
 
 public:
 	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
@@ -249,6 +250,7 @@ public:
 	void UpdateIdleLook(float fTimeElapsed);
 
 	void FireAtPlayer();
+	bool ConsumeShootEffectRequest();
 
 	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
 
