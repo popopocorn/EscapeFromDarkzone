@@ -14,6 +14,7 @@ enum class SoundName {
     FIRE_RIFLE,
     FIRE_SMG,
     FIRE_SHOTGUN,
+    FIRE_PISTOL,
 
     RELOAD_PLAYER_RIFLE,
     RELOAD_ENEMY_RIFLE,

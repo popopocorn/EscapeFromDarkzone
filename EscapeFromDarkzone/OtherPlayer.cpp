@@ -43,11 +43,11 @@ OtherPlayer::~OtherPlayer()
 {
 
 }
+
 void OtherPlayer::Animate(float fTimeElapsed)
 {
 	CGameObject::Animate(fTimeElapsed);
 	Update(fTimeElapsed);
-
 }
 
 void OtherPlayer::Update(float fTimeElapsed)

@@ -1014,16 +1014,13 @@ bool CPlayer::EquipDebugWeapon(PlayerWeaponType weaponType)
 		return false;
 	}
 
-	CGameObject* pWeaponInstance =
-		CGameObject::CreateModelInstance(pWeaponPrototype);
-
-	if (!pWeaponInstance)
+	if (!pWeaponPrototype)
 	{
 		OutputDebugString(L"[Weapon] weapon instance create failed.\n");
 		return false;
 	}
 
-	auto pWeaponItem = std::make_shared<WeaponItem>(
+	auto pWeaponItem = new WeaponItem(
 		ItemGrade::GRADE_1,
 		config.itemType
 	);
@@ -1042,12 +1039,12 @@ bool CPlayer::EquipDebugWeapon(PlayerWeaponType weaponType)
 
 	ApplyWeaponVisualConfig(weaponType);
 
-	EquipWeapon(pWeaponInstance, "mixamorig:RightHand");
+	EquipWeapon(pWeaponPrototype, "mixamorig:RightHand");
 
-	if (m_pWeapon != pWeaponInstance)
+	if (m_pWeapon != pWeaponPrototype)
 	{
-		DeleteGameObjectTree(pWeaponInstance);
-		m_pEquippedWeaponItem.reset();
+		DeleteGameObjectTree(pWeaponPrototype);
+		m_pEquippedWeaponItem = NULL;
 		OutputDebugString(L"[Weapon] debug weapon equip failed.\n");
 		return false;
 	}
@@ -1123,7 +1120,7 @@ bool CPlayer::InitializeLeftHandIK()
 	return true;
 }
 
-bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
+bool CPlayer::EquipWeaponItem(WeaponItem* pItem, const char* pstrSocketName)
 {
 	if (!pItem) return false;
 
@@ -1144,7 +1141,7 @@ bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const ch
 	if (m_pWeapon != pWeaponInstance)
 	{
 		DeleteGameObjectTree(pWeaponInstance);
-		m_pEquippedWeaponItem.reset();
+		m_pEquippedWeaponItem = NULL;
 		return false;
 	}
 
@@ -1301,6 +1298,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		SoundManager::Instance()->Play(SoundName::FIRE_SHOTGUN, muzzlePos);
 		break;
 	case PlayerWeaponType::Pistol:
+		SoundManager::Instance()->Play(SoundName::FIRE_PISTOL, muzzlePos);
 		break;
 	}
 	
@@ -1328,6 +1326,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
 		for (auto& obj : *objs) {
 			if (!obj) continue;
+			if (not obj->isColl) continue;
 			const auto& oobbs = obj->GetOOBB();
 			for (BoundingOrientedBox* pOOBB : oobbs) {
 				if (!pOOBB) continue;
@@ -1346,6 +1345,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 			auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
 			for (auto& obj : *maps) {
 				if (!obj) continue;
+				if (not obj->isColl) continue;
 				const auto& oobbs = obj->GetOOBB();
 				for (BoundingOrientedBox* pOOBB : oobbs) {
 					if (!pOOBB) continue;
@@ -1655,10 +1655,10 @@ CTerrainPlayer::CTerrainPlayer(
 
 	SetOOBB(playerBox);
 
-	auto pDefaultWeaponItem = WeaponItem::CreateDefaultPlayerRifle(
-		pDefaultWeaponPrototype
+	auto pDefaultWeaponItem = new WeaponItem(ItemGrade::GRADE_1, ItemType::RIFLE);
+	pDefaultWeaponItem->SetModelPrototype(
+		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
-
 	if (pDefaultWeaponItem)
 	{
 		if (!EquipWeaponItem(pDefaultWeaponItem, "mixamorig:RightHand"))

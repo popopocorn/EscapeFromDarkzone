@@ -133,7 +133,8 @@ protected:
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
 	//현재 장착 중인 무기 데이터
-	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
+	WeaponItem* m_pEquippedWeaponItem;
+	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
 
 	int   m_nCurrentAmmo = 0;
@@ -273,7 +274,7 @@ public:
 	void EndGrenadeWeaponPose();
 
 	//현재 장착 무기 데이터
-	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
+	bool EquipWeaponItem(WeaponItem* pItem, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
 	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
