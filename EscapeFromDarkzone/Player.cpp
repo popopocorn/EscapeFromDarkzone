@@ -1206,13 +1206,14 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		if (m_fFireCooldown < 0.0f)
 			m_fFireCooldown = 0.0f;
 	}
-	if (m_bFireHeld && CanFireWeapon())
+	if (m_bFireHeld)
 	{
 		
 		if (m_fFireCooldown <= 0.0f)
 		{
 			FireOneShot(ppShaders, pEffectManager);
-			if (!IsCurrentWeaponAutomatic())
+
+			if (!IsCurrentWeaponAutomatic() || m_nCurrentAmmo <= 0)
 			{
 				m_bFireHeld = false;
 			}
@@ -1237,15 +1238,18 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 #include"SoundManager.h"
 void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
 {
-	if (!TryFireWeapon()) return;
+	if (!TryFireWeapon()) 
+	{
+		SoundManager::Instance()->Play(SoundName::DRY_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
+		return;
+	}
 	NotifyWeaponFired();
-
+	
 	// 1. 총구 위치 계산
 	XMFLOAT3 muzzlePos, muzzleLook, muzzleRight, muzzleUp;
 	muzzleLook = GetLookVector();
 	muzzleRight = GetRightVector();
 	muzzleUp = GetUpVector();
-
 	if (Vector3::Length(muzzleLook) < 0.0001f) muzzleLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
 	if (Vector3::Length(muzzleRight) < 0.0001f) muzzleRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
 	if (Vector3::Length(muzzleUp) < 0.0001f) muzzleUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -1265,7 +1269,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		muzzlePos = GetPosition();
 		muzzlePos.y += 1.2f; // 총구가 없을 때 기본 오프셋
 	}
-
+	//SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, muzzlePos);
 	// 2. 이펙트 재생
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
 	EFFECT_TYPE sparkType = (weaponType == PlayerWeaponType::Shotgun) ? EFFECT_SPARK_SHOTGUN :

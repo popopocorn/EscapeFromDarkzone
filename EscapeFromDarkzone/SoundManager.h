@@ -10,7 +10,12 @@ inline FMOD_VECTOR ToFmodVec(const XMFLOAT3& v)
 enum class SoundName {
     FOOSTEP,
     ENEMY_FOOSTEP,
+
     FIRE_RIFLE,
+
+    RELOAD_RIFLE,
+
+    DRY_RIFLE,
 };
 
 class SoundManager : public Singleton<SoundManager>{

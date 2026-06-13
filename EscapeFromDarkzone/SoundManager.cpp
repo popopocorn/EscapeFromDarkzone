@@ -34,13 +34,34 @@ void SoundManager::BuildSound()
 {
     LoadSound(
         SoundName::FOOSTEP,
-        "Sound/Footstep01.wav",
+        "Sound/footstep_Player.wav",
         false,
         false
         );
+
     LoadSound(
         SoundName::ENEMY_FOOSTEP,
-        "Sound/Footstep01.wav",
+        "Sound/footstep_Enemy.wav",
+        true,
+        false
+        );
+
+    LoadSound(
+        SoundName::FIRE_RIFLE,
+        "Sound/rifle_smg_dry.wav",
+        true,
+        false
+        );
+    LoadSound(
+        SoundName::DRY_RIFLE,
+        "Sound/rifle_smg_dry.wav",
+        true,
+        false
+        );
+
+    LoadSound(
+        SoundName::RELOAD_RIFLE,
+        "Sound/Rifle_SMG_Reload.wav",
         true,
         false
         );
