@@ -1385,7 +1385,7 @@ void CPlayer::StartReload()
 	if (!m_pEquippedWeaponItem) return;
 	if (m_bReloading) return;
 	if (m_nCurrentAmmo >= m_nMaxAmmo) return;
-
+	SoundManager::Instance()->Play(SoundName::RELOAD_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
 	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
 
 	m_bReloading = true;
