@@ -1245,7 +1245,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 {
 	if (!TryFireWeapon()) 
 	{
-		SoundManager::Instance()->Play(SoundName::DRY_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
+		if(not m_bReloading)
+			SoundManager::Instance()->Play(SoundName::DRY_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
 		return;
 	}
 	NotifyWeaponFired();
