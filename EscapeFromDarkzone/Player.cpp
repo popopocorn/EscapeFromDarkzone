@@ -1274,6 +1274,19 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		muzzlePos = GetPosition();
 		muzzlePos.y += 1.2f; // 총구가 없을 때 기본 오프셋
 	}
+
+
+	// PvP 송신 (단발 무기도 첫 발에서 전송)
+	if (NetworkManager::Instance().IsConnected())
+	{
+		short wType = GetEquippedWeaponTypeForWire();
+		short wGrade = GetEquippedWeaponGradeForWire();
+		NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
+		NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
+		//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+		//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
+	}
+
 	//SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, muzzlePos);
 	// 2. 이펙트 재생
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
@@ -1295,39 +1308,34 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	// 적 충돌 검사
 	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY] && !ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
 	{
-		if (NetworkManager::Instance().IsConnected()) {
-			NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+		bool isIntersects = false;
+		auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
+		for (auto& obj : *objs) {
+			if (!obj) continue;
+			const auto& oobbs = obj->GetOOBB();
+			for (BoundingOrientedBox* pOOBB : oobbs) {
+				if (!pOOBB) continue;
+				float fDist = 0.0f;
+				if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
+					CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
+					if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
+					isIntersects = true;
+					if (fDist < hitDistance) hitDistance = fDist;
+					break;
+				}
+			}
 		}
-		else {
-			bool isIntersects = false;
-			auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
-			for (auto& obj : *objs) {
+		if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
+			auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
+			for (auto& obj : *maps) {
 				if (!obj) continue;
 				const auto& oobbs = obj->GetOOBB();
 				for (BoundingOrientedBox* pOOBB : oobbs) {
 					if (!pOOBB) continue;
 					float fDist = 0.0f;
 					if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
-						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
-						if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
-						isIntersects = true;
 						if (fDist < hitDistance) hitDistance = fDist;
 						break;
-					}
-				}
-			}
-			if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
-				auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
-				for (auto& obj : *maps) {
-					if (!obj) continue;
-					const auto& oobbs = obj->GetOOBB();
-					for (BoundingOrientedBox* pOOBB : oobbs) {
-						if (!pOOBB) continue;
-						float fDist = 0.0f;
-						if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
-							if (fDist < hitDistance) hitDistance = fDist;
-							break;
-						}
 					}
 				}
 			}
