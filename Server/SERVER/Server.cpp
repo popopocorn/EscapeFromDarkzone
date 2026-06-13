@@ -2204,8 +2204,8 @@ int main()
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
-		npc.outfit = main_npc_def[i].outfit;									//	임시 적용!!!!!!
-		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
+		npc.outfit = main_npc_def[i].outfit;
+		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정
 		npc.state = NPC_STATE_IDLE;
 		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;
