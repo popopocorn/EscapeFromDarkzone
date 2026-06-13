@@ -134,7 +134,8 @@ struct SC_ADD_NPC_PACKET {
 	unsigned char size;
 	char          type;
 	short         npc_id;
-	char          npc_kind;       // 나중에
+	char          npc_kind;       // NPC 단계(tier 1/2/3)
+	char          npc_outfit;     // 외형 프리셋(0/1/2)
 	float         x, y, z;
 	float         yaw;
 	short         hp;

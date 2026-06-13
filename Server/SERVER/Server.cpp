@@ -331,13 +331,14 @@ public:
 		p.type = SC_REMOVE_PLAYER;
 		do_send(&p);
 	}
-	void send_add_npc_packet(short npc_id, char kind, float x, float y, float z, float yaw, short hp)
+	void send_add_npc_packet(short npc_id, char kind, char outfit, float x, float y, float z, float yaw, short hp)
 	{
 		SC_ADD_NPC_PACKET p;
 		p.size = sizeof(SC_ADD_NPC_PACKET);
 		p.type = SC_ADD_NPC;
 		p.npc_id = npc_id;
 		p.npc_kind = kind;
+		p.npc_outfit = outfit;
 		p.x = x; p.y = y; p.z = z;
 		p.yaw = yaw;
 		p.hp = hp;
@@ -1057,7 +1058,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		for (const auto& npc : g_npcs) {
 			if (!npc.alive) continue;
 			clients[e.new_client_id].send_add_npc_packet(
-				npc.id, npc.kind,
+				npc.id, npc.kind, npc.outfit,
 				npc.position.x, npc.position.y, npc.position.z,
 				npc.yaw, npc.hp
 			);
@@ -2178,18 +2179,26 @@ int main()
 		{ 37.0f, 0.0f, -90.0f },
 	};
 
+	// NPC별 단계(tier 1/2/3)와 외형(outfit 0/1/2) 지정.
+	// tier는 무기/체력 결정, outfit은 비주얼 프리셋 (독립).
+	struct NpcSpawnDef { char tier; char outfit; };
+	NpcSpawnDef tmp_npc_def[27] = {
+		{1,0},{1,1},{1,2},{1,0},{1,1},{1,2},{1,0},{1,1},{1,2},   // 1단계 9
+		{2,0},{2,1},{2,2},{2,0},{2,1},{2,2},{2,0},{2,1},{2,2},   // 2단계 9
+		{3,0},{3,1},{3,2},{3,0},{3,1},{3,2},{3,0},{3,1},{3,2},   // 3단계 9, 임시 적용
+	};
+
 	for (int i = 0; i < 27; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
-		npc.kind = 0;
+		npc.outfit = tmp_npc_def[i].outfit;										//	임시 적용!!!!!!
+		ApplyNpcTier(npc, tmp_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
 		npc.state = NPC_STATE_IDLE;
 		npc.position = tmp_position_list[i];
 		npc.spawn_position = npc.position;
 		npc.yaw = 0.0f;
-		npc.hp = 100;
-		npc.max_hp = 100;
 		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;   // 스폰 시 탄창 채움
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
