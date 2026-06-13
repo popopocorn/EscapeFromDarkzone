@@ -48,7 +48,14 @@ void SoundManager::BuildSound()
 
     LoadSound(
         SoundName::FIRE_RIFLE,
-        "Sound/rifle_smg_dry.wav",
+        "Sound/Fire_Rifle.wav",
+        true,
+        false
+        );
+
+    LoadSound(
+        SoundName::FIRE_SMG,
+        "Sound/SMGShot.wav",
         true,
         false
         );
@@ -68,7 +75,14 @@ void SoundManager::BuildSound()
         );
 
     LoadSound(
-        SoundName::RELOAD_RIFLE,
+        SoundName::RELOAD_PLAYER_RIFLE,
+        "Sound/Rifle_SMG_Reload.wav",
+        false,
+        false
+        );
+
+    LoadSound(
+        SoundName::RELOAD_ENEMY_RIFLE,
         "Sound/Rifle_SMG_Reload.wav",
         true,
         false

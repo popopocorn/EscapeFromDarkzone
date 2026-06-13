@@ -1287,12 +1287,15 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 		//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 	}
+
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
 	switch (weaponType)
 	{
 	case PlayerWeaponType::Rifle:
+		SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, muzzlePos);
 		break;
 	case PlayerWeaponType::SMG:
+		SoundManager::Instance()->Play(SoundName::FIRE_SMG, muzzlePos);
 		break;
 	case PlayerWeaponType::Shotgun:
 		SoundManager::Instance()->Play(SoundName::FIRE_SHOTGUN, muzzlePos);
@@ -1313,7 +1316,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
 	}
 
-	float maxRange = 1000.0f;
+	float maxRange = 100.f;
 	float hitDistance = maxRange;
 	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
@@ -1338,6 +1341,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 				}
 			}
 		}
+
 		if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
 			auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
 			for (auto& obj : *maps) {
@@ -1397,7 +1401,7 @@ void CPlayer::StartReload()
 	if (!m_pEquippedWeaponItem) return;
 	if (m_bReloading) return;
 	if (m_nCurrentAmmo >= m_nMaxAmmo) return;
-	SoundManager::Instance()->Play(SoundName::RELOAD_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
+	SoundManager::Instance()->Play(SoundName::RELOAD_PLAYER_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
 	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
 
 	m_bReloading = true;
