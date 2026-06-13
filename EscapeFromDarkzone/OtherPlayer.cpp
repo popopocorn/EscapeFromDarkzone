@@ -125,7 +125,7 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 	timeacu += fTimeElapsed;
 	if (timeacu > 0.5)
 	{
-		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
+		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
 		timeacu -= 0.5;
 	}
 

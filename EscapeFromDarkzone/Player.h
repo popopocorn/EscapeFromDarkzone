@@ -49,6 +49,8 @@ class WeaponItem;
 class Inventory;
 class Equip;
 
+class EffectManager;
+
 class CPlayer : public CGameObject
 {
 protected:
@@ -270,7 +272,8 @@ public:
 	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
-	void UpdateWeaponCombat(float fTimeElapsed);
+	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
+	void FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
 
 	bool TryFireWeapon();
 	void StartReload();

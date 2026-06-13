@@ -1,5 +1,6 @@
 #pragma once
 #include<fmod.hpp>
+#include"Singletone.h"
 
 inline FMOD_VECTOR ToFmodVec(const XMFLOAT3& v)
 {
@@ -9,10 +10,11 @@ inline FMOD_VECTOR ToFmodVec(const XMFLOAT3& v)
 enum class SoundName {
     FOOSTEP,
     ENEMY_FOOSTEP,
+    FIRE_RIFLE,
 };
 
-class SoundManager
-{
+class SoundManager : public Singleton<SoundManager>{
+    friend class Singleton;
 private:
     FMOD::System* system = NULL;
 
@@ -21,11 +23,6 @@ private:
     FMOD::Channel*   BGMChannel = NULL;
 
 public:
-    static SoundManager& Instance()
-    {
-        static SoundManager instance;
-        return instance;
-    }
     void Init();
     void Update();
     void Release();
@@ -40,8 +37,5 @@ public:
 private:
     SoundManager() {}
     ~SoundManager() {}
-    SoundManager(const SoundManager& other) = delete;
-    SoundManager& operator=(const SoundManager& other) = delete;
-
 };
 

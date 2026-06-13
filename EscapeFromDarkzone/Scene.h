@@ -239,3 +239,5 @@ public:
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
 
 };
+
+XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp);

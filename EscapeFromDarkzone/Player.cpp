@@ -10,7 +10,10 @@
 #include "Item.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
-
+#include "EnemyObject.h"
+#include "EffectManager.h"
+#include "Projectile.h"
+#include"Scene.h"
 #include "Network.h"	// 03.27 추가
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
@@ -192,7 +195,7 @@ void CPlayer::Update(float fTimeElapsed)
 		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
 	}
 
-	UpdateWeaponCombat(fTimeElapsed);
+	//UpdateWeaponCombat(fTimeElapsed);
 	UpdateWeaponPose(fTimeElapsed);
 
 	UpdateTransform(NULL);
@@ -1195,7 +1198,7 @@ void CPlayer::InitializeWeaponAmmo()
 	OutputDebugStringW(debugBuf);
 }
 
-void CPlayer::UpdateWeaponCombat(float fTimeElapsed)
+void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
 {
 	if (m_fFireCooldown > 0.0f)
 	{
@@ -1203,7 +1206,18 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed)
 		if (m_fFireCooldown < 0.0f)
 			m_fFireCooldown = 0.0f;
 	}
-
+	if (m_bFireHeld && CanFireWeapon())
+	{
+		
+		if (m_fFireCooldown <= 0.0f)
+		{
+			FireOneShot(ppShaders, pEffectManager);
+			if (!IsCurrentWeaponAutomatic())
+			{
+				m_bFireHeld = false;
+			}
+		}
+	}
 	if (!m_bReloading)
 		return;
 
@@ -1219,6 +1233,105 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed)
 		swprintf_s(debugBuf, L"[Weapon] Reload Complete : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
 		OutputDebugStringW(debugBuf);
 	}
+}
+#include"SoundManager.h"
+void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
+{
+	if (!TryFireWeapon()) return;
+	NotifyWeaponFired();
+
+	// 1. 총구 위치 계산
+	XMFLOAT3 muzzlePos, muzzleLook, muzzleRight, muzzleUp;
+	muzzleLook = GetLookVector();
+	muzzleRight = GetRightVector();
+	muzzleUp = GetUpVector();
+
+	if (Vector3::Length(muzzleLook) < 0.0001f) muzzleLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	if (Vector3::Length(muzzleRight) < 0.0001f) muzzleRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	if (Vector3::Length(muzzleUp) < 0.0001f) muzzleUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	muzzleLook = Vector3::Normalize(muzzleLook);
+	muzzleRight = Vector3::Normalize(muzzleRight);
+	muzzleUp = Vector3::Normalize(muzzleUp);
+
+	if (m_pWeaponMuzzleSocket) {
+		UpdateTransform(NULL);
+		muzzlePos = m_pWeaponMuzzleSocket->GetPosition();
+		muzzlePos.x += muzzleLook.x * 0.05f;
+		muzzlePos.y += muzzleLook.y * 0.05f;
+		muzzlePos.z += muzzleLook.z * 0.05f;
+	}
+	else {
+		muzzlePos = GetPosition();
+		muzzlePos.y += 1.2f; // 총구가 없을 때 기본 오프셋
+	}
+
+	// 2. 이펙트 재생
+	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
+	EFFECT_TYPE sparkType = (weaponType == PlayerWeaponType::Shotgun) ? EFFECT_SPARK_SHOTGUN :
+		(weaponType == PlayerWeaponType::Pistol) ? EFFECT_SPARK_PISTOL : EFFECT_SPARK_RIFLE_SMG;
+
+	XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType,muzzlePos, muzzleLook, muzzleUp );
+
+	if (pEffectManager) {
+		pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
+		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
+	}
+
+	float maxRange = 1000.0f;
+	float hitDistance = maxRange;
+	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
+
+	// 적 충돌 검사
+	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY] && !ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
+	{
+		if (NetworkManager::Instance().IsConnected()) {
+			NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
+		}
+		else {
+			bool isIntersects = false;
+			auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
+			for (auto& obj : *objs) {
+				if (!obj) continue;
+				const auto& oobbs = obj->GetOOBB();
+				for (BoundingOrientedBox* pOOBB : oobbs) {
+					if (!pOOBB) continue;
+					float fDist = 0.0f;
+					if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
+						CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
+						if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
+						isIntersects = true;
+						if (fDist < hitDistance) hitDistance = fDist;
+						break;
+					}
+				}
+			}
+			if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
+				auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
+				for (auto& obj : *maps) {
+					if (!obj) continue;
+					const auto& oobbs = obj->GetOOBB();
+					for (BoundingOrientedBox* pOOBB : oobbs) {
+						if (!pOOBB) continue;
+						float fDist = 0.0f;
+						if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
+							if (fDist < hitDistance) hitDistance = fDist;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	XMFLOAT3 endPos;
+	endPos.x = muzzlePos.x + muzzleLook.x * hitDistance;
+	endPos.y = muzzlePos.y + muzzleLook.y * hitDistance;
+	endPos.z = muzzlePos.z + muzzleLook.z * hitDistance;
+
+	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, endPos);
+
 }
 
 bool CPlayer::CanFireWeapon() const
@@ -1810,7 +1923,7 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 	timeacu += fTimeElapsed;
 	if (timeacu > 0.5)
 	{
-		SoundManager::Instance().Play(SoundName::FOOSTEP, Player->GetPosition());
+		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
 		timeacu -= 0.5;
 	}
 	if (Player->IsReloading())
@@ -1901,7 +2014,16 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
 	m_bKeepRun = bMove;
-
+	if (bMove)
+	{
+		static float timeacu = 0;
+		timeacu += fTimeElapsed;
+		if (timeacu > 0.5)
+		{
+			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
+			timeacu -= 0.5;
+		}
+	}
 	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
 	m_nLastLowerAnim = nextLowerAnim;
 
@@ -1986,7 +2108,16 @@ void PlayerShoot::Update(CPlayer* Player, float fTimeElapsed)
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
 	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
-
+	if (bMove)
+	{
+		static float timeacu = 0;
+		timeacu += fTimeElapsed;
+		if (timeacu > 0.5)
+		{
+			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
+			timeacu -= 0.5;
+		}
+	}
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
@@ -2063,7 +2194,16 @@ void PlayerReload::Update(CPlayer* Player, float fTimeElapsed)
 	XMFLOAT2 dir = Player->GetMoveInput2D();
 	bool bMove = Player->IsMoveInputActive(dir);
 	int lowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
-
+	if (bMove)
+	{
+		static float timeacu = 0;
+		timeacu += fTimeElapsed;
+		if (timeacu > 0.5)
+		{
+			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
+			timeacu -= 0.5;
+		}
+	}
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
