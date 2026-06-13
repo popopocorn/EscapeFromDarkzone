@@ -12,6 +12,7 @@ enum class SoundName {
     ENEMY_FOOSTEP,
 
     FIRE_RIFLE,
+    FIRE_SHOTGUN,
 
     RELOAD_RIFLE,
 

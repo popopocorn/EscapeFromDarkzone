@@ -1287,10 +1287,22 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 		//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 	}
-
-	//SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, muzzlePos);
-	// 2. 이펙트 재생
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
+	switch (weaponType)
+	{
+	case PlayerWeaponType::Rifle:
+		break;
+	case PlayerWeaponType::SMG:
+		break;
+	case PlayerWeaponType::Shotgun:
+		SoundManager::Instance()->Play(SoundName::FIRE_SHOTGUN, muzzlePos);
+		break;
+	case PlayerWeaponType::Pistol:
+		break;
+	}
+	
+	// 2. 이펙트 재생
+	
 	EFFECT_TYPE sparkType = (weaponType == PlayerWeaponType::Shotgun) ? EFFECT_SPARK_SHOTGUN :
 		(weaponType == PlayerWeaponType::Pistol) ? EFFECT_SPARK_PISTOL : EFFECT_SPARK_RIFLE_SMG;
 

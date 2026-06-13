@@ -52,6 +52,14 @@ void SoundManager::BuildSound()
         true,
         false
         );
+
+    LoadSound(
+        SoundName::FIRE_SHOTGUN,
+        "Sound/Shotgunshot.wav",
+        true,
+        false
+        );
+
     LoadSound(
         SoundName::DRY_RIFLE,
         "Sound/rifle_smg_dry.wav",
