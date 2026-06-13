@@ -71,6 +71,19 @@ constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPO
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
+constexpr int PLAYER_SPAWN_COUNT = 8;
+struct PlayerSpawnPos { float x, z; };
+constexpr PlayerSpawnPos PLAYER_SPAWN_POS[PLAYER_SPAWN_COUNT] = {
+	{  42.0f,  45.0f },   // A
+	{  46.0f,  14.0f },   // B
+	{  44.0f, -34.0f },   // C
+	{  44.0f, -90.0f },   // D
+	{ -37.0f,  45.0f },   // E
+	{  20.0f, -62.0f },   // F
+	{  52.0f, -89.0f },   // G
+	{ -82.0f, -43.0f },   // H
+};
+
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
 {
 	float dx = a.x - b.x;
@@ -1638,6 +1651,14 @@ void process_packet(int c_id, char* packet)
 		strcpy_s(clients[c_id]._name, p->name);
 
 		std::cout << "LOGIN " << clients[c_id]._name << ", ID " << clients[c_id]._id << "\n";
+
+		// 접속 id 기반 시작 위치
+		{
+			const PlayerSpawnPos& sp = PLAYER_SPAWN_POS[c_id % PLAYER_SPAWN_COUNT];
+			clients[c_id].x = sp.x;
+			clients[c_id].z = sp.z;
+			clients[c_id].y = 0.1f;   // 기본 높이
+		}
 
 		clients[c_id].send_login_info_packet();
 		{
