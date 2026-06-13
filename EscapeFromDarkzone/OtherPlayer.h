@@ -9,7 +9,9 @@ class OtherPlayer : public CGameObject
 {
 private:
 	//이곳에 네트워크 통신에 필요한 프라이빗(또는 필요 시 프로텍티드) 인자 선언
-
+	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	float    m_fServerYawDeg = 0.0f;
+	bool     m_bUseServerLerp = false;
 
 public:
 	OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);

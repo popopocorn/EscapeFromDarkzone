@@ -21,6 +21,7 @@
 #include "GameFramework.h"
 #include"Projectile.h"
 #include "Network.h"
+#include "NetSession.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
 {
@@ -163,6 +164,21 @@ static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
 		return EFFECT_SPARK_RIFLE_SMG;
 	}
 }
+static EFFECT_TYPE GetSparkEffectTypeByEnemyWeapon(EnemyWeaponType weaponType)
+{
+	switch (weaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return EFFECT_SPARK_PISTOL;
+
+	case EnemyWeaponType::SMG:
+		return EFFECT_SPARK_RIFLE_SMG;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		return EFFECT_SPARK_RIFLE_SMG;
+	}
+}
 XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
 {
 	XMFLOAT3 sparkPos = muzzlePos;
@@ -173,23 +189,23 @@ XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& m
 	switch (weaponType)
 	{
 	case PlayerWeaponType::Rifle:
-		forwardOffset = -0.1f;
-		upOffset = -0.0f;
+		forwardOffset = 0.05f;
+		upOffset = -0.50f;
 		break;
 
 	case PlayerWeaponType::SMG:
-		forwardOffset = -0.08f;
-		upOffset = -0.0f;
+		forwardOffset = -0.1f;
+		upOffset = -0.50f;
 		break;
 
 	case PlayerWeaponType::Shotgun:
-		forwardOffset = 0.12f;
-		upOffset = 0.0f;
+		forwardOffset = 0.1f;
+		upOffset = 0.50f;
 		break;
 
 	case PlayerWeaponType::Pistol:
-		forwardOffset = 0.1f;
-		upOffset = 0.0f;
+		forwardOffset = 0.18f;
+		upOffset = -0.30f;
 		break;
 
 	default:
@@ -207,6 +223,159 @@ XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& m
 	sparkPos.z += muzzleUp.z * upOffset;
 
 	return sparkPos;
+}
+static bool GetCurrentEnemyMuzzleInfo(CEnemyObject* pEnemy, XMFLOAT3& outPos, XMFLOAT3& outLook, XMFLOAT3& outRight, XMFLOAT3& outUp)
+{
+	if (!pEnemy)
+		return false;
+
+	pEnemy->UpdateTransform(NULL);
+
+	outLook = pEnemy->GetForwardXZ();
+	outRight = pEnemy->GetRight();
+	outUp = pEnemy->GetUp();
+
+	if (Vector3::Length(outLook) < 0.0001f)
+	{
+		outLook = pEnemy->GetLook();
+		outLook.y = 0.0f;
+	}
+
+	if (Vector3::Length(outLook) < 0.0001f)
+		outLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	if (Vector3::Length(outRight) < 0.0001f)
+		outRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
+
+	if (Vector3::Length(outUp) < 0.0001f)
+		outUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	outLook = Vector3::Normalize(outLook);
+	outRight = Vector3::Normalize(outRight);
+	outUp = Vector3::Normalize(outUp);
+
+	CGameObject* pMuzzle = pEnemy->GetWeaponMuzzleSocket();
+
+	if (pMuzzle)
+	{
+		outPos = pMuzzle->GetPosition();
+
+		outPos.x += outLook.x * 0.05f;
+		outPos.y += outLook.y * 0.05f;
+		outPos.z += outLook.z * 0.05f;
+
+		return true;
+	}
+
+	outPos = pEnemy->GetPosition();
+
+	outPos.x += outLook.x * 0.8f + outRight.x * 0.25f + outUp.x * 1.2f;
+	outPos.y += outLook.y * 0.8f + outRight.y * 0.25f + outUp.y * 1.2f;
+	outPos.z += outLook.z * 0.8f + outRight.z * 0.25f + outUp.z * 1.2f;
+
+	return false;
+}
+static XMFLOAT3 GetSparkPositionByEnemyWeapon(EnemyWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+{
+	XMFLOAT3 sparkPos = muzzlePos;
+
+	float forwardOffset = 0.0f;
+	float upOffset = 0.0f;
+
+	switch (weaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		forwardOffset = 0.1f;
+		upOffset = -0.30f;
+		break;
+
+	case EnemyWeaponType::SMG:
+		forwardOffset = -0.08f;
+		upOffset = -0.50f;
+		break;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		forwardOffset = -0.1f;
+		upOffset = -0.50f;
+		break;
+	}
+
+	sparkPos.x += muzzleLook.x * forwardOffset;
+	sparkPos.y += muzzleLook.y * forwardOffset;
+	sparkPos.z += muzzleLook.z * forwardOffset;
+
+	sparkPos.x += muzzleUp.x * upOffset;
+	sparkPos.y += muzzleUp.y * upOffset;
+	sparkPos.z += muzzleUp.z * upOffset;
+
+	return sparkPos;
+}
+static XMFLOAT3 SafeNormalizeVector(XMFLOAT3 v, const XMFLOAT3& fallback)
+{
+	if (Vector3::Length(v) < 0.0001f)
+		return fallback;
+
+	return Vector3::Normalize(v);
+}
+static XMFLOAT3 ComputeOOBBHitNormal(const BoundingOrientedBox& box, const XMFLOAT3& hitPoint)
+{
+	XMVECTOR vCenter = XMLoadFloat3(&box.Center);
+	XMVECTOR vOrientation = XMLoadFloat4(&box.Orientation);
+	vOrientation = XMQuaternionNormalize(vOrientation);
+
+	XMVECTOR vInvOrientation = XMQuaternionInverse(vOrientation);
+	XMVECTOR vHit = XMLoadFloat3(&hitPoint);
+	XMVECTOR vLocal = XMVector3Rotate(vHit - vCenter, vInvOrientation);
+
+	XMFLOAT3 localPoint;
+	XMStoreFloat3(&localPoint, vLocal);
+
+	float distX = fabsf(box.Extents.x - fabsf(localPoint.x));
+	float distY = fabsf(box.Extents.y - fabsf(localPoint.y));
+	float distZ = fabsf(box.Extents.z - fabsf(localPoint.z));
+
+	XMFLOAT3 localNormal = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	if (distX <= distY && distX <= distZ)
+	{
+		localNormal = XMFLOAT3((localPoint.x >= 0.0f) ? 1.0f : -1.0f, 0.0f, 0.0f);
+	}
+	else if (distY <= distX && distY <= distZ)
+	{
+		localNormal = XMFLOAT3(0.0f, (localPoint.y >= 0.0f) ? 1.0f : -1.0f, 0.0f);
+	}
+	else
+	{
+		localNormal = XMFLOAT3(0.0f, 0.0f, (localPoint.z >= 0.0f) ? 1.0f : -1.0f);
+	}
+
+	XMVECTOR vLocalNormal = XMLoadFloat3(&localNormal);
+	XMVECTOR vWorldNormal = XMVector3Rotate(vLocalNormal, vOrientation);
+	vWorldNormal = XMVector3Normalize(vWorldNormal);
+
+	XMFLOAT3 worldNormal;
+	XMStoreFloat3(&worldNormal, vWorldNormal);
+
+	return SafeNormalizeVector(worldNormal, XMFLOAT3(0.0f, 0.0f, 1.0f));
+}
+static XMFLOAT3 ReflectVelocityByNormal(const XMFLOAT3& velocity, const XMFLOAT3& normal)
+{
+	XMVECTOR vVelocity = XMLoadFloat3(&velocity);
+	XMVECTOR vNormal = XMLoadFloat3(&normal);
+	vNormal = XMVector3Normalize(vNormal);
+
+	float dot = XMVectorGetX(XMVector3Dot(vVelocity, vNormal));
+
+	if (dot >= 0.0f)
+		return velocity;
+
+	XMVECTOR vReflected = vVelocity - (2.0f * dot * vNormal);
+
+	XMFLOAT3 reflected;
+	XMStoreFloat3(&reflected, vReflected);
+
+	return reflected;
 }
 
 CScene::CScene(CGameFramework* game)
@@ -363,6 +532,20 @@ MainScene::MainScene(CGameFramework* game) : CScene(game)
 	m_fSparkSpawnTimer = 0.0f;
 	m_fSparkSpawnInterval = 0.03f;
 	m_fLaserLength = 15.0f;
+
+	m_bGrenadeAimMode = false;
+	m_fGrenadeAimDistance = 6.0f;
+	m_fGrenadeAimMinDistance = 2.0f;
+	m_fGrenadeAimMaxDistance = 18.0f;
+
+	m_bGrenadeFlying = false;
+	m_xmf3GrenadePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_xmf3GrenadeVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_fGrenadeLifeTimer = 0.0f;
+	m_fGrenadeExplodeDelay = 2.5f;
+	m_fGrenadeGravity = -9.8f;
+	m_fGrenadeBounceDamping = 0.45f;
+	m_fGrenadeGroundY = 0.2f;
 }
 
 MainScene::~MainScene()
@@ -370,14 +553,486 @@ MainScene::~MainScene()
 
 }
 
+void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
+{
+	if (m_bGrenadeAimMode == bEnable) return;
+
+	if (bEnable)
+	{
+		if (!m_pPlayer) return;
+		if (IsAnyInventoryOpen()) return;
+		if (m_bGrenadeFlying) return;
+
+		m_bGrenadeAimMode = true;
+		m_bSparkFireActive = false;
+		m_bLaserActive = false;
+		m_fSparkSpawnTimer = 0.0f;
+
+		if (m_pEffectManager)
+		{
+			m_pEffectManager->HideLaser(0);
+		}
+
+		m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
+		if (m_fGrenadeAimMaxDistance < m_fGrenadeAimMinDistance)
+			m_fGrenadeAimMaxDistance = m_fGrenadeAimMinDistance;
+
+		m_fGrenadeAimDistance = m_fGrenadeAimMinDistance;
+
+		m_pPlayer->ApplyWeaponPose(WEAPON_POSE::GRENADE);
+
+		ClampGameplayCursorToAimLine(hWnd);
+
+		OutputDebugString(L"[Grenade] Aim Mode ON\n");
+	}
+	else
+	{
+		m_bGrenadeAimMode = false;
+
+		if (m_pPlayer)
+		{
+			m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
+		}
+
+		ClampGameplayCursorToAimLine(hWnd);
+
+		OutputDebugString(L"[Grenade] Aim Mode OFF\n");
+	}
+}
+
+void MainScene::ReleaseGameplayCursor()
+{
+	::ClipCursor(NULL);
+	::ShowCursor(TRUE);
+}
+
+void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
+{
+	if (!hWnd) return;
+
+	if (IsAnyInventoryOpen())
+	{
+		ReleaseGameplayCursor();
+		return;
+	}
+
+	if (!m_bGrenadeAimMode) return;
+
+	RECT rc;
+	::GetClientRect(hWnd, &rc);
+
+	int width = rc.right - rc.left;
+	int height = rc.bottom - rc.top;
+
+	if (width <= 0 || height <= 0) return;
+
+	int centerY = height / 2;
+
+	POINT mouse;
+	::GetCursorPos(&mouse);
+	::ScreenToClient(hWnd, &mouse);
+
+	if (mouse.y < 0) mouse.y = 0;
+	if (mouse.y > centerY) mouse.y = centerY;
+
+	m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
+	if (m_fGrenadeAimMaxDistance < m_fGrenadeAimMinDistance)
+		m_fGrenadeAimMaxDistance = m_fGrenadeAimMinDistance;
+
+	float t = 1.0f - (float(mouse.y) / float(centerY));
+	m_fGrenadeAimDistance = m_fGrenadeAimMinDistance + (m_fGrenadeAimMaxDistance - m_fGrenadeAimMinDistance) * t;
+}
+
+float MainScene::CalculateGrenadeMaxAimDistance()
+{
+	if (!m_pPlayer) return 18.0f;
+
+	XMFLOAT3 origin = m_pPlayer->GetPosition();
+	origin.y += 1.2f;
+
+	XMFLOAT3 dir = m_pPlayer->GetLookVector();
+	dir.y = 0.0f;
+
+	if (Vector3::Length(dir) < 0.0001f)
+		return 18.0f;
+
+	dir = Vector3::Normalize(dir);
+
+	float maxDistance = 18.0f;
+	float nearest = maxDistance;
+
+	std::vector<CGameObject*> blockers;
+	blockers.reserve(64);
+
+	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+
+	if (!m_vVisionMapChunks.empty())
+	{
+		GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, maxDistance, blockers);
+	}
+	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], blockers);
+	}
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&origin);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&dir));
+
+	for (CGameObject* pObj : blockers)
+	{
+		if (!pObj) continue;
+
+		const auto& oobbs = pObj->GetOOBB();
+
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+			if (pOOBB->Extents.y < 0.3f) continue;
+
+			float hitDist = 0.0f;
+			if (pOOBB->Intersects(rayOrigin, rayDir, hitDist))
+			{
+				if (hitDist > 0.2f && hitDist < nearest)
+				{
+					nearest = hitDist - 0.3f;
+				}
+			}
+		}
+	}
+
+	if (nearest < m_fGrenadeAimMinDistance)
+		nearest = m_fGrenadeAimMinDistance;
+
+	if (nearest > maxDistance)
+		nearest = maxDistance;
+
+	return nearest;
+}
+
+bool MainScene::CheckGrenadeMapCollision(const XMFLOAT3& prevPos, const XMFLOAT3& nextPos, XMFLOAT3& outHitPos, XMFLOAT3& outHitNormal)
+{
+	XMFLOAT3 move = XMFLOAT3(nextPos.x - prevPos.x, nextPos.y - prevPos.y, nextPos.z - prevPos.z);
+	float moveLength = Vector3::Length(move);
+
+	if (moveLength < 0.0001f)
+		return false;
+
+	XMFLOAT3 moveDir = Vector3::Normalize(move);
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&prevPos);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&moveDir));
+
+	bool bHit = false;
+	float nearestDist = moveLength;
+
+	auto CheckObject = [&](CGameObject* pObj)
+		{
+			if (!pObj) return;
+			if (pObj == m_pGrenadeDebugObject) return;
+
+			const auto& oobbs = pObj->GetOOBB();
+
+			for (BoundingOrientedBox* pOOBB : oobbs)
+			{
+				if (!pOOBB) continue;
+
+				if (pOOBB->Extents.y < 0.30f)
+					continue;
+
+				BoundingOrientedBox expandedBox = *pOOBB;
+				expandedBox.Extents.x += m_fGrenadeRadius;
+				expandedBox.Extents.y += m_fGrenadeRadius;
+				expandedBox.Extents.z += m_fGrenadeRadius;
+
+				float hitDist = 0.0f;
+
+				if (expandedBox.Intersects(rayOrigin, rayDir, hitDist))
+				{
+					if (hitDist >= 0.0f && hitDist <= nearestDist)
+					{
+						nearestDist = hitDist;
+						bHit = true;
+
+						outHitPos.x = prevPos.x + moveDir.x * hitDist;
+						outHitPos.y = prevPos.y + moveDir.y * hitDist;
+						outHitPos.z = prevPos.z + moveDir.z * hitDist;
+
+						outHitNormal = ComputeOOBBHitNormal(expandedBox, outHitPos);
+					}
+				}
+			}
+		};
+
+	if (!m_vVisionMapChunks.empty())
+	{
+		for (CGameObject* pObj : m_vVisionMapChunks)
+		{
+			CheckObject(pObj);
+		}
+	}
+	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		auto* mapObjs = m_ppShaders[SHADERIDX::MAP]->GetObj();
+
+		if (mapObjs)
+		{
+			for (auto& obj : *mapObjs)
+			{
+				CheckObject(obj);
+			}
+		}
+	}
+
+	return bHit;
+}
+
+void MainScene::ThrowGrenade()
+{
+	if (!m_pPlayer) return;
+	if (!m_bGrenadeAimMode) return;
+
+	XMFLOAT3 look = m_pPlayer->GetLookVector();
+	look.y = 0.0f;
+
+	if (Vector3::Length(look) < 0.0001f)
+		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	look = Vector3::Normalize(look);
+
+	m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
+	if (m_fGrenadeAimDistance > m_fGrenadeAimMaxDistance)
+		m_fGrenadeAimDistance = m_fGrenadeAimMaxDistance;
+
+	if (m_fGrenadeAimDistance < m_fGrenadeAimMinDistance)
+		m_fGrenadeAimDistance = m_fGrenadeAimMinDistance;
+
+	XMFLOAT3 startPos = m_pPlayer->GetPosition();
+	startPos.x += look.x * 0.8f;
+	startPos.y += 1.2f;
+	startPos.z += look.z * 0.8f;
+
+	float flightTime = 0.75f;
+	float targetDistance = m_fGrenadeAimDistance;
+
+	XMFLOAT3 targetPos = startPos;
+	targetPos.x += look.x * targetDistance;
+	targetPos.z += look.z * targetDistance;
+	targetPos.y = m_fGrenadeGroundY;
+
+	m_xmf3GrenadePosition = startPos;
+
+	m_xmf3GrenadeVelocity.x = (targetPos.x - startPos.x) / flightTime;
+	m_xmf3GrenadeVelocity.z = (targetPos.z - startPos.z) / flightTime;
+	m_xmf3GrenadeVelocity.y = ((targetPos.y - startPos.y) - (0.5f * m_fGrenadeGravity * flightTime * flightTime)) / flightTime;
+
+	m_fGrenadeLifeTimer = 0.0f;
+	m_bGrenadeFlying = true;
+	m_bGrenadeAimMode = false;
+
+	if (!m_pGrenadeDebugObject)
+	{
+		CGameObject* pGrenadePrototype = ResourceManager::Instance().GetModelPrototype(ModelName::GRENADE);
+
+		if (pGrenadePrototype)
+		{
+			m_pGrenadeDebugObject = CGameObject::CreateModelInstance(pGrenadePrototype);
+			m_pGrenadeDebugObject->SetOOBB(NULL);
+			m_pGrenadeDebugObject->isColl = false;
+			m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+			m_pGrenadeDebugObject->SetScale(1.0f, 1.0f, 1.0f);
+
+			GameObjects.push_back(unique_ptr<CGameObject>(m_pGrenadeDebugObject));
+
+			CShader* pStandardShader = shadermanager->GetShader(ShaderType::STANDARD);
+			if (pStandardShader)
+			{
+				pStandardShader->addObjects(m_pGrenadeDebugObject);
+			}
+		}
+		else
+		{
+			OutputDebugString(L"[Grenade] ModelName::GRENADE prototype not found.\n");
+		}
+	}
+	else
+	{
+		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
+	}
+
+	OutputDebugString(L"[Grenade] Real Throw\n");
+}
+
+void MainScene::UpdateGrenade(float fTimeElapsed)
+{
+	if (m_bGrenadeThrowPending)
+	{
+		m_fGrenadeThrowTimer += fTimeElapsed;
+
+		if (m_fGrenadeThrowTimer < m_fGrenadeReleaseTime)
+		{
+			return;
+		}
+
+		m_bGrenadeThrowPending = false;
+		m_fGrenadeThrowTimer = 0.0f;
+
+		ThrowGrenade();
+	}
+
+	if (!m_bGrenadeFlying) return;
+
+	m_fGrenadeLifeTimer += fTimeElapsed;
+
+	XMFLOAT3 prevPos = m_xmf3GrenadePosition;
+
+	m_xmf3GrenadeVelocity.y += m_fGrenadeGravity * fTimeElapsed;
+
+	XMFLOAT3 nextPos = m_xmf3GrenadePosition;
+	nextPos.x += m_xmf3GrenadeVelocity.x * fTimeElapsed;
+	nextPos.y += m_xmf3GrenadeVelocity.y * fTimeElapsed;
+	nextPos.z += m_xmf3GrenadeVelocity.z * fTimeElapsed;
+
+	XMFLOAT3 hitPos;
+	XMFLOAT3 hitNormal;
+
+	if (CheckGrenadeMapCollision(prevPos, nextPos, hitPos, hitNormal))
+	{
+		m_xmf3GrenadePosition.x = hitPos.x + hitNormal.x * (m_fGrenadeRadius + 0.03f);
+		m_xmf3GrenadePosition.y = hitPos.y + hitNormal.y * (m_fGrenadeRadius + 0.03f);
+		m_xmf3GrenadePosition.z = hitPos.z + hitNormal.z * (m_fGrenadeRadius + 0.03f);
+
+		m_xmf3GrenadeVelocity = ReflectVelocityByNormal(m_xmf3GrenadeVelocity, hitNormal);
+
+		m_xmf3GrenadeVelocity.x *= m_fGrenadeWallBounceDamping;
+		m_xmf3GrenadeVelocity.y *= m_fGrenadeWallBounceDamping;
+		m_xmf3GrenadeVelocity.z *= m_fGrenadeWallBounceDamping;
+
+		m_xmf3GrenadeVelocity.x *= m_fGrenadeWallFriction;
+		m_xmf3GrenadeVelocity.z *= m_fGrenadeWallFriction;
+
+		if (Vector3::Length(m_xmf3GrenadeVelocity) < 0.35f)
+		{
+			m_xmf3GrenadeVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		}
+
+		OutputDebugString(L"[Grenade] Map Collision Bounce\n");
+	}
+	else
+	{
+		m_xmf3GrenadePosition = nextPos;
+	}
+
+	if (m_xmf3GrenadePosition.y <= m_fGrenadeGroundY)
+	{
+		m_xmf3GrenadePosition.y = m_fGrenadeGroundY;
+
+		if (m_xmf3GrenadeVelocity.y < 0.0f)
+		{
+			m_xmf3GrenadeVelocity.y = -m_xmf3GrenadeVelocity.y * m_fGrenadeBounceDamping;
+			m_xmf3GrenadeVelocity.x *= 0.70f;
+			m_xmf3GrenadeVelocity.z *= 0.70f;
+
+			if (fabsf(m_xmf3GrenadeVelocity.y) < 0.6f)
+				m_xmf3GrenadeVelocity.y = 0.0f;
+		}
+	}
+
+	if (m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
+	}
+
+	if (m_fGrenadeLifeTimer >= m_fGrenadeExplodeDelay)
+	{
+		ExplodeGrenade();
+	}
+}
+
+void MainScene::ExplodeGrenade()
+{
+	if (!m_bGrenadeFlying) return;
+
+	XMFLOAT3 grenadeFinalPos = m_xmf3GrenadePosition;
+
+	if (m_pGrenadeDebugObject)
+	{
+		grenadeFinalPos = m_pGrenadeDebugObject->GetPosition();
+	}
+
+	grenadeFinalPos.y = m_fGrenadeGroundY;
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		//여기에서 서버로 최종 폭발 위치 전송, grenadeFinalPos 사용
+		//NetSession::Instance().GrenadeExplode(grenadeFinalPos);
+	}
+
+	XMFLOAT3 effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	if (m_pPlayer)
+	{
+		effectDir = m_pPlayer->GetLookVector();
+		effectDir.y = 0.0f;
+
+		if (Vector3::Length(effectDir) < 0.0001f)
+		{
+			effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+		}
+
+		effectDir = Vector3::Normalize(effectDir);
+	}
+
+	XMFLOAT3 effectPos = grenadeFinalPos;
+
+	float effectVisualOffset = 1.5f;
+	effectPos.x -= effectDir.x * effectVisualOffset;
+	effectPos.z -= effectDir.z * effectVisualOffset;
+
+	m_xmf3GrenadePosition = grenadeFinalPos;
+
+	m_bGrenadeFlying = false;
+	m_fGrenadeLifeTimer = 0.0f;
+
+	if (m_pEffectManager)
+	{
+		EffectSpawnDesc desc;
+		desc.id = EffectID::GRENADE_EXPLOSION;
+		desc.position = effectPos;
+		desc.direction = effectDir;
+		desc.ownerId = 0;
+		desc.value = 0.0f;
+
+		m_pEffectManager->PlayEffectByID(desc);
+	}
+
+	if (m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject->SetPosition(0.0f, -10000.0f, 0.0f);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
+	}
+
+	OutputDebugString(L"[Grenade] Explosion\n");
+}
+
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	ClampGameplayCursorToAimLine(hWnd);
+
 	switch (nMessageID)
 	{
+	case WM_MOUSEMOVE:
+	{
+		ClampGameplayCursorToAimLine(hWnd);
+		break;
+	}
+
 	case WM_LBUTTONDOWN:
 	{
 		if (IsAnyInventoryOpen())
 		{
+			ReleaseGameplayCursor();
+
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
@@ -391,6 +1046,16 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			return;
 		}
 
+		if (m_bGrenadeAimMode)
+		{
+			ClampGameplayCursorToAimLine(hWnd);
+			return;
+		}
+
+		if (!m_pPlayer)
+			return;
+
+		
 		if (m_pPlayer)
 		{
 			m_pPlayer->SetFireHeld(true);
@@ -403,16 +1068,56 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 	case WM_LBUTTONUP:
 	{
+		if (m_bGrenadeAimMode)
+		{
+			if (!m_bGrenadeThrowPending && !m_bGrenadeFlying)
+			{
+				m_bGrenadeThrowPending = true;
+				m_fGrenadeThrowTimer = 0.0f;
+
+				if (m_pPlayer && !m_pPlayer->IsGrenadeState())
+				{
+					m_pPlayer->ChangeState(std::make_unique<PlayerGrenade>());
+				}
+
+				OutputDebugString(L"[Grenade] Throw Anim Start. Real grenade delayed.\n");
+			}
+
+			ClampGameplayCursorToAimLine(hWnd);
+			return;
+		}
+
 		if (m_pPlayer) m_pPlayer->SetFireHeld(false);
-		m_bLaserActive = false;
-		if (m_pEffectManager) m_pEffectManager->HideLaser(0);
-		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
+	
+		if (IsAnyInventoryOpen())
+		{
+			if (m_pInventoryManager)
+			{
+				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
+			}
+		}
+		else
+		{
+			if (uiManager)
+			{
+				uiManager->ProcessClick(InputManager::Instance().GetMousePos());
+			}
+		}
+
 		break;
 	}
+
 	case WM_MOUSEWHEEL:
 	{
+		ClampGameplayCursorToAimLine(hWnd);
+
+		if (m_bGrenadeAimMode)
+		{
+			return;
+		}
+
 		if (!m_pPlayer) return;
-		if (IsAnyInventoryOpen()) return; 
+		if (IsAnyInventoryOpen()) return;
 
 		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
 
@@ -421,10 +1126,9 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (zDelta > 0)
 			currentDistX10 -= 10.0f;
 		else
-			currentDistX10 += 10.0f; 
+			currentDistX10 += 10.0f;
 
 		m_pPlayer->cameraDistance = currentDistX10 / 10.0f;
-
 		m_pPlayer->cameraDistance = clamp(m_pPlayer->cameraDistance, 3.0f, 15.0f);
 
 		if (m_pPlayer->GetCamera())
@@ -434,6 +1138,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		break;
 	}
+
 	default:
 		break;
 	}
@@ -516,6 +1221,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			{
 				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
 			}
+
 			if (uiManager)
 			{
 				for (auto& o : *uiManager->GetPanels())
@@ -523,6 +1229,49 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 					o->ToggleOpen();
 				}
 			}
+
+			if (IsAnyInventoryOpen())
+			{
+				m_bGrenadeAimMode = false;
+
+				if (m_pPlayer)
+				{
+					m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
+				}
+
+				ReleaseGameplayCursor();
+			}
+			else
+			{
+				ClampGameplayCursorToAimLine(hWnd);
+			}
+
+			return true;
+		}
+
+		case 'G':
+		{
+			if (wasDownBefore) return true;
+
+			if (IsAnyInventoryOpen())
+			{
+				return true;
+			}
+
+			if (m_bGrenadeFlying)
+			{
+				return true;
+			}
+
+			if (m_pPlayer && m_pPlayer->IsGrenadeState())
+			{
+				return true;
+			}
+
+			SetGrenadeAimMode(hWnd, true);
+			ClampGameplayCursorToAimLine(hWnd);
+
+			OutputDebugString(L"[Grenade] Aim Mode Enter By G\n");
 			return true;
 		}
 
@@ -532,10 +1281,27 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			{
 				m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
 			}
+
+			if (IsAnyInventoryOpen())
+			{
+				m_bGrenadeAimMode = false;
+
+				if (m_pPlayer)
+				{
+					m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
+				}
+
+				ReleaseGameplayCursor();
+			}
+			else
+			{
+				ClampGameplayCursorToAimLine(hWnd);
+			}
+
 			return true;
 		}
 
-		case VK_F11:		// 서버 충돌처리용 OOBB CSV 파일 생성/업데이트
+		case VK_F11:
 			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
 
@@ -543,18 +1309,20 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::WEAPON_RIFLE);
+				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
 			}
 			return true;
 		}
+
 		case '0':
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
 			}
 			return true;
 		}
+
 		default:
 			break;
 		}
@@ -565,22 +1333,40 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		if (IsAnyInventoryOpen())
 			return true;
 
+		ClampGameplayCursorToAimLine(hWnd);
 		return SendPlayerKeyEvent(wParam, KEY_STATE::DOWN);
 	}
+
 	case WM_KEYUP:
 	{
+		if (wParam == 'G')
+		{
+			return true;
+		}
+
 		if (wParam == VK_TAB)
 		{
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->HandleTabReleased();
 			}
+
+			if (IsAnyInventoryOpen())
+			{
+				ReleaseGameplayCursor();
+			}
+			else
+			{
+				ClampGameplayCursorToAimLine(hWnd);
+			}
+
 			return true;
 		}
 
 		if (IsAnyInventoryOpen())
 			return true;
 
+		ClampGameplayCursorToAimLine(hWnd);
 		return SendPlayerKeyEvent(wParam, KEY_STATE::UP);
 	}
 	}
@@ -765,16 +1551,11 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
 	//적 오브젝트 - 네트워크가 안 될 때에만
-	CEnemyObject* pEnemy = new CEnemyObject(
-		pd3dDevice,
-		pd3dCommandList,
-		m_pd3dGraphicsRootSignature,
-		pSkinnedShader,
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
-	);
+	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1));
+	pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+	pEnemy->ApplyDefaultWeaponByEnemyModelType();
 	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
 	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	pEnemy->SetEnemyWeaponType(EnemyWeaponType::Rifle);
 	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
 	pEnemy->setNav(AStarNav.get());
 	pEnemy->SubmitWeaponToShader(stdshader);
@@ -900,11 +1681,50 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pInventoryManager->Update(fTimeElapsed);
 	}
 
+	if (m_pEffectManager && m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+	{
+		auto* enemyObjs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+
+		if (enemyObjs)
+		{
+			for (auto& obj : *enemyObjs)
+			{
+				if (!obj) continue;
+
+				CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
+				if (!pEnemy) continue;
+
+				if (!pEnemy->ConsumeShootEffectRequest())
+					continue;
+
+				XMFLOAT3 muzzlePos;
+				XMFLOAT3 muzzleLook;
+				XMFLOAT3 muzzleRight;
+				XMFLOAT3 muzzleUp;
+
+				GetCurrentEnemyMuzzleInfo(
+					pEnemy,
+					muzzlePos,
+					muzzleLook,
+					muzzleRight,
+					muzzleUp
+				);
+
+				EnemyWeaponType weaponType = pEnemy->GetEnemyWeaponType();
+				EFFECT_TYPE sparkType = GetSparkEffectTypeByEnemyWeapon(weaponType);
+				XMFLOAT3 sparkPos = GetSparkPositionByEnemyWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
+
+				m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
+			}
+		}
+	}
+
 	if (m_pPlayer && m_pLights.size() > 1)
 	{
 		m_pLights[1].m_xmf3Position = m_pPlayer->GetPosition();
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
+
 	// 시야 객체 blocker 갱신
 	{
 		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
@@ -942,6 +1762,8 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	if (m_pEffectManager) {
 		m_pEffectManager->Update(fTimeElapsed);
 	}
+
+	UpdateGrenade(fTimeElapsed);
 
 	if (m_pEffectManager)
 	{

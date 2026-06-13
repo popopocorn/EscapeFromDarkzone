@@ -53,6 +53,9 @@ constexpr char SC_PLAY_EFFECT_WORLD = 21;
 constexpr char CS_CRAFT_REQUEST = 22;
 constexpr char SC_EQUIPMENT_UPDATE = 23;
 
+// PvP 패킷
+constexpr char CS_HIT_PLAYER = 24;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -69,6 +72,7 @@ constexpr char NPC_STATE_RUN = 1;
 constexpr char NPC_STATE_DIE = 2;
 constexpr char NPC_STATE_RETURN = 3;
 constexpr char NPC_STATE_ATTACK = 4;
+constexpr char NPC_STATE_RELOAD = 5;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -130,7 +134,8 @@ struct SC_ADD_NPC_PACKET {
 	unsigned char size;
 	char          type;
 	short         npc_id;
-	char          npc_kind;       // 나중에
+	char          npc_kind;       // NPC 단계(tier 1/2/3)
+	char          npc_outfit;     // 외형 프리셋(0/1/2)
 	float         x, y, z;
 	float         yaw;
 	short         hp;
@@ -169,8 +174,9 @@ struct CS_HIT_NPC_PACKET {
 	char          type;
 	float         ray_ox, ray_oy, ray_oz;
 	float         ray_dx, ray_dy, ray_dz;
-	char          weapon_id;				// 나중에
-	unsigned int  fire_time;				// 나중에
+	short         weapon_type;     // WeaponType (PISTOL=0..SHOTGUN=3)
+	short         weapon_grade;    // WeaponGrade (BASIC=0..GRADE_4=4)
+	unsigned int  fire_time;
 };
 
 struct SC_INVENTORY_UPDATE_PACKET {
@@ -252,6 +258,16 @@ struct SC_EQUIPMENT_UPDATE_PACKET {
 	unsigned char size;
 	char          type;
 	ItemID        equip_id;
+};
+
+struct CS_HIT_PLAYER_PACKET {
+	unsigned char size;
+	char          type;
+	float         ray_ox, ray_oy, ray_oz;
+	float         ray_dx, ray_dy, ray_dz;
+	short         weapon_type;				// WeaponType
+	short         weapon_grade;				// WeaponGrade
+	unsigned int  fire_time;				// 나중에
 };
 
 #pragma pack (pop)

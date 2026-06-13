@@ -56,12 +56,12 @@ D3D12_RASTERIZER_DESC CEffectShader::CreateRasterizerState()
 
 D3D12_SHADER_BYTECODE CEffectShader::CreateVertexShader(ID3DBlob** ppd3dShaderBlob)
 {
-    return CShader::CompileShaderFromFile(L"Effect.hlsli", "VSParticle", "vs_5_1", ppd3dShaderBlob);
+    return CShader::CompileShaderFromFile(L"Effect.hlsli", "VSEffect", "vs_5_1", ppd3dShaderBlob);
 }
 
 D3D12_SHADER_BYTECODE CEffectShader::CreatePixelShader(ID3DBlob** ppd3dShaderBlob)
 {
-    return CShader::CompileShaderFromFile(L"Effect.hlsli", "PSParticle", "ps_5_1", ppd3dShaderBlob);
+    return CShader::CompileShaderFromFile(L"Effect.hlsli", "PSEffect", "ps_5_1", ppd3dShaderBlob);
 }
 
 void CEffectShader::CreateGraphicsPipelineState(ID3D12Device* device, ID3D12RootSignature* rootSig, int rootParamStart)

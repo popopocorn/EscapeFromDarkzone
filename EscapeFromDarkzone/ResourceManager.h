@@ -24,6 +24,7 @@ enum class ModelName
 	SMG,
 	BULLET,
 
+	GRENADE,
 	LOOT_BOX,
 
 	MAP_FLOOR,

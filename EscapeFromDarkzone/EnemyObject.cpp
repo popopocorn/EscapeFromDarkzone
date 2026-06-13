@@ -52,6 +52,112 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 	return nullptr;
 }
+struct EnemyWeaponVisualConfig
+{
+	XMFLOAT3 position;
+	XMFLOAT3 rotation;
+	XMFLOAT3 scale;
+};
+static EnemyWeaponVisualConfig GetEnemyWeaponVisualConfig(EnemyModelType enemyModelType, EnemyWeaponType weaponType)
+{
+	EnemyWeaponVisualConfig config{};
+	config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+	config.rotation = XMFLOAT3(-90.0f, -90.0f, 28.0f);
+	config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+
+	switch (enemyModelType)
+	{
+	case EnemyModelType::Enemy01:
+		switch (weaponType)
+		{
+		case EnemyWeaponType::Pistol:
+			config.position = XMFLOAT3(0.05f, 0.10f, 0.0f);
+			config.rotation = XMFLOAT3(180.0f, 180.0f, 0.0f);
+			config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+			break;
+
+		case EnemyWeaponType::SMG:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(180.0f, 90.0f, 0.0f);
+			config.scale = XMFLOAT3(10.9f, 10.9f, 10.9f);
+			break;
+
+		case EnemyWeaponType::Rifle:
+		default:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(-90.0f, -90.0f, 28.0f);
+			config.scale = XMFLOAT3(10.0f, 10.0f, 10.0f);
+			break;
+		}
+		break;
+
+	case EnemyModelType::Enemy02:
+		switch (weaponType)
+		{
+		case EnemyWeaponType::Pistol:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(90.0f, -90.0f, 14.0f);
+			config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+			break;
+
+		case EnemyWeaponType::SMG:
+			config.position = XMFLOAT3(0.05f, 0.25f, 0.05f);
+			config.rotation = XMFLOAT3(90.0f, 0.0f, 0.0f);
+			config.scale = XMFLOAT3(0.9f, 0.9f, 0.9f);
+			break;
+
+		case EnemyWeaponType::Rifle:
+		default:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(-90.0f, -90.0f, 28.0f);
+			config.scale = XMFLOAT3(1.1f, 1.1f, 1.1f);
+			break;
+		}
+		break;
+
+	case EnemyModelType::Enemy03:
+	default:
+		switch (weaponType)
+		{
+		case EnemyWeaponType::Pistol:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(90.0f, -90.0f, 14.0f);
+			config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+			break;
+
+		case EnemyWeaponType::SMG:
+			config.position = XMFLOAT3(-0.14f, 0.20f, 0.16f);
+			config.rotation = XMFLOAT3(-90.0f, -90.0f, 28.0f);
+			config.scale = XMFLOAT3(0.9f, 0.9f, 0.9f);
+			break;
+
+		case EnemyWeaponType::Rifle:
+		default:
+			config.position = XMFLOAT3(0.0f, 0.40f, 0.05f);
+			config.rotation = XMFLOAT3(90.0f, 0.0f, 0.0f);
+			config.scale = XMFLOAT3(1.1f, 1.1f, 1.1f);
+			break;
+		}
+		break;
+	}
+
+	return config;
+}
+static EnemyWeaponType GetDefaultWeaponTypeByEnemyModelType(EnemyModelType enemyModelType)
+{
+	switch (enemyModelType)
+	{
+	case EnemyModelType::Enemy01:
+		return EnemyWeaponType::Pistol;
+
+	case EnemyModelType::Enemy02:
+		return EnemyWeaponType::SMG;
+
+	case EnemyModelType::Enemy03:
+	default:
+		return EnemyWeaponType::Rifle;
+	}
+}
 
 CEnemyObject::CEnemyObject(
 	ID3D12Device* pd3dDevice,
@@ -75,8 +181,11 @@ CEnemyObject::CEnemyObject(
 	}
 
 	SetChild(pEnemyModel->m_pModelRootObject, true);
+
 	m_pRenderWeapon = new CGameObject();
-	EquipDefaultPistol();
+	m_pWeapon = nullptr;
+	m_pWeaponSocket = nullptr;
+	m_pWeaponMuzzleSocket = nullptr;
 
 	ClearOOBB(false);
 
@@ -123,6 +232,9 @@ CEnemyObject::~CEnemyObject()
 
 void CEnemyObject::SubmitWeaponToShader(CShader* shader)
 {
+	if (!shader || !m_pRenderWeapon)
+		return;
+
 	shader->addObjects(m_pRenderWeapon);
 }
 
@@ -187,12 +299,14 @@ void CEnemyObject::Update(float fTimeElapsed)
 {
 	m_xmf3PrevPos = m_xmf3Position;
 
+	if (m_fShootAnimTimer > 0.0f) {
+		m_fShootAnimTimer -= fTimeElapsed;
+	}
+
 	if (m_pState)
 	{
 		m_pState->Update(this, fTimeElapsed);
 	}
-
-	//if (not Alive)return;
 
 	if (m_bDying)
 	{
@@ -200,6 +314,13 @@ void CEnemyObject::Update(float fTimeElapsed)
 		m_xmf4x4ToParent._42 = m_xmf3Position.y;
 		m_xmf4x4ToParent._43 = m_xmf3Position.z;
 		UpdateTransform(NULL);
+
+		if (m_pRenderWeapon && m_pWeaponSocket)
+		{
+			m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+			m_pRenderWeapon->UpdateTransform(NULL);
+		}
+
 		return;
 	}
 
@@ -211,9 +332,8 @@ void CEnemyObject::Update(float fTimeElapsed)
 	XMFLOAT3 shift = Vector3::ScalarProduct(m_xmf3Velocity, fTimeElapsed, false);
 	m_xmf3Position = Vector3::Add(m_xmf3Position, shift);
 
-	// 05.10 추가 (보간)
-	if (m_bUseServerLerp) {
-		//constexpr float ALPHA = 0.15f;  // 60FPS 기준 매 프레임 15% 보정
+	if (m_bUseServerLerp)
+	{
 		constexpr float ALPHA = 0.08f;
 		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * ALPHA;
 		m_xmf3Position.y += (m_xmf3ServerPosition.y - m_xmf3Position.y) * ALPHA;
@@ -229,8 +349,8 @@ void CEnemyObject::Update(float fTimeElapsed)
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+		m_pRenderWeapon->UpdateTransform(NULL);
 	}
-
 }
 
 void CEnemyObject::HandleCollision(XMFLOAT3 normal)
@@ -481,17 +601,17 @@ void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
 
 void CEnemyObject::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponPrototype =
-		ResourceManager::Instance().GetModelPrototype(modelName);
+	CGameObject* pWeaponPrototype = ResourceManager::Instance().GetModelPrototype(modelName);
 
 	if (!pWeaponPrototype)
 	{
-		OutputDebugString(L"[Enemy] weapon prototype not found.\n");
+		wchar_t debugText[128];
+		swprintf_s(debugText, L"[Enemy] weapon prototype not found. ModelName = %d\n", static_cast<int>(modelName));
+		OutputDebugString(debugText);
 		return;
 	}
 
-	CGameObject* pWeaponInstance =
-		CGameObject::CreateModelInstance(pWeaponPrototype);
+	CGameObject* pWeaponInstance = CGameObject::CreateModelInstance(pWeaponPrototype);
 
 	if (!pWeaponInstance)
 	{
@@ -507,8 +627,7 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		"mixamorig:RightHandIndex1"
 	};
 
-	CGameObject* pRightHand =
-		FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
+	CGameObject* pRightHand = FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
 
 	if (!pRightHand)
 	{
@@ -516,6 +635,12 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		delete pWeaponInstance;
 		return;
 	}
+
+	if (!m_pRenderWeapon)
+	{
+		m_pRenderWeapon = new CGameObject();
+	}
+
 	if (m_pRenderWeapon->m_pChild)
 	{
 		delete m_pRenderWeapon->m_pChild;
@@ -524,33 +649,18 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 
 	m_pWeapon = pWeaponInstance;
 	m_pWeaponSocket = pRightHand;
-	
-	m_pRenderWeapon->SetChild(m_pWeapon);
+
+	m_pWeapon->m_pSibling = nullptr;
+	m_pRenderWeapon->m_pChild = m_pWeapon;
+
 	m_pRenderWeapon->SetOOBB(NULL);
 	m_pRenderWeapon->isColl = false;
 
-	// 기본값. 나중에 무기별로 조정 가능.
-	switch (modelName)
-	{
-	case ModelName::SMG:
-		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
-		m_pWeapon->SetScale(0.9f, 0.9f, 0.9f);
-		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
-		break;
+	EnemyWeaponVisualConfig visualConfig = GetEnemyWeaponVisualConfig(m_eEnemyModelType, m_eWeaponType);
 
-	case ModelName::RIFLE:
-		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
-		m_pWeapon->SetScale(1.2f, 1.2f, 1.2f);
-		m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
-		break;
-
-	case ModelName::PISTOL:
-	default:
-		m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
-		m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
-		m_pWeapon->Rotate(90.0f, -90.0f, 14.0f);
-		break;
-	}
+	m_pWeapon->SetPosition(visualConfig.position);
+	m_pWeapon->SetScale(visualConfig.scale.x, visualConfig.scale.y, visualConfig.scale.z);
+	m_pWeapon->Rotate(visualConfig.rotation.x, visualConfig.rotation.y, visualConfig.rotation.z);
 
 	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
 
@@ -563,19 +673,48 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		OutputDebugString(L"[Enemy] Socket_Muzzle not found.\n");
 	}
 
-	//m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+	m_pRenderWeapon->UpdateTransform(NULL);
 }
 
 void CEnemyObject::EquipDefaultPistol()
 {
-	EquipWeaponModel(ModelName::PISTOL);
+	SetEnemyWeaponType(EnemyWeaponType::Pistol);
+}
+void CEnemyObject::SetEnemyModelType(EnemyModelType eModelType)
+{
+	m_eEnemyModelType = eModelType;
+}
+void CEnemyObject::ApplyDefaultWeaponByEnemyModelType()
+{
+	EnemyWeaponType defaultWeaponType = GetDefaultWeaponTypeByEnemyModelType(m_eEnemyModelType);
+	SetEnemyWeaponType(defaultWeaponType);
+}
+ModelName CEnemyObject::GetWeaponModelNameByType(EnemyWeaponType eWeaponType) const
+{
+	switch (eWeaponType)
+	{
+	case EnemyWeaponType::Pistol:
+		return ModelName::PISTOL;
+
+	case EnemyWeaponType::SMG:
+		return ModelName::SMG;
+
+	case EnemyWeaponType::Rifle:
+	default:
+		return ModelName::RIFLE;
+	}
+}
+void CEnemyObject::EquipWeaponByType(EnemyWeaponType eWeaponType)
+{
+	EquipWeaponModel(GetWeaponModelNameByType(eWeaponType));
 }
 
-// 총기 타입을 설정하고 해당 총기 스탯을 적용한다.
 void CEnemyObject::SetEnemyWeaponType(EnemyWeaponType eWeaponType)
 {
 	m_eWeaponType = eWeaponType;
 	ConfigureWeaponStats();
+	EquipWeaponByType(eWeaponType);
 }
 
 int CEnemyObject::GetIdleAnimationByWeapon() const
@@ -939,6 +1078,7 @@ void CEnemyObject::FireAtPlayer()
 	if (!m_pPlayer) return;
 	if (m_bDying) return;
 	if (m_bReloading) return;
+
 	if (m_nCurrentAmmo <= 0)
 	{
 		StartReload();
@@ -947,13 +1087,23 @@ void CEnemyObject::FireAtPlayer()
 
 	m_nCurrentAmmo--;
 
-	// 나중에 여기에서 총알, 레이캐스트, 서버 패킷, 이펙트 등을 연결하면 됨.
+	m_fShootAnimTimer = m_fShootAnimHold;
+	m_bShootEffectRequested = true;
+
 	OutputDebugString(L"[Enemy AI] Enemy Burst Fire\n");
 
 	if (m_nCurrentAmmo <= 0)
 	{
 		StartReload();
 	}
+}
+
+bool CEnemyObject::ConsumeShootEffectRequest()
+{
+	if (!m_bShootEffectRequested) return false;
+
+	m_bShootEffectRequested = false;
+	return true;
 }
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
@@ -1129,14 +1279,61 @@ bool EnemyAttack::Enter(CEnemyObject* pEnemy)
 
 void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (!pEnemy->m_pPlayer) return;
 	if (pEnemy->m_bDying) return;
 
 	if (NetworkManager::Instance().IsConnected())
 	{
-		pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		if (pEnemy->IsReloading())
+		{
+			pEnemy->UpdateReload(fTimeElapsed);
+			pEnemy->SetEnemyAnimation(pEnemy->GetReloadAnimationByWeapon(), false, false);
+			return;
+		}
+
+		if (pEnemy->m_fShootAnimTimer > 0.0f) {
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+			return;
+		}
+
+		XMFLOAT3 toServer;
+		toServer.x = pEnemy->m_xmf3ServerPosition.x - pEnemy->m_xmf3Position.x;
+		toServer.y = 0.0f;
+		toServer.z = pEnemy->m_xmf3ServerPosition.z - pEnemy->m_xmf3Position.z;
+
+		float moveLen = Vector3::Length(toServer);
+
+		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;		// 임시
+
+		if (moveLen < MOVE_ANIM_THRESHOLD) {				// 안움직임
+			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
+		}
+		else {												// 움직임
+			XMFLOAT3 moveDir = NormalizeXZ(toServer);
+			XMFLOAT3 forward = pEnemy->GetForwardXZ();
+			XMFLOAT3 right = GetRightFromForwardXZ(forward);
+
+			float fwdDot = moveDir.x * forward.x + moveDir.z * forward.z;   // 전후 성분
+			float rightDot = moveDir.x * right.x + moveDir.z * right.z;     // 좌우 성분
+
+			if (fabsf(rightDot) > fabsf(fwdDot))
+			{
+				// 옆걸음
+				if (rightDot >= 0.0f)
+					pEnemy->SetEnemyAnimation(pEnemy->GetRightRunAnimationByWeapon(), true, false);
+				else
+					pEnemy->SetEnemyAnimation(pEnemy->GetLeftRunAnimationByWeapon(), true, false);
+			}
+			else
+			{
+				// 전진 
+				pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+			}
+		}
+
 		return;
 	}
+
+	if (!pEnemy->m_pPlayer) return;
 
 	if (pEnemy->IsOutsideLeashRange())
 	{
@@ -1504,3 +1701,4 @@ void CEnemyObject::SnapToServerPosition()
 	m_xmf4x4ToParent._42 = m_xmf3Position.y;
 	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 }
+

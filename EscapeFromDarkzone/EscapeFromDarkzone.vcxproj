@@ -163,9 +163,12 @@
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemDef.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="NetEntityManager.h" />
+    <ClInclude Include="NetSession.h" />
     <ClInclude Include="Network.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="OtherPlayer.h" />
+    <ClInclude Include="NetPacketDispatcher.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Projectile.h" />
     <ClInclude Include="protocol.h" />
@@ -200,9 +203,12 @@
     <ClCompile Include="InventoryManager.cpp" />
     <ClCompile Include="Item.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="NetEntityManager.cpp" />
+    <ClCompile Include="NetSession.cpp" />
     <ClCompile Include="Network.cpp" />
     <ClCompile Include="Object.cpp" />
     <ClCompile Include="OtherPlayer.cpp" />
+    <ClCompile Include="NetPacketDispatcher.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Projectile.cpp" />
     <ClCompile Include="ResourceManager.cpp" />

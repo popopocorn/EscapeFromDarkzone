@@ -15,6 +15,7 @@
 #include "Projectile.h"
 #include"Scene.h"
 #include "Network.h"	// 03.27 추가
+#include "NetSession.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -240,16 +241,20 @@ void CPlayer::Update(float fTimeElapsed)
 		bool bHasInput = (inputs != 0);
 
 		if (bHasInput) {
-			NetworkManager::Instance().SendMove(
-				inputs, m_fYaw,
-				static_cast<unsigned int>(GetTickCount())
-			);
+			NetSession::Instance().Move(inputs, m_fYaw,
+				static_cast<unsigned int>(GetTickCount()));
+			//NetworkManager::Instance().SendMove(
+			//	inputs, m_fYaw,
+			//	static_cast<unsigned int>(GetTickCount())
+			//);
 		}
 		else if (m_bWasMoving) {
-			NetworkManager::Instance().SendMove(
-				0, m_fYaw,
-				static_cast<unsigned int>(GetTickCount())
-			);
+			NetSession::Instance().Move(0, m_fYaw,
+				static_cast<unsigned int>(GetTickCount()));
+			//NetworkManager::Instance().SendMove(
+			//	0, m_fYaw,
+			//	static_cast<unsigned int>(GetTickCount())
+			//);
 		}
 
 		m_bWasMoving = bHasInput;
@@ -471,7 +476,7 @@ static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType wea
 	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 
 	// SMG 기준값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞- 뒤+, z값 수정 시 좌+ 우-
+	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
 	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.10f, 0.16f);
 	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
 	const XMFLOAT3 smgShootPos = XMFLOAT3(0.20f, -0.10f, -0.20f);
@@ -1404,6 +1409,20 @@ PlayerWeaponType CPlayer::GetCurrentPlayerWeaponType() const
 		return m_eCurrentWeaponType;
 
 	return GetPlayerWeaponTypeFromItemType(m_pEquippedWeaponItem->GetType());
+}
+
+short CPlayer::GetEquippedWeaponTypeForWire() const
+{
+	if (!m_pEquippedWeaponItem)
+		return static_cast<short>(ItemType::RIFLE);
+	return static_cast<short>(m_pEquippedWeaponItem->GetType());
+}
+
+short CPlayer::GetEquippedWeaponGradeForWire() const
+{
+	if (!m_pEquippedWeaponItem)
+		return static_cast<short>(ItemGrade::GRADE_1);
+	return static_cast<short>(m_pEquippedWeaponItem->GetGrade());
 }
 
 bool CPlayer::IsCurrentWeaponAutomatic() const

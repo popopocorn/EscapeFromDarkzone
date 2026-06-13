@@ -36,6 +36,13 @@ enum class EnemyWeaponType
 	Rifle
 };
 
+enum class EnemyModelType
+{
+	Enemy01,
+	Enemy02,
+	Enemy03
+};
+
 constexpr int MAX_LOOT_SLOTS = 10;
 
 class AstarNavigation;
@@ -95,9 +102,15 @@ public:
 	XMFLOAT3 m_xmf3ServerPosition = { 0.0f, 0.0f, 0.0f };	// 05.10 추가
 	bool     m_bUseServerLerp = false;						// 05.10 추가
 public:
+	void SetEnemyModelType(EnemyModelType eModelType);
+	void ApplyDefaultWeaponByEnemyModelType();
+	void EquipWeaponByType(EnemyWeaponType eWeaponType);
 	void EquipWeaponModel(ModelName modelName);
 	void EquipDefaultPistol();
+	ModelName GetWeaponModelNameByType(EnemyWeaponType eWeaponType) const;
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+
+	EnemyModelType m_eEnemyModelType = EnemyModelType::Enemy01;
 	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Pistol;
 
 	float m_fMoveSpeed = 5.0f;
@@ -176,11 +189,9 @@ public:
 	float m_fDieDuration = 3.4f;
 	bool m_bDeadRemoveRequested = false;
 
-	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
-
-	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
-
-	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+	float m_fShootAnimTimer = 0.0f;				// 서버 패킷으로부터 사격 애니메이션을 구분하기 위해 추가
+	float m_fShootAnimHold = 0.18f;				// 버스트 간격(0.15) 보다 조금 더 길게 해서 안 끊기게 유지
+	bool m_bShootEffectRequested = false;
 
 public:
 	void SetSpawnPosition(const XMFLOAT3& pos) { m_xmf3SpawnPosition = pos; }
@@ -239,6 +250,15 @@ public:
 	void UpdateIdleLook(float fTimeElapsed);
 
 	void FireAtPlayer();
+	bool ConsumeShootEffectRequest();
+
+	void SetServerPosition(const XMFLOAT3& pos);	// 05.10 추가
+
+	void SetServerYaw(float yawRad);				// 05.14 추가: 서버에서 받은 방향으로 회전
+
+	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
+
+	void  TriggerShootAnim() { m_fShootAnimTimer = m_fShootAnimHold; }
 
 };
 

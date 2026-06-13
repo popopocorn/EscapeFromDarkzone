@@ -18,6 +18,7 @@
 #include "Server_Npc.h"
 #include "Server_AI.h"
 #include "Server_Effect.h"
+#include "Server_Weapon.h"
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -51,9 +52,8 @@ constexpr float NPC_BURST_SHOT_INTERVAL		= 0.15f;
 constexpr float NPC_BURST_REST_DURATION		= 1.0f;
 
 // 스트레이프 / 재장전
-constexpr float NPC_STRAFE_DURATION			= 1.2f;
-constexpr int   NPC_MAG_AMMO				= 12;
-constexpr float NPC_RELOAD_DURATION			= 2.0f;
+constexpr float NPC_STRAFE_DURATION = 1.2f;
+// 탄창 / 재장전시간은 무기 테이블로 
 
 // 시야각
 constexpr float NPC_VIEW_ANGLE_DEG			= 120.0f;
@@ -68,9 +68,6 @@ constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STO
 constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
 constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
-// NPC 사격 (플레이어 무기와 분리 — 밸런스 독립 조절)
-constexpr short NPC_FIRE_DAMAGE = 5;       // 발당 데미지
-constexpr float NPC_FIRE_RANGE = 12.0f;   // 사격 유효 사거리 (attack range보다 약간 길게)
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
@@ -334,13 +331,14 @@ public:
 		p.type = SC_REMOVE_PLAYER;
 		do_send(&p);
 	}
-	void send_add_npc_packet(short npc_id, char kind, float x, float y, float z, float yaw, short hp)
+	void send_add_npc_packet(short npc_id, char kind, char outfit, float x, float y, float z, float yaw, short hp)
 	{
 		SC_ADD_NPC_PACKET p;
 		p.size = sizeof(SC_ADD_NPC_PACKET);
 		p.type = SC_ADD_NPC;
 		p.npc_id = npc_id;
 		p.npc_kind = kind;
+		p.npc_outfit = outfit;
 		p.x = x; p.y = y; p.z = z;
 		p.yaw = yaw;
 		p.hp = hp;
@@ -635,26 +633,54 @@ static void StartNpcBurst(SERVER_NPC& npc)
 	npc.burst_shot_timer = 0.0f;
 }
 
+static WeaponSpec GetNpcWeaponSpec(const SERVER_NPC& npc)
+{
+	return LookupWeaponSpec(
+		static_cast<WeaponType>(npc.weapon_type),
+		static_cast<WeaponGrade>(npc.weapon_grade));
+}
+
 static void StartNpcReload(SERVER_NPC& npc)
 {
 	if (npc.reloading) return;
 	npc.reloading = true;
-	npc.reload_timer = NPC_RELOAD_DURATION;
+	npc.reload_timer = GetNpcWeaponSpec(npc).reloadTime;
 	npc.burst_shots_left = 0;
 	npc.burst_shot_timer = 0.0f;
 	npc.burst_rest_timer = 0.0f;
 	std::cout << "[NPC " << npc.id << "] Reload Start\n";
 }
 
-static void UpdateNpcReload(SERVER_NPC& npc, float dt)
+static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 {
-	if (!npc.reloading) return;
+	if (!npc.reloading) return false;
 	npc.reload_timer -= dt;
 	if (npc.reload_timer <= 0.0f) {
 		npc.reloading = false;
 		npc.reload_timer = 0.0f;
-		npc.current_ammo = NPC_MAG_AMMO;
+		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;
 		std::cout << "[NPC " << npc.id << "] Reload Finish\n";
+		return true;
+	}
+	return false;
+}
+
+static void BroadcastAttachedEffectNoSnapshot(
+	EffectID id, EffectEntityKind kind, short entity_id)
+{
+	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
+	ep.size = sizeof(ep);
+	ep.type = SC_PLAY_EFFECT_ATTACHED;
+	ep.effect_id = static_cast<unsigned char>(id);
+	ep.entity_kind = static_cast<unsigned char>(kind);
+	ep.entity_id = entity_id;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		{
+			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+			if (clients[i]._state != ST_INGAME) continue;
+		}
+		clients[i].do_send(&ep);
 	}
 }
 
@@ -692,13 +718,24 @@ static void BroadcastWorldEffect(
 	}
 }
 
+static void ChangeNpcState(SERVER_NPC&, char, const std::array<PlayerSnapshot, MAX_USER>&);
+
 static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
-	if (npc.current_ammo <= 0) { StartNpcReload(npc); return; }
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		return;
+	}
 
 	npc.current_ammo--;
+
+	// NPC 무기 spec
+	WeaponSpec spec = LookupWeaponSpec(
+		static_cast<WeaponType>(npc.weapon_type),
+		static_cast<WeaponGrade>(npc.weapon_grade));
 
 	XMFLOAT3 forward = GetForwardXZ(npc.yaw);
 
@@ -726,16 +763,19 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		BoundingOrientedBox pbox = MakePlayerOOBB(tpos, player_snapshot[target_id].yaw);
 
 		float t{}; // Intersects out 파라미터
-		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= NPC_FIRE_RANGE) {
+		float hit_dist = 0.0f;
+		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= spec.range) {
 			hit = true;
+			hit_dist = t;
 		}
 
 		if (hit) {
+			short dmg = ComputeDamage(spec, hit_dist);   // 거리 감쇠 포함
 			short new_hp = 0;
 			{
 				std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
 				if (clients[target_id]._state == ST_INGAME) {
-					clients[target_id].hp -= NPC_FIRE_DAMAGE;
+					clients[target_id].hp -= dmg;
 					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 					new_hp = clients[target_id].hp;
 				}
@@ -759,7 +799,10 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	// 발사 이펙트: 머즐 플래시
 	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
 
-	if (npc.current_ammo <= 0) StartNpcReload(npc);
+	if (npc.current_ammo <= 0) {
+		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+	}
 }
 
 static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& player_pos)
@@ -831,7 +874,7 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 		box.y = npc.position.y;
 		box.z = npc.position.z;
 
-		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], ["<< box.npc_id << "]\n";
+		std::cout << "BOX CREATED [" << box.x << ", " << box.y << ", " << box.z << "], [" << box.npc_id << "]\n";
 
 		for (int i = 0; i < INVENTORY_SIZE; ++i) {
 			box.items[i] = npc._inventory[i].item;
@@ -917,27 +960,9 @@ static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
 	normals.clear();
 }
 
-static short WeaponDamage(char weapon_id)
-{
-	switch (weapon_id) {
-	case 0:  
-		return 10;
-	default: 
-		return 0;
-	}
-}
+static void EnterNpcAttack(SERVER_NPC&);
 
-static float WeaponRange(char weapon_id)
-{
-	switch (weapon_id) {
-	case 0:  
-		return 100.0f;
-	default: 
-		return 0.0f;
-	}
-}
-
-static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	if (NPC_STATE_DIE == npc.state) return;
 
@@ -959,6 +984,27 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, const std::array<PlayerSn
 	if (npc.hp <= 0) {
 		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
 	}
+
+	if (NPC_STATE_IDLE == npc.state) {
+		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
+		if (!player_snapshot[attacker_client_id].in_game) return;
+
+		XMFLOAT3 attacker_pos = {
+			player_snapshot[attacker_client_id].x,
+			player_snapshot[attacker_client_id].y,
+			player_snapshot[attacker_client_id].z
+		};
+
+		RefreshLastSeenPlayer(npc, attacker_pos);
+
+		if (CanShootPlayer(npc, attacker_pos)) {
+			EnterNpcAttack(npc);
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		}
+		else {
+			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+		}
+	}
 }
 
 static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
@@ -969,7 +1015,9 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
 		XMVECTOR dir = XMVector3Normalize(XMVectorSet(e.ray_direction.x, e.ray_direction.y, e.ray_direction.z, 0.0f));
 
-		float max_range = WeaponRange(e.weapon_id);
+		WeaponSpec spec = LookupWeaponSpec((WeaponType)e.weapon_type, (WeaponGrade)e.weapon_grade);
+
+		float max_range = spec.range;
 		if (max_range <= 0.0f) return;
 
 		short best_id = -1;
@@ -985,12 +1033,14 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 
 		if (best_id >= 0) {
-			short damage = WeaponDamage(e.weapon_id);
-			ApplyDamage(g_npcs[best_id], damage, player_snapshot);
+			short dmg = ComputeDamage(spec, best_t);
+			if (dmg > 0) {
+				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
+			}
 		}
 	}
 
-		break;
+	break;
 	case NpcInputEvent::NEW_CLIENT_JOINED:
 	{
 		std::cout << "[NPC] NEW_CLIENT_JOINED received, client "
@@ -1008,7 +1058,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		for (const auto& npc : g_npcs) {
 			if (!npc.alive) continue;
 			clients[e.new_client_id].send_add_npc_packet(
-				npc.id, npc.kind,
+				npc.id, npc.kind, npc.outfit,
 				npc.position.x, npc.position.y, npc.position.z,
 				npc.yaw, npc.hp
 			);
@@ -1065,7 +1115,7 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 	ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
 }
 
-static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	// 1. 가장 가까운 플레이어 검색
 	float dist_sq;
@@ -1221,8 +1271,10 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		}
 	}
 
-	// 스폰 위치 도착 → IDLE (잠깐 감지 무시 타이머 세팅)
+	// 스폰 위치 도착 -> IDLE (잠깐 감지 무시 타이머 세팅)
 	if (IsNearSpawn(npc)) {
+		npc.hp = npc.max_hp;
+
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
 		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
@@ -1301,12 +1353,16 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	bool can_detect = CanDetectPlayer(npc, player_pos);
 	bool can_shoot = CanShootPlayer(npc, player_pos);
 
-	// 2. 재장전 중 정지, 조준만
+	// 2. 재장전
 	if (npc.reloading) {
-		UpdateNpcReload(npc, dt);
+		bool justFinished = UpdateNpcReload(npc, dt);
 		if (can_detect) {
 			RefreshLastSeenPlayer(npc, player_pos);
 			npc.yaw = std::atan2(player_pos.x - npc.position.x, player_pos.z - npc.position.z);
+		}
+		if (justFinished) {
+			// 재장전 종료 -> ATTACK 복귀 통지
+			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
 		}
 		return;  // 이동 없음
 	}
@@ -1342,6 +1398,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	// 5. 탄약 0이면 재장전
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
+		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);   // 클라에 재장전 시작 통지
 		return;
 	}
 
@@ -1407,7 +1464,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	}
 }
 
-static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot) 
+static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	npc.die_timer += dt;
 	if (npc.die_timer < NPC_DIE_DURATION) return;
@@ -1437,20 +1494,21 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	switch (npc.state) {
-	case NPC_STATE_IDLE: 
-		UpdateNpcIdle(npc, dt, player_snapshot); 
+	case NPC_STATE_IDLE:
+		UpdateNpcIdle(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_RUN:  
-		UpdateNpcRun(npc, dt, player_snapshot); 
+	case NPC_STATE_RUN:
+		UpdateNpcRun(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_RETURN: 
+	case NPC_STATE_RETURN:
 		UpdateNpcReturn(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_ATTACK: 
+	case NPC_STATE_ATTACK:
+	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
 		UpdateNpcAttack(npc, dt, player_snapshot);
 		break;
-	case NPC_STATE_DIE:  
-		UpdateNpcDie(npc, dt, player_snapshot); 
+	case NPC_STATE_DIE:
+		UpdateNpcDie(npc, dt, player_snapshot);
 		break;
 	}
 }
@@ -1787,7 +1845,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
-		CS_HIT_NPC_PACKET* p = 
+		CS_HIT_NPC_PACKET* p =
 			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
 
 		NpcInputEvent ev{};
@@ -1795,10 +1853,90 @@ void process_packet(int c_id, char* packet)
 		ev.attacker_client_id = c_id;
 		ev.ray_origin = { p->ray_ox, p->ray_oy, p->ray_oz };
 		ev.ray_direction = { p->ray_dx, p->ray_dy, p->ray_dz };
-		ev.weapon_id = p->weapon_id;
+		ev.weapon_type = p->weapon_type;
+		ev.weapon_grade = p->weapon_grade;
 		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
 
 		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+	case CS_HIT_PLAYER: {
+		CS_HIT_PLAYER_PACKET* p =
+			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
+
+		XMVECTOR origin = XMVectorSet(p->ray_ox, p->ray_oy, p->ray_oz, 0.0f);
+		XMVECTOR dir = XMVector3Normalize(
+			XMVectorSet(p->ray_dx, p->ray_dy, p->ray_dz, 0.0f));
+
+		// 공격자 무기 spec (PvE HIT_NPC와 동일 테이블 공유)
+		WeaponSpec spec = LookupWeaponSpec(
+			static_cast<WeaponType>(p->weapon_type),
+			static_cast<WeaponGrade>(p->weapon_grade));
+
+		/*
+		{
+			std::cout << "[debug pvp weapon type]: " << static_cast<int>(p->weapon_type)
+				<< " grade:" << static_cast<int>(p->weapon_grade)
+				<< " range:" << spec.range
+				<< " damage:" << spec.damage
+				<< "\n";
+		}
+		*/
+
+		// 락 잡아서 후보만 스냅샷
+		short  best_id = -1;
+		float  best_t = spec.range;
+
+		for (int i = 0; i < MAX_USER; ++i) {
+			if (i == c_id) continue;   // 자기 자신 제외
+
+			XMFLOAT3 tpos;
+			float    tyaw;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;     // 이미 사망
+				tpos = { clients[i].x, clients[i].y, clients[i].z };
+				tyaw = clients[i].yaw;
+			}   // 좌표 복사 끝, 락 해제
+
+			BoundingOrientedBox pbox = MakePlayerOOBB(tpos, tyaw);
+			float t;
+			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_id = (short)i;
+			}
+		}
+
+		// 명중 1번만 짧게 락, hp조정
+		if (best_id >= 0) {
+			short dmg = ComputeDamage(spec, best_t);   // 거리 감쇠 포함
+			short new_hp = 0;
+			{
+				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
+				if (clients[best_id]._state == ST_INGAME) {
+					clients[best_id].hp -= dmg;
+					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
+					new_hp = clients[best_id].hp;
+				}
+			}
+
+			std::cout << "[PvP] client " << c_id << " HIT player "
+				<< best_id << " (hp=" << new_hp << ")\n";
+
+			// 피격자 본인에게만 HP 통지
+			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+			hp_pkt.size = sizeof(hp_pkt);
+			hp_pkt.type = SC_PLAYER_HP_UPDATE;
+			hp_pkt.id = best_id;
+			hp_pkt.hp = new_hp;
+			clients[best_id].do_send(&hp_pkt);
+		}
+
+		// 머즐 플래시 전체 브로드캐스트
+		BroadcastAttachedEffectNoSnapshot(
+			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
 		break;
 	}
@@ -1934,7 +2072,7 @@ void worker_thread(HANDLE h_iocp)
 				clients[client_id]._prev_remain = 0;
 
 				clients[client_id]._collNormals.clear();
-				
+
 				clients[client_id]._socket = g_c_socket;
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket),
 					h_iocp, client_id, 0);
@@ -2011,48 +2149,47 @@ int main()
 
 	init_npcs();
 
-	XMFLOAT3 tmp_position_list[27] = {
-		{ 7.0f, 0.0f, -14.0f },
-		{ 3.5f, 0.0f, 20.0f },
-		{ -12.0f, 0.0f, -24.0f },
-		{ -40.0f, 0.1f, 30.0f },
-		{ -43.0f, 0.0f, 8.0f },
-		{ -35.0f, 0.0f, -5.0f },
-		{ -22.0f, 0.0f, -5.0f },
-		{ -34.0f, 0.0f, -40.0f },
-		{ -3.5f, 0.0f, -36.0f },
-		{ 3.0f, 0.0f, -65.0f },
-		{ -20.0f, 0.0f, -89.0f },
-		{ -68.0f, 0.0f, -66.0f },
-		{ -40.0f, 0.0f, -15.0f },
-		{ -66.0f, 0.0f, -27.0f },
-		{ 17.0f, 0.0f, -33.0f },
-		{ 38.0f, 0.0f, -65.0f },
-		{ 37.0f, 0.0f, -89.0f },
-		{ 1.0f, 0.0f, -81.0f },
-		{ -57.0f, 0.0f, 104.0f },
-		{ -73.0f, 0.0f, -70.0f },
-		{ -79.0f, 0.0f, -35.0f },
-		{ -82.0f, 0.0f, 1.0f },
-		{ -59.0f, 0.0f, 23.0f },
-		{ -28.0f, 0.0f, -20.0f },
-		{ 26.0f, 0.0f, 37.0f },
-		{ 26.0f, 0.0f, 2.0f },
-		{ 37.0f, 0.0f, -90.0f },
+	// NPC 배치: 위치(x,z) + 단계(tier) + 외형(outfit). y는 0.0f 고정.
+	// 1·2단계: 10그룹 x 3마리(a,b=1단계, c=2단계). 3단계: A,B,C.
+	struct NpcSpawnDef { float x, z; char tier; char outfit; };
+	NpcSpawnDef main_npc_def[] = {
+		// 그룹01 (outfit a0 b1 c0)
+		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
+		// 그룹02 (outfit a1 b2 c1)
+		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
+		// 그룹03 (outfit a0 b2 c2)
+		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
+		// 그룹04 (outfit a0 b1 c0)
+		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
+		// 그룹05 (outfit a1 b2 c1)
+		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
+		// 그룹06 (outfit a0 b2 c2)
+		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
+		// 그룹07 (outfit a0 b1 c0)
+		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
+		// 그룹08 (outfit a1 b2 c1)
+		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
+		// 그룹09 (outfit a0 b2 c2)
+		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
+		// 그룹10 (outfit a0 b1 c0)
+		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
+		// 3단계 A,B,C (outfit 0,1,2)
+		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
 	};
+	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 
-	for (int i = 0; i < 27; ++i)
+	for (int i = 0; i < npc_count; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
-		npc.kind = 0;
+		npc.outfit = main_npc_def[i].outfit;									//	임시 적용!!!!!!
+		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
 		npc.state = NPC_STATE_IDLE;
-		npc.position = tmp_position_list[i];
+		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;
 		npc.yaw = 0.0f;
-		npc.hp = 100;
-		npc.max_hp = 100;
+		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;   // 스폰 시 탄창 채움
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
