@@ -2149,54 +2149,44 @@ int main()
 
 	init_npcs();
 
-	XMFLOAT3 tmp_position_list[27] = {
-		{ 7.0f, 0.0f, -14.0f },
-		{ 3.5f, 0.0f, 20.0f },
-		{ -12.0f, 0.0f, -24.0f },
-		{ -40.0f, 0.1f, 30.0f },
-		{ -43.0f, 0.0f, 8.0f },
-		{ -35.0f, 0.0f, -5.0f },
-		{ -22.0f, 0.0f, -5.0f },
-		{ -34.0f, 0.0f, -40.0f },
-		{ -3.5f, 0.0f, -36.0f },
-		{ 3.0f, 0.0f, -65.0f },
-		{ -20.0f, 0.0f, -89.0f },
-		{ -68.0f, 0.0f, -66.0f },
-		{ -40.0f, 0.0f, -15.0f },
-		{ -66.0f, 0.0f, -27.0f },
-		{ 17.0f, 0.0f, -33.0f },
-		{ 38.0f, 0.0f, -65.0f },
-		{ 37.0f, 0.0f, -89.0f },
-		{ 1.0f, 0.0f, -81.0f },
-		{ -57.0f, 0.0f, 104.0f },
-		{ -73.0f, 0.0f, -70.0f },
-		{ -79.0f, 0.0f, -35.0f },
-		{ -82.0f, 0.0f, 1.0f },
-		{ -59.0f, 0.0f, 23.0f },
-		{ -28.0f, 0.0f, -20.0f },
-		{ 26.0f, 0.0f, 37.0f },
-		{ 26.0f, 0.0f, 2.0f },
-		{ 37.0f, 0.0f, -90.0f },
+	// NPC 배치: 위치(x,z) + 단계(tier) + 외형(outfit). y는 0.0f 고정.
+	// 1·2단계: 10그룹 x 3마리(a,b=1단계, c=2단계). 3단계: A,B,C.
+	struct NpcSpawnDef { float x, z; char tier; char outfit; };
+	NpcSpawnDef main_npc_def[] = {
+		// 그룹01 (outfit a0 b1 c0)
+		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
+		// 그룹02 (outfit a1 b2 c1)
+		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
+		// 그룹03 (outfit a0 b2 c2)
+		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
+		// 그룹04 (outfit a0 b1 c0)
+		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
+		// 그룹05 (outfit a1 b2 c1)
+		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
+		// 그룹06 (outfit a0 b2 c2)
+		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
+		// 그룹07 (outfit a0 b1 c0)
+		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
+		// 그룹08 (outfit a1 b2 c1)
+		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
+		// 그룹09 (outfit a0 b2 c2)
+		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
+		// 그룹10 (outfit a0 b1 c0)
+		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
+		// 3단계 A,B,C (outfit 0,1,2)
+		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
 	};
+	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 
-	// NPC별 단계(tier 1/2/3)와 외형(outfit 0/1/2) 지정.
-	// tier는 무기/체력 결정, outfit은 비주얼 프리셋 (독립).
-	struct NpcSpawnDef { char tier; char outfit; };
-	NpcSpawnDef tmp_npc_def[27] = {
-		{1,0},{1,1},{1,2},{1,0},{1,1},{1,2},{1,0},{1,1},{1,2},   // 1단계 9
-		{2,0},{2,1},{2,2},{2,0},{2,1},{2,2},{2,0},{2,1},{2,2},   // 2단계 9
-		{3,0},{3,1},{3,2},{3,0},{3,1},{3,2},{3,0},{3,1},{3,2},   // 3단계 9, 임시 적용
-	};
-
-	for (int i = 0; i < 27; ++i)
+	for (int i = 0; i < npc_count; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
-		npc.outfit = tmp_npc_def[i].outfit;										//	임시 적용!!!!!!
-		ApplyNpcTier(npc, tmp_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
+		npc.outfit = main_npc_def[i].outfit;									//	임시 적용!!!!!!
+		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
 		npc.state = NPC_STATE_IDLE;
-		npc.position = tmp_position_list[i];
+		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;
 		npc.yaw = 0.0f;
 		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;   // 스폰 시 탄창 채움
