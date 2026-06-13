@@ -329,7 +329,7 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 {
 	if (!m_pLootShader) return;
 
-	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
+	CLootContainerObject* pLoot = new CLootContainerObject(60.0f);
 
 	XMFLOAT3 spawnPos = pos;
 	spawnPos.y += 0.05f;

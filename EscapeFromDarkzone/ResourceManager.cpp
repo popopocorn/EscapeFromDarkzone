@@ -337,17 +337,14 @@ void ResourceManager::BuildPlayerModelPrototypes(ID3D12Device* pd3dDevice, ID3D1
 {
 	if (!PlayerShader) return;
 
-	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_01, pd3dDevice, pd3dCommandList, 
-		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_black.bin", PlayerShader);
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_01, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_black.bin", PlayerShader);
 
-	/*LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, 
-		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
 
-	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_03, pd3dDevice, pd3dCommandList, 
-		pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_green.bin", PlayerShader);
+	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_03, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_green.bin", PlayerShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
-	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);*/
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
 }
 
 void ResourceManager::BuildSkinnedModelPrototypes(
@@ -356,15 +353,16 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
-	LoadAndRegisterSkinnedModelPrototype(
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
-	);
-	/*LoadAndRegisterSkinnedModelPrototype(
+	);*/
+	
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
@@ -372,59 +370,62 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_2.bin",
 		SkinnedShader
 	);
-	LoadAndRegisterSkinnedModelPrototype(
+
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_3,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
-	);
-	*/
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+	
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_1.bin",
 		SkinnedShader
-	);
-	/*
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+	
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_2.bin",
 		SkinnedShader
-	);
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_3,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_3.bin",
 		SkinnedShader
-	);
-	*/
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+	
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
-	);
-	/*
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+	
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_2.bin",
 		SkinnedShader
-	);
-	LoadAndRegisterSkinnedModelPrototype(
+	);*/
+
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_3,
 		pd3dDevice,
 		pd3dCommandList,
@@ -622,8 +623,7 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	if (!pPrototypeInfo->m_pModelRootObject) return nullptr;
 	if (!pPrototypeInfo->m_pAnimationSets) return nullptr;
 
-	CGameObject* pRootInstance =
-		CGameObject::CreateModelInstance(pPrototypeInfo->m_pModelRootObject);
+	CGameObject* pRootInstance = CGameObject::CreateModelInstance(pPrototypeInfo->m_pModelRootObject);
 
 	if (!pRootInstance)
 		return nullptr;
@@ -633,11 +633,7 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	pInstanceInfo->m_pModelRootObject = pRootInstance;
 	pInstanceInfo->m_nSkinnedMeshes = pPrototypeInfo->m_nSkinnedMeshes;
 
-	pInstanceInfo->m_pAnimationSets =
-		CreateAnimationSetsInstanceCache(
-			pPrototypeInfo->m_pAnimationSets,
-			pRootInstance
-		);
+	pInstanceInfo->m_pAnimationSets = CreateAnimationSetsInstanceCache(pPrototypeInfo->m_pAnimationSets, pRootInstance);
 
 	if (!pInstanceInfo->m_pAnimationSets)
 	{
@@ -645,17 +641,30 @@ CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 		return nullptr;
 	}
 
+	pInstanceInfo->m_ppSkinnedMeshes = nullptr;
+
 	if (pInstanceInfo->m_nSkinnedMeshes > 0)
 	{
-		pInstanceInfo->m_ppSkinnedMeshes =
-			new CSkinnedMesh * [pInstanceInfo->m_nSkinnedMeshes];
+		pInstanceInfo->m_ppSkinnedMeshes = new CSkinnedMesh * [pInstanceInfo->m_nSkinnedMeshes];
+
+		for (int i = 0; i < pInstanceInfo->m_nSkinnedMeshes; ++i)
+		{
+			pInstanceInfo->m_ppSkinnedMeshes[i] = nullptr;
+		}
 
 		int nSkinnedMesh = 0;
+		pRootInstance->FindAndSetSkinnedMesh(pInstanceInfo->m_ppSkinnedMeshes, &nSkinnedMesh);
 
-		pRootInstance->FindAndSetSkinnedMesh(
-			pInstanceInfo->m_ppSkinnedMeshes,
-			&nSkinnedMesh
-		);
+		if (nSkinnedMesh != pInstanceInfo->m_nSkinnedMeshes)
+		{
+			pInstanceInfo->m_nSkinnedMeshes = nSkinnedMesh;
+		}
+
+		if (pInstanceInfo->m_nSkinnedMeshes <= 0)
+		{
+			delete[] pInstanceInfo->m_ppSkinnedMeshes;
+			pInstanceInfo->m_ppSkinnedMeshes = nullptr;
+		}
 	}
 
 	return pInstanceInfo;

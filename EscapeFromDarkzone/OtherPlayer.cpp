@@ -18,8 +18,20 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
-	CLoadedModelInfo* pPlayerModel = CGameObject::LoadGeometryAndAnimationFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/Ch15_nonPBR.bin", NULL);
-	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
+	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
+
+	CLoadedModelInfo* pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02);
+
+	if (!pPlayerModel)
+	{
+		return;
+	}
+
+	if (!pPlayerModel->m_pModelRootObject)
+	{
+		delete pPlayerModel;
+		return;
+	}
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
@@ -27,14 +39,20 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 
 	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
 
-	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
-	m_pSkinnedAnimationController->SetTrackEnable(0, true);
-	m_pSkinnedAnimationController->SetTrackEnable(1, false);
+	if (m_pSkinnedAnimationController)
+	{
+		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
+		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
+		m_pSkinnedAnimationController->SetTrackEnable(0, true);
+
+		m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
+		m_pSkinnedAnimationController->SetTrackEnable(1, false);
+	}
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-
-	if (pPlayerModel) delete pPlayerModel;
+	delete pPlayerModel;
 
 	ChangeState(std::make_unique<OtherPlayerIdle>());
 }
