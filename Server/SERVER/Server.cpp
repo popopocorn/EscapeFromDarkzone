@@ -9,6 +9,7 @@
 #include <string>
 
 #include <chrono>
+#include <atomic>
 #include <cmath>
 
 #include "protocol.h"
@@ -402,6 +403,14 @@ public:
 };
 
 std::array<SESSION, MAX_USER> clients;
+
+// ===== 라운드 상태 =====
+constexpr int ROUND_MIN_PLAYERS = 3;
+
+enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
+std::atomic<int> g_round_state{ ROUND_WAITING };
+std::chrono::steady_clock::time_point g_round_start_time;
+// =======================
 
 AstarNavigation g_astar;
 SOCKET g_s_socket, g_c_socket;
@@ -1681,6 +1690,36 @@ void process_packet(int c_id, char* packet)
 			clients[c_id]._state = ST_INGAME;
 		}
 
+		// ===== 라운드 시작 판정 =====
+		if (g_round_state.load() == ROUND_WAITING) {
+			// ST_INGAME 인원 카운트
+			int ingame = 0;
+			for (auto& pl : clients) {
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (pl._state == ST_INGAME) ++ingame;
+			}
+
+			if (ingame >= ROUND_MIN_PLAYERS) {
+				int expected = ROUND_WAITING;
+				// CAS 성공자 단 하나만 전환, 브로드캐스트
+				if (g_round_state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
+					g_round_start_time = std::chrono::steady_clock::now();
+					std::cout << "[ROUND] start (players=" << ingame << ")\n";
+
+					SC_ROUND_START_PACKET rp;
+					rp.size = sizeof(rp);
+					rp.type = SC_ROUND_START;
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+						}
+						pl.do_send(&rp);
+					}
+				}
+			}
+		}
+
 		for (auto& pl : clients) {
 			{
 				std::lock_guard<std::mutex> ll(pl._s_lock);
@@ -1722,6 +1761,9 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_MOVE: {
+		// 라운드 시작 전에는 이동 무시 (서버 가드)
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 
 		// 패킷 순서 보정: 이미 더 최신 패킷을 처리했으면 무시
@@ -2109,6 +2151,16 @@ void worker_thread(HANDLE h_iocp)
 
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
+			// 라운드 중 접속 차단
+			if (g_round_state.load() == ROUND_IN_PROGRESS) { 
+				closesocket(g_c_socket); 
+				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
+				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
+				int addr_size = sizeof(SOCKADDR_IN); 
+				AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over); 
+				break; 
+			}
+
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				//{

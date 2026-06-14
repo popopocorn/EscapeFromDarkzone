@@ -102,6 +102,14 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		
 		break;
 	}
+	case SC_ROUND_START:
+	{
+		// 라운드 시작 수신. 이 패킷이 온 시점에 서버는 이미 이동 가드를 풀었음.
+		// 클라는 이거 받고 나서부터 시작. (약간 수정 필요)
+		OutputDebugString(L"[ROUND] SC_ROUND_START received\n");
+		// TODO: 대기 화면 해제 / 입력 활성화 등 뭔가 UI를 붙이기
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		gf.m_pNetEntityMgr->OnAddNpc(reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data()));
