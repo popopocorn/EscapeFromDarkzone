@@ -94,6 +94,14 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		gf.m_pNetEntityMgr->OnPlayerStateChange(reinterpret_cast<SC_PLAYER_STATE_CHANGE_PACKET*>(packet.data()));
 		break;
 	}
+	case SC_CHANGE_WEAPON:
+	{
+		// 수신만 함. 실제 OtherPlayer 무기 교체 미구현
+		// auto* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
+		// TODO: OtherPlayer 무기 메시 교체
+		
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		gf.m_pNetEntityMgr->OnAddNpc(reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data()));

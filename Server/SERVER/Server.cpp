@@ -275,6 +275,8 @@ public:
 	float x, y, z;
 	float yaw;
 	char  player_state;
+	short weapon_type;    // ItemType (기본 PISTOL)
+	short weapon_grade;   // ItemGrade (기본 GRADE_1)
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -298,6 +300,8 @@ public:
 		y = 0.1f;
 		yaw = 0.0f;
 		player_state = PLAYER_STATE_IDLE;
+		weapon_type = static_cast<short>(ItemType::PISTOL);
+		weapon_grade = static_cast<short>(ItemGrade::BASIC);
 		_name[0] = 0;
 		_state = ST_FREE;
 		_prev_remain = 0;
@@ -394,6 +398,7 @@ public:
 		do_send(&p);
 	}
 	void send_player_state_change_packet(int c_id);
+	void send_change_weapon_packet(int c_id);
 };
 
 std::array<SESSION, MAX_USER> clients;
@@ -437,6 +442,16 @@ void SESSION::send_player_state_change_packet(int c_id) {
 	p.type = SC_PLAYER_STATE_CHANGE;
 	p.id = c_id;
 	p.state = clients[c_id].player_state;
+	do_send(&p);
+}
+
+void SESSION::send_change_weapon_packet(int c_id) {
+	SC_CHANGE_WEAPON_PACKET p;
+	p.size = sizeof(SC_CHANGE_WEAPON_PACKET);
+	p.type = SC_CHANGE_WEAPON;
+	p.id = c_id;
+	p.weapon_type = clients[c_id].weapon_type;
+	p.weapon_grade = clients[c_id].weapon_grade;
 	do_send(&p);
 }
 
@@ -1676,6 +1691,11 @@ void process_packet(int c_id, char* packet)
 			printf("ADD_PLAYER: %d, SEND TO %d\n", c_id, pl._id);
 			clients[c_id].send_add_player_packet(pl._id);
 			printf("ADD_PLAYER: %d, SEND TO %d\n", pl._id, c_id);
+
+			pl.send_change_weapon_packet(c_id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, pl._id);
+			clients[c_id].send_change_weapon_packet(pl._id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", pl._id, c_id);
 		}
 
 		{
@@ -1786,6 +1806,18 @@ void process_packet(int c_id, char* packet)
 				clients[c_id].x, clients[c_id].y, clients[c_id].z, cl._id);*/
 		}
 
+		break;
+	}
+	case CS_CHANGE_WEAPON: {
+		CS_CHANGE_WEAPON_PACKET* p = reinterpret_cast<CS_CHANGE_WEAPON_PACKET*>(packet);
+		clients[c_id].weapon_type = p->weapon_type;
+		clients[c_id].weapon_grade = p->weapon_grade;
+		for (auto& cl : clients) {
+			if (cl._state != ST_INGAME) continue;
+			if (cl._id == c_id) continue;
+			cl.send_change_weapon_packet(c_id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, cl._id);
+		}
 		break;
 	}
 	case CS_INVENTORY_CLICK: {

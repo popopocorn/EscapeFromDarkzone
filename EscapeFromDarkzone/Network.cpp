@@ -308,6 +308,17 @@ bool NetworkManager::SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const Dir
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
+bool NetworkManager::SendChangeWeapon(short weaponType, short weaponGrade)
+{
+	CS_CHANGE_WEAPON_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_CHANGE_WEAPON_PACKET);
+	pkt.type = CS_CHANGE_WEAPON;
+	pkt.weapon_type = weaponType;
+	pkt.weapon_grade = weaponGrade;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
+
 bool NetworkManager::SendLootPickup(short box_id, short slotidx)
 {
 	CS_LOOT_PICKUP_PACKET pkt;

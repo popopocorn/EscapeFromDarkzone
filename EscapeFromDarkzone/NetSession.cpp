@@ -20,6 +20,11 @@ bool NetSession::FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX
 	return NetworkManager::Instance().SendHitPlayer(rayOrigin, rayDirection, weaponType, weaponGrade);
 }
 
+bool NetSession::ChangeWeapon(short weaponType, short weaponGrade)
+{
+	return NetworkManager::Instance().SendChangeWeapon(weaponType, weaponGrade);
+}
+
 bool NetSession::Craft(ItemID target)
 {
 	return NetworkManager::Instance().SendCraftRequest(target);
