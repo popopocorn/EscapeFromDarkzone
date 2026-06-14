@@ -63,6 +63,11 @@ class InventoryManager;
 class CGameFramework;
 class ShaderManager;
 
+enum class SceneName{
+	LOBBY,
+	MAIN,
+};
+
 class CScene
 {
 public:
@@ -101,7 +106,7 @@ public:
 	};
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
-
+	SceneName name;
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera*							m_pCamera = nullptr;	
@@ -109,11 +114,11 @@ protected:
 	LightCameraManager*					ShadowCameraManager;
 	CGameFramework*						frame;
 	unique_ptr<HUDManager>				uiManager;
-	EquipUI*							equipUI = NULL;
+	
 	vector<unique_ptr<CGameObject>>		GameObjects;
 
 public:
-
+	EquipUI*							equipUI = NULL;
 	float								m_fElapsedTime = 0.0f;
 
 	ShaderManager*						shadermanager = nullptr;

@@ -525,7 +525,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/bullet.bin",
+		"Model/bullet2.bin",
 		Standardshader
 	);
 }
@@ -744,19 +744,6 @@ void ResourceManager::BuildUIMesh(
 		L"UI/Crosshair_03.dds"
 	);
 
-	LoadUIMesh(
-		pd3dDevice,
-		pd3dCommandList,
-		UIName::STATUS_BULLET_DOT,
-		L"UI/BlueDot.dds"
-	);
-
-	LoadUIMesh(
-		pd3dDevice,
-		pd3dCommandList,
-		UIName::STATUS_BULLET_DOT,
-		L"UI/BlueDot.dds"
-	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const

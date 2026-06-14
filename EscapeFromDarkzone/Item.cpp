@@ -156,3 +156,11 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pP
 //	//playerinventory 아이템 추가
 //	return true;
 //}
+
+Equip::Equip()
+{
+	helmet = ArmorItem(ItemType::ARMOR_HELMET, ItemID::ARMOR_HELMET_01);
+	body = ArmorItem(ItemType::ARMOR_BODY, ItemID::ARMOR_BODY_01);
+	shoes = ArmorItem(ItemType::ARMOR_SHOES, ItemID::ARMOR_SHOES_01);
+	plate = Plate(ItemType::PLATE, ItemID::ARMOR_PLATE);
+}

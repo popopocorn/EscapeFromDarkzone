@@ -185,10 +185,13 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		break;
 	}
-	case SC_EQUIPMENT_UPDATE:
-	{
-		SC_EQUIPMENT_UPDATE_PACKET* p = reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
-
+	case SC_EQUIPMENT_UPDATE: {
+		SC_EQUIPMENT_UPDATE_PACKET* p =
+			reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
+		
+		// 장비 시스템 미구현 - 현재는 콘솔 출력만
+		//gf.m_pNetEntityMgr->OnApplyEquip(reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data()));
+		gf.m_pScene.back()->equipUI->EquipItem(p->equip_id);
 		wchar_t buf[128];
 		swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n", static_cast<int>(p->equip_id));
 		OutputDebugStringW(buf);

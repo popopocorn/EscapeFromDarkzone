@@ -274,3 +274,9 @@ void NetEntityManager::OnNpcStateChange(const SC_NPC_STATE_CHANGE_PACKET* p)
 		}
 	}
 }
+
+void NetEntityManager::OnApplyEquip(const SC_EQUIPMENT_UPDATE_PACKET* p)
+{
+
+	m_pActiveScene->equipUI->EquipItem(p->equip_id);
+}

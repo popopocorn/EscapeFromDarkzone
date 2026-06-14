@@ -520,6 +520,7 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 MainScene::MainScene(CGameFramework* game) : CScene(game)
 {
+	name = SceneName::MAIN;
 	colManager = std::make_unique<CollisionManager>();
 	m_pFogOverlayShader = nullptr;
 	m_pDebugShader = nullptr;
@@ -1749,6 +1750,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
 	e->Init(pd3dDevice, pd3dCommandList);
+	equipUI = e;
 	uiManager->AddToManager(e);
 
 	PlayerStatus* s = new PlayerStatus(m_pPlayer);
@@ -2144,7 +2146,7 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
 {
-	
+	name = SceneName::LOBBY;
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)

@@ -54,6 +54,7 @@ CPlayer::CPlayer()
 	m_pPlayerUpdatedContext = NULL;
 	m_pCameraUpdatedContext = NULL;
 	state = std::make_unique<PlayerIdle>();
+	Equipments = make_unique<Equip>();
 }
 
 CPlayer::~CPlayer()

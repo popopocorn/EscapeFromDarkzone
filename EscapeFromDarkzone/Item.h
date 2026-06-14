@@ -111,6 +111,7 @@ private:
 	short hp = 100;
 	bool broken = false;
 public:
+	Plate() {};
 	Plate(ItemType t, ItemID i) : Item(t, i) {};
 	short GetHp() { return hp; }
 	short DoDamage(short d) { hp -= d; if (hp < 0)broken = true; }
@@ -123,9 +124,10 @@ public:
 };
 
 struct Equip {
-	ArmorItem	helmet;
-	ArmorItem	body;
-	ArmorItem	shoes;
-	Plate		plate;
+	Equip();
+	ArmorItem helmet;
+	ArmorItem body;
+	ArmorItem shoes;
+	Plate     plate;
 };
 

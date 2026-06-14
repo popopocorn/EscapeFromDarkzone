@@ -62,7 +62,9 @@ public:
 	NetEntityManager* GetNetEntityManager() { return m_pNetEntityMgr.get(); }	// 06.07 추가
 
 	CScene*						nextScene;
-	void ChangeScene();
+	void PushScene();
+	void PopScene();
+	void PopScene(SceneName name);
 	bool						mouseMove = false;
 	ShaderManager* GetShaderManager() { return shadermanager.get(); }
 private:

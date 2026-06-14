@@ -413,11 +413,6 @@ UIName MapItemIDToUIName(ItemID id)
 		{ ItemID::MAT_2_METAL_PLATE,  UIName::ICON_METAL },
 		{ ItemID::MAT_3_BOLT_AND_NUT, UIName::ICON_NEEDLE },
 
-		/*{ ItemID::WEAPON_UPGRADE_2,   UIName::ICON_UPGRADE_2 },
-		{ ItemID::WEAPON_UPGRADE_3,   UIName::ICON_UPGRADE_3 },
-		{ ItemID::WEAPON_UPGRADE_4,   UIName::ICON_UPGRADE_4 },
-		{ ItemID::ARMOR_PLATE,        UIName::ICON_ARMOR_PLATE },*/
-
 		{ ItemID::ARMOR_HELMET_01,    UIName::ICON_HELMET_01 },
 		{ ItemID::ARMOR_HELMET_02,    UIName::ICON_HELMET_02 },
 		{ ItemID::ARMOR_HELMET_03,    UIName::ICON_HELMET_03 },
@@ -545,7 +540,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_BODY]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
-		ItemID i = this->helmet;
+		ItemID i = this->body;
 		switch (i)
 		{
 		case ItemID::NONE:
@@ -571,7 +566,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_SHOES]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
-		ItemID i = this->helmet;
+		ItemID i = this->shoes;
 		switch (i)
 		{
 		case ItemID::NONE:

@@ -51,6 +51,7 @@ public:
 	void OnRemoveNpc(const SC_REMOVE_NPC_PACKET* p);
 	void OnMoveNpc(const SC_MOVE_NPC_PACKET* p);
 	void OnNpcStateChange(const SC_NPC_STATE_CHANGE_PACKET* p);
+	void OnApplyEquip(const SC_EQUIPMENT_UPDATE_PACKET* p);
 
 	// 조회 (dispatcher의 cross-cutting 핸들러용: SC_PLAY_EFFECT_ATTACHED)
 	OtherPlayer* FindOtherPlayer(short id);
