@@ -90,17 +90,159 @@ struct CraftRecipe {
 };
 
 inline constexpr CraftRecipe g_craftRecipes[] = {
-	// 무기: MAT_2 x20 + MAT_3 x20
+	
+	// 무기: 라이플 (금속판, 볼트/너트 중심)
 	{ ItemID::WEAPON_RIFLE_01, 1, {
-		{ ItemID::MAT_2_METAL_PLATE, 20 },
-		{ ItemID::MAT_3_BOLT_AND_NUT, 20 },
-		{ ItemID::NONE, 0 },
+		{ ItemID::MAT_2_METAL_PLATE, 3 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 3 },
+		{ ItemID::NONE, 0 }, { ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_RIFLE_02, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 6 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 6 },
+		{ ItemID::WEAPON_UPGRADE_2, 1 },
 		{ ItemID::NONE, 0 } } },
-	// 방어구: MAT_1 x10 + MAT_2 x10 + MAT_3 x10
-	{ ItemID::ARMOR_BODY_01,   1, {
-		{ ItemID::MAT_1_FIBER, 10 },
+
+	{ ItemID::WEAPON_RIFLE_03, 1, {
 		{ ItemID::MAT_2_METAL_PLATE, 10 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 10 },
+		{ ItemID::WEAPON_UPGRADE_3, 1 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_RIFLE_04, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 15 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 15 },
+		{ ItemID::WEAPON_UPGRADE_4, 1 },
+		{ ItemID::NONE, 0 } } },
+
+	
+	// 무기: SMG (섬유 포함, 금속/볼트 요구량 상대적으로 낮음)
+	{ ItemID::WEAPON_SMG_01, 1, {
+		{ ItemID::MAT_1_FIBER, 2 },
+		{ ItemID::MAT_2_METAL_PLATE, 2 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 2 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_SMG_02, 1, {
+		{ ItemID::MAT_1_FIBER, 4 },
+		{ ItemID::MAT_2_METAL_PLATE, 4 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 4 },
+		{ ItemID::WEAPON_UPGRADE_2, 1 } } },
+
+	{ ItemID::WEAPON_SMG_03, 1, {
+		{ ItemID::MAT_1_FIBER, 6 },
+		{ ItemID::MAT_2_METAL_PLATE, 8 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 6 },
+		{ ItemID::WEAPON_UPGRADE_3, 1 } } },
+
+	{ ItemID::WEAPON_SMG_04, 1, {
+		{ ItemID::MAT_1_FIBER, 10 },
+		{ ItemID::MAT_2_METAL_PLATE, 12 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 8 },
+		{ ItemID::WEAPON_UPGRADE_4, 1 } } },
+
+	
+	// 무기: 샷건 (금속판 다량 요구, 볼트/너트 약간)
+	{ ItemID::WEAPON_SHOTGUN_01, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 4 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 2 },
+		{ ItemID::NONE, 0 }, { ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_SHOTGUN_02, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 8 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 4 },
+		{ ItemID::WEAPON_UPGRADE_2, 1 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_SHOTGUN_03, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 12 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 6 },
+		{ ItemID::WEAPON_UPGRADE_3, 1 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::WEAPON_SHOTGUN_04, 1, {
+		{ ItemID::MAT_2_METAL_PLATE, 18 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 10 },
+		{ ItemID::WEAPON_UPGRADE_4, 1 },
+		{ ItemID::NONE, 0 } } },
+
+
+	// 방어구: 헬멧 (섬유, 금속판 중심)
+	{ ItemID::ARMOR_HELMET_01, 1, {
+		{ ItemID::MAT_1_FIBER, 3 },
+		{ ItemID::MAT_2_METAL_PLATE, 3 },
+		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_HELMET_02, 1, {
+		{ ItemID::MAT_1_FIBER, 5 },
+		{ ItemID::MAT_2_METAL_PLATE, 5 },
+		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_HELMET_03, 1, {
+		{ ItemID::MAT_1_FIBER, 8 },
+		{ ItemID::MAT_2_METAL_PLATE, 8 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 2 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_HELMET_04, 1, {
+		{ ItemID::MAT_1_FIBER, 12 },
+		{ ItemID::MAT_2_METAL_PLATE, 12 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 4 },
+		{ ItemID::NONE, 0 } } },
+
+
+	
+	// 방어구: 바디 (가장 많은 재료 요구, 3종류 모두 골고루 사용)
+	{ ItemID::ARMOR_BODY_01, 1, {
+		{ ItemID::MAT_1_FIBER, 3 },
+		{ ItemID::MAT_2_METAL_PLATE, 3 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 2 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_BODY_02, 1, {
+		{ ItemID::MAT_1_FIBER, 6 },
+		{ ItemID::MAT_2_METAL_PLATE, 6 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 4 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_BODY_03, 1, {
+		{ ItemID::MAT_1_FIBER, 10 },
+		{ ItemID::MAT_2_METAL_PLATE, 10 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 8 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_BODY_04, 1, {
+		{ ItemID::MAT_1_FIBER, 15 },
+		{ ItemID::MAT_2_METAL_PLATE, 15 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 12 },
+		{ ItemID::NONE, 0 } } },
+
+	
+	// 방어구: 신발 (섬유, 볼트/너트 중심)
+	{ ItemID::ARMOR_SHOES_01, 1, {
+		{ ItemID::MAT_1_FIBER, 3 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 3 },
+		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_SHOES_02, 1, {
+		{ ItemID::MAT_1_FIBER, 5 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 5 },
+		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_SHOES_03, 1, {
+		{ ItemID::MAT_1_FIBER, 8 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 8 },
+		{ ItemID::MAT_2_METAL_PLATE, 2 },
+		{ ItemID::NONE, 0 } } },
+
+	{ ItemID::ARMOR_SHOES_04, 1, {
+		{ ItemID::MAT_1_FIBER, 12 },
+		{ ItemID::MAT_3_BOLT_AND_NUT, 12 },
+		{ ItemID::MAT_2_METAL_PLATE, 4 },
 		{ ItemID::NONE, 0 } } },
 };
 

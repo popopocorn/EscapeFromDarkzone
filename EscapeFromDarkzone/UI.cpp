@@ -418,30 +418,42 @@ void Inventory::ClearItems()
 
 UIName MapItemIDToUIName(ItemID id)
 {
-	switch (id)
+	static const std::unordered_map<ItemID, UIName> itemToUIMap = {
+		{ ItemID::MAT_1_FIBER,        UIName::ICON_FIBER },
+		{ ItemID::MAT_2_METAL_PLATE,  UIName::ICON_METAL },
+		{ ItemID::MAT_3_BOLT_AND_NUT, UIName::ICON_NEEDLE },
+
+		/*{ ItemID::WEAPON_UPGRADE_2,   UIName::ICON_UPGRADE_2 },
+		{ ItemID::WEAPON_UPGRADE_3,   UIName::ICON_UPGRADE_3 },
+		{ ItemID::WEAPON_UPGRADE_4,   UIName::ICON_UPGRADE_4 },
+		{ ItemID::ARMOR_PLATE,        UIName::ICON_ARMOR_PLATE },*/
+
+		{ ItemID::ARMOR_HELMET_01,    UIName::ICON_HELMET_01 },
+		{ ItemID::ARMOR_HELMET_02,    UIName::ICON_HELMET_02 },
+		{ ItemID::ARMOR_HELMET_03,    UIName::ICON_HELMET_03 },
+		{ ItemID::ARMOR_HELMET_04,    UIName::ICON_HELMET_04 },
+
+		// --- 방어구: 바디 ---
+		{ ItemID::ARMOR_BODY_01,      UIName::ICON_BODY_01 },
+		{ ItemID::ARMOR_BODY_02,      UIName::ICON_BODY_02 },
+		{ ItemID::ARMOR_BODY_03,      UIName::ICON_BODY_03 },
+		{ ItemID::ARMOR_BODY_04,      UIName::ICON_BODY_04 },
+
+		// --- 방어구: 신발 ---
+		{ ItemID::ARMOR_SHOES_01,     UIName::ICON_SHOES_01 },
+		{ ItemID::ARMOR_SHOES_02,     UIName::ICON_SHOES_02 },
+		{ ItemID::ARMOR_SHOES_03,     UIName::ICON_SHOES_03 },
+		{ ItemID::ARMOR_SHOES_04,     UIName::ICON_SHOES_04 }
+
+	};
+
+	auto it = itemToUIMap.find(id);
+	if (it != itemToUIMap.end())
 	{
-	case ItemID::MAT_1_FIBER:
-		return UIName::ICON_FIBER;
-		break;
-	case ItemID::MAT_2_METAL_PLATE:
-		return UIName::ICON_METAL;
-		break;
-	case ItemID::MAT_3_BOLT_AND_NUT:
-		return UIName::ICON_NEEDLE;
-		break;
-	case ItemID::WEAPON_UPGRADE_1:
-		break;
-	case ItemID::WEAPON_UPGRADE_2:
-		break;
-	case ItemID::WEAPON_UPGRADE_3:
-		break;
-	case ItemID::WEAPON_UPGRADE_4:
-		break;
-	case ItemID::ARMOR_PLATE:
-		break;
-	default:
-		break;
+		return it->second;
 	}
+
+	return UIName::UI_NONE_IMAGE; // 매핑된 아이콘이 없을 경우의 기본 이미지
 }
 
 ItemSlot* Inventory::GetSlot(int idx)
@@ -599,25 +611,43 @@ void EquipUI::EquipItem(ItemID item)
 	case ItemID::ARMOR_HELMET_02:
 	case ItemID::ARMOR_HELMET_03:
 	case ItemID::ARMOR_HELMET_04:
+	{
+
+		UIName n = MapItemIDToUIName(item);
+		UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+
 		player->helmet = ArmorItem(ItemType::ARMOR_HELMET, item);
 		helmet = item;
 		break;
+	}
 
 	case ItemID::ARMOR_BODY_01:
 	case ItemID::ARMOR_BODY_02:
 	case ItemID::ARMOR_BODY_03:
 	case ItemID::ARMOR_BODY_04:
+	{
+
+		UIName n = MapItemIDToUIName(item);
+		UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+
 		player->helmet = ArmorItem(ItemType::ARMOR_BODY, item);
 		body = item;
 		break;
+	}
 
 	case ItemID::ARMOR_SHOES_01:
 	case ItemID::ARMOR_SHOES_02:
 	case ItemID::ARMOR_SHOES_03:
 	case ItemID::ARMOR_SHOES_04:
+	{
+
+		UIName n = MapItemIDToUIName(item);
+		UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+
 		player->helmet = ArmorItem(ItemType::ARMOR_SHOES, item);
 		shoes = item;
 		break;
+	}
 	case ItemID::ARMOR_PLATE:
 		player->plate = Plate(ItemType::PLATE, item);
 		plate = item;

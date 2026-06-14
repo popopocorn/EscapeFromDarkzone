@@ -1587,6 +1587,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
+	equipUI = e;
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 

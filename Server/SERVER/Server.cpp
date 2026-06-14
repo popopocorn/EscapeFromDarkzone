@@ -1833,13 +1833,13 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 
-			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 10 };
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
 			clients[c_id].send_inventory_update_packet(0);
 
-			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 20 };
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
 			clients[c_id].send_inventory_update_packet(1);
 
-			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 20 };
+			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			clients[c_id].send_inventory_update_packet(2);
 		}
 
@@ -2316,16 +2316,16 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	switch (npc.kind) {
 	case NPC_TIER_3:
 		dropCount = rand() % 2 + 2;
-		minQty = 3; maxQty = 6;
+		minQty = 7; maxQty = 12;
 		break;
 	case NPC_TIER_2:
 		dropCount = rand() % 2 + 2; // 2~3종류
-		minQty = 2; maxQty = 4;
+		minQty = 4; maxQty = 6;
 		break;
 	case NPC_TIER_1:
 	default:
 		dropCount = rand() % 2 + 1; // 1~2종류
-		minQty = 1; maxQty = 2;
+		minQty = 2; maxQty = 4;
 		break;
 	}
 
@@ -2367,11 +2367,10 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 			upgradeItem = ItemID::WEAPON_UPGRADE_4;
 			break;
 		case NPC_TIER_2: 
-			upgradeItem = (rand() % 2 == 0) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3;
-			break;
+			upgradeItem = (rand() % 100 < 70) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3; break;
 		case NPC_TIER_1: 
 		default:
-			upgradeItem = ItemID::WEAPON_UPGRADE_1;
+			upgradeItem = ItemID::WEAPON_UPGRADE_2;
 			break;
 		}
 

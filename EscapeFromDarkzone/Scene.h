@@ -109,6 +109,7 @@ protected:
 	LightCameraManager*					ShadowCameraManager;
 	CGameFramework*						frame;
 	unique_ptr<HUDManager>				uiManager;
+	EquipUI*							equipUI = NULL;
 	vector<unique_ptr<CGameObject>>		GameObjects;
 
 public:
