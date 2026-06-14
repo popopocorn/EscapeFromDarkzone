@@ -357,14 +357,14 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
-	);*/
+	);
 
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
@@ -375,14 +375,14 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_3,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
-	);*/
+	);
 
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_1,
@@ -393,52 +393,52 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_2.bin",
 		SkinnedShader
-	);*/
+	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_3,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_3.bin",
 		SkinnedShader
-	);*/
+	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
-	);*/
+	);
 
 
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_2.bin",
 		SkinnedShader
-	);*/
+	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_3,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_3.bin",
 		SkinnedShader
-		);*/
+		);
 }
 
 void ResourceManager::BuildModelPrototypes(
