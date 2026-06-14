@@ -91,7 +91,40 @@ void InventoryManager::Update(float fTimeElapsed)
 	std::erase_if(m_vLootContainers, [](std::unique_ptr<CLootContainerObject>& loot) {
 		return (!loot || !loot->IsAlive());
 		});
+
+	UpdateLootInventoryByPlayerDistance(3.0f);
 }
+
+void InventoryManager::UpdateLootInventoryByPlayerDistance(float fLootInteractDistance)
+{
+	if (!IsPlayerInventoryOpen())
+	{
+		if (IsLootInventoryOpen() || m_pOpenedLoot)
+		{
+			CloseLootInventory();
+		}
+
+		return;
+	}
+
+	CLootContainerObject* pNearestLoot = FindNearestLootContainer(fLootInteractDistance);
+
+	if (!pNearestLoot)
+	{
+		if (IsLootInventoryOpen() || m_pOpenedLoot)
+		{
+			CloseLootInventory();
+		}
+
+		return;
+	}
+
+	if (m_pOpenedLoot != pNearestLoot || !IsLootInventoryOpen())
+	{
+		OpenLootContainer(pNearestLoot);
+	}
+}
+
 void InventoryManager::UpdateLootWorld(float fTimeElapsed)
 {
 	for (auto& loot : m_vLootContainers)
@@ -297,7 +330,7 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 {
 	if (!m_pLootShader) return;
 
-	CLootContainerObject* pLoot = new CLootContainerObject(30.0f);
+	CLootContainerObject* pLoot = new CLootContainerObject(60.0f);
 
 	XMFLOAT3 spawnPos = pos;
 	spawnPos.y += 0.05f;
@@ -369,19 +402,25 @@ void InventoryManager::HandleTabPressed(float fLootInteractDistance)
 	if (m_bTabInventoryHold)
 		return;
 
-	OpenPlayerInventory();
-
-	CLootContainerObject* pNearestLoot = FindNearestLootContainer(fLootInteractDistance);
-	if (pNearestLoot)
-	{
-		OpenLootContainer(pNearestLoot);
-	}
-	else
-	{
-		CloseLootInventory();
-	}
+	bool bWasPlayerInventoryOpen = IsPlayerInventoryOpen();
 
 	m_bTabInventoryHold = true;
+	m_bTabOpenedInventory = !bWasPlayerInventoryOpen;
+
+	if (!bWasPlayerInventoryOpen)
+	{
+		OpenPlayerInventory();
+
+		CLootContainerObject* pNearestLoot = FindNearestLootContainer(fLootInteractDistance);
+		if (pNearestLoot)
+		{
+			OpenLootContainer(pNearestLoot);
+		}
+		else
+		{
+			CloseLootInventory();
+		}
+	}
 }
 
 void InventoryManager::HandleTabReleased()
@@ -389,9 +428,14 @@ void InventoryManager::HandleTabReleased()
 	if (!m_bTabInventoryHold)
 		return;
 
-	ClosePlayerInventory();
-	CloseLootInventory();
+	if (m_bTabOpenedInventory)
+	{
+		ClosePlayerInventory();
+		CloseLootInventory();
+	}
+
 	m_bTabInventoryHold = false;
+	m_bTabOpenedInventory = false;
 }
 
 void InventoryManager::CloseAll()
@@ -399,7 +443,9 @@ void InventoryManager::CloseAll()
 	ClosePlayerInventory();
 	CloseLootInventory();
 	CloseCraftInventory();
+
 	m_bTabInventoryHold = false;
+	m_bTabOpenedInventory = false;
 }
 
 bool InventoryManager::IsAnyInventoryOpen() const

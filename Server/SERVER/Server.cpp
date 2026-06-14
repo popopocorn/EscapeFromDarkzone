@@ -9,6 +9,7 @@
 #include <string>
 
 #include <chrono>
+#include <atomic>
 #include <cmath>
 
 #include "protocol.h"
@@ -70,6 +71,28 @@ constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPO
 
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
+
+
+// ===== 라운드 상태 =====
+constexpr int ROUND_MIN_PLAYERS = 3;			// default: 8
+
+enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
+std::atomic<int> g_round_state{ ROUND_WAITING };
+std::chrono::steady_clock::time_point g_round_start_time;
+// =======================
+
+
+// ===== 탈출 =====
+constexpr float ESCAPE_HOLD_SEC = 10.0f;		// 탈출 소요 시간
+struct EscapeZone { float minX, maxX, minZ, maxZ; };
+constexpr EscapeZone ESCAPE_ZONES[] = {
+	{   40.0f,  50.0f, -150.0f, -140.0f },  // 탈출구역 A
+	{-150.0f, -140.0f, -150.0f, -140.0f },  // 탈출구역 B
+	{-150.0f, -140.0f,   40.0f,   50.0f },  // 탈출구역 C
+};
+constexpr int ESCAPE_ZONE_COUNT = sizeof(ESCAPE_ZONES) / sizeof(ESCAPE_ZONES[0]);
+// ================
+
 
 constexpr int PLAYER_SPAWN_COUNT = 8;
 struct PlayerSpawnPos { float x, z; };
@@ -286,6 +309,10 @@ public:
 	short hp = 100;
 	short max_hp = 100;
 
+	bool in_escape_zone = false;
+	bool escaped = false;
+	std::chrono::steady_clock::time_point last_hit_time;
+
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
@@ -308,6 +335,9 @@ public:
 		hp = 100;
 		max_hp = 100;
 		_last_move_recv_time = std::chrono::steady_clock::now();
+		last_hit_time = _last_move_recv_time;
+		in_escape_zone = false;
+		escaped = false;
 	}
 
 	~SESSION() {}
@@ -806,6 +836,8 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 					clients[target_id].hp -= dmg;
 					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 					new_hp = clients[target_id].hp;
+					if (clients[target_id].in_escape_zone)		// 탈출 중 피격시 시간 초기화
+						clients[target_id].last_hit_time = std::chrono::steady_clock::now();
 				}
 			}
 
@@ -1647,6 +1679,65 @@ static void npc_thread()
 			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
 		}
 
+		// ===== 탈출 판정 =====
+		if (g_round_state.load() == ROUND_IN_PROGRESS)
+		{
+			const auto tnow = std::chrono::steady_clock::now();
+			for (int i = 0; i < MAX_USER; ++i) {
+				float px = 0.0f, pz = 0.0f;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i]._state != ST_INGAME) continue;
+					if (clients[i].escaped) continue;
+					px = clients[i].x; pz = clients[i].z;
+				}
+
+				// 영역 판정 (XZ, OR)
+				bool now_in_zone = false;
+				for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
+					const auto& ez = ESCAPE_ZONES[z];
+					if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
+						now_in_zone = true; 
+						break;
+					}
+				}
+
+				bool  success = false;
+				float escape_sec = 0.0f;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i].escaped) continue;   // 더블체크
+
+					if (now_in_zone) {
+						if (!clients[i].in_escape_zone) {
+							clients[i].in_escape_zone = true;
+							std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+							clients[i].last_hit_time = tnow;       // 진행 시작
+						}
+						if (std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+							clients[i].escaped = true;
+							success = true;
+							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
+						}
+					}
+					else if (true == clients[i].in_escape_zone && !now_in_zone) {
+						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
+						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+					}
+				}
+
+				if (success) {
+					SC_ESCAPE_SUCCESS_PACKET ep;
+					ep.size = sizeof(ep);
+					ep.type = SC_ESCAPE_SUCCESS;
+					ep.escape_time_sec = escape_sec;
+					clients[i].do_send(&ep);
+					std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
+				}
+			}
+		}
+		// =====================
+
 		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
@@ -1679,6 +1770,39 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll{ clients[c_id]._s_lock };
 			clients[c_id]._state = ST_INGAME;
+
+			clients[c_id].escaped = false;            // 탈출 상태 초기화
+			clients[c_id].in_escape_zone = false;
+		}
+
+		// ===== 라운드 시작 판정 =====
+		if (g_round_state.load() == ROUND_WAITING) {
+			// ST_INGAME 인원 카운트
+			int ingame = 0;
+			for (auto& pl : clients) {
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (pl._state == ST_INGAME) ++ingame;
+			}
+
+			if (ingame >= ROUND_MIN_PLAYERS) {
+				int expected = ROUND_WAITING;
+				// CAS 성공자 단 하나만 전환, 브로드캐스트
+				if (g_round_state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
+					g_round_start_time = std::chrono::steady_clock::now();
+					std::cout << "[ROUND] start (players=" << ingame << ")\n";
+
+					SC_ROUND_START_PACKET rp;
+					rp.size = sizeof(rp);
+					rp.type = SC_ROUND_START;
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+						}
+						pl.do_send(&rp);
+					}
+				}
+			}
 		}
 
 		for (auto& pl : clients) {
@@ -1722,6 +1846,9 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_MOVE: {
+		// 라운드 시작 전에는 이동 무시 (서버 가드)
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 
 		// 패킷 순서 보정: 이미 더 최신 패킷을 처리했으면 무시
@@ -1972,6 +2099,8 @@ void process_packet(int c_id, char* packet)
 					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
 					new_hp = clients[best_id].hp;
+					if (clients[best_id].in_escape_zone)			// 탈출 중 피격시 시간 초기화
+						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
 				}
 			}
 
@@ -2109,6 +2238,16 @@ void worker_thread(HANDLE h_iocp)
 
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
+			// 라운드 중 접속 차단
+			if (g_round_state.load() == ROUND_IN_PROGRESS) { 
+				closesocket(g_c_socket); 
+				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
+				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
+				int addr_size = sizeof(SOCKADDR_IN); 
+				AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over); 
+				break; 
+			}
+
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				//{

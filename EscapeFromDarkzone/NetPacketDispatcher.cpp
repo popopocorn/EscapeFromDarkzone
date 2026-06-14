@@ -56,9 +56,9 @@ static bool GetAttachedEffectMuzzleInfo(
 	outDir = SafeNormalizeOrDefault(outDir, XMFLOAT3(0.0f, 0.0f, 1.0f));
 
 	outPos.x += outDir.x * 0.05f;
-	outPos.y += outDir.y * 0.05f;
+	outPos.y += outDir.y * 0.05f -0.55;
 	outPos.z += outDir.z * 0.05f;
-
+	
 	return true;
 }
 
@@ -96,10 +96,49 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_CHANGE_WEAPON:
 	{
-		// 수신만 함. 실제 OtherPlayer 무기 교체 미구현
-		// auto* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
-		// TODO: OtherPlayer 무기 메시 교체
-		
+		SC_CHANGE_WEAPON_PACKET* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
+
+		wchar_t buf[256];
+		swprintf_s(buf, L"[SC_CHANGE_WEAPON] recv id=%d weapon_type=%d weapon_grade=%d\n",
+			p->id, p->weapon_type, p->weapon_grade);
+		OutputDebugStringW(buf);
+
+		if (!gf.m_pNetEntityMgr)
+		{
+			OutputDebugString(L"[SC_CHANGE_WEAPON] NetEntityManager is null.\n");
+			break;
+		}
+
+		OtherPlayer* pOther = gf.m_pNetEntityMgr->FindOtherPlayer(p->id);
+
+		if (!pOther)
+		{
+			OutputDebugString(L"[SC_CHANGE_WEAPON] OtherPlayer not found.\n");
+			break;
+		}
+
+		pOther->ChangeWeaponFromServer(p->weapon_type, p->weapon_grade);
+
+		OutputDebugString(L"[SC_CHANGE_WEAPON] OtherPlayer weapon changed.\n");
+
+		break;
+	}
+	case SC_ROUND_START:
+	{
+		// 라운드 시작 수신. 이 패킷이 온 시점에 서버는 이미 이동 가드를 풀었음.
+		// 클라는 이거 받고 나서부터 시작. (약간 수정 필요)
+		OutputDebugString(L"[ROUND] SC_ROUND_START received\n");
+		// TODO: 대기 화면 해제 / 입력 활성화 등 뭔가 UI를 붙이기
+		break;
+	}
+	case SC_ESCAPE_SUCCESS:
+	{
+		SC_ESCAPE_SUCCESS_PACKET* p =
+			reinterpret_cast<SC_ESCAPE_SUCCESS_PACKET*>(packet.data());
+		wchar_t buf[128];
+		swprintf_s(buf, L"[ESCAPE] success! time=%.2fs\n", p->escape_time_sec);
+		OutputDebugStringW(buf);
+		// TODO: 탈출 성공 UI 표시 (된다면)
 		break;
 	}
 	case SC_ADD_NPC:
