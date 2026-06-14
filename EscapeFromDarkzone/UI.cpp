@@ -77,24 +77,14 @@ UIMesh::~UIMesh()
 		UVBuffer->Release();
 		UVBuffer = nullptr;
 	}
-
-	if (m_pd3dPositionUploadBuffer)
-	{
-		m_pd3dPositionUploadBuffer->Release();
-		m_pd3dPositionUploadBuffer = nullptr;
-	}
-
-	if (UVUploadBuffer)
-	{
-		UVUploadBuffer->Release();
-		UVUploadBuffer = nullptr;
-	}
-	//if(texture) texture->Release();
 }
 
 void UIMesh::ReleaseUploadBuffers()
 {
+	m_pd3dPositionUploadBuffer->Release();
+	UVUploadBuffer->Release();
 
+	texture->ReleaseUploadBuffers();
 }
 
 void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName)

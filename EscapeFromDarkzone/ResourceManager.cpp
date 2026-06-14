@@ -214,6 +214,10 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		obj.second->ReleaseUploadBuffers();
 	}
+	for (auto& obj : m_UIPrototypes)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
 }
 
 void ResourceManager::ReleaseResources()
