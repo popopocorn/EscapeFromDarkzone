@@ -552,33 +552,108 @@ CAnimationController::CAnimationController(ID3D12Device* pd3dDevice, ID3D12Graph
 	m_nAnimationTracks = nAnimationTracks;
 	m_pAnimationTracks = new CAnimationTrack[nAnimationTracks];
 
+	m_pAnimationSets = nullptr;
+	m_pModelRootObject = nullptr;
+	m_nSkinnedMeshes = 0;
+	m_ppSkinnedMeshes = nullptr;
+	m_ppd3dcbSkinningBoneTransforms = nullptr;
+	m_ppcbxmf4x4MappedSkinningBoneTransforms = nullptr;
+	m_pppSkinningBoneFrameCaches = nullptr;
+
+	m_bIsBlending = false;
+	m_fBlendTime = 0.0f;
+	m_fBlendDuration = 0.2f;
+
+	if (!pModel)
+	{
+		return;
+	}
+
 	m_pAnimationSets = pModel->m_pAnimationSets;
-
-
 	m_pModelRootObject = pModel->m_pModelRootObject;
-
 	m_nSkinnedMeshes = pModel->m_nSkinnedMeshes;
+
+	if (!m_pModelRootObject)
+	{
+		m_nSkinnedMeshes = 0;
+		return;
+	}
+
+	if (m_nSkinnedMeshes > 0 && !pModel->m_ppSkinnedMeshes)
+	{
+		pModel->m_ppSkinnedMeshes = new CSkinnedMesh * [m_nSkinnedMeshes];
+
+		for (int i = 0; i < m_nSkinnedMeshes; ++i)
+		{
+			pModel->m_ppSkinnedMeshes[i] = nullptr;
+		}
+
+		int nFoundSkinnedMeshes = 0;
+		m_pModelRootObject->FindAndSetSkinnedMesh(pModel->m_ppSkinnedMeshes, &nFoundSkinnedMeshes);
+
+		if (nFoundSkinnedMeshes != m_nSkinnedMeshes)
+		{
+			m_nSkinnedMeshes = nFoundSkinnedMeshes;
+			pModel->m_nSkinnedMeshes = nFoundSkinnedMeshes;
+		}
+	}
+
+	if (m_nSkinnedMeshes <= 0 || !pModel->m_ppSkinnedMeshes)
+	{
+		m_nSkinnedMeshes = 0;
+		return;
+	}
+
 	m_ppSkinnedMeshes = new CSkinnedMesh * [m_nSkinnedMeshes];
-	for (int i = 0; i < m_nSkinnedMeshes; i++) m_ppSkinnedMeshes[i] = pModel->m_ppSkinnedMeshes[i];
+
+	for (int i = 0; i < m_nSkinnedMeshes; i++)
+	{
+		m_ppSkinnedMeshes[i] = pModel->m_ppSkinnedMeshes[i];
+	}
 
 	m_ppd3dcbSkinningBoneTransforms = new ID3D12Resource * [m_nSkinnedMeshes];
 	m_ppcbxmf4x4MappedSkinningBoneTransforms = new XMFLOAT4X4 * [m_nSkinnedMeshes];
 
-	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255);
 	for (int i = 0; i < m_nSkinnedMeshes; i++)
 	{
-		m_ppd3dcbSkinningBoneTransforms[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-		m_ppd3dcbSkinningBoneTransforms[i]->Map(0, NULL, (void**)&m_ppcbxmf4x4MappedSkinningBoneTransforms[i]);
+		m_ppd3dcbSkinningBoneTransforms[i] = nullptr;
+		m_ppcbxmf4x4MappedSkinningBoneTransforms[i] = nullptr;
 	}
 
-	m_pppSkinningBoneFrameCaches = new CGameObject**[m_nSkinnedMeshes];
+	UINT ncbElementBytes = (((sizeof(XMFLOAT4X4) * SKINNED_ANIMATION_BONES) + 255) & ~255);
 
 	for (int i = 0; i < m_nSkinnedMeshes; i++)
 	{
-		m_pppSkinningBoneFrameCaches[i] = new CGameObject*[m_ppSkinnedMeshes[i]->m_nSkinningBones];
+		if (!m_ppSkinnedMeshes[i])
+			continue;
+
+		m_ppd3dcbSkinningBoneTransforms[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
+
+		if (m_ppd3dcbSkinningBoneTransforms[i])
+		{
+			m_ppd3dcbSkinningBoneTransforms[i]->Map(0, NULL, (void**)&m_ppcbxmf4x4MappedSkinningBoneTransforms[i]);
+		}
+	}
+
+	m_pppSkinningBoneFrameCaches = new CGameObject * *[m_nSkinnedMeshes];
+
+	for (int i = 0; i < m_nSkinnedMeshes; i++)
+	{
+		m_pppSkinningBoneFrameCaches[i] = nullptr;
+
+		if (!m_ppSkinnedMeshes[i])
+			continue;
+
+		m_pppSkinningBoneFrameCaches[i] = new CGameObject * [m_ppSkinnedMeshes[i]->m_nSkinningBones];
+
 		for (int j = 0; j < m_ppSkinnedMeshes[i]->m_nSkinningBones; j++)
 		{
-			m_pppSkinningBoneFrameCaches[i][j] = pModel->m_pModelRootObject->FindFrame(m_ppSkinnedMeshes[i]->m_ppstrSkinningBoneNames[j]);
+			m_pppSkinningBoneFrameCaches[i][j] = nullptr;
+
+			if (m_pModelRootObject)
+			{
+				m_pppSkinningBoneFrameCaches[i][j] = m_pModelRootObject->FindFrame(m_ppSkinnedMeshes[i]->m_ppstrSkinningBoneNames[j]);
+			}
 		}
 	}
 
@@ -586,6 +661,7 @@ CAnimationController::CAnimationController(ID3D12Device* pd3dDevice, ID3D12Graph
 	m_fBlendTime = 0.0f;
 	m_fBlendDuration = 0.2f;
 }
+
 CAnimationController::~CAnimationController()
 {
 	if (m_pAnimationTracks) delete[] m_pAnimationTracks;

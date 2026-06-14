@@ -21,13 +21,14 @@ private:
 	CLootContainerObject* m_pOpenedLoot = nullptr;
 
 	bool m_bTabInventoryHold = false;
+	bool m_bTabOpenedInventory = false;
 
 	CPlayer* m_pPlayer = nullptr;
 	CStandardObjectsShader* m_pLootShader = nullptr;
 	CBoundingBoxShader* m_pDebugShader = nullptr;
 
 	Inventory* GetPlayerInventoryPtr() const;
-
+	void UpdateLootInventoryByPlayerDistance(float fLootInteractDistance);
 public:
 	InventoryManager() = default;
 	~InventoryManager();
