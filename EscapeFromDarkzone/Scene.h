@@ -114,11 +114,11 @@ protected:
 	LightCameraManager*					ShadowCameraManager;
 	CGameFramework*						frame;
 	unique_ptr<HUDManager>				uiManager;
-	EquipUI*							equipUI = NULL;
+	
 	vector<unique_ptr<CGameObject>>		GameObjects;
 
 public:
-
+	EquipUI*							equipUI = NULL;
 	float								m_fElapsedTime = 0.0f;
 
 	ShaderManager*						shadermanager = nullptr;

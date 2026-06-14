@@ -545,7 +545,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_BODY]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
-		ItemID i = this->helmet;
+		ItemID i = this->body;
 		switch (i)
 		{
 		case ItemID::NONE:
@@ -571,7 +571,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_SHOES]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
-		ItemID i = this->helmet;
+		ItemID i = this->shoes;
 		switch (i)
 		{
 		case ItemID::NONE:
