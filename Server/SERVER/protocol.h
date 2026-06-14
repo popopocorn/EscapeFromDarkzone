@@ -66,6 +66,9 @@ constexpr char SC_ROUND_START = 27;
 // 탈출 성공 패킷
 constexpr char SC_ESCAPE_SUCCESS = 28;
 
+// 수류탄 폭발 (C2S) — 클라가 최종 폭발 위치 전송 
+constexpr char CS_GRENADE_EXPLODE = 29;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -304,6 +307,12 @@ struct SC_ESCAPE_SUCCESS_PACKET {
 	unsigned char size;
 	char          type;
 	float         escape_time_sec;   // 라운드 시작~탈출까지 걸린 시간(초)
+};
+
+struct CS_GRENADE_EXPLODE_PACKET {
+	unsigned char size;
+	char          type;
+	float         x, y, z;   // 최종 폭발 위치 (grenadeFinalPos), 판정은 XZ만 사용
 };
 
 #pragma pack (pop)

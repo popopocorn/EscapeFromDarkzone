@@ -1126,6 +1126,63 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		break;
 	}
+	case NpcInputEvent::GRENADE_EXPLODE:
+	{
+		const XMFLOAT3 C = e.explode_pos;
+		GrenadeSpec g = GetGrenadeSpec();
+
+		// ---- 플레이어 피해 ----
+		for (int i = 0; i < MAX_USER; ++i) {
+			short new_hp = 0;
+			bool  hit = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;
+
+				XMFLOAT3 ppos = { clients[i].x, clients[i].y, clients[i].z };
+				float dist = DistanceXZ(ppos, C);   // XZ 거리
+				short dmg = ComputeGrenadeDamage(g, dist);
+				if (dmg <= 0) continue;
+
+				clients[i].hp -= dmg;
+				if (clients[i].hp < 0) clients[i].hp = 0;
+				new_hp = clients[i].hp;
+				hit = true;
+
+				if (clients[i].in_escape_zone)   // 탈출 중 피격 시 시간 초기화
+					clients[i].last_hit_time = std::chrono::steady_clock::now();
+			}   // 락 해제 후 송신
+
+			if (hit) {
+				SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+				hp_pkt.size = sizeof(hp_pkt);
+				hp_pkt.type = SC_PLAYER_HP_UPDATE;
+				hp_pkt.id = (short)i;
+				hp_pkt.hp = new_hp;
+				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
+			}
+		}
+
+		// ---- NPC 피해 ----
+		for (auto& npc : g_npcs) {
+			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
+			float dist = DistanceXZ(npc.position, C);
+			short dmg = ComputeGrenadeDamage(g, dist);
+			if (dmg <= 0) continue;
+			ApplyDamage(npc, dmg, e.attacker_client_id, player_snapshot);
+		}
+
+		// ---- 폭발 이펙트 전체 브로드캐스트 ----
+		// dir은 클라가 GRENADE_EXPLOSION이면 위로 강제하므로 형식상 값.
+		XMFLOAT3 dir = { 0.0f, 1.0f, 0.0f };
+		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir, player_snapshot);
+
+		std::cout << "[Grenade] explode at (" << C.x << "," << C.z
+			<< ") by client " << e.attacker_client_id << "\n";
+
+		break;
+	}
 	}
 }
 
@@ -2179,6 +2236,18 @@ void process_packet(int c_id, char* packet)
 			<< " item:" << static_cast<int>(pickItem)
 			<< " count:" << pickCount
 			<< " -> playerSlot:" << playerSlotIdx << "\n";
+
+		break;
+	}
+	case CS_GRENADE_EXPLODE: {
+		CS_GRENADE_EXPLODE_PACKET* p =
+			reinterpret_cast<CS_GRENADE_EXPLODE_PACKET*>(packet);
+
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::GRENADE_EXPLODE;
+		ev.attacker_client_id = c_id;
+		ev.explode_pos = { p->x, p->y, p->z };
+		g_npc_input_queue.Push(std::move(ev));
 
 		break;
 	}

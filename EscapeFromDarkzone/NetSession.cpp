@@ -30,6 +30,11 @@ bool NetSession::Craft(ItemID target)
 	return NetworkManager::Instance().SendCraftRequest(target);
 }
 
+bool NetSession::GrenadeExplode(const DirectX::XMFLOAT3& pos)
+{
+	return NetworkManager::Instance().SendGrenadeExplode(pos);
+}
+
 bool NetSession::InventoryClick(char action, short slotidx)
 {
 	return NetworkManager::Instance().SendInventoryClick(action, slotidx);

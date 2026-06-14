@@ -95,3 +95,29 @@ inline WeaponSpec LookupWeaponSpec(WeaponType type, WeaponGrade grade)
     }
     return s;
 }
+
+struct GrenadeSpec {
+    short damageMax = 80;
+    float radius = 5.0f;
+    float falloffRatio = 0.7f;
+};
+
+inline GrenadeSpec GetGrenadeSpec() 
+{ 
+    GrenadeSpec g;
+    return g;
+}
+
+inline short ComputeGrenadeDamage(const GrenadeSpec& g, float dist) 
+{ 
+    if (dist < 0.0f) dist = 0.0f;
+    if (dist > g.radius) return 0;   // 반경 밖 -> 미적용
+    float dmg = static_cast<float>(g.damageMax);
+    if (g.falloffRatio > 0.0f) {
+        float falloff = 1.0f - g.falloffRatio * (dist / g.radius);
+        dmg *= falloff;
+    }
+    short result = static_cast<short>(dmg + 0.5f);   // 반올림
+    if (result < 1) result = 1;                       // 반경 내면 최소 1
+    return result;
+}

@@ -188,6 +188,9 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n",
 			static_cast<int>(p->equip_id));
 		OutputDebugStringW(buf);
+
+		// EquipUI::
+
 		break;
 	}
 	case SC_ADD_LOOT_BOX: {
