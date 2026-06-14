@@ -736,20 +736,6 @@ void ResourceManager::BuildUIMesh(
 		UIName::STATUS_BULLET_DOT,
 		L"UI/BlueDot.dds"
 	);
-
-	LoadUIMesh(
-		pd3dDevice,
-		pd3dCommandList,
-		UIName::STATUS_BULLET_DOT,
-		L"UI/BlueDot.dds"
-	);
-
-	LoadUIMesh(
-		pd3dDevice,
-		pd3dCommandList,
-		UIName::STATUS_BULLET_DOT,
-		L"UI/BlueDot.dds"
-	);
 	
 
 
