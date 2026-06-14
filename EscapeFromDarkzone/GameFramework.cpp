@@ -13,6 +13,7 @@
 #include "ShaderManager.h"
 #include "SoundManager.h"
 #include "GameFramework.h"
+#include"Scene.h"
 
 int FRAME_BUFFER_WIDTH = 1392;
 int FRAME_BUFFER_HEIGHT = 738;
@@ -112,7 +113,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	m_hWnd = hMainWnd;
 
 	InputManager::Instance().init(hMainWnd);
-	SoundManager::Instance().Init();
+	SoundManager::Instance()->Init();
 	CreateDirect3DDevice();
 	root = make_unique<RootSignature>(m_pd3dDevice);
 	
@@ -128,7 +129,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	shadowmap->Create(m_pd3dDevice);
 
 	shadermanager = make_unique<ShaderManager>();
-	SoundManager::Instance().BuildSound();
+	SoundManager::Instance()->BuildSound();
 	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
 
 	BuildObjects();
@@ -834,12 +835,12 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	AnimateObjects(fTimeElapsed);
-	SoundManager::Instance().UpdateListener(
+	SoundManager::Instance()->UpdateListener(
 		m_pPlayer->GetPosition(),
 		m_pPlayer->GetLookVector(),
 		m_pPlayer->GetUpVector()
 	);
-	SoundManager::Instance().Update();
+	SoundManager::Instance()->Update();
 	
 	// 03.27 추가, 03.30 위치 변경
 	if (NetworkManager::Instance().IsConnected())

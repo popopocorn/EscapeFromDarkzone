@@ -32,7 +32,6 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 	case ItemType::PISTOL:
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
-		spec.dps = 64.166667f;
 		spec.magazineSize = 15;
 		spec.reloadTime = 1.2f;
 		break;
@@ -47,19 +46,15 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		{
 		case ItemGrade::GRADE_1:
 			spec.damage = 11.0f;
-			spec.dps = 128.33333f;
 			break;
 		case ItemGrade::GRADE_2:
 			spec.damage = 14.0f;
-			spec.dps = 163.33333f;
 			break;
 		case ItemGrade::GRADE_3:
 			spec.damage = 18.0f;
-			spec.dps = 210.0f;
 			break;
 		case ItemGrade::GRADE_4:
 			spec.damage = 23.0f;
-			spec.dps = 268.33333f;
 			break;
 		default:
 			break;
@@ -76,19 +71,15 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		{
 		case ItemGrade::GRADE_1:
 			spec.damage = 9.0f;
-			spec.dps = 135.0f;
 			break;
 		case ItemGrade::GRADE_2:
 			spec.damage = 11.0f;
-			spec.dps = 165.0f;
 			break;
 		case ItemGrade::GRADE_3:
 			spec.damage = 14.0f;
-			spec.dps = 210.0f;
 			break;
 		case ItemGrade::GRADE_4:
 			spec.damage = 17.0f;
-			spec.dps = 255.0f;
 			break;
 		default:
 			break;
@@ -96,7 +87,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::SHOTGUN:
-		spec.rpm = 200.0f;
+		spec.rpm = 55.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
 		spec.magazineSize = 8;
 		spec.reloadTime = 2.4f;
@@ -105,19 +96,15 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		{
 		case ItemGrade::GRADE_1:
 			spec.damage = 64.0f;
-			spec.dps = 213.33333f;
 			break;
 		case ItemGrade::GRADE_2:
 			spec.damage = 72.0f;
-			spec.dps = 240.0f;
 			break;
 		case ItemGrade::GRADE_3:
 			spec.damage = 80.0f;
-			spec.dps = 266.66667f;
 			break;
 		case ItemGrade::GRADE_4:
 			spec.damage = 88.0f;
-			spec.dps = 293.33333f;
 			break;
 		default:
 			break;
@@ -125,9 +112,11 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 	}
 
+	// DPS 일괄 계산
+	spec.dps = spec.damage * spec.rpm / 60.0f;
+
 	return spec;
 }
-
 std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pPrototype)
 {
 	if (!pPrototype) return nullptr;

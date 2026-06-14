@@ -95,6 +95,7 @@
     </ClCompile>
     <ClCompile Include="ShaderManager.cpp" />
     <ClCompile Include="SoundManager.cpp" />
+    <ClCompile Include="Projectile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -198,6 +199,10 @@
     </ClInclude>
     <ClInclude Include="ShaderManager.h" />
     <ClInclude Include="SoundManager.h" />
+    <ClInclude Include="Projectile.h" />
+    <ClInclude Include="Singletone.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">

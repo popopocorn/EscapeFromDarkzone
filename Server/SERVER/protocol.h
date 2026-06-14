@@ -134,7 +134,8 @@ struct SC_ADD_NPC_PACKET {
 	unsigned char size;
 	char          type;
 	short         npc_id;
-	char          npc_kind;       // 나중에
+	char          npc_kind;       // NPC 단계(tier 1/2/3)
+	char          npc_outfit;     // 외형 프리셋(0/1/2)
 	float         x, y, z;
 	float         yaw;
 	short         hp;
@@ -173,8 +174,9 @@ struct CS_HIT_NPC_PACKET {
 	char          type;
 	float         ray_ox, ray_oy, ray_oz;
 	float         ray_dx, ray_dy, ray_dz;
-	char          weapon_id;				// 나중에
-	unsigned int  fire_time;				// 나중에
+	short         weapon_type;     // WeaponType (PISTOL=0..SHOTGUN=3)
+	short         weapon_grade;    // WeaponGrade (BASIC=0..GRADE_4=4)
+	unsigned int  fire_time;
 };
 
 struct SC_INVENTORY_UPDATE_PACKET {
@@ -263,7 +265,8 @@ struct CS_HIT_PLAYER_PACKET {
 	char          type;
 	float         ray_ox, ray_oy, ray_oz;
 	float         ray_dx, ray_dy, ray_dz;
-	char          weapon_id;				// 나중에
+	short         weapon_type;				// WeaponType
+	short         weapon_grade;				// WeaponGrade
 	unsigned int  fire_time;				// 나중에
 };
 

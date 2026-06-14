@@ -496,7 +496,13 @@ XMFLOAT3 CalcPixelByRatio(float ratio)
 
 	return XMFLOAT3(correctedScaleX, 1.0f, 1.0f);
 }
-
+XMFLOAT3 CalcPixelByRatio(int width, int height)
+{
+	if (height == 0)
+		return XMFLOAT3(1.0f, 1.0f, 1.0f);
+	float ratio = static_cast<float>(width) / static_cast<float>(height);
+	return CalcPixelByRatio(ratio);
+}
 void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	base = make_unique<UIObject>();
@@ -583,7 +589,6 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 		});
 	UIs[ItemType::ARMOR_SHOES]->setAABB();
 
-
 }
 
 void EquipUI::EquipItem(ItemID item)
@@ -654,16 +659,40 @@ PlayerStatus::PlayerStatus(CPlayer* p)
 
 void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
+	Rifle = ResourceManager::Instance().GetUIMesh(UIName::STATUS_RIFLE_BULLET);
+	SMG = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SMG_BULLET);
+	Shotgun = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SHOTGUN_BULLET);
+	Pistol = ResourceManager::Instance().GetUIMesh(UIName::STATUS_PISTOL_BULLET);
+	bullet = ResourceManager::Instance().GetUIMesh(UIName::STATUS_BULLET_DOT);
+	curammo = player->GetCurrentAmmo();
+
 	UIs[HP_BASE] = make_unique<UIObject>();
 	UIs[HP_BASE]->SetScale(0.4, 0.07, 1);
 	UIs[HP_BASE]->SetLocate(0.0, -0.9, 0.5);
 	UIs[HP_BASE]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_BAR));
 
 	UIs[HP_MAIN] = make_unique<UIObject>();
-	UIs[HP_MAIN]->SetScale(0.33, 0.04, 1);
+	UIs[HP_MAIN]->SetScale(0.33, 0.06, 1);
 	UIs[HP_MAIN]->SetLocate(-0.029, -0.9, 0.5);
 	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
+	
+	UIs[MAG_BASE] = make_unique<UIObject>();
+	XMFLOAT3 r = CalcPixelByRatio(1.0);
+	float wr = 0.15;
+	UIs[MAG_BASE]->SetScale(r.x * wr, r.y * wr, 1);
+	UIs[MAG_BASE]->SetLocate(0.25, -0.9, 0.5);
+	UIs[MAG_BASE]->SetUIMesh(Rifle);
 
+	XMFLOAT3 br = CalcPixelByRatio(30, 58);
+	float bwr = 0.05;
+	for (int i = 0; i < 35; ++i)
+	{
+		UIObject* t = new UIObject();
+		t->SetScale(br.x * bwr, br.y * bwr, 1.0);
+		t->SetLocate(0.3 + i * br.x*bwr, -0.9, 0.5);
+		t->SetUIMesh(bullet);
+		Bullets.push_back(unique_ptr<UIObject>(t));
+	}
 }
 
 bool PlayerStatus::ProcessClick(POINT mouse)
@@ -676,20 +705,23 @@ bool PlayerStatus::ProcessClick(POINT mouse)
 		}
 	}
 }
-
 void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 {
 	for (auto& p : UIs)
 	{
 		shader->addObjects(p.second.get());
 	}
+	for (int i = 0; i < curammo; ++i)
+	{
+		shader->addObjects(Bullets[i].get());
+	}
 }
 
 void PlayerStatus::Update(float fTimeElapsed)
 {
 	if (!player) return;
+	//playerhp update
 	hp = player->GetHP();
-
 	float ratio = static_cast<float>(hp) / static_cast<float>(FullHp);
 	if (ratio < 0.0f) ratio = 0.0f;
 	if (ratio > 1.0f) ratio = 1.0f;
@@ -700,9 +732,14 @@ void PlayerStatus::Update(float fTimeElapsed)
 	float currentX = defaultX - (maxWidth * (1.0f - ratio) / 2.0f);
 	if (UIs[HP_MAIN])
 	{
-		UIs[HP_MAIN]->SetScale(currentWidth, 0.04f, 1.0f);
+		UIs[HP_MAIN]->SetScale(currentWidth, 0.06f, 1.0f);
 		UIs[HP_MAIN]->SetLocate(currentX, -0.9f, 0.5f);
 	}
+
+	//ammo update
+	int maxammo = player->GetMaxAmmo();
+	curammo = player->GetCurrentAmmo();
+
 }
 
 void HUDManager::SubmitToShader(UIObjectShader* shader)
@@ -711,7 +748,7 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 	{
 		shader->addObjects(o.get());
 	}
-	for (const auto& o : pannels)
+	for (const auto& o : panels)
 	{
 		o->SubmitToShader(shader);
 	}
@@ -720,12 +757,12 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 void HUDManager::Release()
 {
 	objs.clear();
-	pannels.clear();
+	panels.clear();
 }
 
 void HUDManager::Update(float fTimeElapsed)
 {
-	for (auto& o : pannels)
+	for (auto& o : panels)
 	{
 		o->Update(fTimeElapsed);
 	}
@@ -742,7 +779,7 @@ bool HUDManager::ProcessClick(POINT mouse)
 			return true;
 		}
 	}
-	for (auto& o : pannels)
+	for (auto& o : panels)
 	{
 		if (o->isOpen)
 		{

@@ -377,6 +377,7 @@ public:
 	void SetMaterial(int nMaterial, CMaterial *pMaterial);
 
 	void SetChild(CGameObject *pChild, bool bReferenceUpdate=false);
+	void ReplaceChild(CGameObject *pChild);
 
 	virtual void BuildMaterials(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) { }
 
@@ -418,6 +419,7 @@ public:
 	void Rotate(float fPitch = 10.0f, float fYaw = 10.0f, float fRoll = 10.0f);
 	void Rotate(XMFLOAT3 *pxmf3Axis, float fAngle);
 	void Rotate(XMFLOAT4 *pxmf4Quaternion);
+	void SetRotate(float fPitch, float fYaw, float fRoll);
 
 	CMesh* GetMesh() const { return m_pMesh; }
 

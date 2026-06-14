@@ -1179,7 +1179,7 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	if (timeacu > 0.5f)
 	{
-		SoundManager::Instance().Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
 		timeacu -= 0.5f;
 	}
 

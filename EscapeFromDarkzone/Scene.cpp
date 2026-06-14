@@ -19,7 +19,7 @@
 #include "InventoryManager.h"
 #include "ResourceManager.h"
 #include "GameFramework.h"
-
+#include"Projectile.h"
 #include "Network.h"
 #include "NetSession.h"
 
@@ -179,7 +179,7 @@ static EFFECT_TYPE GetSparkEffectTypeByEnemyWeapon(EnemyWeaponType weaponType)
 		return EFFECT_SPARK_RIFLE_SMG;
 	}
 }
-static XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
 {
 	XMFLOAT3 sparkPos = muzzlePos;
 
@@ -1037,16 +1037,12 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			{
 				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
 			}
-
-			m_bSparkFireActive = false;
-			m_bLaserActive = false;
-			m_fSparkSpawnTimer = 0.0f;
+			if (m_pPlayer)m_pPlayer->SetFireHeld(false);
 
 			if (m_pEffectManager)
 			{
 				m_pEffectManager->HideLaser(0);
 			}
-
 			return;
 		}
 
@@ -1059,81 +1055,13 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (!m_pPlayer)
 			return;
 
-		if (!m_pPlayer->TryFireWeapon())
+		
+		if (m_pPlayer)
 		{
-			m_bSparkFireActive = false;
-			m_bLaserActive = false;
-			m_fSparkSpawnTimer = 0.0f;
+			m_pPlayer->SetFireHeld(true);
 
-			if (m_pEffectManager)
-			{
-				m_pEffectManager->HideLaser(0);
-			}
-
-			return;
 		}
 
-		m_bSparkFireActive = m_pPlayer->IsCurrentWeaponAutomatic();
-		m_bLaserActive = true;
-		m_fSparkSpawnTimer = 0.0f;
-		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
-
-		m_pPlayer->NotifyWeaponFired();
-
-		XMFLOAT3 muzzlePos;
-		XMFLOAT3 muzzleLook;
-		XMFLOAT3 muzzleRight;
-		XMFLOAT3 muzzleUp;
-
-		GetCurrentPlayerMuzzleInfo(m_pPlayer, muzzlePos, muzzleLook, muzzleRight, muzzleUp);
-
-		PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
-		EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
-		XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
-
-		if (m_pEffectManager)
-		{
-			m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
-			m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
-		}
-
-		if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
-		{
-			if (NetworkManager::Instance().IsConnected())
-			{
-				NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
-			}
-			else
-			{
-				XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
-				XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-
-				auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-				for (auto& obj : *objs)
-				{
-					if (!obj) continue;
-
-					const auto& oobbs = obj->GetOOBB();
-
-					for (BoundingOrientedBox* pOOBB : oobbs)
-					{
-						if (!pOOBB) continue;
-
-						float fDist = 0.0f;
-
-						if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-						{
-							CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
-							if (pEnemy)
-							{
-								pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
-							}
-							break;
-						}
-					}
-				}
-			}
-		}
 
 		break;
 	}
@@ -1159,15 +1087,8 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			return;
 		}
 
-		m_bSparkFireActive = false;
-		m_bLaserActive = false;
-		m_fSparkSpawnTimer = 0.0f;
-
-		if (m_pEffectManager)
-		{
-			m_pEffectManager->HideLaser(0);
-		}
-
+		if (m_pPlayer) m_pPlayer->SetFireHeld(false);
+	
 		if (IsAnyInventoryOpen())
 		{
 			if (m_pInventoryManager)
@@ -1303,7 +1224,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 			if (uiManager)
 			{
-				for (auto& o : *uiManager->GetPannels())
+				for (auto& o : *uiManager->GetPanels())
 				{
 					o->ToggleOpen();
 				}
@@ -1571,7 +1492,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		stdshader->addObjects(map);
 		++name;
 	}
-
+	ProjectileManager::Instance()->Init(stdshader);
 
 
 	m_ppShaders.push_back(stdshader);
@@ -1833,115 +1754,13 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 			}
 		}
 	}
-
-	// 연사 처리
-	if (m_bSparkFireActive && m_pPlayer && m_pPlayer->IsCurrentWeaponAutomatic() && !IsAnyInventoryOpen())
+	if (m_pPlayer && !IsAnyInventoryOpen())
 	{
-		m_fSparkSpawnInterval = m_pPlayer->GetWeaponShotInterval();
-		m_fSparkSpawnTimer += fTimeElapsed;
-
-		while (m_fSparkSpawnTimer >= m_fSparkSpawnInterval)
-		{
-			if (!m_pPlayer->CanFireWeapon())
-			{
-				m_fSparkSpawnTimer = 0.0f;
-				m_bSparkFireActive = false;
-				m_bLaserActive = false;
-
-				if (m_pEffectManager)
-				{
-					m_pEffectManager->HideLaser(0);
-				}
-
-				break;
-			}
-
-			if (!m_pPlayer->TryFireWeapon())
-			{
-				break;
-			}
-
-			m_fSparkSpawnTimer -= m_fSparkSpawnInterval;
-
-			m_pPlayer->NotifyWeaponFired();
-
-			XMFLOAT3 muzzlePos;
-			XMFLOAT3 muzzleLook;
-			XMFLOAT3 muzzleRight;
-			XMFLOAT3 muzzleUp;
-
-			GetCurrentPlayerMuzzleInfo(
-				m_pPlayer,
-				muzzlePos,
-				muzzleLook,
-				muzzleRight,
-				muzzleUp
-			);
-
-			PlayerWeaponType weaponType = m_pPlayer->GetCurrentPlayerWeaponType();
-			EFFECT_TYPE sparkType = GetSparkEffectTypeByWeapon(weaponType);
-			XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
-
-			if (m_pEffectManager)
-			{
-				m_pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
-				m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
-			}
-
-			if (NetworkManager::Instance().IsConnected())
-			{
-				NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, 0);
-			}
-
-			if (m_ppShaders[SHADERIDX::ENEMY] && !m_ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
-			{
-				if (NetworkManager::Instance().IsConnected())
-				{
-					//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
-					NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
-				}
-				else
-				{
-					XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
-					XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-
-					auto* objs = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-
-					for (auto& obj : *objs)
-					{
-						if (!obj) continue;
-
-						const auto& oobbs = obj->GetOOBB();
-
-						for (BoundingOrientedBox* pOOBB : oobbs)
-						{
-							if (!pOOBB) continue;
-
-							float fDist = 0.0f;
-
-							if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
-							{
-								CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
-								if (pEnemy)
-								{
-									pEnemy->HandleHP(m_pPlayer->GetWeaponDamage());
-								}
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
+		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager);
 	}
-	else
-	{
-		m_fSparkSpawnTimer = 0.0f;
 
-		if (m_pEffectManager)
-		{
-			m_pEffectManager->HideLaser(0);
-		}
+	if (m_pEffectManager) {
+		m_pEffectManager->Update(fTimeElapsed);
 	}
 
 	UpdateGrenade(fTimeElapsed);
@@ -1987,7 +1806,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
-
+	ProjectileManager::Instance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
@@ -2039,7 +1858,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
-
+	ProjectileManager::Instance()->Render(pd3dCommandList, pCamera, true);
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);

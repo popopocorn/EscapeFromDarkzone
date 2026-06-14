@@ -1052,6 +1052,12 @@ void CGameObject::SetChild(CGameObject *pChild, bool bReferenceUpdate)
 	}
 }
 
+void CGameObject::ReplaceChild(CGameObject* pChild)
+{
+	if (not pChild)return;
+	m_pChild = pChild;
+}
+
 void CGameObject::SetMesh(CMesh *pMesh)
 {
 	if (m_pMesh) m_pMesh->Release();
@@ -1303,6 +1309,22 @@ void CGameObject::Rotate(XMFLOAT4 *pxmf4Quaternion)
 {
 	XMMATRIX mtxRotate = XMMatrixRotationQuaternion(XMLoadFloat4(pxmf4Quaternion));
 	m_xmf4x4ToParent = Matrix4x4::Multiply(mtxRotate, m_xmf4x4ToParent);
+
+	UpdateTransform(NULL);
+}
+
+void CGameObject::SetRotate(float fPitch, float fYaw, float fRoll)
+{
+	XMFLOAT3 pos = XMFLOAT3(m_xmf4x4ToParent._41, m_xmf4x4ToParent._42, m_xmf4x4ToParent._43);
+	XMMATRIX mtxRotate = XMMatrixRotationRollPitchYaw(
+		XMConvertToRadians(fPitch),
+		XMConvertToRadians(fYaw),
+		XMConvertToRadians(fRoll)
+	);
+	XMStoreFloat4x4(&m_xmf4x4ToParent, mtxRotate);
+	m_xmf4x4ToParent._41 = pos.x;
+	m_xmf4x4ToParent._42 = pos.y;
+	m_xmf4x4ToParent._43 = pos.z;
 
 	UpdateTransform(NULL);
 }

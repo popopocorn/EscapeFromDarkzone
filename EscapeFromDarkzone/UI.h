@@ -117,16 +117,16 @@ public:
 
 	bool isOpen = false;
 };
-class UIPannel {
+class UIPanel {
 public:
 	bool isOpen = false;
-	virtual ~UIPannel() = default;
+	virtual ~UIPanel() = default;
 	virtual bool ProcessClick(POINT mouse) = 0;
 	virtual void SubmitToShader(UIObjectShader* shader) = 0;
 	virtual void ToggleOpen() { isOpen = !isOpen; }
 	virtual void Update(float fTimeElapsed) {};
 };
-class EquipUI :public UIPannel{
+class EquipUI :public UIPanel{
 private:
 	Equip* player;
 	ItemID		helmet = ItemID::NONE;
@@ -153,7 +153,7 @@ enum StatusType {
 	WEAPON_SLOT_3,
 	WEAPON_SLOT_4,
 };
-class PlayerStatus : public UIPannel {
+class PlayerStatus : public UIPanel {
 public:
 	PlayerStatus(CPlayer* p);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
@@ -164,6 +164,12 @@ private:
 	CPlayer* player;
 	short hp;
 	short FullHp;
+	int curammo = 0;
+	UIMesh* Rifle = NULL;
+	UIMesh* SMG = NULL;
+	UIMesh* Pistol = NULL;
+	UIMesh* Shotgun = NULL;
+	UIMesh* bullet = NULL;
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
 	vector<unique_ptr<UIObject>>Bullets;
 public:
@@ -175,13 +181,13 @@ class UIObjectShader;
 class HUDManager {
 private:
 	vector<unique_ptr<UIObject>> objs;
-	vector<unique_ptr<UIPannel>> pannels;
+	vector<unique_ptr<UIPanel>> panels;
 public:
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
 	void Release();
 	void Update(float fTimeElapsed);
 	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
-	void AddToManager(UIPannel* obj) { pannels.push_back(unique_ptr<UIPannel>(obj)); }
-	vector<unique_ptr<UIPannel>>* GetPannels() { return &pannels; }
+	void AddToManager(UIPanel* obj) { panels.push_back(unique_ptr<UIPanel>(obj)); }
+	vector<unique_ptr<UIPanel>>* GetPanels() { return &panels; }
 };

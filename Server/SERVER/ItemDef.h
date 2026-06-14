@@ -52,6 +52,9 @@ enum class ItemID : short {
 	ARMOR_SHOES_02,
 	ARMOR_SHOES_03,
 	ARMOR_SHOES_04,
+
+
+	ITEMID_END
 };
 
 constexpr int MAX_SLOTS = 10;

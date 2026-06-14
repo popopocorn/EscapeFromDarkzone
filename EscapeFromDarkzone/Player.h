@@ -49,6 +49,8 @@ class WeaponItem;
 class Inventory;
 class Equip;
 
+class EffectManager;
+
 class CPlayer : public CGameObject
 {
 protected:
@@ -230,6 +232,10 @@ public:
 	XMFLOAT2 GetMoveInput2D() const;
 	int GetRunAnimationFromInput(const XMFLOAT2& dir) const;
 	PlayerWeaponType GetCurrentPlayerWeaponType() const;
+
+	short GetEquippedWeaponTypeForWire() const;
+	short GetEquippedWeaponGradeForWire() const;
+
 	bool IsCurrentWeaponAutomatic() const;
 	int GetIdleAnimationByWeapon() const;
 	int GetGrenadeAnimationByWeapon() const;
@@ -270,7 +276,8 @@ public:
 	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
-	void UpdateWeaponCombat(float fTimeElapsed);
+	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
+	void FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
 
 	bool TryFireWeapon();
 	void StartReload();

@@ -512,6 +512,16 @@ void ResourceManager::BuildModelPrototypes(
 		"Model/LootBox.bin",
 		Standardshader
 	);
+
+	//총알
+	LoadAndRegisterModelPrototype(
+		ModelName::BULLET,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/bullet.bin",
+		Standardshader
+	);
 }
 
 void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path)
@@ -594,12 +604,46 @@ void ResourceManager::BuildUIMesh(
 		UIName::STATUS_HEALTH_BAR,
 		L"UI/Health_Bar_Table.dds"
 	);
-
+	
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_DOT,
 		L"UI/Health_Dot.dds"
+	);
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_RIFLE_BULLET,
+		L"UI/Rifle_Bullet2.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_SMG_BULLET,
+		L"UI/SMG_Bullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_SHOTGUN_BULLET,
+		L"UI/Shotgun_Bullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_PISTOL_BULLET,
+		L"UI/PistolBullet.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_BULLET_DOT,
+		L"UI/BlueDot.dds"
 	);
 }
 
@@ -609,7 +653,7 @@ CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
 	if (it == m_ModelPrototypes.end())
 		return nullptr;
 
-	return it->second.get();
+	return CGameObject::CreateModelInstance(it->second.get());
 }
 
 CLoadedModelInfo* ResourceManager::CreateSkinnedModelInstance(ModelName key)
