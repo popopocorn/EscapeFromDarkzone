@@ -74,7 +74,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 3;			// default: 8
+constexpr int ROUND_MIN_PLAYERS = 2;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 std::atomic<int> g_round_state{ ROUND_WAITING };
@@ -1126,6 +1126,63 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		break;
 	}
+	case NpcInputEvent::GRENADE_EXPLODE:
+	{
+		const XMFLOAT3 C = e.explode_pos;
+		GrenadeSpec g = GetGrenadeSpec();
+
+		// ---- 플레이어 피해 ----
+		for (int i = 0; i < MAX_USER; ++i) {
+			short new_hp = 0;
+			bool  hit = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;
+
+				XMFLOAT3 ppos = { clients[i].x, clients[i].y, clients[i].z };
+				float dist = DistanceXZ(ppos, C);   // XZ 거리
+				short dmg = ComputeGrenadeDamage(g, dist);
+				if (dmg <= 0) continue;
+
+				clients[i].hp -= dmg;
+				if (clients[i].hp < 0) clients[i].hp = 0;
+				new_hp = clients[i].hp;
+				hit = true;
+
+				if (clients[i].in_escape_zone)   // 탈출 중 피격 시 시간 초기화
+					clients[i].last_hit_time = std::chrono::steady_clock::now();
+			}   // 락 해제 후 송신
+
+			if (hit) {
+				SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+				hp_pkt.size = sizeof(hp_pkt);
+				hp_pkt.type = SC_PLAYER_HP_UPDATE;
+				hp_pkt.id = (short)i;
+				hp_pkt.hp = new_hp;
+				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
+			}
+		}
+
+		// ---- NPC 피해 ----
+		for (auto& npc : g_npcs) {
+			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
+			float dist = DistanceXZ(npc.position, C);
+			short dmg = ComputeGrenadeDamage(g, dist);
+			if (dmg <= 0) continue;
+			ApplyDamage(npc, dmg, e.attacker_client_id, player_snapshot);
+		}
+
+		// ---- 폭발 이펙트 전체 브로드캐스트 ----
+		// dir은 클라가 GRENADE_EXPLOSION이면 위로 강제하므로 형식상 값.
+		XMFLOAT3 dir = { 0.0f, 1.0f, 0.0f };
+		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir, player_snapshot);
+
+		std::cout << "[Grenade] explode at (" << C.x << "," << C.z
+			<< ") by client " << e.attacker_client_id << "\n";
+
+		break;
+	}
 	}
 }
 
@@ -1873,7 +1930,7 @@ void process_packet(int c_id, char* packet)
 		float rightX = cosf(fYawRad);
 		float rightZ = -sinf(fYawRad);
 
-		char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
+		/*char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
 		if (clients[c_id].player_state != new_state) {
 			clients[c_id].player_state = new_state;
 			for (auto& cl : clients) {
@@ -1881,7 +1938,7 @@ void process_packet(int c_id, char* packet)
 				if (cl._id == c_id) continue;
 				cl.send_player_state_change_packet(c_id);
 			}
-		}
+		}*/
 
 		// inputs 비트 플래그로 이동 방향 계산
 		float dirX = 0.0f, dirZ = 0.0f;
@@ -2180,6 +2237,34 @@ void process_packet(int c_id, char* packet)
 			<< " count:" << pickCount
 			<< " -> playerSlot:" << playerSlotIdx << "\n";
 
+		break;
+	}
+	case CS_GRENADE_EXPLODE: {
+		CS_GRENADE_EXPLODE_PACKET* p =
+			reinterpret_cast<CS_GRENADE_EXPLODE_PACKET*>(packet);
+
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::GRENADE_EXPLODE;
+		ev.attacker_client_id = c_id;
+		ev.explode_pos = { p->x, p->y, p->z };
+		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
+	case CS_PLAYER_STATE_CHANGE: {
+		CS_PLAYER_STATE_CHANGE_PACKET* p =
+			reinterpret_cast<CS_PLAYER_STATE_CHANGE_PACKET*>(packet);
+
+		//std::cout << "[CS_PLAYER_STATE] from " << c_id << " state=" << (int)p->state << "\n";
+
+		// 보고받은 상태 저장 후 다른 클라이언트에 브로드캐스트
+		clients[c_id].player_state = p->state;
+		for (auto& cl : clients) {
+			if (cl._state != ST_INGAME) continue;
+			if (cl._id == c_id) continue;
+			cl.send_player_state_change_packet(c_id);
+			std::cout << "send [SC_PLAYER_STATE_CHANGE_PACKET] to " << cl._id << " state=" << (int)clients[c_id].player_state << "\n";
+		}
 		break;
 	}
 	}

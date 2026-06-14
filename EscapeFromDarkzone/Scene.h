@@ -218,6 +218,9 @@ public:
 	float m_fGrenadeBounceDamping = 0.45f;
 	float m_fGrenadeGroundY = 0.2f;
 
+	int m_nGrenadeMaxCount = 3;
+	int m_nGrenadeCount = 3;
+
 	float m_fGrenadeRadius = 0.18f;
 	float m_fGrenadeWallBounceDamping = 0.55f;
 	float m_fGrenadeWallFriction = 0.75f;
@@ -226,6 +229,9 @@ public:
 	float m_fGrenadeThrowTimer = 0.0f;
 	float m_fGrenadeReleaseTime = 2.1f;
 	CGameObject* m_pGrenadeDebugObject = nullptr;
+
+	UIObject* m_pCrosshairUI = nullptr;
+	bool m_bCrosshairCursorHidden = false;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker¿ë º¤ÅÍ
 private:
@@ -246,6 +252,9 @@ private:
 	void SetGrenadeAimMode(HWND hWnd, bool bEnable);
 	void ClampGameplayCursorToAimLine(HWND hWnd);
 	void ReleaseGameplayCursor();
+
+	void UpdateCrosshairUI(HWND hWnd);
+	void HideCrosshairUI();
 
 	float CalculateGrenadeMaxAimDistance();
 	void ThrowGrenade();

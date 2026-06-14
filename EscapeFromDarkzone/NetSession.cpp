@@ -25,9 +25,19 @@ bool NetSession::ChangeWeapon(short weaponType, short weaponGrade)
 	return NetworkManager::Instance().SendChangeWeapon(weaponType, weaponGrade);
 }
 
+bool NetSession::ChangeState(char state)
+{
+	return NetworkManager::Instance().SendChangeState(state);
+}
+
 bool NetSession::Craft(ItemID target)
 {
 	return NetworkManager::Instance().SendCraftRequest(target);
+}
+
+bool NetSession::GrenadeExplode(const DirectX::XMFLOAT3& pos)
+{
+	return NetworkManager::Instance().SendGrenadeExplode(pos);
 }
 
 bool NetSession::InventoryClick(char action, short slotidx)

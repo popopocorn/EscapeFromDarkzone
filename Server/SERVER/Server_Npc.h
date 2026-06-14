@@ -101,7 +101,7 @@ inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 
 // NpcInputEvent
 struct NpcInputEvent {
-    enum Type { HIT, NEW_CLIENT_JOINED };
+    enum Type { HIT, NEW_CLIENT_JOINED, GRENADE_EXPLODE };
     Type type;
 
     int      attacker_client_id;
@@ -112,6 +112,8 @@ struct NpcInputEvent {
     short    weapon_grade;
 
     int      new_client_id;
+
+    XMFLOAT3 explode_pos;
 };
 
 // NpcInputQueue

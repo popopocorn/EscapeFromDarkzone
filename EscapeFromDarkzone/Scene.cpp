@@ -547,6 +547,9 @@ MainScene::MainScene(CGameFramework* game) : CScene(game)
 	m_fGrenadeGravity = -9.8f;
 	m_fGrenadeBounceDamping = 0.45f;
 	m_fGrenadeGroundY = 0.2f;
+
+	m_nGrenadeMaxCount = 3;
+	m_nGrenadeCount = m_nGrenadeMaxCount;
 }
 
 MainScene::~MainScene()
@@ -564,6 +567,13 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		if (IsAnyInventoryOpen()) return;
 		if (m_bGrenadeFlying) return;
 
+		if (m_nGrenadeCount <= 0)
+		{
+			OutputDebugString(L"[Grenade] No grenades left.\n");
+			ClampGameplayCursorToAimLine(hWnd);
+			return;
+		}
+
 		m_bGrenadeAimMode = true;
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
@@ -575,6 +585,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		}
 
 		m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
+
 		if (m_fGrenadeAimMaxDistance < m_fGrenadeAimMinDistance)
 			m_fGrenadeAimMaxDistance = m_fGrenadeAimMinDistance;
 
@@ -604,7 +615,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 void MainScene::ReleaseGameplayCursor()
 {
 	::ClipCursor(NULL);
-	::ShowCursor(TRUE);
+	HideCrosshairUI();
 }
 
 void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
@@ -616,8 +627,6 @@ void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
 		ReleaseGameplayCursor();
 		return;
 	}
-
-	if (!m_bGrenadeAimMode) return;
 
 	RECT rc;
 	::GetClientRect(hWnd, &rc);
@@ -633,15 +642,137 @@ void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
 	::GetCursorPos(&mouse);
 	::ScreenToClient(hWnd, &mouse);
 
-	if (mouse.y < 0) mouse.y = 0;
-	if (mouse.y > centerY) mouse.y = centerY;
+	bool bNeedMoveCursor = false;
 
-	m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
-	if (m_fGrenadeAimMaxDistance < m_fGrenadeAimMinDistance)
-		m_fGrenadeAimMaxDistance = m_fGrenadeAimMinDistance;
+	if (mouse.x < 0)
+	{
+		mouse.x = 0;
+		bNeedMoveCursor = true;
+	}
 
-	float t = 1.0f - (float(mouse.y) / float(centerY));
-	m_fGrenadeAimDistance = m_fGrenadeAimMinDistance + (m_fGrenadeAimMaxDistance - m_fGrenadeAimMinDistance) * t;
+	if (mouse.x > width)
+	{
+		mouse.x = width;
+		bNeedMoveCursor = true;
+	}
+
+	if (mouse.y < 0)
+	{
+		mouse.y = 0;
+		bNeedMoveCursor = true;
+	}
+
+	if (mouse.y > centerY)
+	{
+		mouse.y = centerY;
+		bNeedMoveCursor = true;
+	}
+
+	if (bNeedMoveCursor)
+	{
+		POINT screenMouse = mouse;
+		::ClientToScreen(hWnd, &screenMouse);
+		::SetCursorPos(screenMouse.x, screenMouse.y);
+	}
+
+	if (m_bGrenadeAimMode)
+	{
+		m_fGrenadeAimMaxDistance = CalculateGrenadeMaxAimDistance();
+
+		if (m_fGrenadeAimMaxDistance < m_fGrenadeAimMinDistance)
+			m_fGrenadeAimMaxDistance = m_fGrenadeAimMinDistance;
+
+		float t = 1.0f - (float(mouse.y) / float(centerY));
+		m_fGrenadeAimDistance = m_fGrenadeAimMinDistance + (m_fGrenadeAimMaxDistance - m_fGrenadeAimMinDistance) * t;
+	}
+
+	UpdateCrosshairUI(hWnd);
+}
+
+void MainScene::HideCrosshairUI()
+{
+	if (m_pCrosshairUI)
+	{
+		m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.9f);
+	}
+
+	if (m_bCrosshairCursorHidden)
+	{
+		while (::ShowCursor(TRUE) < 0) {}
+		m_bCrosshairCursorHidden = false;
+	}
+}
+
+void MainScene::UpdateCrosshairUI(HWND hWnd)
+{
+	if (!m_pCrosshairUI)
+		return;
+
+	if (!hWnd || IsAnyInventoryOpen())
+	{
+		HideCrosshairUI();
+		return;
+	}
+
+	RECT rc;
+	::GetClientRect(hWnd, &rc);
+
+	int width = rc.right - rc.left;
+	int height = rc.bottom - rc.top;
+
+	if (width <= 0 || height <= 0)
+	{
+		HideCrosshairUI();
+		return;
+	}
+
+	int centerY = height / 2;
+
+	POINT mouse;
+	::GetCursorPos(&mouse);
+	::ScreenToClient(hWnd, &mouse);
+
+	bool bNeedMoveCursor = false;
+
+	if (mouse.x < 0)
+	{
+		mouse.x = 0;
+		bNeedMoveCursor = true;
+	}
+
+	if (mouse.x > width)
+	{
+		mouse.x = width;
+		bNeedMoveCursor = true;
+	}
+
+	if (mouse.y < 0)
+	{
+		mouse.y = 0;
+		bNeedMoveCursor = true;
+	}
+
+	if (mouse.y > centerY)
+	{
+		mouse.y = centerY;
+		bNeedMoveCursor = true;
+	}
+
+	if (bNeedMoveCursor)
+	{
+		POINT screenMouse = mouse;
+		::ClientToScreen(hWnd, &screenMouse);
+		::SetCursorPos(screenMouse.x, screenMouse.y);
+	}
+
+	float ndcX = (2.0f * static_cast<float>(mouse.x)) / static_cast<float>(width) - 1.0f;
+	float ndcY = 1.0f - (2.0f * static_cast<float>(mouse.y)) / static_cast<float>(height);
+
+	m_pCrosshairUI->SetLocate(ndcX, ndcY, 0.9f);
+
+	while (::ShowCursor(FALSE) >= 0) {}
+	::SetCursor(NULL);
+	m_bCrosshairCursorHidden = true;
 }
 
 float MainScene::CalculateGrenadeMaxAimDistance()
@@ -791,6 +922,25 @@ void MainScene::ThrowGrenade()
 {
 	if (!m_pPlayer) return;
 	if (!m_bGrenadeAimMode) return;
+
+	if (m_nGrenadeCount <= 0)
+	{
+		m_bGrenadeAimMode = false;
+
+		if (m_pPlayer)
+		{
+			m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
+		}
+
+		OutputDebugString(L"[Grenade] Throw blocked. No grenades left.\n");
+		return;
+	}
+
+	m_nGrenadeCount--;
+
+	wchar_t grenadeDebugText[128];
+	swprintf_s(grenadeDebugText, L"[Grenade] Throw. Remain = %d / %d\n", m_nGrenadeCount, m_nGrenadeMaxCount);
+	OutputDebugStringW(grenadeDebugText);
 
 	XMFLOAT3 look = m_pPlayer->GetLookVector();
 	look.y = 0.0f;
@@ -955,22 +1105,17 @@ void MainScene::ExplodeGrenade()
 {
 	if (!m_bGrenadeFlying) return;
 
-	XMFLOAT3 grenadeFinalPos = m_xmf3GrenadePosition;
+	XMFLOAT3 explosionPos = m_xmf3GrenadePosition;
 
 	if (m_pGrenadeDebugObject)
 	{
-		grenadeFinalPos = m_pGrenadeDebugObject->GetPosition();
+		explosionPos = m_pGrenadeDebugObject->GetPosition();
 	}
 
-	grenadeFinalPos.y = m_fGrenadeGroundY;
-
-	if (NetworkManager::Instance().IsConnected())
-	{
-		//여기에서 서버로 최종 폭발 위치 전송, grenadeFinalPos 사용
-		//NetSession::Instance().GrenadeExplode(grenadeFinalPos);
-	}
+	explosionPos.y = m_fGrenadeGroundY;
 
 	XMFLOAT3 effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
 	if (m_pPlayer)
 	{
 		effectDir = m_pPlayer->GetLookVector();
@@ -984,27 +1129,44 @@ void MainScene::ExplodeGrenade()
 		effectDir = Vector3::Normalize(effectDir);
 	}
 
-	XMFLOAT3 effectPos = grenadeFinalPos;
+	XMFLOAT3 rightDir = XMFLOAT3(effectDir.z, 0.0f, -effectDir.x);
 
-	float effectVisualOffset = 1.5f;
-	effectPos.x -= effectDir.x * effectVisualOffset;
-	effectPos.z -= effectDir.z * effectVisualOffset;
+	XMFLOAT3 serverExplosionPos = explosionPos;
 
-	m_xmf3GrenadePosition = grenadeFinalPos;
+	constexpr float SERVER_GRENADE_OFFSET_RIGHT = 2.0f;
+	constexpr float SERVER_GRENADE_OFFSET_FORWARD = 2.0f;
+	//constexpr float SERVER_GRENADE_OFFSET_UP = 0.25f;
+
+	serverExplosionPos.x += rightDir.x * SERVER_GRENADE_OFFSET_RIGHT;
+	serverExplosionPos.z += rightDir.z * SERVER_GRENADE_OFFSET_RIGHT;
+
+	serverExplosionPos.x += effectDir.x * SERVER_GRENADE_OFFSET_FORWARD;
+	serverExplosionPos.z += effectDir.z * SERVER_GRENADE_OFFSET_FORWARD;
+
+	//serverExplosionPos.y += SERVER_GRENADE_OFFSET_UP;
+
+	m_xmf3GrenadePosition = explosionPos;
 
 	m_bGrenadeFlying = false;
 	m_fGrenadeLifeTimer = 0.0f;
 
-	if (m_pEffectManager)
+	if (NetworkManager::Instance().IsConnected())
 	{
-		EffectSpawnDesc desc;
-		desc.id = EffectID::GRENADE_EXPLOSION;
-		desc.position = effectPos;
-		desc.direction = effectDir;
-		desc.ownerId = 0;
-		desc.value = 0.0f;
+		NetSession::Instance().GrenadeExplode(serverExplosionPos);
+	}
+	else
+	{
+		if (m_pEffectManager)
+		{
+			EffectSpawnDesc desc;
+			desc.id = EffectID::GRENADE_EXPLOSION;
+			desc.position = serverExplosionPos;
+			desc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
+			desc.ownerId = 0;
+			desc.value = 0.0f;
 
-		m_pEffectManager->PlayEffectByID(desc);
+			m_pEffectManager->PlayEffectByID(desc);
+		}
 	}
 
 	if (m_pGrenadeDebugObject)
@@ -1015,7 +1177,6 @@ void MainScene::ExplodeGrenade()
 
 	OutputDebugString(L"[Grenade] Explosion\n");
 }
-
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	ClampGameplayCursorToAimLine(hWnd);
@@ -1588,13 +1749,22 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
-	equipUI = e;
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 
 	PlayerStatus* s = new PlayerStatus(m_pPlayer);
 	s->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(s);
+
+	m_pCrosshairUI = new UIObject();
+	m_pCrosshairUI->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::CROSSHAIR));
+
+	float crosshairSizeY = 0.055f;
+	float aspect = static_cast<float>(FRAME_BUFFER_WIDTH) / static_cast<float>(FRAME_BUFFER_HEIGHT);
+	m_pCrosshairUI->SetScale(crosshairSizeY / aspect, crosshairSizeY, 1.0f);
+	m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.05f);
+
+	uiManager->AddToManager(m_pCrosshairUI);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
