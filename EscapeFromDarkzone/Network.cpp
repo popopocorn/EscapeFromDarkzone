@@ -326,5 +326,6 @@ bool NetworkManager::SendCraftRequest(ItemID target)
 	pkt.size = sizeof(CS_CRAFT_REQUEST_PACKET);
 	pkt.type = CS_CRAFT_REQUEST;
 	pkt.target = target;
+	OutputDebugString(L"SendItemRequest\n");
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }

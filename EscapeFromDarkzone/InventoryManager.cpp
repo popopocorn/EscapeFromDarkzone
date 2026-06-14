@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "Object.h"
 #include "ResourceManager.h"
+#include"SoundManager.h"
 
 
 InventoryManager::~InventoryManager()
@@ -148,7 +149,7 @@ bool InventoryManager::ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, 
 {
 	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
 	if (!pPlayerInventory) return false;
-
+	SoundManager::Instance()->Play(SoundName::GRAB_ITEM, XMFLOAT3());
 	return pPlayerInventory->ApplyServerSlotUpdate(slotIndex, itemId, count);
 }
 
