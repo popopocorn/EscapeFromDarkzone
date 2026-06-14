@@ -28,6 +28,7 @@ public:
 	bool FireHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
 	bool ChangeWeapon(short weaponType, short weaponGrade);
 	bool Craft(ItemID target);
+	bool GrenadeExplode(const DirectX::XMFLOAT3& pos);
 	bool InventoryClick(char action, short slotidx);
 	bool LootPickup(short box_id, short slotidx);
 };

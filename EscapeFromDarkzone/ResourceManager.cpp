@@ -214,6 +214,10 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		obj.second->ReleaseUploadBuffers();
 	}
+	for (auto& obj : m_UIPrototypes)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
 }
 
 void ResourceManager::ReleaseResources()
@@ -578,7 +582,7 @@ void ResourceManager::BuildUIMesh(
 		UIName::DIVIDER_001,
 		L"UI/divider-002.dds"
 	);
-
+	//icon
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
@@ -600,6 +604,91 @@ void ResourceManager::BuildUIMesh(
 		L"UI/metalbar.dds"
 	);
 
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_HELMET_01,
+		L"UI/Icon_Helmet_01.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_HELMET_02,
+		L"UI/Icon_Helmet_02.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_HELMET_03,
+		L"UI/Icon_Helmet_03.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_HELMET_04,
+		L"UI/Icon_Helmet_04.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_BODY_01,
+		L"UI/Icon_Body_01.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_BODY_02,
+		L"UI/Icon_Body_02.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_BODY_03,
+		L"UI/Icon_Body_03.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_BODY_04,
+		L"UI/Icon_Body_04.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_SHOES_01,
+		L"UI/Icon_Shoes_01.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_SHOES_02,
+		L"UI/Icon_Shoes_02.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_SHOES_03,
+		L"UI/Icon_Shoes_03.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_SHOES_04,
+		L"UI/Icon_Shoes_04.dds"
+	);
+
+	//status
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
@@ -653,6 +742,20 @@ void ResourceManager::BuildUIMesh(
 		pd3dCommandList,
 		UIName::CROSSHAIR,
 		L"UI/Crosshair_03.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_BULLET_DOT,
+		L"UI/BlueDot.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::STATUS_BULLET_DOT,
+		L"UI/BlueDot.dds"
 	);
 }
 

@@ -319,6 +319,18 @@ bool NetworkManager::SendChangeWeapon(short weaponType, short weaponGrade)
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
+bool NetworkManager::SendGrenadeExplode(const DirectX::XMFLOAT3& pos)
+{
+	CS_GRENADE_EXPLODE_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_GRENADE_EXPLODE_PACKET);
+	pkt.type = CS_GRENADE_EXPLODE;
+	pkt.x = pos.x;
+	pkt.y = pos.y;
+	pkt.z = pos.z;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
+
 bool NetworkManager::SendLootPickup(short box_id, short slotidx)
 {
 	CS_LOOT_PICKUP_PACKET pkt;

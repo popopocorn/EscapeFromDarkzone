@@ -9,6 +9,7 @@
 #include <string>
 
 #include <chrono>
+#include <atomic>
 #include <cmath>
 
 #include "protocol.h"
@@ -70,6 +71,28 @@ constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPO
 
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
+
+
+// ===== 라운드 상태 =====
+constexpr int ROUND_MIN_PLAYERS = 3;			// default: 8
+
+enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
+std::atomic<int> g_round_state{ ROUND_WAITING };
+std::chrono::steady_clock::time_point g_round_start_time;
+// =======================
+
+
+// ===== 탈출 =====
+constexpr float ESCAPE_HOLD_SEC = 10.0f;		// 탈출 소요 시간
+struct EscapeZone { float minX, maxX, minZ, maxZ; };
+constexpr EscapeZone ESCAPE_ZONES[] = {
+	{   40.0f,  50.0f, -150.0f, -140.0f },  // 탈출구역 A
+	{-150.0f, -140.0f, -150.0f, -140.0f },  // 탈출구역 B
+	{-150.0f, -140.0f,   40.0f,   50.0f },  // 탈출구역 C
+};
+constexpr int ESCAPE_ZONE_COUNT = sizeof(ESCAPE_ZONES) / sizeof(ESCAPE_ZONES[0]);
+// ================
+
 
 constexpr int PLAYER_SPAWN_COUNT = 8;
 struct PlayerSpawnPos { float x, z; };
@@ -286,6 +309,10 @@ public:
 	short hp = 100;
 	short max_hp = 100;
 
+	bool in_escape_zone = false;
+	bool escaped = false;
+	std::chrono::steady_clock::time_point last_hit_time;
+
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
@@ -308,6 +335,9 @@ public:
 		hp = 100;
 		max_hp = 100;
 		_last_move_recv_time = std::chrono::steady_clock::now();
+		last_hit_time = _last_move_recv_time;
+		in_escape_zone = false;
+		escaped = false;
 	}
 
 	~SESSION() {}
@@ -806,6 +836,8 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 					clients[target_id].hp -= dmg;
 					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 					new_hp = clients[target_id].hp;
+					if (clients[target_id].in_escape_zone)		// 탈출 중 피격시 시간 초기화
+						clients[target_id].last_hit_time = std::chrono::steady_clock::now();
 				}
 			}
 
@@ -1091,6 +1123,63 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				npc.yaw, npc.hp
 			);
 		}
+
+		break;
+	}
+	case NpcInputEvent::GRENADE_EXPLODE:
+	{
+		const XMFLOAT3 C = e.explode_pos;
+		GrenadeSpec g = GetGrenadeSpec();
+
+		// ---- 플레이어 피해 ----
+		for (int i = 0; i < MAX_USER; ++i) {
+			short new_hp = 0;
+			bool  hit = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].hp <= 0) continue;
+
+				XMFLOAT3 ppos = { clients[i].x, clients[i].y, clients[i].z };
+				float dist = DistanceXZ(ppos, C);   // XZ 거리
+				short dmg = ComputeGrenadeDamage(g, dist);
+				if (dmg <= 0) continue;
+
+				clients[i].hp -= dmg;
+				if (clients[i].hp < 0) clients[i].hp = 0;
+				new_hp = clients[i].hp;
+				hit = true;
+
+				if (clients[i].in_escape_zone)   // 탈출 중 피격 시 시간 초기화
+					clients[i].last_hit_time = std::chrono::steady_clock::now();
+			}   // 락 해제 후 송신
+
+			if (hit) {
+				SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+				hp_pkt.size = sizeof(hp_pkt);
+				hp_pkt.type = SC_PLAYER_HP_UPDATE;
+				hp_pkt.id = (short)i;
+				hp_pkt.hp = new_hp;
+				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
+			}
+		}
+
+		// ---- NPC 피해 ----
+		for (auto& npc : g_npcs) {
+			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
+			float dist = DistanceXZ(npc.position, C);
+			short dmg = ComputeGrenadeDamage(g, dist);
+			if (dmg <= 0) continue;
+			ApplyDamage(npc, dmg, e.attacker_client_id, player_snapshot);
+		}
+
+		// ---- 폭발 이펙트 전체 브로드캐스트 ----
+		// dir은 클라가 GRENADE_EXPLOSION이면 위로 강제하므로 형식상 값.
+		XMFLOAT3 dir = { 0.0f, 1.0f, 0.0f };
+		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir, player_snapshot);
+
+		std::cout << "[Grenade] explode at (" << C.x << "," << C.z
+			<< ") by client " << e.attacker_client_id << "\n";
 
 		break;
 	}
@@ -1647,6 +1736,65 @@ static void npc_thread()
 			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
 		}
 
+		// ===== 탈출 판정 =====
+		if (g_round_state.load() == ROUND_IN_PROGRESS)
+		{
+			const auto tnow = std::chrono::steady_clock::now();
+			for (int i = 0; i < MAX_USER; ++i) {
+				float px = 0.0f, pz = 0.0f;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i]._state != ST_INGAME) continue;
+					if (clients[i].escaped) continue;
+					px = clients[i].x; pz = clients[i].z;
+				}
+
+				// 영역 판정 (XZ, OR)
+				bool now_in_zone = false;
+				for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
+					const auto& ez = ESCAPE_ZONES[z];
+					if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
+						now_in_zone = true; 
+						break;
+					}
+				}
+
+				bool  success = false;
+				float escape_sec = 0.0f;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i].escaped) continue;   // 더블체크
+
+					if (now_in_zone) {
+						if (!clients[i].in_escape_zone) {
+							clients[i].in_escape_zone = true;
+							std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+							clients[i].last_hit_time = tnow;       // 진행 시작
+						}
+						if (std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+							clients[i].escaped = true;
+							success = true;
+							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
+						}
+					}
+					else if (true == clients[i].in_escape_zone && !now_in_zone) {
+						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
+						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+					}
+				}
+
+				if (success) {
+					SC_ESCAPE_SUCCESS_PACKET ep;
+					ep.size = sizeof(ep);
+					ep.type = SC_ESCAPE_SUCCESS;
+					ep.escape_time_sec = escape_sec;
+					clients[i].do_send(&ep);
+					std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
+				}
+			}
+		}
+		// =====================
+
 		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
@@ -1679,6 +1827,39 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll{ clients[c_id]._s_lock };
 			clients[c_id]._state = ST_INGAME;
+
+			clients[c_id].escaped = false;            // 탈출 상태 초기화
+			clients[c_id].in_escape_zone = false;
+		}
+
+		// ===== 라운드 시작 판정 =====
+		if (g_round_state.load() == ROUND_WAITING) {
+			// ST_INGAME 인원 카운트
+			int ingame = 0;
+			for (auto& pl : clients) {
+				std::lock_guard<std::mutex> ll(pl._s_lock);
+				if (pl._state == ST_INGAME) ++ingame;
+			}
+
+			if (ingame >= ROUND_MIN_PLAYERS) {
+				int expected = ROUND_WAITING;
+				// CAS 성공자 단 하나만 전환, 브로드캐스트
+				if (g_round_state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
+					g_round_start_time = std::chrono::steady_clock::now();
+					std::cout << "[ROUND] start (players=" << ingame << ")\n";
+
+					SC_ROUND_START_PACKET rp;
+					rp.size = sizeof(rp);
+					rp.type = SC_ROUND_START;
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+						}
+						pl.do_send(&rp);
+					}
+				}
+			}
 		}
 
 		for (auto& pl : clients) {
@@ -1709,19 +1890,22 @@ void process_packet(int c_id, char* packet)
 		{
 			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 
-			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 10 };
+			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
 			clients[c_id].send_inventory_update_packet(0);
 
-			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 20 };
+			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
 			clients[c_id].send_inventory_update_packet(1);
 
-			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 20 };
+			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			clients[c_id].send_inventory_update_packet(2);
 		}
 
 		break;
 	}
 	case CS_MOVE: {
+		// 라운드 시작 전에는 이동 무시 (서버 가드)
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 
 		// 패킷 순서 보정: 이미 더 최신 패킷을 처리했으면 무시
@@ -1972,6 +2156,8 @@ void process_packet(int c_id, char* packet)
 					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
 					new_hp = clients[best_id].hp;
+					if (clients[best_id].in_escape_zone)			// 탈출 중 피격시 시간 초기화
+						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
 				}
 			}
 
@@ -2053,6 +2239,18 @@ void process_packet(int c_id, char* packet)
 
 		break;
 	}
+	case CS_GRENADE_EXPLODE: {
+		CS_GRENADE_EXPLODE_PACKET* p =
+			reinterpret_cast<CS_GRENADE_EXPLODE_PACKET*>(packet);
+
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::GRENADE_EXPLODE;
+		ev.attacker_client_id = c_id;
+		ev.explode_pos = { p->x, p->y, p->z };
+		g_npc_input_queue.Push(std::move(ev));
+
+		break;
+	}
 	}
 }
 
@@ -2109,6 +2307,16 @@ void worker_thread(HANDLE h_iocp)
 
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
+			// 라운드 중 접속 차단
+			if (g_round_state.load() == ROUND_IN_PROGRESS) { 
+				closesocket(g_c_socket); 
+				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
+				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
+				int addr_size = sizeof(SOCKADDR_IN); 
+				AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over); 
+				break; 
+			}
+
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				//{
@@ -2165,7 +2373,83 @@ void worker_thread(HANDLE h_iocp)
 		}
 	}
 }
+// NPC 인벤토리를 채우는 랜덤 루트 함수
+static void GenerateNpcLoot(SERVER_NPC& npc)
+{
+	npc._inventory.fill(ItemSlot{});
 
+	int dropCount = 0;   // 몇 종류의 아이템을 떨어뜨릴 것인가
+	int minQty = 1, maxQty = 3; // 한 종류당 떨어지는 최소/최대 개수
+
+
+	switch (npc.kind) {
+	case NPC_TIER_3:
+		dropCount = rand() % 2 + 2;
+		minQty = 7; maxQty = 12;
+		break;
+	case NPC_TIER_2:
+		dropCount = rand() % 2 + 2; // 2~3종류
+		minQty = 4; maxQty = 6;
+		break;
+	case NPC_TIER_1:
+	default:
+		dropCount = rand() % 2 + 1; // 1~2종류
+		minQty = 2; maxQty = 4;
+		break;
+	}
+
+	ItemID dropPool[] = {
+		ItemID::MAT_1_FIBER,
+		ItemID::MAT_2_METAL_PLATE,
+		ItemID::MAT_3_BOLT_AND_NUT,
+	};
+	int poolSize = sizeof(dropPool) / sizeof(dropPool[0]);
+
+	int currentSlot = 0;
+
+	for (int j = 0; j < dropCount; ++j) {
+		if (currentSlot >= INVENTORY_SIZE) break;
+
+		ItemID item = dropPool[rand() % poolSize];
+		int count = minQty + (rand() % (maxQty - minQty + 1));
+		bool bFound = false;
+		for (int k = 0; k < currentSlot; ++k) {
+			if (npc._inventory[k].item == item) {
+				npc._inventory[k].count += count;
+				bFound = true;
+				break;
+			}
+		}
+		if (!bFound) {
+			npc._inventory[currentSlot].item = item;
+			npc._inventory[currentSlot].count = count;
+			currentSlot++;
+		}
+	}
+
+	// --- 업그레이드 재료 랜덤 드랍 처리 ---
+	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+		ItemID upgradeItem = ItemID::NONE;
+
+		switch (npc.kind) {
+		case NPC_TIER_3: 
+			upgradeItem = ItemID::WEAPON_UPGRADE_4;
+			break;
+		case NPC_TIER_2: 
+			upgradeItem = (rand() % 100 < 70) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3; break;
+		case NPC_TIER_1: 
+		default:
+			upgradeItem = ItemID::WEAPON_UPGRADE_2;
+			break;
+		}
+
+		if (upgradeItem != ItemID::NONE) {
+			npc._inventory[currentSlot].item = upgradeItem;
+			npc._inventory[currentSlot].count = 1;
+			currentSlot++;
+		}
+	}
+}
 int main()
 {
 	if (!load_mapOOBB_from_CSV("map_oobb.csv")) {
@@ -2246,8 +2530,9 @@ int main()
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
-		npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
-		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };
+		/*npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
+		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };*/
+		GenerateNpcLoot(npc);
 
 		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
 			<< "slot0=" << static_cast<int>(npc._inventory[0].item)

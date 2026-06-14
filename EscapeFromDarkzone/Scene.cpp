@@ -1113,10 +1113,12 @@ void MainScene::ExplodeGrenade()
 
 	grenadeFinalPos.y = m_fGrenadeGroundY;
 
-	if (NetworkManager::Instance().IsConnected())
+	const bool bConnected = NetworkManager::Instance().IsConnected();
+
+	if (bConnected)
 	{
 		//여기에서 서버로 최종 폭발 위치 전송, grenadeFinalPos 사용
-		//NetSession::Instance().GrenadeExplode(grenadeFinalPos);
+		NetSession::Instance().GrenadeExplode(grenadeFinalPos);
 	}
 
 	XMFLOAT3 effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
@@ -1144,7 +1146,7 @@ void MainScene::ExplodeGrenade()
 	m_bGrenadeFlying = false;
 	m_fGrenadeLifeTimer = 0.0f;
 
-	if (m_pEffectManager)
+	if (!bConnected && m_pEffectManager)
 	{
 		EffectSpawnDesc desc;
 		desc.id = EffectID::GRENADE_EXPLOSION;
@@ -1455,7 +1457,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
+				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE_01);
 			}
 			return true;
 		}
@@ -1737,6 +1739,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
+	equipUI = e;
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 
