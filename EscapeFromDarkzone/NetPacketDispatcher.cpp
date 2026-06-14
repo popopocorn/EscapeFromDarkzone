@@ -110,6 +110,16 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		// TODO: 대기 화면 해제 / 입력 활성화 등 뭔가 UI를 붙이기
 		break;
 	}
+	case SC_ESCAPE_SUCCESS:
+	{
+		SC_ESCAPE_SUCCESS_PACKET* p =
+			reinterpret_cast<SC_ESCAPE_SUCCESS_PACKET*>(packet.data());
+		wchar_t buf[128];
+		swprintf_s(buf, L"[ESCAPE] success! time=%.2fs\n", p->escape_time_sec);
+		OutputDebugStringW(buf);
+		// TODO: 탈출 성공 UI 표시 (된다면)
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		gf.m_pNetEntityMgr->OnAddNpc(reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data()));
