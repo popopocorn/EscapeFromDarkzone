@@ -71,6 +71,19 @@ constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPO
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
+constexpr int PLAYER_SPAWN_COUNT = 8;
+struct PlayerSpawnPos { float x, z; };
+constexpr PlayerSpawnPos PLAYER_SPAWN_POS[PLAYER_SPAWN_COUNT] = {
+	{  42.0f,  45.0f },   // A
+	{  46.0f,  14.0f },   // B
+	{  44.0f, -34.0f },   // C
+	{  44.0f, -90.0f },   // D
+	{ -37.0f,  45.0f },   // E
+	{  20.0f, -62.0f },   // F
+	{  52.0f, -89.0f },   // G
+	{ -82.0f, -43.0f },   // H
+};
+
 static float DistanceXZ(const XMFLOAT3& a, const XMFLOAT3& b)
 {
 	float dx = a.x - b.x;
@@ -262,6 +275,8 @@ public:
 	float x, y, z;
 	float yaw;
 	char  player_state;
+	short weapon_type;    // ItemType (기본 PISTOL)
+	short weapon_grade;   // ItemGrade (기본 GRADE_1)
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -285,6 +300,8 @@ public:
 		y = 0.1f;
 		yaw = 0.0f;
 		player_state = PLAYER_STATE_IDLE;
+		weapon_type = static_cast<short>(ItemType::PISTOL);
+		weapon_grade = static_cast<short>(ItemGrade::BASIC);
 		_name[0] = 0;
 		_state = ST_FREE;
 		_prev_remain = 0;
@@ -381,6 +398,7 @@ public:
 		do_send(&p);
 	}
 	void send_player_state_change_packet(int c_id);
+	void send_change_weapon_packet(int c_id);
 };
 
 std::array<SESSION, MAX_USER> clients;
@@ -424,6 +442,16 @@ void SESSION::send_player_state_change_packet(int c_id) {
 	p.type = SC_PLAYER_STATE_CHANGE;
 	p.id = c_id;
 	p.state = clients[c_id].player_state;
+	do_send(&p);
+}
+
+void SESSION::send_change_weapon_packet(int c_id) {
+	SC_CHANGE_WEAPON_PACKET p;
+	p.size = sizeof(SC_CHANGE_WEAPON_PACKET);
+	p.type = SC_CHANGE_WEAPON;
+	p.id = c_id;
+	p.weapon_type = clients[c_id].weapon_type;
+	p.weapon_grade = clients[c_id].weapon_grade;
 	do_send(&p);
 }
 
@@ -1639,6 +1667,14 @@ void process_packet(int c_id, char* packet)
 
 		std::cout << "LOGIN " << clients[c_id]._name << ", ID " << clients[c_id]._id << "\n";
 
+		// 접속 id 기반 시작 위치
+		{
+			const PlayerSpawnPos& sp = PLAYER_SPAWN_POS[c_id % PLAYER_SPAWN_COUNT];
+			clients[c_id].x = sp.x;
+			clients[c_id].z = sp.z;
+			clients[c_id].y = 0.1f;   // 기본 높이
+		}
+
 		clients[c_id].send_login_info_packet();
 		{
 			std::lock_guard<std::mutex> ll{ clients[c_id]._s_lock };
@@ -1655,6 +1691,11 @@ void process_packet(int c_id, char* packet)
 			printf("ADD_PLAYER: %d, SEND TO %d\n", c_id, pl._id);
 			clients[c_id].send_add_player_packet(pl._id);
 			printf("ADD_PLAYER: %d, SEND TO %d\n", pl._id, c_id);
+
+			pl.send_change_weapon_packet(c_id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, pl._id);
+			clients[c_id].send_change_weapon_packet(pl._id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", pl._id, c_id);
 		}
 
 		{
@@ -1765,6 +1806,18 @@ void process_packet(int c_id, char* packet)
 				clients[c_id].x, clients[c_id].y, clients[c_id].z, cl._id);*/
 		}
 
+		break;
+	}
+	case CS_CHANGE_WEAPON: {
+		CS_CHANGE_WEAPON_PACKET* p = reinterpret_cast<CS_CHANGE_WEAPON_PACKET*>(packet);
+		clients[c_id].weapon_type = p->weapon_type;
+		clients[c_id].weapon_grade = p->weapon_grade;
+		for (auto& cl : clients) {
+			if (cl._state != ST_INGAME) continue;
+			if (cl._id == c_id) continue;
+			cl.send_change_weapon_packet(c_id);
+			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, cl._id);
+		}
 		break;
 	}
 	case CS_INVENTORY_CLICK: {
@@ -2154,27 +2207,27 @@ int main()
 	struct NpcSpawnDef { float x, z; char tier; char outfit; };
 	NpcSpawnDef main_npc_def[] = {
 		// 그룹01 (outfit a0 b1 c0)
-		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
+		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
 		// 그룹02 (outfit a1 b2 c1)
-		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
+		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
 		// 그룹03 (outfit a0 b2 c2)
-		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
+		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
 		// 그룹04 (outfit a0 b1 c0)
-		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
+		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
 		// 그룹05 (outfit a1 b2 c1)
-		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
+		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
 		// 그룹06 (outfit a0 b2 c2)
-		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
+		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
 		// 그룹07 (outfit a0 b1 c0)
-		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
+		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
 		// 그룹08 (outfit a1 b2 c1)
-		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
+		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
 		// 그룹09 (outfit a0 b2 c2)
-		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
+		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
 		// 그룹10 (outfit a0 b1 c0)
-		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
+		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
 		// 3단계 A,B,C (outfit 0,1,2)
-		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
+		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
 	};
 	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 
@@ -2183,8 +2236,8 @@ int main()
 		// NPC 1개 — id 0, (7, 0, -14) 위치
 		SERVER_NPC& npc = g_npcs[i];
 		npc.alive = true;
-		npc.outfit = main_npc_def[i].outfit;									//	임시 적용!!!!!!
-		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정		임시 적용!!!!!!
+		npc.outfit = main_npc_def[i].outfit;
+		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정
 		npc.state = NPC_STATE_IDLE;
 		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;

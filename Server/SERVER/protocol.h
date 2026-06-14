@@ -56,6 +56,10 @@ constexpr char SC_EQUIPMENT_UPDATE = 23;
 // PvP 패킷
 constexpr char CS_HIT_PLAYER = 24;
 
+// 무기 변경 동기화
+constexpr char CS_CHANGE_WEAPON = 25;
+constexpr char SC_CHANGE_WEAPON = 26;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -268,6 +272,21 @@ struct CS_HIT_PLAYER_PACKET {
 	short         weapon_type;				// WeaponType
 	short         weapon_grade;				// WeaponGrade
 	unsigned int  fire_time;				// 나중에
+};
+
+struct CS_CHANGE_WEAPON_PACKET {
+	unsigned char size;
+	char          type;
+	short         weapon_type;   // ItemType
+	short         weapon_grade;  // ItemGrade
+};
+
+struct SC_CHANGE_WEAPON_PACKET {
+	unsigned char size;
+	char          type;
+	short         id;
+	short         weapon_type;   // ItemType
+	short         weapon_grade;  // ItemGrade
 };
 
 #pragma pack (pop)

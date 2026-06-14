@@ -1172,6 +1172,15 @@ bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 	}
 	InitializeWeaponAmmo();
 	ApplyWeaponPose(WEAPON_POSE::IDLE);
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		NetSession::Instance().ChangeWeapon(
+			GetEquippedWeaponTypeForWire(),
+			GetEquippedWeaponGradeForWire());
+		// OtherPlayer 무기 동기화를 위해 현재 무기 정보를 패킷으로 전송
+	}
+
 	return true;
 }
 
