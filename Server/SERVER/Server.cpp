@@ -2165,7 +2165,84 @@ void worker_thread(HANDLE h_iocp)
 		}
 	}
 }
+// NPC 인벤토리를 채우는 랜덤 루트 함수
+static void GenerateNpcLoot(SERVER_NPC& npc)
+{
+	npc._inventory.fill(ItemSlot{});
 
+	int dropCount = 0;   // 몇 종류의 아이템을 떨어뜨릴 것인가
+	int minQty = 1, maxQty = 3; // 한 종류당 떨어지는 최소/최대 개수
+
+
+	switch (npc.kind) {
+	case NPC_TIER_3:
+		dropCount = rand() % 2 + 2;
+		minQty = 3; maxQty = 6;
+		break;
+	case NPC_TIER_2:
+		dropCount = rand() % 2 + 2; // 2~3종류
+		minQty = 2; maxQty = 4;
+		break;
+	case NPC_TIER_1:
+	default:
+		dropCount = rand() % 2 + 1; // 1~2종류
+		minQty = 1; maxQty = 2;
+		break;
+	}
+
+	ItemID dropPool[] = {
+		ItemID::MAT_1_FIBER,
+		ItemID::MAT_2_METAL_PLATE,
+		ItemID::MAT_3_BOLT_AND_NUT,
+	};
+	int poolSize = sizeof(dropPool) / sizeof(dropPool[0]);
+
+	int currentSlot = 0;
+
+	for (int j = 0; j < dropCount; ++j) {
+		if (currentSlot >= INVENTORY_SIZE) break;
+
+		ItemID item = dropPool[rand() % poolSize];
+		int count = minQty + (rand() % (maxQty - minQty + 1));
+		bool bFound = false;
+		for (int k = 0; k < currentSlot; ++k) {
+			if (npc._inventory[k].item == item) {
+				npc._inventory[k].count += count;
+				bFound = true;
+				break;
+			}
+		}
+		if (!bFound) {
+			npc._inventory[currentSlot].item = item;
+			npc._inventory[currentSlot].count = count;
+			currentSlot++;
+		}
+	}
+
+	// --- 업그레이드 재료 랜덤 드랍 처리 ---
+	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+		ItemID upgradeItem = ItemID::NONE;
+
+		switch (npc.kind) {
+		case NPC_TIER_3: 
+			upgradeItem = ItemID::WEAPON_UPGRADE_4;
+			break;
+		case NPC_TIER_2: 
+			upgradeItem = (rand() % 2 == 0) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3;
+			break;
+		case NPC_TIER_1: 
+		default:
+			upgradeItem = ItemID::WEAPON_UPGRADE_1;
+			break;
+		}
+
+		if (upgradeItem != ItemID::NONE) {
+			npc._inventory[currentSlot].item = upgradeItem;
+			npc._inventory[currentSlot].count = 1;
+			currentSlot++;
+		}
+	}
+}
 int main()
 {
 	if (!load_mapOOBB_from_CSV("map_oobb.csv")) {
@@ -2246,8 +2323,9 @@ int main()
 		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
 
 		// NPC 인벤토리 초기화 하드코딩
-		npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
-		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };
+		/*npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
+		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };*/
+		GenerateNpcLoot(npc);
 
 		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
 			<< "slot0=" << static_cast<int>(npc._inventory[0].item)
