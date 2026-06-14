@@ -64,7 +64,7 @@ static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outP
 {
 	switch (modelName)
 	{
-	//권총은 애니메이션 추가된 후 추가 수정
+		//권총은 애니메이션 추가된 후 추가 수정
 	case ModelName::PISTOL:
 		outPos = XMFLOAT3(-0.0f, 0.0f, 0.05f);
 		outRot = XMFLOAT3(180.0f, 180.0f, 0.0f);
@@ -78,7 +78,7 @@ static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outP
 		break;
 
 	case ModelName::SHOTGUN:
-		outPos = XMFLOAT3(-0.00f, 0.15f, 0.15f);
+		outPos = XMFLOAT3(-0.20f, 0.15f, 0.15f);
 		outRot = XMFLOAT3(180.0f, 0.0f, 105.0f);
 		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 		break;
@@ -89,6 +89,26 @@ static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outP
 		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
 		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 		break;
+	}
+}
+static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
+{
+	ItemType itemType = static_cast<ItemType>(weaponType);
+
+	switch (itemType)
+	{
+	case ItemType::PISTOL:
+		return PlayerWeaponType::Pistol;
+
+	case ItemType::SMG:
+		return PlayerWeaponType::SMG;
+
+	case ItemType::SHOTGUN:
+		return PlayerWeaponType::Shotgun;
+
+	case ItemType::RIFLE:
+	default:
+		return PlayerWeaponType::Rifle;
 	}
 }
 
@@ -195,12 +215,12 @@ void OtherPlayer::Render(
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
-void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState)
+void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce)
 {
 	if (!pNewState)
 		return;
 
-	if (m_pState && typeid(*m_pState) == typeid(*pNewState))
+	if (!bForce && m_pState && typeid(*m_pState) == typeid(*pNewState))
 		return;
 
 	if (m_pState)
@@ -210,85 +230,422 @@ void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState)
 
 	m_pState->Enter(this);
 }
+int OtherPlayer::GetIdleAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_IDLE;
+
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_IDLE;
+	}
+}
+int OtherPlayer::GetForwardRunAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_RUN_F;
+
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_RUN_F;
+	}
+}
+int OtherPlayer::GetGrenadeAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_GRENADE;
+
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_GRENADE;
+	}
+}
+int OtherPlayer::GetShootAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_SHOOT;
+
+	case PlayerWeaponType::Shotgun:
+		return PLAYER_SHOTGUN_SHOOT;
+
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_SHOOT;
+	}
+}
+int OtherPlayer::GetReloadAnimationByWeapon() const
+{
+	switch (m_eWeaponType)
+	{
+	case PlayerWeaponType::Pistol:
+		return PLAYER_PISTOL_RELOAD;
+
+	case PlayerWeaponType::SMG:
+	case PlayerWeaponType::Shotgun:
+	case PlayerWeaponType::Rifle:
+	default:
+		return PLAYER_RIFLE_SMG_RELOAD;
+	}
+}
+int OtherPlayer::GetDieAnimationByWeapon() const
+{
+	return PLAYER_DIE;
+}
+int OtherPlayer::GetLowerAnimationByServerState() const
+{
+	if (m_bServerMoving)
+		return GetForwardRunAnimationByWeapon();
+
+	return GetIdleAnimationByWeapon();
+}
+void OtherPlayer::RefreshBaseAnimationByServerState()
+{
+	auto* pCtrl = GetAnimationController();
+	if (!pCtrl)
+		return;
+
+	int lowerAnim = GetLowerAnimationByServerState();
+
+	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+	pCtrl->SetTrackEnable(0, true);
+	pCtrl->SetTrackWeight(0, 1.0f);
+
+	pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+	pCtrl->SetTrackAnimationSetIfChanged(1, lowerAnim);
+	pCtrl->SetTrackEnable(1, true);
+	pCtrl->SetTrackWeight(1, 1.0f);
+}
+void OtherPlayer::TriggerShootAnim()
+{
+	ChangeState(std::make_unique<OtherPlayerShoot>(), true);
+}
+void OtherPlayer::TriggerReloadAnim()
+{
+	ChangeState(std::make_unique<OtherPlayerReload>(), true);
+}
+void OtherPlayer::TriggerGrenadeAnim()
+{
+	ChangeState(std::make_unique<OtherPlayerGrenade>(), true);
+}
+void OtherPlayer::TriggerDieAnim()
+{
+	ChangeState(std::make_unique<OtherPlayerDie>(), true);
+}
 
 bool OtherPlayerIdle::Enter(OtherPlayer* Player)
 {
+	Player->SetServerMoving(false);
+
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
+		int idleAnim = Player->GetIdleAnimationByWeapon();
+
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		pCtrl->SetTrackAnimationSetIfChanged(0, idleAnim);
+		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackEnable(1, true);
+
+		pCtrl->SetTrackWeight(0, 1.0f);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
+
 	return true;
 }
 
 void OtherPlayerIdle::Update(OtherPlayer* Player, float fTimeElapsed)
 {
-	
 }
 
 void OtherPlayerIdle::Exit(OtherPlayer* Player)
 {
-	
 }
 
 bool OtherPlayerRun::Enter(OtherPlayer* Player)
 {
+	Player->SetServerMoving(true);
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		int runAnim = Player->GetForwardRunAnimationByWeapon();
+		int idleAnim = Player->GetIdleAnimationByWeapon();
+
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
+		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackEnable(1, true);
+
+		pCtrl->SetTrackWeight(0, 1.0f);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
 	return true;
 }
 
 void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 {
-	//int nextAnim = 0;
-	int nextAnim = PLAYER_RIFLE_SMG_RUN_F;
-	static float timeacu = 0;
-	timeacu += fTimeElapsed;
-	if (timeacu > 0.5)
+	m_fFootstepTimer += fTimeElapsed;
+
+	if (m_fFootstepTimer > 0.5f)
 	{
-		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
-		timeacu -= 0.5;
+		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
+		m_fFootstepTimer -= 0.5f;
 	}
-
-	//네트워크 전송시 플레이어의 방향(월드좌표가 아닌 화면기준 이동 방향)을 여기의 angle로 사용
-
-	/*if (angle > -XM_PIDIV4 && angle <= XM_PIDIV4)
-		nextAnim = ANIM_RUN_F;
-	else if (angle > XM_PIDIV4 && angle <= 3 * XM_PIDIV4)
-		nextAnim = ANIM_RUN_R;
-	else if (angle <= -XM_PIDIV4 && angle > -3 * XM_PIDIV4)
-		nextAnim = ANIM_RUN_L;
-	else
-		nextAnim = ANIM_RUN_B;*/
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
+		int runAnim = Player->GetForwardRunAnimationByWeapon();
+		int idleAnim = Player->GetIdleAnimationByWeapon();
+
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
+		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackEnable(1, true);
+
+		pCtrl->SetTrackWeight(0, 1.0f);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 }
 
-void OtherPlayerRun::Exit(OtherPlayer * Player)
-{}
+void OtherPlayerRun::Exit(OtherPlayer* Player)
+{
+}
 
-bool OtherPlayerDie::Enter(OtherPlayer* Player)
+bool OtherPlayerGrenade::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+	m_nLastLowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, m_nLastLowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetGrenadeAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerGrenade::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	m_nLastLowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, m_nLastLowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		if (Player->IsServerMoving())
+			Player->ChangeState(std::make_unique<OtherPlayerRun>());
+		else
+			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
+	}
+}
+
+void OtherPlayerGrenade::Exit(OtherPlayer* Player)
 {
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackAnimationSetIfChanged(0, PLAYER_DIE);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(1, m_nLastLowerAnim);
+
+		float fLowerPosition = pCtrl->GetTrackPosition(0);
+		pCtrl->SetTrackPosition(1, fLowerPosition);
 	}
+}
+
+bool OtherPlayerShoot::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+
+	int lowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerShoot::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	int lowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+	}
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		if (Player->IsServerMoving())
+			Player->ChangeState(std::make_unique<OtherPlayerRun>());
+		else
+			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
+	}
+}
+
+void OtherPlayerShoot::Exit(OtherPlayer* Player)
+{
+}
+
+bool OtherPlayerReload::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+
+	int lowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetReloadAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerReload::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	int lowerAnim = Player->GetLowerAnimationByServerState();
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+	}
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		if (Player->IsServerMoving())
+			Player->ChangeState(std::make_unique<OtherPlayerRun>());
+		else
+			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
+	}
+}
+
+void OtherPlayerReload::Exit(OtherPlayer* Player)
+{
+}
+
+bool OtherPlayerDie::Enter(OtherPlayer* Player)
+{
+	Player->SetServerMoving(false);
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (!pCtrl) return false;
+
+	pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+	pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+
+	pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetDieAnimationByWeapon());
+	pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetDieAnimationByWeapon());
+
+	pCtrl->SetTrackPosition(0, 0.0f);
+	pCtrl->SetTrackPosition(1, 0.0f);
+
+	pCtrl->SetTrackEnable(0, true);
+	pCtrl->SetTrackEnable(1, true);
+
+	pCtrl->SetTrackWeight(0, 1.0f);
+	pCtrl->SetTrackWeight(1, 1.0f);
+
 	return true;
 }
 
 void OtherPlayerDie::Update(OtherPlayer* Player, float fTimeElapsed)
-{}
+{
+}
 
-void OtherPlayerDie::Exit(OtherPlayer * Player)
-{}
+void OtherPlayerDie::Exit(OtherPlayer* Player)
+{
+}
 
 OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,
 	float x, float y, float z)
 {
-	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature); 
+	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	pOther->SetPosition(XMFLOAT3(x, y, z));
 	pOther->m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표 초기화(첫 프레임 튐 방지)
 	pOther->m_bUseServerLerp = true;
@@ -296,7 +653,7 @@ OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	return pOther;
 }
 
-void OtherPlayer::UpdatePosition(float x, float y, float z) 
+void OtherPlayer::UpdatePosition(float x, float y, float z)
 {
 	m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표
 	m_bUseServerLerp = true;
@@ -314,14 +671,7 @@ void OtherPlayer::EquipDefaultPistol()
 
 void OtherPlayer::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponPrototype = ResourceManager::Instance().GetModelPrototype(modelName);
-
-	if (!pWeaponPrototype)
-	{
-		return;
-	}
-
-	CGameObject* pWeaponInstance = CGameObject::CreateModelInstance(pWeaponPrototype);
+	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelPrototype(modelName);
 
 	if (!pWeaponInstance)
 	{
@@ -390,8 +740,12 @@ void OtherPlayer::ChangeWeaponFromServer(short weaponType, short weaponGrade)
 {
 	UNREFERENCED_PARAMETER(weaponGrade);
 
+	m_eWeaponType = GetOtherPlayerWeaponTypeFromPacket(weaponType);
+
 	ModelName modelName = GetOtherPlayerWeaponModelNameFromPacket(weaponType);
 	EquipWeaponModel(modelName);
+
+	RefreshBaseAnimationByServerState();
 }
 
 void OtherPlayer::SubmitWeaponToShader(CShader* shader)

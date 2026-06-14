@@ -151,6 +151,18 @@ void NetEntityManager::OnPlayerStateChange(const SC_PLAYER_STATE_CHANGE_PACKET* 
 		case PLAYER_STATE_RUN:
 			pOther->ChangeState(std::make_unique<OtherPlayerRun>());
 			break;
+		case PLAYER_STATE_SHOOT:
+			pOther->ChangeState(std::make_unique<OtherPlayerShoot>());
+			break;
+		case PLAYER_STATE_RELOAD:
+			pOther->ChangeState(std::make_unique<OtherPlayerReload>());
+			break;
+		case PLAYER_STATE_GRENADE:
+			pOther->ChangeState(std::make_unique<OtherPlayerGrenade>());
+			break;
+		case PLAYER_STATE_DIE:
+			pOther->ChangeState(std::make_unique<OtherPlayerDie>());
+			break;
 		}
 	}
 }

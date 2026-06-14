@@ -319,6 +319,16 @@ bool NetworkManager::SendChangeWeapon(short weaponType, short weaponGrade)
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
+bool NetworkManager::SendChangeState(char state)
+{
+	CS_PLAYER_STATE_CHANGE_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_PLAYER_STATE_CHANGE_PACKET);
+	pkt.type = CS_PLAYER_STATE_CHANGE;
+	pkt.state = state;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
+
 bool NetworkManager::SendGrenadeExplode(const DirectX::XMFLOAT3& pos)
 {
 	CS_GRENADE_EXPLODE_PACKET pkt;
