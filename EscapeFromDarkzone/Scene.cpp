@@ -582,6 +582,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		m_pPlayer->ApplyWeaponPose(WEAPON_POSE::GRENADE);
 
 		ClampGameplayCursorToAimLine(hWnd);
+		UpdateCrosshairUI(hWnd);
 
 		OutputDebugString(L"[Grenade] Aim Mode ON\n");
 	}
@@ -594,7 +595,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 			m_pPlayer->ApplyWeaponPose(WEAPON_POSE::IDLE);
 		}
 
-		ClampGameplayCursorToAimLine(hWnd);
+		HideCrosshairUI();
 
 		OutputDebugString(L"[Grenade] Aim Mode OFF\n");
 	}
@@ -603,7 +604,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 void MainScene::ReleaseGameplayCursor()
 {
 	::ClipCursor(NULL);
-	::ShowCursor(TRUE);
+	HideCrosshairUI();
 }
 
 void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
@@ -616,7 +617,11 @@ void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
 		return;
 	}
 
-	if (!m_bGrenadeAimMode) return;
+	if (!m_bGrenadeAimMode)
+	{
+		HideCrosshairUI();
+		return;
+	}
 
 	RECT rc;
 	::GetClientRect(hWnd, &rc);
@@ -641,6 +646,69 @@ void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
 
 	float t = 1.0f - (float(mouse.y) / float(centerY));
 	m_fGrenadeAimDistance = m_fGrenadeAimMinDistance + (m_fGrenadeAimMaxDistance - m_fGrenadeAimMinDistance) * t;
+
+	UpdateCrosshairUI(hWnd);
+}
+
+void MainScene::HideCrosshairUI()
+{
+	if (m_pCrosshairUI)
+	{
+		m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.0f);
+	}
+
+	if (m_bCrosshairCursorHidden)
+	{
+		::ShowCursor(TRUE);
+		m_bCrosshairCursorHidden = false;
+	}
+}
+
+void MainScene::UpdateCrosshairUI(HWND hWnd)
+{
+	if (!m_pCrosshairUI)
+		return;
+
+	if (!hWnd || IsAnyInventoryOpen() || !m_bGrenadeAimMode)
+	{
+		HideCrosshairUI();
+		return;
+	}
+
+	RECT rc;
+	::GetClientRect(hWnd, &rc);
+
+	int width = rc.right - rc.left;
+	int height = rc.bottom - rc.top;
+
+	if (width <= 0 || height <= 0)
+	{
+		HideCrosshairUI();
+		return;
+	}
+
+	int centerY = height / 2;
+
+	POINT mouse;
+	::GetCursorPos(&mouse);
+	::ScreenToClient(hWnd, &mouse);
+
+	if (mouse.x < 0) mouse.x = 0;
+	if (mouse.x > width) mouse.x = width;
+
+	if (mouse.y < 0) mouse.y = 0;
+	if (mouse.y > centerY) mouse.y = centerY;
+
+	float ndcX = (2.0f * static_cast<float>(mouse.x)) / static_cast<float>(width) - 1.0f;
+	float ndcY = 1.0f - (2.0f * static_cast<float>(mouse.y)) / static_cast<float>(height);
+
+	m_pCrosshairUI->SetLocate(ndcX, ndcY, 0.05f);
+
+	if (!m_bCrosshairCursorHidden)
+	{
+		::ShowCursor(FALSE);
+		m_bCrosshairCursorHidden = true;
+	}
 }
 
 float MainScene::CalculateGrenadeMaxAimDistance()
@@ -1593,6 +1661,16 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	PlayerStatus* s = new PlayerStatus(m_pPlayer);
 	s->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(s);
+
+	m_pCrosshairUI = new UIObject();
+	m_pCrosshairUI->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::CROSSHAIR));
+
+	float crosshairSizeY = 0.055f;
+	float aspect = static_cast<float>(FRAME_BUFFER_WIDTH) / static_cast<float>(FRAME_BUFFER_HEIGHT);
+	m_pCrosshairUI->SetScale(crosshairSizeY / aspect, crosshairSizeY, 1.0f);
+	m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.05f);
+
+	uiManager->AddToManager(m_pCrosshairUI);
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 

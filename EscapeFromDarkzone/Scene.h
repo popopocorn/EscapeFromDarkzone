@@ -221,6 +221,9 @@ public:
 	float m_fGrenadeReleaseTime = 2.1f;
 	CGameObject* m_pGrenadeDebugObject = nullptr;
 
+	UIObject* m_pCrosshairUI = nullptr;
+	bool m_bCrosshairCursorHidden = false;
+
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker¿ë º¤ÅÍ
 private:
 	unique_ptr<CollisionManager> colManager;
@@ -240,6 +243,9 @@ private:
 	void SetGrenadeAimMode(HWND hWnd, bool bEnable);
 	void ClampGameplayCursorToAimLine(HWND hWnd);
 	void ReleaseGameplayCursor();
+
+	void UpdateCrosshairUI(HWND hWnd);
+	void HideCrosshairUI();
 
 	float CalculateGrenadeMaxAimDistance();
 	void ThrowGrenade();

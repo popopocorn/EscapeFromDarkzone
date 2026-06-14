@@ -647,6 +647,13 @@ void ResourceManager::BuildUIMesh(
 		UIName::STATUS_BULLET_DOT,
 		L"UI/BlueDot.dds"
 	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::CROSSHAIR,
+		L"UI/Crosshair_03.dds"
+	);
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
