@@ -36,7 +36,20 @@ enum class ItemID : short {
 	WEAPON_UPGRADE_4,
 	ARMOR_PLATE,
 	//완성품
-	WEAPON_RIFLE,
+	WEAPON_RIFLE_01,
+	WEAPON_RIFLE_02,
+	WEAPON_RIFLE_03,
+	WEAPON_RIFLE_04,
+
+	WEAPON_SMG_01,
+	WEAPON_SMG_02,
+	WEAPON_SMG_03,
+	WEAPON_SMG_04,
+
+	WEAPON_SHOTGUN_01,
+	WEAPON_SHOTGUN_02,
+	WEAPON_SHOTGUN_03,
+	WEAPON_SHOTGUN_04,
 
 	ARMOR_HELMET_01,
 	ARMOR_HELMET_02,
@@ -78,7 +91,7 @@ struct CraftRecipe {
 
 inline constexpr CraftRecipe g_craftRecipes[] = {
 	// 무기: MAT_2 x20 + MAT_3 x20
-	{ ItemID::WEAPON_RIFLE, 1, {
+	{ ItemID::WEAPON_RIFLE_01, 1, {
 		{ ItemID::MAT_2_METAL_PLATE, 20 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 20 },
 		{ ItemID::NONE, 0 },

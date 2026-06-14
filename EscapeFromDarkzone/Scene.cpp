@@ -1305,7 +1305,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
-				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE);
+				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE_01);
 			}
 			return true;
 		}
