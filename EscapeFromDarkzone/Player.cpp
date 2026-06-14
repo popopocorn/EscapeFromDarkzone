@@ -969,8 +969,6 @@ void CPlayer::DetachCurrentWeapon()
 		}
 	}
 
-	DeleteGameObjectTree(m_pWeapon);
-
 	m_pWeapon = nullptr;
 	m_pWeaponSocket = nullptr;
 	m_pLeftHandGrip = nullptr;
@@ -1001,86 +999,84 @@ void CPlayer::ApplyWeaponVisualConfig(PlayerWeaponType weaponType)
 }
 
 //디버그용 무조건 장착 함수
-bool CPlayer::EquipDebugWeapon(PlayerWeaponType weaponType)
-{
-	PlayerWeaponVisualConfig config = GetPlayerWeaponVisualConfig(weaponType);
+//bool CPlayer::EquipDebugWeapon(PlayerWeaponType weaponType)
+//{
+//	PlayerWeaponVisualConfig config = GetPlayerWeaponVisualConfig(weaponType);
+//
+//	CGameObject* pWeaponPrototype =
+//		ResourceManager::Instance().GetModelPrototype(config.modelName);
+//
+//	if (!pWeaponPrototype)
+//	{
+//		OutputDebugString(L"[Weapon] weapon prototype not found.\n");
+//		return false;
+//	}
+//
+//	if (!pWeaponPrototype)
+//	{
+//		OutputDebugString(L"[Weapon] weapon instance create failed.\n");
+//		return false;
+//	}
+//
+//	auto pWeaponItem = new WeaponItem(
+//		ItemGrade::GRADE_1,
+//		config.itemType
+//	);
+//
+//	pWeaponItem->SetModelPrototype(pWeaponPrototype);
+//
+//	DetachCurrentWeapon();
+//
+//	m_eCurrentWeaponType = weaponType;
+//	m_pEquippedWeaponItem = pWeaponItem;
+//
+//	m_bReloading = false;
+//	m_fReloadElapsed = 0.0f;
+//	m_fFireCooldown = 0.0f;
+//	m_bShotAnimRequest = false;
+//
+//	ApplyWeaponVisualConfig(weaponType);
+//
+//	EquipWeapon(pWeaponPrototype, "mixamorig:RightHand");
+//
+//	if (m_pWeapon != pWeaponPrototype)
+//	{
+//		DeleteGameObjectTree(pWeaponPrototype);
+//		m_pEquippedWeaponItem = NULL;
+//		OutputDebugString(L"[Weapon] debug weapon equip failed.\n");
+//		return false;
+//	}
+//
+//	InitializeWeaponAmmo();
+//
+//	ApplyWeaponPose(WEAPON_POSE::IDLE);
+//
+//	if (m_pSkinnedAnimationController)
+//	{
+//		int idleAnim = GetIdleAnimationByWeapon();
+//
+//		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
+//		m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
+//
+//		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, idleAnim);
+//		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, idleAnim);
+//
+//		m_pSkinnedAnimationController->SetTrackPosition(0, 0.0f);
+//		m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
+//
+//		m_pSkinnedAnimationController->SetTrackEnable(0, true);
+//		m_pSkinnedAnimationController->SetTrackEnable(1, true);
+//
+//		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
+//		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
+//	}
+//
+//	ChangeState(std::make_unique<PlayerIdle>());
+//
+//	OutputDebugString(L"[Weapon] debug weapon equipped.\n");
+//	return true;
+//}
 
-	CGameObject* pWeaponPrototype =
-		ResourceManager::Instance().GetModelPrototype(config.modelName);
-
-	if (!pWeaponPrototype)
-	{
-		OutputDebugString(L"[Weapon] weapon prototype not found.\n");
-		return false;
-	}
-
-	CGameObject* pWeaponInstance =
-		CGameObject::CreateModelInstance(pWeaponPrototype);
-
-	if (!pWeaponInstance)
-	{
-		OutputDebugString(L"[Weapon] weapon instance create failed.\n");
-		return false;
-	}
-
-	auto pWeaponItem = std::make_shared<WeaponItem>(
-		ItemGrade::GRADE_1,
-		config.itemType
-	);
-
-	pWeaponItem->SetModelPrototype(pWeaponPrototype);
-
-	DetachCurrentWeapon();
-
-	m_eCurrentWeaponType = weaponType;
-	m_pEquippedWeaponItem = pWeaponItem;
-
-	m_bReloading = false;
-	m_fReloadElapsed = 0.0f;
-	m_fFireCooldown = 0.0f;
-	m_bShotAnimRequest = false;
-
-	ApplyWeaponVisualConfig(weaponType);
-
-	EquipWeapon(pWeaponInstance, "mixamorig:RightHand");
-
-	if (m_pWeapon != pWeaponInstance)
-	{
-		DeleteGameObjectTree(pWeaponInstance);
-		m_pEquippedWeaponItem.reset();
-		OutputDebugString(L"[Weapon] debug weapon equip failed.\n");
-		return false;
-	}
-
-	InitializeWeaponAmmo();
-
-	ApplyWeaponPose(WEAPON_POSE::IDLE);
-
-	if (m_pSkinnedAnimationController)
-	{
-		int idleAnim = GetIdleAnimationByWeapon();
-
-		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
-
-		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, idleAnim);
-		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, idleAnim);
-
-		m_pSkinnedAnimationController->SetTrackPosition(0, 0.0f);
-		m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
-
-		m_pSkinnedAnimationController->SetTrackEnable(0, true);
-		m_pSkinnedAnimationController->SetTrackEnable(1, true);
-
-		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
-		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
-	}
-
-	ChangeState(std::make_unique<PlayerIdle>());
-
-	OutputDebugString(L"[Weapon] debug weapon equipped.\n");
-	return true;
-}
 
 CGameObject* CPlayer::FindFirstFrameByNames(const char* const* ppNames, int nCount)
 {
@@ -1123,33 +1119,57 @@ bool CPlayer::InitializeLeftHandIK()
 	return true;
 }
 
-bool CPlayer::EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName)
+bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 {
-	if (!pItem) return false;
 
-	CGameObject* pWeaponInstance = pItem->CreateModelInstance();
-	if (!pWeaponInstance) return false;
-
-	PlayerWeaponType weaponType = GetPlayerWeaponTypeFromItemType(pItem->GetType());
+	if (m_eCurrentWeaponType == type && m_pWeapon)return true;
+	auto it = PlayerOwnWeapons.find(type);
+	if (it == PlayerOwnWeapons.end())return false;
 
 	DetachCurrentWeapon();
 
-	m_eCurrentWeaponType = weaponType;
-	m_pEquippedWeaponItem = pItem;
+	m_eCurrentWeaponType = type;
 
-	ApplyWeaponVisualConfig(weaponType);
+	m_pEquippedWeaponItem = it->second.get();
+
+	ApplyWeaponVisualConfig(type);
+	
+	CGameObject* pWeaponInstance = m_pEquippedWeaponItem->GetModelPrototype();
 
 	EquipWeapon(pWeaponInstance, pstrSocketName);
 
 	if (m_pWeapon != pWeaponInstance)
 	{
-		DeleteGameObjectTree(pWeaponInstance);
-		m_pEquippedWeaponItem.reset();
+		m_pEquippedWeaponItem = NULL;
 		return false;
 	}
+	auto* pCtrl = GetAnimationController();
+	if (pCtrl)
+	{
+		int upperAnim = GetIdleAnimationByWeapon();
+		int lowerAnim = GetIdleAnimationByWeapon();
 
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
 	InitializeWeaponAmmo();
 	ApplyWeaponPose(WEAPON_POSE::IDLE);
+	SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		NetSession::Instance().ChangeWeapon(
+			GetEquippedWeaponTypeForWire(),
+			GetEquippedWeaponGradeForWire());
+		// OtherPlayer 무기 동기화를 위해 현재 무기 정보를 패킷으로 전송
+	}
 
 	return true;
 }
@@ -1179,8 +1199,6 @@ void CPlayer::InitializeWeaponAmmo()
 {
 	if (!m_pEquippedWeaponItem)
 	{
-		m_nCurrentAmmo = 0;
-		m_nMaxAmmo = 0;
 		m_bReloading = false;
 		m_fReloadElapsed = 0.0f;
 		m_fReloadDuration = 0.0f;
@@ -1190,16 +1208,13 @@ void CPlayer::InitializeWeaponAmmo()
 
 	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
 
-	m_nMaxAmmo = (spec.magazineSize > 0) ? spec.magazineSize : 1;
-	m_nCurrentAmmo = m_nMaxAmmo;
-
 	m_bReloading = false;
 	m_fReloadElapsed = 0.0f;
 	m_fReloadDuration = spec.reloadTime;
 	m_fFireCooldown = 0.0f;
 
 	wchar_t debugBuf[256];
-	swprintf_s(debugBuf, L"[Weapon] Ammo Init : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	swprintf_s(debugBuf, L"[Weapon] Ammo Init : %d / %d\n", m_pEquippedWeaponItem->CurAmmo, m_pEquippedWeaponItem->maxAmmo);
 	OutputDebugStringW(debugBuf);
 }
 
@@ -1218,7 +1233,7 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		{
 			FireOneShot(ppShaders, pEffectManager);
 
-			if (!IsCurrentWeaponAutomatic() || m_nCurrentAmmo <= 0)
+			if (!IsCurrentWeaponAutomatic() || m_pEquippedWeaponItem->CurAmmo <= 0)
 			{
 				m_bFireHeld = false;
 			}
@@ -1233,10 +1248,10 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 	{
 		m_bReloading = false;
 		m_fReloadElapsed = 0.0f;
-		m_nCurrentAmmo = m_nMaxAmmo;
+		m_pEquippedWeaponItem->CurAmmo = m_pEquippedWeaponItem->maxAmmo;
 
 		wchar_t debugBuf[256];
-		swprintf_s(debugBuf, L"[Weapon] Reload Complete : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+		swprintf_s(debugBuf, L"[Weapon] Reload Complete : %d / %d\n", m_pEquippedWeaponItem->CurAmmo, m_pEquippedWeaponItem->maxAmmo);
 		OutputDebugStringW(debugBuf);
 	}
 }
@@ -1287,17 +1302,21 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
 		//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 	}
+
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
 	switch (weaponType)
 	{
 	case PlayerWeaponType::Rifle:
+		SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, muzzlePos);
 		break;
 	case PlayerWeaponType::SMG:
+		SoundManager::Instance()->Play(SoundName::FIRE_SMG, muzzlePos);
 		break;
 	case PlayerWeaponType::Shotgun:
 		SoundManager::Instance()->Play(SoundName::FIRE_SHOTGUN, muzzlePos);
 		break;
 	case PlayerWeaponType::Pistol:
+		SoundManager::Instance()->Play(SoundName::FIRE_PISTOL, muzzlePos);
 		break;
 	}
 	
@@ -1313,7 +1332,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
 	}
 
-	float maxRange = 1000.0f;
+	float maxRange = 100.f;
 	float hitDistance = maxRange;
 	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
@@ -1325,6 +1344,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
 		for (auto& obj : *objs) {
 			if (!obj) continue;
+			if (not obj->isColl) continue;
 			const auto& oobbs = obj->GetOOBB();
 			for (BoundingOrientedBox* pOOBB : oobbs) {
 				if (!pOOBB) continue;
@@ -1338,10 +1358,12 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 				}
 			}
 		}
+
 		if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
 			auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
 			for (auto& obj : *maps) {
 				if (!obj) continue;
+				if (not obj->isColl) continue;
 				const auto& oobbs = obj->GetOOBB();
 				for (BoundingOrientedBox* pOOBB : oobbs) {
 					if (!pOOBB) continue;
@@ -1369,10 +1391,18 @@ bool CPlayer::CanFireWeapon() const
 	if (!m_pWeapon) return false;
 	if (!m_pEquippedWeaponItem) return false;
 	if (m_bReloading) return false;
-	if (m_nCurrentAmmo <= 0) return false;
+	if (m_pEquippedWeaponItem->CurAmmo <= 0) return false;
 	return true;
 }
 
+int CPlayer::GetCurrentAmmo() const
+{
+	return m_pEquippedWeaponItem->CurAmmo;
+}
+int CPlayer::GetMaxAmmo() const
+{
+	return m_pEquippedWeaponItem->maxAmmo;
+}
 bool CPlayer::TryFireWeapon()
 {
 	if (!CanFireWeapon())
@@ -1380,12 +1410,11 @@ bool CPlayer::TryFireWeapon()
 
 	if (m_fFireCooldown > 0.0f)
 		return false;
-
-	--m_nCurrentAmmo;
+	--m_pEquippedWeaponItem->CurAmmo;
 	m_fFireCooldown = GetWeaponShotInterval();
 
 	wchar_t debugBuf[256];
-	swprintf_s(debugBuf, L"[Weapon] Ammo : %d / %d\n", m_nCurrentAmmo, m_nMaxAmmo);
+	swprintf_s(debugBuf, L"[Weapon] Ammo : %d / %d\n", m_pEquippedWeaponItem->CurAmmo, m_pEquippedWeaponItem->maxAmmo);
 	OutputDebugStringW(debugBuf);
 
 	return true;
@@ -1396,8 +1425,8 @@ void CPlayer::StartReload()
 	if (!m_pWeapon) return;
 	if (!m_pEquippedWeaponItem) return;
 	if (m_bReloading) return;
-	if (m_nCurrentAmmo >= m_nMaxAmmo) return;
-	SoundManager::Instance()->Play(SoundName::RELOAD_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
+	if (m_pEquippedWeaponItem->CurAmmo >= m_pEquippedWeaponItem->maxAmmo) return;
+	SoundManager::Instance()->Play(SoundName::RELOAD_PLAYER_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
 	const WeaponSpec& spec = m_pEquippedWeaponItem->GetSpec();
 
 	m_bReloading = true;
@@ -1407,7 +1436,7 @@ void CPlayer::StartReload()
 	m_bShotAnimRequest = false;
 
 	wchar_t debugBuf[256];
-	swprintf_s(debugBuf, L"[Weapon] Reload Start (%d / %d)\n", m_nCurrentAmmo, m_nMaxAmmo);
+	swprintf_s(debugBuf, L"[Weapon] Reload Start (%d / %d)\n", m_pEquippedWeaponItem->CurAmmo, m_pEquippedWeaponItem->maxAmmo);
 	OutputDebugStringW(debugBuf);
 }
 
@@ -1650,22 +1679,29 @@ CTerrainPlayer::CTerrainPlayer(
 	playerBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	SetOOBB(playerBox);
+	///*
+	PlayerOwnWeapons[PlayerWeaponType::Rifle] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::RIFLE);
+	PlayerOwnWeapons[PlayerWeaponType::Rifle]->SetModelPrototype(
+		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
+	);
+	PlayerOwnWeapons[PlayerWeaponType::Shotgun] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::SHOTGUN);
+	PlayerOwnWeapons[PlayerWeaponType::Shotgun]->SetModelPrototype(
+		ResourceManager::Instance().GetModelPrototype(ModelName::SHOTGUN)
+	);
+	PlayerOwnWeapons[PlayerWeaponType::SMG] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::SMG);
+	PlayerOwnWeapons[PlayerWeaponType::SMG]->SetModelPrototype(
+		ResourceManager::Instance().GetModelPrototype(ModelName::SMG)
+	);
+	//*/
 
-	auto pDefaultWeaponItem = WeaponItem::CreateDefaultPlayerRifle(
-		pDefaultWeaponPrototype
+	PlayerOwnWeapons[PlayerWeaponType::Pistol] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::PISTOL);
+	PlayerOwnWeapons[PlayerWeaponType::Pistol]->SetModelPrototype(
+		ResourceManager::Instance().GetModelPrototype(ModelName::PISTOL)
 	);
 
-	if (pDefaultWeaponItem)
-	{
-		if (!EquipWeaponItem(pDefaultWeaponItem, "mixamorig:RightHand"))
-		{
-			OutputDebugString(L"Error: Default weapon equip failed.\n");
-		}
-	}
-	else
-	{
-		OutputDebugString(L"Error: Default weapon item creation failed.\n");
-	}
+
+	EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand");
+	
 
 	InitializeLeftHandIK();
 
@@ -1790,19 +1826,19 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				switch (ev.keyEvent.key)
 				{
 				case INPUT_KEY::KEY_1:
-					EquipDebugWeapon(PlayerWeaponType::Rifle);
+					EquipWeaponItem(PlayerWeaponType::Rifle, "mixamorig:RightHand");
 					break;
 
 				case INPUT_KEY::KEY_2:
-					EquipDebugWeapon(PlayerWeaponType::SMG);
+					EquipWeaponItem(PlayerWeaponType::SMG, "mixamorig:RightHand");
 					break;
 
 				case INPUT_KEY::KEY_3:
-					EquipDebugWeapon(PlayerWeaponType::Shotgun);
+					EquipWeaponItem(PlayerWeaponType::Shotgun, "mixamorig:RightHand");
 					break;
 
 				case INPUT_KEY::KEY_4:
-					EquipDebugWeapon(PlayerWeaponType::Pistol);
+					EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand");
 					break;
 
 				case INPUT_KEY::SPACE:

@@ -361,7 +361,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_1.bin",
 		SkinnedShader
 	);*/
-	
+
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
 		pd3dDevice,
@@ -379,16 +379,16 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster1_3.bin",
 		SkinnedShader
 	);*/
-	
-	/*LoadAndRegisterSkinnedModelPrototype(
+
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_1,
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster2_1.bin",
 		SkinnedShader
-	);*/
-	
+	);
+
 	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_02_2,
 		pd3dDevice,
@@ -406,7 +406,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster2_3.bin",
 		SkinnedShader
 	);*/
-	
+
 	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_1,
 		pd3dDevice,
@@ -415,7 +415,9 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
 	);*/
-	
+
+
+
 	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
 		pd3dDevice,
@@ -432,7 +434,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_3.bin",
 		SkinnedShader
-	);*/
+		);*/
 }
 
 void ResourceManager::BuildModelPrototypes(

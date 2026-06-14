@@ -1566,6 +1566,7 @@ void EnemyReturn::Exit(CEnemyObject* pEnemy)
 
 bool EnemyDie::Enter(CEnemyObject* pEnemy)
 {
+	pEnemy->isColl = false;
 	pEnemy->m_bDying = true;
 	pEnemy->m_fDieElapsed = 0.0f;
 

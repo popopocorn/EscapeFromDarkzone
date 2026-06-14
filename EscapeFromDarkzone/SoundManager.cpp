@@ -48,14 +48,28 @@ void SoundManager::BuildSound()
 
     LoadSound(
         SoundName::FIRE_RIFLE,
-        "Sound/rifle_smg_dry.wav",
+        "Sound/Fire_Rifle.wav",
+        true,
+        false
+        );
+
+    LoadSound(
+        SoundName::FIRE_SMG,
+        "Sound/Fire_SMG.wav",
         true,
         false
         );
 
     LoadSound(
         SoundName::FIRE_SHOTGUN,
-        "Sound/Shotgunshot.wav",
+        "Sound/Fire_Shotgun.wav",
+        true,
+        false
+        );
+
+    LoadSound(
+        SoundName::FIRE_PISTOL,
+        "Sound/Fire_Pistol.wav",
         true,
         false
         );
@@ -68,9 +82,30 @@ void SoundManager::BuildSound()
         );
 
     LoadSound(
-        SoundName::RELOAD_RIFLE,
+        SoundName::RELOAD_PLAYER_RIFLE,
+        "Sound/Rifle_SMG_Reload.wav",
+        false,
+        false
+        );
+
+    LoadSound(
+        SoundName::RELOAD_ENEMY_RIFLE,
         "Sound/Rifle_SMG_Reload.wav",
         true,
+        false
+        );
+
+    LoadSound(
+        SoundName::EQUIP_WEAPON,
+        "Sound/Weapon_Select.wav",
+        false,
+        false
+        );
+
+    LoadSound(
+        SoundName::GRAB_ITEM,
+        "Sound/loot.wav",
+        false,
         false
         );
 }

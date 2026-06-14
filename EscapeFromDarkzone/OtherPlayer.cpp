@@ -32,6 +32,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		delete pPlayerModel;
 		return;
 	}
+	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
 
@@ -61,11 +62,11 @@ OtherPlayer::~OtherPlayer()
 {
 
 }
+
 void OtherPlayer::Animate(float fTimeElapsed)
 {
 	CGameObject::Animate(fTimeElapsed);
 	Update(fTimeElapsed);
-
 }
 
 void OtherPlayer::Update(float fTimeElapsed)

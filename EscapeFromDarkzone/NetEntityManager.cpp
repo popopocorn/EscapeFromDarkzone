@@ -155,6 +155,22 @@ void NetEntityManager::OnPlayerStateChange(const SC_PLAYER_STATE_CHANGE_PACKET* 
 	}
 }
 
+static ModelName NpcModelFromTierOutfit(int tier, int outfit)
+{
+	if (tier < 0 || tier > 2) tier = 0;
+	if (outfit < 0 || outfit > 2) outfit = 0;
+	switch (tier) {
+	case 1:
+		return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_02_1) + outfit);
+	case 2:
+		return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_03_1) + outfit);
+	case 0:
+	default:
+		//return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1) + outfit);
+		return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1));
+	}
+}
+
 void NetEntityManager::OnAddNpc(const SC_ADD_NPC_PACKET* p)
 {
 	if (!IsActiveSceneGameplay()) return;   // 스폰 가드
@@ -168,23 +184,19 @@ void NetEntityManager::OnAddNpc(const SC_ADD_NPC_PACKET* p)
 	// 중복 방지
 	if (FindNpc(p->npc_id)) return;
 
-	CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1);
+	// tier(npc_kind) + outfit으로 외형 모델 선택
+	ModelName enemyModelName = NpcModelFromTierOutfit(p->npc_kind, p->npc_outfit);
+
+	CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(enemyModelName);		// 리소스 매니저에서 모델 받아옴
 	{
 		wchar_t szLog[256];
-		swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, model=%s, controller_will_be=%s\n",
-			p->npc_id,
-			pModel ? L"OK" : L"NULL",
+		swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, tier=%d, outfit=%d, model=%s\n",
+			p->npc_id, (int)p->npc_kind, (int)p->npc_outfit,
 			(pModel && pModel->m_pModelRootObject) ? L"OK" : L"NULL");
 		OutputDebugStringW(szLog);
 	}
 
-	CEnemyObject* pNpc = new CEnemyObject(
-		m_pd3dDevice,
-		m_pd3dCommandList,
-		m_pRootSignature,
-		m_pShaderManager->GetShader(ShaderType::SKINNED),
-		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_1)
-	);
+	CEnemyObject* pNpc = new CEnemyObject(m_pd3dDevice, m_pd3dCommandList, m_pRootSignature, m_pShaderManager->GetShader(ShaderType::SKINNED), pModel);
 	{
 		wchar_t szLog[256];
 		swprintf_s(szLog, L"[SC_ADD_NPC] pNpc->m_pChild=%s, controller=%s\n",
@@ -192,10 +204,14 @@ void NetEntityManager::OnAddNpc(const SC_ADD_NPC_PACKET* p)
 			pNpc->m_pSkinnedAnimationController ? L"OK" : L"NULL");
 		OutputDebugStringW(szLog);
 	}
+	pNpc->SetEnemyModelType(static_cast<EnemyModelType>(p->npc_kind));		// 애니메이션 안나오는 원인 (수정완)
+	pNpc->ApplyDefaultWeaponByEnemyModelType();
+
+	pNpc->SubmitWeaponToShader(m_pShaderManager->GetShader(ShaderType::STANDARD));
+
 	pNpc->SetPosition(p->x, p->y, p->z);
 	pNpc->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));   // lerp 시작점 = 서버 위치
 	pNpc->SetServerYaw(p->yaw);
-	pNpc->SubmitWeaponToShader(m_pShaderManager->GetShader(ShaderType::STANDARD));
 	if (!AddNpc(p->npc_id, pNpc)) {
 		OutputDebugString(L"[Network] NPC slot full.\n");
 		pNpc->Kill();
@@ -205,7 +221,6 @@ void NetEntityManager::OnAddNpc(const SC_ADD_NPC_PACKET* p)
 	m_pActiveScene->AddObj(pNpc);
 	m_pActiveScene->m_ppShaders[SHADERIDX::ENEMY]->addObjects(pNpc);
 }
-
 void NetEntityManager::OnRemoveNpc(const SC_REMOVE_NPC_PACKET* p)
 {
 	if (CEnemyObject* pNpc = FindNpc(p->npc_id)) {

@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "Object.h"
 #include "ResourceManager.h"
+#include"SoundManager.h"
 
 
 InventoryManager::~InventoryManager()
@@ -181,7 +182,7 @@ bool InventoryManager::ApplyPlayerInventorySlotUpdate(ItemID itemId, int count, 
 {
 	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
 	if (!pPlayerInventory) return false;
-
+	SoundManager::Instance()->Play(SoundName::GRAB_ITEM, XMFLOAT3());
 	return pPlayerInventory->ApplyServerSlotUpdate(slotIndex, itemId, count);
 }
 
@@ -370,7 +371,7 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 			}
 		}
 	}
-
+	pLoot->isColl = false;
 	pLoot->UpdateTransform(NULL);
 	m_vLootContainers.push_back(std::unique_ptr<CLootContainerObject>(pLoot));
 }

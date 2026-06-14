@@ -133,11 +133,9 @@ protected:
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
 	//현재 장착 중인 무기 데이터
-	std::shared_ptr<WeaponItem> m_pEquippedWeaponItem;
+	WeaponItem* m_pEquippedWeaponItem;
+	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
-
-	int   m_nCurrentAmmo = 0;
-	int   m_nMaxAmmo = 0;
 
 	bool  m_bReloading = false;
 	float m_fReloadElapsed = 0.0f;
@@ -225,7 +223,7 @@ public:
 	void UpdateWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 
-	bool EquipDebugWeapon(PlayerWeaponType weaponType);
+	//bool EquipDebugWeapon(PlayerWeaponType weaponType);
 	void ApplyWeaponVisualConfig(PlayerWeaponType weaponType);
 	void DetachCurrentWeapon();
 
@@ -273,7 +271,7 @@ public:
 	void EndGrenadeWeaponPose();
 
 	//현재 장착 무기 데이터
-	bool EquipWeaponItem(const std::shared_ptr<WeaponItem>& pItem, const char* pstrSocketName);
+	bool EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
 	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
@@ -284,8 +282,8 @@ public:
 	bool CanFireWeapon() const;
 
 	bool IsReloading() const { return m_bReloading; }
-	int GetCurrentAmmo() const { return m_nCurrentAmmo; }
-	int GetMaxAmmo() const { return m_nMaxAmmo; }
+	int GetCurrentAmmo() const;
+	int GetMaxAmmo() const;
 
 	float GetWeaponShotInterval() const;
 	float GetWeaponDamage() const;

@@ -1096,14 +1096,10 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
 			}
 		}
-		else
+		if (uiManager)
 		{
-			if (uiManager)
-			{
-				uiManager->ProcessClick(InputManager::Instance().GetMousePos());
-			}
+			uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		}
-
 		break;
 	}
 
