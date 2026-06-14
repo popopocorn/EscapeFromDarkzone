@@ -60,6 +60,12 @@ constexpr char CS_HIT_PLAYER = 24;
 constexpr char CS_CHANGE_WEAPON = 25;
 constexpr char SC_CHANGE_WEAPON = 26;
 
+// 라운드 시작 패킷
+constexpr char SC_ROUND_START = 27;
+
+// 탈출 성공 패킷
+constexpr char SC_ESCAPE_SUCCESS = 28;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -287,6 +293,17 @@ struct SC_CHANGE_WEAPON_PACKET {
 	short         id;
 	short         weapon_type;   // ItemType
 	short         weapon_grade;  // ItemGrade
+};
+
+struct SC_ROUND_START_PACKET {
+	unsigned char size;
+	char          type;
+};
+
+struct SC_ESCAPE_SUCCESS_PACKET {
+	unsigned char size;
+	char          type;
+	float         escape_time_sec;   // 라운드 시작~탈출까지 걸린 시간(초)
 };
 
 #pragma pack (pop)
