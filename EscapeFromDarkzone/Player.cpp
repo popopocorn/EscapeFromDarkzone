@@ -338,6 +338,26 @@ void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 
 	state = std::move(new_state);
 	state->Enter(this);
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		char reportState = -1;
+		if (typeid(*state) == typeid(PlayerIdle))    reportState = PLAYER_STATE_IDLE;
+		else if (typeid(*state) == typeid(PlayerRun))     reportState = PLAYER_STATE_RUN;
+		else if (typeid(*state) == typeid(PlayerShoot))   reportState = PLAYER_STATE_SHOOT;
+		else if (typeid(*state) == typeid(PlayerReload))  reportState = PLAYER_STATE_RELOAD;
+		else if (typeid(*state) == typeid(PlayerGrenade)) reportState = PLAYER_STATE_GRENADE;
+		else if (typeid(*state) == typeid(PlayerDie))     reportState = PLAYER_STATE_DIE;
+
+		if (reportState >= 0)
+		{
+			CS_PLAYER_STATE_CHANGE_PACKET p;
+			p.size = sizeof(p);
+			p.type = CS_PLAYER_STATE_CHANGE;
+			p.state = reportState;
+			NetSession::Instance().ChangeState(reportState);
+		}
+	}
 }
 
 bool CPlayer::IsGrenadeState() const

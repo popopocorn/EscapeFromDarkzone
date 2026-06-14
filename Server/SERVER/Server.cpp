@@ -74,7 +74,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 3;			// default: 8
+constexpr int ROUND_MIN_PLAYERS = 2;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 std::atomic<int> g_round_state{ ROUND_WAITING };
@@ -1930,7 +1930,7 @@ void process_packet(int c_id, char* packet)
 		float rightX = cosf(fYawRad);
 		float rightZ = -sinf(fYawRad);
 
-		char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
+		/*char new_state = (p->inputs == 0) ? PLAYER_STATE_IDLE : PLAYER_STATE_RUN;
 		if (clients[c_id].player_state != new_state) {
 			clients[c_id].player_state = new_state;
 			for (auto& cl : clients) {
@@ -1938,7 +1938,7 @@ void process_packet(int c_id, char* packet)
 				if (cl._id == c_id) continue;
 				cl.send_player_state_change_packet(c_id);
 			}
-		}
+		}*/
 
 		// inputs 비트 플래그로 이동 방향 계산
 		float dirX = 0.0f, dirZ = 0.0f;
@@ -2249,6 +2249,22 @@ void process_packet(int c_id, char* packet)
 		ev.explode_pos = { p->x, p->y, p->z };
 		g_npc_input_queue.Push(std::move(ev));
 
+		break;
+	}
+	case CS_PLAYER_STATE_CHANGE: {
+		CS_PLAYER_STATE_CHANGE_PACKET* p =
+			reinterpret_cast<CS_PLAYER_STATE_CHANGE_PACKET*>(packet);
+
+		//std::cout << "[CS_PLAYER_STATE] from " << c_id << " state=" << (int)p->state << "\n";
+
+		// 보고받은 상태 저장 후 다른 클라이언트에 브로드캐스트
+		clients[c_id].player_state = p->state;
+		for (auto& cl : clients) {
+			if (cl._state != ST_INGAME) continue;
+			if (cl._id == c_id) continue;
+			cl.send_player_state_change_packet(c_id);
+			std::cout << "send [SC_PLAYER_STATE_CHANGE_PACKET] to " << cl._id << " state=" << (int)clients[c_id].player_state << "\n";
+		}
 		break;
 	}
 	}

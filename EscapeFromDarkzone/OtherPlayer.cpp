@@ -64,7 +64,7 @@ static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outP
 {
 	switch (modelName)
 	{
-	//권총은 애니메이션 추가된 후 추가 수정
+		//권총은 애니메이션 추가된 후 추가 수정
 	case ModelName::PISTOL:
 		outPos = XMFLOAT3(-0.0f, 0.0f, 0.05f);
 		outRot = XMFLOAT3(180.0f, 180.0f, 0.0f);
@@ -690,7 +690,7 @@ void OtherPlayerDie::Exit(OtherPlayer* Player)
 OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,
 	float x, float y, float z)
 {
-	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature); 
+	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	pOther->SetPosition(XMFLOAT3(x, y, z));
 	pOther->m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표 초기화(첫 프레임 튐 방지)
 	pOther->m_bUseServerLerp = true;
@@ -698,7 +698,7 @@ OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	return pOther;
 }
 
-void OtherPlayer::UpdatePosition(float x, float y, float z) 
+void OtherPlayer::UpdatePosition(float x, float y, float z)
 {
 	m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표
 	m_bUseServerLerp = true;

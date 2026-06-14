@@ -54,6 +54,7 @@ public:
     bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
     bool SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
     bool SendChangeWeapon(short weaponType, short weaponGrade);
+    bool SendChangeState(char state);
     bool SendGrenadeExplode(const DirectX::XMFLOAT3& pos);
 
     bool SendLootPickup(short box_id, short slotidx);
