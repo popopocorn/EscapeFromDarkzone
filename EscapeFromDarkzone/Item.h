@@ -98,7 +98,8 @@ public:
 	static WeaponSpec BuildSpec(ItemType category, ItemGrade grade);
 
 	static std::shared_ptr<WeaponItem> CreateDefaultPlayerRifle(CGameObject* pPrototype);
-
+	int maxAmmo;
+	int CurAmmo;
 private:
 	ItemGrade m_Grade = ItemGrade::BASIC;
 	ItemType m_Category = ItemType::PISTOL;

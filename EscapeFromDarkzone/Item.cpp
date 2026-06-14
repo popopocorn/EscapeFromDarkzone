@@ -20,6 +20,8 @@ WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 {
 	type = category;
 	m_Spec = BuildSpec(category, grade);
+	maxAmmo = m_Spec.magazineSize;
+	CurAmmo = maxAmmo;
 }
 
 //무기 수치
