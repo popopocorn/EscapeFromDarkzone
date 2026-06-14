@@ -509,18 +509,32 @@ bool OtherPlayerShoot::Enter(OtherPlayer* Player)
 {
 	m_fElapsed = 0.0f;
 
-	int lowerAnim = Player->GetLowerAnimationByServerState();
+	bool bPistolIdleShoot = (!Player->IsServerMoving() && Player->GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
+
+	int lowerAnim = bPistolIdleShoot ? Player->GetShootAnimationByWeapon() : Player->GetLowerAnimationByServerState();
+	int upperAnim = Player->GetShootAnimationByWeapon();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
+		if (bPistolIdleShoot)
+		{
+			pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+			pCtrl->SetTrackPosition(0, 0.0f);
+			pCtrl->SetTrackEnable(0, true);
+			pCtrl->SetTrackWeight(0, 1.0f);
+		}
+		else
+		{
+			pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+			pCtrl->SetTrackEnable(0, true);
+			pCtrl->SetTrackWeight(0, 1.0f);
+		}
 
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
+		pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
 		pCtrl->SetTrackPosition(1, 0.0f);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
@@ -533,15 +547,31 @@ void OtherPlayerShoot::Update(OtherPlayer* Player, float fTimeElapsed)
 {
 	m_fElapsed += fTimeElapsed;
 
-	int lowerAnim = Player->GetLowerAnimationByServerState();
+	bool bPistolIdleShoot = (!Player->IsServerMoving() && Player->GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
+
+	int lowerAnim = bPistolIdleShoot ? Player->GetShootAnimationByWeapon() : Player->GetLowerAnimationByServerState();
 
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
+		if (bPistolIdleShoot)
+		{
+			pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+			pCtrl->SetTrackEnable(0, true);
+			pCtrl->SetTrackWeight(0, 1.0f);
+		}
+		else
+		{
+			pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+			pCtrl->SetTrackEnable(0, true);
+			pCtrl->SetTrackWeight(0, 1.0f);
+		}
+
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 
 	if (m_fElapsed >= m_fAnimDuration)
@@ -555,6 +585,21 @@ void OtherPlayerShoot::Update(OtherPlayer* Player, float fTimeElapsed)
 
 void OtherPlayerShoot::Exit(OtherPlayer* Player)
 {
+	auto* pCtrl = Player->GetAnimationController();
+	if (!pCtrl)
+		return;
+
+	int lowerAnim = Player->GetLowerAnimationByServerState();
+
+	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+	pCtrl->SetTrackEnable(0, true);
+	pCtrl->SetTrackWeight(0, 1.0f);
+
+	pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+	pCtrl->SetTrackAnimationSetIfChanged(1, lowerAnim);
+	pCtrl->SetTrackEnable(1, true);
+	pCtrl->SetTrackWeight(1, 1.0f);
 }
 
 bool OtherPlayerReload::Enter(OtherPlayer* Player)
