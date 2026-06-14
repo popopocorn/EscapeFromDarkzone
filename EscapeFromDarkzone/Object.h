@@ -362,6 +362,7 @@ public:
 
 	XMFLOAT4X4						m_xmf4x4ToParent;
 	XMFLOAT4X4						m_xmf4x4World;
+	XMFLOAT4X4						m_xmf4x4Origin;
 
 	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
@@ -410,7 +411,9 @@ public:
 
 	virtual void SetPosition(float x, float y, float z);
 	virtual void SetPosition(XMFLOAT3 xmf3Position);
-	void SetScale(float x, float y, float z);
+	void SetScale(float x, float y, float z, bool replace = false);
+
+
 
 	void MoveStrafe(float fDistance = 1.0f);
 	void MoveUp(float fDistance = 1.0f);

@@ -613,23 +613,35 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
 	m_pWeaponSocket->m_pChild = m_pWeapon;
 
-	m_pWeapon->SetPosition(
+	//XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, XMMatrixIdentity());
+	static std::unordered_map<CGameObject*, XMFLOAT4X4> s_originalTransformMap;
+
+	// 1. 이 무기가 최초로 장착되는 거라면, 오프셋이 묻지 않은 '순정 FBX 행렬'을 백업합니다.
+	if (s_originalTransformMap.find(m_pWeapon) == s_originalTransformMap.end())
+	{
+		s_originalTransformMap[m_pWeapon] = m_pWeapon->m_xmf4x4ToParent;
+	}
+
+	// 2. 무기를 장착할 때마다, 누적된 찌꺼기를 날리고 '순정 FBX 행렬'로 깨끗하게 복구합니다.
+	m_pWeapon->m_xmf4x4ToParent = s_originalTransformMap[m_pWeapon];
+	pWeapon->SetPosition(
 		m_xmf3WeaponIdlePos.x,
 		m_xmf3WeaponIdlePos.y,
 		m_xmf3WeaponIdlePos.z
 	);
 
-	m_pWeapon->SetScale(
+	pWeapon->SetScale(
 		m_xmf3WeaponScale.x,
 		m_xmf3WeaponScale.y,
 		m_xmf3WeaponScale.z
 	);
 
-	m_pWeapon->Rotate(
+	pWeapon->Rotate(
 		m_xmf3WeaponIdleRot.x,
 		m_xmf3WeaponIdleRot.y,
 		m_xmf3WeaponIdleRot.z
 	);
+
 
 	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
 	m_bWeaponBaseLocalSaved = true;
@@ -654,7 +666,6 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	{
 		OutputDebugString(L"[Weapon] 경고: 현재 무기에서 Socket_Muzzle 프레임을 찾지 못했습니다.\n");
 	}
-
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 
 	OutputDebugString(L"성공: 무기가 플레이어 오른손 소켓에 장착되었습니다.\n");
@@ -1122,7 +1133,7 @@ bool CPlayer::InitializeLeftHandIK()
 bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 {
 
-	if (m_eCurrentWeaponType == type && m_pWeapon)return true;
+	if (m_eCurrentWeaponType == type && m_pWeapon)return false;
 	auto it = PlayerOwnWeapons.find(type);
 	if (it == PlayerOwnWeapons.end())return false;
 
@@ -1161,7 +1172,6 @@ bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 	}
 	InitializeWeaponAmmo();
 	ApplyWeaponPose(WEAPON_POSE::IDLE);
-	SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 	return true;
 }
 
@@ -1817,19 +1827,23 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 				switch (ev.keyEvent.key)
 				{
 				case INPUT_KEY::KEY_1:
-					EquipWeaponItem(PlayerWeaponType::Rifle, "mixamorig:RightHand");
+					if (EquipWeaponItem(PlayerWeaponType::Rifle, "mixamorig:RightHand"))
+						SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::KEY_2:
-					EquipWeaponItem(PlayerWeaponType::SMG, "mixamorig:RightHand");
+					if (EquipWeaponItem(PlayerWeaponType::SMG, "mixamorig:RightHand"))
+					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::KEY_3:
-					EquipWeaponItem(PlayerWeaponType::Shotgun, "mixamorig:RightHand");
+					if (EquipWeaponItem(PlayerWeaponType::Shotgun, "mixamorig:RightHand"))
+					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::KEY_4:
-					EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand");
+					if (EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand"))
+					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::SPACE:
