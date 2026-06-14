@@ -78,7 +78,7 @@ static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outP
 		break;
 
 	case ModelName::SHOTGUN:
-		outPos = XMFLOAT3(-0.20f, 0.15f, 0.15f);
+		outPos = XMFLOAT3(-0.20f, 0.15f, 0.f);
 		outRot = XMFLOAT3(180.0f, 0.0f, 105.0f);
 		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
 		break;

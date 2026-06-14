@@ -1104,24 +1104,17 @@ void MainScene::ExplodeGrenade()
 {
 	if (!m_bGrenadeFlying) return;
 
-	XMFLOAT3 grenadeFinalPos = m_xmf3GrenadePosition;
+	XMFLOAT3 explosionPos = m_xmf3GrenadePosition;
 
 	if (m_pGrenadeDebugObject)
 	{
-		grenadeFinalPos = m_pGrenadeDebugObject->GetPosition();
+		explosionPos = m_pGrenadeDebugObject->GetPosition();
 	}
 
-	grenadeFinalPos.y = m_fGrenadeGroundY;
-
-	const bool bConnected = NetworkManager::Instance().IsConnected();
-
-	if (bConnected)
-	{
-		//여기에서 서버로 최종 폭발 위치 전송, grenadeFinalPos 사용
-		NetSession::Instance().GrenadeExplode(grenadeFinalPos);
-	}
+	explosionPos.y = m_fGrenadeGroundY;
 
 	XMFLOAT3 effectDir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
 	if (m_pPlayer)
 	{
 		effectDir = m_pPlayer->GetLookVector();
@@ -1135,27 +1128,44 @@ void MainScene::ExplodeGrenade()
 		effectDir = Vector3::Normalize(effectDir);
 	}
 
-	XMFLOAT3 effectPos = grenadeFinalPos;
+	XMFLOAT3 rightDir = XMFLOAT3(effectDir.z, 0.0f, -effectDir.x);
 
-	float effectVisualOffset = 1.5f;
-	effectPos.x -= effectDir.x * effectVisualOffset;
-	effectPos.z -= effectDir.z * effectVisualOffset;
+	XMFLOAT3 serverExplosionPos = explosionPos;
 
-	m_xmf3GrenadePosition = grenadeFinalPos;
+	constexpr float SERVER_GRENADE_OFFSET_RIGHT = 2.0f;
+	constexpr float SERVER_GRENADE_OFFSET_FORWARD = 2.0f;
+	//constexpr float SERVER_GRENADE_OFFSET_UP = 0.25f;
+
+	serverExplosionPos.x += rightDir.x * SERVER_GRENADE_OFFSET_RIGHT;
+	serverExplosionPos.z += rightDir.z * SERVER_GRENADE_OFFSET_RIGHT;
+
+	serverExplosionPos.x += effectDir.x * SERVER_GRENADE_OFFSET_FORWARD;
+	serverExplosionPos.z += effectDir.z * SERVER_GRENADE_OFFSET_FORWARD;
+
+	//serverExplosionPos.y += SERVER_GRENADE_OFFSET_UP;
+
+	m_xmf3GrenadePosition = explosionPos;
 
 	m_bGrenadeFlying = false;
 	m_fGrenadeLifeTimer = 0.0f;
 
-	if (!bConnected && m_pEffectManager)
+	if (NetworkManager::Instance().IsConnected())
 	{
-		EffectSpawnDesc desc;
-		desc.id = EffectID::GRENADE_EXPLOSION;
-		desc.position = effectPos;
-		desc.direction = effectDir;
-		desc.ownerId = 0;
-		desc.value = 0.0f;
+		NetSession::Instance().GrenadeExplode(serverExplosionPos);
+	}
+	else
+	{
+		if (m_pEffectManager)
+		{
+			EffectSpawnDesc desc;
+			desc.id = EffectID::GRENADE_EXPLOSION;
+			desc.position = serverExplosionPos;
+			desc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
+			desc.ownerId = 0;
+			desc.value = 0.0f;
 
-		m_pEffectManager->PlayEffectByID(desc);
+			m_pEffectManager->PlayEffectByID(desc);
+		}
 	}
 
 	if (m_pGrenadeDebugObject)
@@ -1166,7 +1176,6 @@ void MainScene::ExplodeGrenade()
 
 	OutputDebugString(L"[Grenade] Explosion\n");
 }
-
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	ClampGameplayCursorToAimLine(hWnd);
@@ -1739,7 +1748,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
-	equipUI = e;
 	e->Init(pd3dDevice, pd3dCommandList);
 	uiManager->AddToManager(e);
 
