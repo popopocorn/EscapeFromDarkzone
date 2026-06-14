@@ -525,7 +525,7 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/bullet.bin",
+		"Model/bullet2.bin",
 		Standardshader
 	);
 }
