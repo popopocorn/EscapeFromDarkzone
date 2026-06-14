@@ -212,6 +212,9 @@ public:
 	float m_fGrenadeBounceDamping = 0.45f;
 	float m_fGrenadeGroundY = 0.2f;
 
+	int m_nGrenadeMaxCount = 3;
+	int m_nGrenadeCount = 3;
+
 	float m_fGrenadeRadius = 0.18f;
 	float m_fGrenadeWallBounceDamping = 0.55f;
 	float m_fGrenadeWallFriction = 0.75f;
