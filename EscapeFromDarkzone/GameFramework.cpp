@@ -814,7 +814,6 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-
 	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
@@ -823,7 +822,7 @@ void CGameFramework::FrameAdvance()
 	if (nextScene)
 	{
 		WaitForGpuComplete();
-		ChangeScene();
+		PushScene();
 		m_pd3dCommandList->Close(); 
 		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
 		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
@@ -978,7 +977,7 @@ void CGameFramework::ProcessNetworkPackets()
 	}
 }
 
-void CGameFramework::ChangeScene()
+void CGameFramework::PushScene()
 {
 	m_pScene.back()->ReleaseObjects();
 	m_pScene.push_back(unique_ptr<CScene>(nextScene));
@@ -990,4 +989,21 @@ void CGameFramework::ChangeScene()
 	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
 
 	nextScene = nullptr;
+}
+
+void CGameFramework::PopScene()
+{
+	m_pScene.back()->ReleaseObjects();
+	m_pScene.pop_back();
+	m_pScene.back()->SetRoot(root->GetRoot());
+	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	m_pScene.back()->SetCamera(m_pCamera);
+
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
+}
+
+void CGameFramework::PopScene(SceneName name)
+{
+	
 }

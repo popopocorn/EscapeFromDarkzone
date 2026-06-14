@@ -520,6 +520,7 @@ bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 
 MainScene::MainScene(CGameFramework* game) : CScene(game)
 {
+	name = SceneName::MAIN;
 	colManager = std::make_unique<CollisionManager>();
 	m_pFogOverlayShader = nullptr;
 	m_pDebugShader = nullptr;
@@ -1974,7 +1975,7 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
 {
-	
+	name = SceneName::LOBBY;
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
