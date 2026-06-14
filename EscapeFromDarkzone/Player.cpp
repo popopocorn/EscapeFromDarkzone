@@ -1161,7 +1161,7 @@ bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 	}
 	InitializeWeaponAmmo();
 	ApplyWeaponPose(WEAPON_POSE::IDLE);
-
+	SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 	return true;
 }
 

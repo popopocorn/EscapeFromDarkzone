@@ -20,6 +20,9 @@ enum class SoundName {
     RELOAD_ENEMY_RIFLE,
 
     DRY_RIFLE,
+
+    EQUIP_WEAPON,
+    GRAB_ITEM,
 };
 
 class SoundManager : public Singleton<SoundManager>{

@@ -94,6 +94,20 @@ void SoundManager::BuildSound()
         true,
         false
         );
+
+    LoadSound(
+        SoundName::EQUIP_WEAPON,
+        "Sound/Weapon_Select.wav",
+        false,
+        false
+        );
+
+    LoadSound(
+        SoundName::GRAB_ITEM,
+        "Sound/loot.wav",
+        false,
+        false
+        );
 }
 
 void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool loop)
