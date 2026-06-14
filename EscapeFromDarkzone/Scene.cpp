@@ -1750,6 +1750,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	LinkToPlayer();
 	EquipUI* e = new EquipUI(m_pPlayer);
 	e->Init(pd3dDevice, pd3dCommandList);
+	equipUI = e;
 	uiManager->AddToManager(e);
 
 	PlayerStatus* s = new PlayerStatus(m_pPlayer);
