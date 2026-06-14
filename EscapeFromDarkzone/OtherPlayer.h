@@ -3,7 +3,7 @@
 #include "Object.h"
 #include"State.h"
 #include "Player.h"
-
+#include "ResourceManager.h"
 
 class OtherPlayer : public CGameObject
 {
@@ -47,6 +47,8 @@ private:
 	CGameObject* m_pRenderWeapon = nullptr;
 public:
 	void EquipDefaultPistol();
+	void EquipWeaponModel(ModelName modelName);
+	void ChangeWeaponFromServer(short weaponType, short weaponGrade);
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
 	void SubmitWeaponToShader(CShader* shader);
 };

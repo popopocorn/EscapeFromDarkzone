@@ -56,9 +56,9 @@ static bool GetAttachedEffectMuzzleInfo(
 	outDir = SafeNormalizeOrDefault(outDir, XMFLOAT3(0.0f, 0.0f, 1.0f));
 
 	outPos.x += outDir.x * 0.05f;
-	outPos.y += outDir.y * 0.05f;
+	outPos.y += outDir.y * 0.05f -0.55;
 	outPos.z += outDir.z * 0.05f;
-
+	
 	return true;
 }
 
@@ -96,10 +96,31 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_CHANGE_WEAPON:
 	{
-		// 수신만 함. 실제 OtherPlayer 무기 교체 미구현
-		// auto* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
-		// TODO: OtherPlayer 무기 메시 교체
-		
+		SC_CHANGE_WEAPON_PACKET* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
+
+		wchar_t buf[256];
+		swprintf_s(buf, L"[SC_CHANGE_WEAPON] recv id=%d weapon_type=%d weapon_grade=%d\n",
+			p->id, p->weapon_type, p->weapon_grade);
+		OutputDebugStringW(buf);
+
+		if (!gf.m_pNetEntityMgr)
+		{
+			OutputDebugString(L"[SC_CHANGE_WEAPON] NetEntityManager is null.\n");
+			break;
+		}
+
+		OtherPlayer* pOther = gf.m_pNetEntityMgr->FindOtherPlayer(p->id);
+
+		if (!pOther)
+		{
+			OutputDebugString(L"[SC_CHANGE_WEAPON] OtherPlayer not found.\n");
+			break;
+		}
+
+		pOther->ChangeWeaponFromServer(p->weapon_type, p->weapon_grade);
+
+		OutputDebugString(L"[SC_CHANGE_WEAPON] OtherPlayer weapon changed.\n");
+
 		break;
 	}
 	case SC_ADD_NPC:

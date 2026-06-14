@@ -15,6 +15,82 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 	return nullptr;
 }
+static void DeleteOtherPlayerObjectTree(CGameObject* pObject)
+{
+	if (!pObject)
+		return;
+
+	CGameObject* pChild = pObject->m_pChild;
+
+	while (pChild)
+	{
+		CGameObject* pNext = pChild->m_pSibling;
+
+		pChild->m_pSibling = nullptr;
+		pChild->m_pParent = nullptr;
+
+		DeleteOtherPlayerObjectTree(pChild);
+
+		pChild = pNext;
+	}
+
+	pObject->m_pChild = nullptr;
+	pObject->m_pSibling = nullptr;
+	pObject->m_pParent = nullptr;
+
+	delete pObject;
+}
+static ModelName GetOtherPlayerWeaponModelNameFromPacket(short weaponType)
+{
+	ItemType itemType = static_cast<ItemType>(weaponType);
+
+	switch (itemType)
+	{
+	case ItemType::PISTOL:
+		return ModelName::PISTOL;
+
+	case ItemType::SMG:
+		return ModelName::SMG;
+
+	case ItemType::SHOTGUN:
+		return ModelName::SHOTGUN;
+
+	case ItemType::RIFLE:
+	default:
+		return ModelName::RIFLE;
+	}
+}
+static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outPos, XMFLOAT3& outRot, XMFLOAT3& outScale)
+{
+	switch (modelName)
+	{
+	//권총은 애니메이션 추가된 후 추가 수정
+	case ModelName::PISTOL:
+		outPos = XMFLOAT3(-0.0f, 0.0f, 0.05f);
+		outRot = XMFLOAT3(180.0f, 180.0f, 0.0f);
+		outScale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+		break;
+
+	case ModelName::SMG:
+		outPos = XMFLOAT3(0.1f, 0.10f, 0.16f);
+		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
+		outScale = XMFLOAT3(1.1f * 0.90f, 1.1f * 0.90f, 1.1f * 0.90f);
+		break;
+
+	case ModelName::SHOTGUN:
+		outPos = XMFLOAT3(-0.00f, 0.15f, 0.15f);
+		outRot = XMFLOAT3(180.0f, 0.0f, 105.0f);
+		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
+		break;
+
+	case ModelName::RIFLE:
+	default:
+		outPos = XMFLOAT3(-0.05f, 0.30f, 0.1f);
+		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
+		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
+		break;
+	}
+}
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -32,9 +108,12 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		delete pPlayerModel;
 		return;
 	}
-	if (!pPlayerModel->m_pAnimationSets) pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 
 	SetChild(pPlayerModel->m_pModelRootObject, true);
+
+	m_pRenderWeapon = new CGameObject();
+	m_pRenderWeapon->SetOOBB(NULL);
+	m_pRenderWeapon->isColl = false;
 
 	EquipDefaultPistol();
 
@@ -74,7 +153,6 @@ void OtherPlayer::Update(float fTimeElapsed)
 	if (m_pState)
 		m_pState->Update(this, fTimeElapsed);
 
-	// 서버 위치 보간 (NPC와 동일, ALPHA= 0.08)
 	if (m_bUseServerLerp)
 	{
 		constexpr float ALPHA = 0.08f;
@@ -231,21 +309,22 @@ void OtherPlayer::SetServerYaw(float yawRad)
 
 void OtherPlayer::EquipDefaultPistol()
 {
-	CGameObject* pPistolPrototype =
-		ResourceManager::Instance().GetModelPrototype(ModelName::PISTOL);
+	EquipWeaponModel(ModelName::PISTOL);
+}
 
-	if (!pPistolPrototype)
+void OtherPlayer::EquipWeaponModel(ModelName modelName)
+{
+	CGameObject* pWeaponPrototype = ResourceManager::Instance().GetModelPrototype(modelName);
+
+	if (!pWeaponPrototype)
 	{
-		OutputDebugString(L"[OtherPlayer] PISTOL prototype not found.\n");
 		return;
 	}
 
-	CGameObject* pPistolInstance =
-		CGameObject::CreateModelInstance(pPistolPrototype);
+	CGameObject* pWeaponInstance = CGameObject::CreateModelInstance(pWeaponPrototype);
 
-	if (!pPistolInstance)
+	if (!pWeaponInstance)
 	{
-		OutputDebugString(L"[OtherPlayer] PISTOL instance create failed.\n");
 		return;
 	}
 
@@ -257,39 +336,68 @@ void OtherPlayer::EquipDefaultPistol()
 		"mixamorig:RightHandIndex1"
 	};
 
-	CGameObject* pRightHand =
-		FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
+	CGameObject* pRightHand = FindFirstFrameByNames(this, s_ppRightHandNames, _countof(s_ppRightHandNames));
 
 	if (!pRightHand)
 	{
-		OutputDebugString(L"[OtherPlayer] RightHand frame not found. Pistol not equipped.\n");
-		delete pPistolInstance;
+		DeleteOtherPlayerObjectTree(pWeaponInstance);
 		return;
 	}
 
-	m_pWeapon = pPistolInstance;
+	if (!m_pRenderWeapon)
+	{
+		m_pRenderWeapon = new CGameObject();
+		m_pRenderWeapon->isColl = false;
+	}
+
+	if (m_pWeapon)
+	{
+		if (m_pRenderWeapon->m_pChild == m_pWeapon)
+		{
+			m_pRenderWeapon->m_pChild = nullptr;
+		}
+
+		DeleteOtherPlayerObjectTree(m_pWeapon);
+	}
+
+	m_pWeapon = pWeaponInstance;
 	m_pWeaponSocket = pRightHand;
 
+	m_pWeapon->m_pParent = m_pRenderWeapon;
+	m_pWeapon->m_pSibling = nullptr;
+	m_pRenderWeapon->m_pChild = m_pWeapon;
 
-	m_pWeapon->SetPosition(-0.14f, 0.20f, 0.16f);
-	m_pWeapon->SetScale(0.85f, 0.85f, 0.85f);
-	m_pWeapon->Rotate(-90.0f, -90.0f, 28.0f);
+	XMFLOAT3 weaponPos;
+	XMFLOAT3 weaponRot;
+	XMFLOAT3 weaponScale;
+
+	GetOtherPlayerWeaponVisualConfig(modelName, weaponPos, weaponRot, weaponScale);
+
+	m_pWeapon->SetPosition(weaponPos.x, weaponPos.y, weaponPos.z);
+	m_pWeapon->SetScale(weaponScale.x, weaponScale.y, weaponScale.z);
+	m_pWeapon->Rotate(weaponRot.x, weaponRot.y, weaponRot.z);
 
 	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
 
-	if (m_pWeaponMuzzleSocket)
-	{
-		OutputDebugString(L"[OtherPlayer] Socket_Muzzle found.\n");
-	}
-	else
-	{
-		OutputDebugString(L"[OtherPlayer] Socket_Muzzle not found.\n");
-	}
+	m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
+	m_pRenderWeapon->ClearOOBB(true);
+	m_pRenderWeapon->SetOOBB(NULL);
+	m_pRenderWeapon->isColl = false;
+	m_pRenderWeapon->UpdateTransform(NULL);
+}
 
-	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+void OtherPlayer::ChangeWeaponFromServer(short weaponType, short weaponGrade)
+{
+	UNREFERENCED_PARAMETER(weaponGrade);
+
+	ModelName modelName = GetOtherPlayerWeaponModelNameFromPacket(weaponType);
+	EquipWeaponModel(modelName);
 }
 
 void OtherPlayer::SubmitWeaponToShader(CShader* shader)
 {
+	if (!shader || !m_pRenderWeapon)
+		return;
+
 	shader->addObjects(m_pRenderWeapon);
 }
