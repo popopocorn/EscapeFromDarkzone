@@ -141,13 +141,23 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 
 	if (m_pSkinnedAnimationController)
 	{
-		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_RIFLE_SMG_IDLE);
-		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
-		m_pSkinnedAnimationController->SetTrackEnable(0, true);
+		m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
+		m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
 
+		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
 		m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
-		m_pSkinnedAnimationController->SetTrackEnable(1, false);
+
+		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, PLAYER_PISTOL_IDLE);
+		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, PLAYER_PISTOL_IDLE);
+
+		m_pSkinnedAnimationController->SetTrackPosition(0, 0.0f);
+		m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
+
+		m_pSkinnedAnimationController->SetTrackEnable(0, true);
+		m_pSkinnedAnimationController->SetTrackEnable(1, true);
+
+		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
+		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
 	}
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);

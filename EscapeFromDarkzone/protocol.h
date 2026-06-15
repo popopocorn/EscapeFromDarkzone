@@ -72,6 +72,9 @@ constexpr char CS_GRENADE_EXPLODE = 29;
 // OtherPlayer 상태 변환
 constexpr char CS_PLAYER_STATE_CHANGE = 30;
 
+// 총알 브로드캐스트
+constexpr char SC_FIRE_TRACER = 31;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -326,6 +329,16 @@ struct CS_PLAYER_STATE_CHANGE_PACKET {
 	unsigned char size;
 	char          type;
 	char          state;     // PLAYER_STATE_*
+};
+
+struct SC_FIRE_TRACER_PACKET {
+	unsigned char size;
+	char          type;          // SC_FIRE_TRACER
+	short         shooter_id;     // 발사자 (수신 클라가 자기 자신이면 무시)
+	float         ox, oy, oz;     // 시작 위치
+	float         dx, dy, dz;     // 정규화 방향
+	short         weapon_type;    // WeaponType (ItemType 기준)
+	short         weapon_grade;   // WeaponGrade
 };
 
 #pragma pack (pop)

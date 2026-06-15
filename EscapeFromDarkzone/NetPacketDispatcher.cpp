@@ -249,6 +249,26 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		break;
 	}
+	case SC_FIRE_TRACER:
+	{
+		SC_FIRE_TRACER_PACKET* p =
+			reinterpret_cast<SC_FIRE_TRACER_PACKET*>(packet.data());
+
+		// 본인 발사는 로컬에서 이미 재생됨 --> 무시
+		//if (p->shooter_id == /* 내 클라 id */) break;		// 서버에서 한 번 걸러서 상관 없을 듯
+
+		if (gf.m_pScene.empty()) break;
+		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+		if (!pMainScene) break;
+
+		XMFLOAT3 origin = { p->ox, p->oy, p->oz };
+		XMFLOAT3 dir = { p->dx, p->dy, p->dz };
+		if (Vector3::Length(dir) < 0.0001f) dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
+		dir = Vector3::Normalize(dir);
+
+		//pMainScene->PlayTracerFromServer(origin, dir, p->weapon_type, p->weapon_grade);
+		break;
+	}
 	case SC_PLAY_EFFECT_ATTACHED:
 	{
 		SC_PLAY_EFFECT_ATTACHED_PACKET* p = reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());

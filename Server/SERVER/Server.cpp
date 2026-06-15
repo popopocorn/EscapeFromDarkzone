@@ -74,7 +74,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 2;			// default: 8
+constexpr int ROUND_MIN_PLAYERS = 3;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 std::atomic<int> g_round_state{ ROUND_WAITING };
@@ -756,6 +756,30 @@ static void BroadcastAttachedEffect(
 	for (int i = 0; i < MAX_USER; ++i) {
 		if (!player_snapshot[i].in_game) continue;
 		clients[i].do_send(&ep);
+	}
+}
+
+static void BroadcastFireTracer(
+	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
+	short weapon_type, short weapon_grade)
+{
+	SC_FIRE_TRACER_PACKET tp;
+	tp.size = sizeof(tp);
+	tp.type = SC_FIRE_TRACER;
+	tp.shooter_id = shooter_id;
+	tp.ox = origin.x; tp.oy = origin.y; tp.oz = origin.z;
+	tp.dx = dir.x;    tp.dy = dir.y;    tp.dz = dir.z;
+	tp.weapon_type = weapon_type;
+	tp.weapon_grade = weapon_grade;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		{
+			if (shooter_id == i) continue; // 발사자 자신에게는 탄피 안 보이게
+
+			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+			if (clients[i]._state != ST_INGAME) continue;
+		}
+		clients[i].do_send(&tp);
 	}
 }
 
@@ -2176,6 +2200,12 @@ void process_packet(int c_id, char* packet)
 		// 머즐 플래시 전체 브로드캐스트
 		BroadcastAttachedEffectNoSnapshot(
 			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
+
+		BroadcastFireTracer(
+			(short)c_id,
+			{ p->ray_ox, p->ray_oy, p->ray_oz },
+			{ p->ray_dx, p->ray_dy, p->ray_dz },
+			p->weapon_type, p->weapon_grade);
 
 		break;
 	}
