@@ -7,14 +7,13 @@ enum class ProjectileType {
 class Projectile :public CGameObject{
 private:
 	XMFLOAT3 start;
-	XMFLOAT3 end;
 	XMFLOAT3 direction;
 	bool active = false;
 	float speed = 100.0f;
 	float totalDistance = 0.0f;
 	float curDistance = 0.0f;
 public:
-	void Activate(XMFLOAT3 s, XMFLOAT3 e, float speed, float dist);
+	void Activate(XMFLOAT3 s, XMFLOAT3 dir, float speed, float dist);
 	virtual void Animate(float fTimeElapsed);
 	bool IsActive() { return active; }
 };
@@ -31,7 +30,7 @@ private:
 	CShader* shader=NULL;
 public:
 	void Init(CShader* s);
-	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 e);
+	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 dir, float dist);
 	void Update(float fTimeElapsed);
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch);
 

@@ -5,13 +5,10 @@
 #include"ResourceManager.h"
 #include "Projectile.h"
 
-void Projectile::Activate(XMFLOAT3 s, XMFLOAT3 e, float sp, float dist)
+void Projectile::Activate(XMFLOAT3 s, XMFLOAT3 dir, float sp, float dist)
 {
 	start = s;
-	end = e;
 	speed = sp;
-	XMFLOAT3 dir = Vector3::Subtract(e, s);
-	dir = Vector3::Normalize(dir);
 	direction = dir;
 	totalDistance = dist;
 	curDistance = 0.0f;
@@ -52,17 +49,16 @@ void ProjectileManager::Init(CShader*s)
 	}
 }
 
-void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 e)
+void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 dir, float  dist)
 {
 	for (int i = 0; i < bullets.size(); ++i)
 	{
 		int idx = (lastUse + i) % bullets.size();
 		if (not bullets[idx].IsActive())
 		{
-			float dist = Vector3::Distance(e, s);
-			bullets[idx].Activate(s, e, 100 , dist);
+			bullets[idx].Activate(s, dir ,100 , dist);
 
-			lastUse = idx+1;
+			lastUse = (idx + 1) % bullets.size();
 			break;
 		}
 	}

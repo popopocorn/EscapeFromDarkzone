@@ -1367,9 +1367,9 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	float hitDistance = maxRange;
 	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-
+	
 	// 적 충돌 검사
-	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY] && !ppShaders[SHADERIDX::ENEMY]->GetObj()->empty())
+	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY])
 	{
 		bool isIntersects = false;
 		auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
@@ -1381,8 +1381,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 				if (!pOOBB) continue;
 				float fDist = 0.0f;
 				if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
-					CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
-					if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
+					//CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
+					//if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
 					isIntersects = true;
 					if (fDist < hitDistance) hitDistance = fDist;
 					break;
@@ -1407,13 +1407,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 			}
 		}
 	}
-
-	XMFLOAT3 endPos;
-	endPos.x = muzzlePos.x + muzzleLook.x * hitDistance;
-	endPos.y = muzzlePos.y + muzzleLook.y * hitDistance;
-	endPos.z = muzzlePos.z + muzzleLook.z * hitDistance;
-
-	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, endPos);
+	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, muzzleLook,hitDistance);
 
 }
 
