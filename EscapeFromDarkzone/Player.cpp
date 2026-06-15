@@ -1946,7 +1946,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 
 	XMFLOAT3 direction = MoveDir;
 	direction.y = 0.0f;
-	direction = Vector3::ScalarProduct(direction, 8.0f, false);
+	direction = Vector3::ScalarProduct(direction, speed, false);
 	CPlayer::Move(direction, true);
 
 	CPlayer::Update(fTimeElapsed);

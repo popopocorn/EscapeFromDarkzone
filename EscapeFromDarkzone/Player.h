@@ -79,7 +79,7 @@ protected:
 	std::queue<GameEvent>		event_queue;
 
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
-	float						speed{};
+	float						speed{8};
 
 	// 충돌 노멀
 	std::vector<XMFLOAT3>		CollVector;
