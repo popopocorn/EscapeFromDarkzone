@@ -27,6 +27,7 @@ void Projectile::Animate(float fTimeElapsed)
 	curDistance += moveDist;
 	if (curDistance >= totalDistance)
 	{
+		//데칼 활성화
 		active = false;
 		return;
 	}

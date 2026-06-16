@@ -127,10 +127,53 @@ ColResult CollisionManager::CalcCollision(
 
 	// 노멀 벡터 저장
 	XMStoreFloat3(&result.normal, bestAxis);
-
+	
 	// 밀어낼 벡터 (MTV) = 노멀 방향 * 최소 침투 깊이
 	XMVECTOR mtv = XMVectorScale(bestAxis, minPenetration);
 	XMStoreFloat3(&result.mtv, mtv);
 
 	return result;
+}
+
+XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos)
+{
+	XMVECTOR vHitPos = XMLoadFloat3(&hitPos);
+	XMVECTOR vCenter = XMLoadFloat3(&oobb.Center);
+	XMVECTOR vOrientation = XMLoadFloat4(&oobb.Orientation);
+
+	XMVECTOR vInverseRot = XMQuaternionInverse(vOrientation);
+	XMMATRIX matInverseRot = XMMatrixRotationQuaternion(vInverseRot);
+
+	XMVECTOR vLocalHit = XMVector3TransformCoord(vHitPos - vCenter, matInverseRot);
+	XMFLOAT3 localHit;
+	XMStoreFloat3(&localHit, vLocalHit);
+
+	float dx = abs(localHit.x) / oobb.Extents.x;
+	float dy = abs(localHit.y) / oobb.Extents.y;
+	float dz = abs(localHit.z) / oobb.Extents.z;
+
+	XMFLOAT3 localNormal = { 0.0f, 0.0f, 0.0f };
+
+	
+	if (dx >= dy && dx >= dz) {
+		localNormal.x = (localHit.x > 0.0f) ? 1.0f : -1.0f;
+	}
+	
+	else if (dy >= dx && dy >= dz) {
+		localNormal.y = (localHit.y > 0.0f) ? 1.0f : -1.0f;
+	}
+	
+	else {
+		localNormal.z = (localHit.z > 0.0f) ? 1.0f : -1.0f;
+	}
+
+	// 4. 구해진 로컬 노멀을 다시 월드 좌표계(원래 박스의 회전 적용)로 변환
+	XMMATRIX matRot = XMMatrixRotationQuaternion(vOrientation);
+	XMVECTOR vWorldNormal = XMVector3TransformNormal(XMLoadFloat3(&localNormal), matRot);
+	vWorldNormal = XMVector3Normalize(vWorldNormal);
+
+	XMFLOAT3 worldNormal;
+	XMStoreFloat3(&worldNormal, vWorldNormal);
+
+	return worldNormal;
 }

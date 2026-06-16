@@ -20,7 +20,7 @@ public:
 
 class CShader;
 
-class ProjectileManager :public Singleton<ProjectileManager>{
+class ProjectileManager : public Singleton<ProjectileManager>{
 	friend class Singleton<ProjectileManager>;
 private:
 	vector<Projectile> bullets;

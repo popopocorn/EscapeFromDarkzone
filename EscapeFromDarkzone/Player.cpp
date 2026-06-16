@@ -1383,6 +1383,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 				if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
 					//CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
 					//if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
+					
 					isIntersects = true;
 					if (fDist < hitDistance) hitDistance = fDist;
 					break;
