@@ -532,6 +532,8 @@ void ResourceManager::BuildModelPrototypes(
 
 void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path)
 {
+	auto it = m_UIPrototypes.find(name);
+	if (it != m_UIPrototypes.end())return;
 	m_UIPrototypes[name] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
 	m_UIPrototypes[name]->LoadTexture(pd3dDevice, pd3dCommandList,path);
 
