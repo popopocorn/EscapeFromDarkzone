@@ -135,7 +135,7 @@ ColResult CollisionManager::CalcCollision(
 	return result;
 }
 
-XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos)
+XMFLOAT3 CollisionManager::GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos)
 {
 	XMVECTOR vHitPos = XMLoadFloat3(&hitPos);
 	XMVECTOR vCenter = XMLoadFloat3(&oobb.Center);
@@ -145,29 +145,29 @@ XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPo
 	XMMATRIX matInverseRot = XMMatrixRotationQuaternion(vInverseRot);
 
 	XMVECTOR vLocalHit = XMVector3TransformCoord(vHitPos - vCenter, matInverseRot);
+
 	XMFLOAT3 localHit;
 	XMStoreFloat3(&localHit, vLocalHit);
 
-	float dx = abs(localHit.x) / oobb.Extents.x;
-	float dy = abs(localHit.y) / oobb.Extents.y;
-	float dz = abs(localHit.z) / oobb.Extents.z;
+	float dx = fabsf(localHit.x) / oobb.Extents.x;
+	float dy = fabsf(localHit.y) / oobb.Extents.y;
+	float dz = fabsf(localHit.z) / oobb.Extents.z;
 
-	XMFLOAT3 localNormal = { 0.0f, 0.0f, 0.0f };
+	XMFLOAT3 localNormal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	
-	if (dx >= dy && dx >= dz) {
+	if (dx >= dy && dx >= dz)
+	{
 		localNormal.x = (localHit.x > 0.0f) ? 1.0f : -1.0f;
 	}
-	
-	else if (dy >= dx && dy >= dz) {
+	else if (dy >= dx && dy >= dz)
+	{
 		localNormal.y = (localHit.y > 0.0f) ? 1.0f : -1.0f;
 	}
-	
-	else {
+	else
+	{
 		localNormal.z = (localHit.z > 0.0f) ? 1.0f : -1.0f;
 	}
 
-	// 4. 구해진 로컬 노멀을 다시 월드 좌표계(원래 박스의 회전 적용)로 변환
 	XMMATRIX matRot = XMMatrixRotationQuaternion(vOrientation);
 	XMVECTOR vWorldNormal = XMVector3TransformNormal(XMLoadFloat3(&localNormal), matRot);
 	vWorldNormal = XMVector3Normalize(vWorldNormal);

@@ -152,6 +152,7 @@
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DDSTextureLoader12.h" />
     <ClInclude Include="DebugObject.h" />
+    <ClInclude Include="Decal.h" />
     <ClInclude Include="Effect.h" />
     <ClInclude Include="EffectManager.h" />
     <ClInclude Include="EffectShader.h" />
@@ -193,6 +194,7 @@
     <ClCompile Include="Collision.cpp" />
     <ClCompile Include="DDSTextureLoader12.cpp" />
     <ClCompile Include="DebugObject.cpp" />
+    <ClCompile Include="Decal.cpp" />
     <ClCompile Include="Effect.cpp" />
     <ClCompile Include="EffectManager.cpp" />
     <ClCompile Include="EffectShader.cpp" />

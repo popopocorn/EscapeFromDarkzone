@@ -528,6 +528,16 @@ void ResourceManager::BuildModelPrototypes(
 		"Model/bullet2.bin",
 		Standardshader
 	);
+
+	//데칼
+	LoadAndRegisterModelPrototype(
+		ModelName::BULLET_DECAL,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/bullet_decal.bin",	//나중에 이름 변경
+		Standardshader
+	);
 }
 
 void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path)

@@ -24,5 +24,6 @@ public:
 		const BoundingOrientedBox& main, 
 		const BoundingOrientedBox& target
 	);
+	XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos);
 };
 

@@ -20,6 +20,7 @@
 #include "ResourceManager.h"
 #include "GameFramework.h"
 #include"Projectile.h"
+#include "Decal.h"
 #include "Network.h"
 #include "NetSession.h"
 
@@ -1651,7 +1652,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		++name;
 	}
 	ProjectileManager::Instance()->Init(stdshader);
-
+	DecalManager::Instance()->Init(stdshader);
 
 	m_ppShaders.push_back(stdshader);
 
@@ -1977,6 +1978,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
 	ProjectileManager::Instance()->Update(fTimeElapsed);
+	DecalManager::Instance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
@@ -2019,16 +2021,14 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	//if (m_pInventoryManager)
-	//{
-	//	m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, nPipelineState);
-	//}
+	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 	ProjectileManager::Instance()->Render(pd3dCommandList, pCamera, true);
+
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);

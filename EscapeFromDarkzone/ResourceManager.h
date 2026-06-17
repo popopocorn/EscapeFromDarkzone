@@ -23,6 +23,7 @@ enum class ModelName
 	SHOTGUN,
 	SMG,
 	BULLET,
+	BULLET_DECAL,
 
 	GRENADE,
 	LOOT_BOX,

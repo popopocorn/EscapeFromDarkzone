@@ -96,6 +96,10 @@
     <ClCompile Include="ShaderManager.cpp" />
     <ClCompile Include="SoundManager.cpp" />
     <ClCompile Include="Projectile.cpp" />
+    <ClCompile Include="NetEntityManager.cpp" />
+    <ClCompile Include="NetSession.cpp" />
+    <ClCompile Include="NetPacketDispatcher.cpp" />
+    <ClCompile Include="Decal.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -203,6 +207,10 @@
     <ClInclude Include="Singletone.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="NetEntityManager.h" />
+    <ClInclude Include="NetSession.h" />
+    <ClInclude Include="NetPacketDispatcher.h" />
+    <ClInclude Include="Decal.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">
