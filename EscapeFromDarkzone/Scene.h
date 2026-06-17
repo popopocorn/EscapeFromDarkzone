@@ -285,7 +285,7 @@ public:
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
 
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
-
+	void ProcessFireRequest(ItemType weapon,  XMFLOAT3 start, XMFLOAT3 direction, float distance);
 };
 
 XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp);

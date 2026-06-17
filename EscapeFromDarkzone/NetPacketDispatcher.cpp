@@ -257,14 +257,15 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		if (gf.m_pScene.empty()) break;
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
 		if (!pMainScene) break;
-
+		
 		XMFLOAT3 origin = { p->ox, p->oy, p->oz }; // ox, oy, oz: 시작 위치
 		XMFLOAT3 dir = { p->dx, p->dy, p->dz };	// dx, dy, dz: 방향
 		if (Vector3::Length(dir) < 0.0001f) dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
 		dir = Vector3::Normalize(dir);
 
 		XMFLOAT3 normal = { p->nx, p->ny, p->nz }; // nx, ny, nz: 데칼 노멀
-
+		ItemType type = static_cast<ItemType>(p->weapon_type);
+		pMainScene->ProcessFireRequest(type, origin, dir, p->distance);
 		// p->weapon_type : 무기 종류(사운드 재생 용도)
 		// p->hit_kind    : 데칼 종류(0: 허공, 1: 벽, 2: 캐릭터 피격)
 		// p->distance    : 진행 거리 (시작점부터 종착점까지)
