@@ -116,7 +116,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
 
-	CLoadedModelInfo* pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02);
+	CLoadedModelInfo* pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01);
 
 	if (!pPlayerModel)
 	{

@@ -2146,14 +2146,24 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	}
 }
 
-void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance)
+void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind, XMFLOAT3 hitNormal)
 {
-	ProjectileManager::Instance()->SpawnProjectile(
-		ProjectileType::RIFLE_BULLET,
-		start,
-		direction,
-		distance
-	);
+	if (Vector3::Length(direction) < 0.0001f)
+		direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	direction = Vector3::Normalize(direction);
+
+	DecalInfo decalInfo;
+
+	if (hitKind == 1 && Vector3::Length(hitNormal) >= 0.0001f)
+	{
+		decalInfo.enable = true;
+		decalInfo.decalType = 1;
+		decalInfo.normal = Vector3::Normalize(hitNormal);
+	}
+
+	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, start, direction, distance, decalInfo);
+
 	switch (weapon)
 	{
 	case ItemType::PISTOL:

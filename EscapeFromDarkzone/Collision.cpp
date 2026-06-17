@@ -149,27 +149,33 @@ XMFLOAT3 CollisionManager::GetOOBBHitNormal(const BoundingOrientedBox& oobb, con
 	XMFLOAT3 localHit;
 	XMStoreFloat3(&localHit, vLocalHit);
 
-	float dx = fabsf(localHit.x) / oobb.Extents.x;
-	float dy = fabsf(localHit.y) / oobb.Extents.y;
-	float dz = fabsf(localHit.z) / oobb.Extents.z;
+	float dx = (oobb.Extents.x > 0.0001f) ? fabsf(localHit.x) / oobb.Extents.x : -1.0f;
+	float dy = (oobb.Extents.y > 0.0001f) ? fabsf(localHit.y) / oobb.Extents.y : -1.0f;
+	float dz = (oobb.Extents.z > 0.0001f) ? fabsf(localHit.z) / oobb.Extents.z : -1.0f;
 
 	XMFLOAT3 localNormal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	if (dx >= dy && dx >= dz)
 	{
-		localNormal.x = (localHit.x > 0.0f) ? 1.0f : -1.0f;
+		localNormal.x = (localHit.x >= 0.0f) ? 1.0f : -1.0f;
 	}
 	else if (dy >= dx && dy >= dz)
 	{
-		localNormal.y = (localHit.y > 0.0f) ? 1.0f : -1.0f;
+		localNormal.y = (localHit.y >= 0.0f) ? 1.0f : -1.0f;
 	}
 	else
 	{
-		localNormal.z = (localHit.z > 0.0f) ? 1.0f : -1.0f;
+		localNormal.z = (localHit.z >= 0.0f) ? 1.0f : -1.0f;
 	}
 
 	XMMATRIX matRot = XMMatrixRotationQuaternion(vOrientation);
 	XMVECTOR vWorldNormal = XMVector3TransformNormal(XMLoadFloat3(&localNormal), matRot);
+
+	if (XMVectorGetX(XMVector3LengthSq(vWorldNormal)) < 0.000001f)
+	{
+		return XMFLOAT3(0.0f, 1.0f, 0.0f);
+	}
+
 	vWorldNormal = XMVector3Normalize(vWorldNormal);
 
 	XMFLOAT3 worldNormal;

@@ -207,11 +207,10 @@ void DecalManager::SpawnBulletDecal(XMFLOAT3 pos, XMFLOAT3 normal)
 		{
 			decals[idx].Activate(DecalType::BULLET, pos, normal, DEFAULT_BULLET_DECAL_SIZE, DEFAULT_BULLET_DECAL_LIFETIME);
 			lastUse = (idx + 1) % decals.size();
-			break;
+			return;
 		}
 	}
 }
-
 void DecalManager::SpawnBulletDecal(CGameObject* pHitObject, XMFLOAT3 hitPos)
 {
 	if (!pHitObject)
