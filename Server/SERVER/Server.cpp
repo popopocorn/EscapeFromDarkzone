@@ -1,3 +1,7 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <iostream>
 #include <array>
 #include <WS2tcpip.h>
@@ -742,6 +746,33 @@ static void BroadcastAttachedEffectNoSnapshot(
 	}
 }
 
+// 스냅샷 없이 (IOCP 워커 경로: PvP)
+static void BroadcastFireTracerNoSnapshot(
+	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
+	short weapon_type, unsigned char hit_kind, float distance,
+	const XMFLOAT3& normal)
+{
+	SC_FIRE_TRACER_PACKET tp;
+	tp.size = sizeof(tp);
+	tp.type = SC_FIRE_TRACER;
+	tp.shooter_id = shooter_id;
+	tp.ox = origin.x; tp.oy = origin.y; tp.oz = origin.z;
+	tp.dx = dir.x;    tp.dy = dir.y;    tp.dz = dir.z;
+	tp.weapon_type = weapon_type;
+	tp.hit_kind = hit_kind;
+	tp.distance = distance;
+	tp.nx = normal.x; tp.ny = normal.y; tp.nz = normal.z;
+
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (shooter_id == i) continue;   // 발사자 본인 제외
+		{
+			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+			if (clients[i]._state != ST_INGAME) continue;
+		}
+		clients[i].do_send(&tp);
+	}
+}
+
 static void BroadcastAttachedEffect(
 	EffectID id, EffectEntityKind kind, short entity_id,
 	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
@@ -759,9 +790,12 @@ static void BroadcastAttachedEffect(
 	}
 }
 
+// 스냅샷 기반 (NPC 스레드 경로: PvE, NPC-->플레이어)
 static void BroadcastFireTracer(
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
-	short weapon_type, short weapon_grade)
+	short weapon_type, unsigned char hit_kind, float distance,
+	const XMFLOAT3& normal,
+	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	SC_FIRE_TRACER_PACKET tp;
 	tp.size = sizeof(tp);
@@ -770,15 +804,13 @@ static void BroadcastFireTracer(
 	tp.ox = origin.x; tp.oy = origin.y; tp.oz = origin.z;
 	tp.dx = dir.x;    tp.dy = dir.y;    tp.dz = dir.z;
 	tp.weapon_type = weapon_type;
-	tp.weapon_grade = weapon_grade;
+	tp.hit_kind = hit_kind;
+	tp.distance = distance;
+	tp.nx = normal.x; tp.ny = normal.y; tp.nz = normal.z;
 
 	for (int i = 0; i < MAX_USER; ++i) {
-		{
-			if (shooter_id == i) continue; // 발사자 자신에게는 탄피 안 보이게
-
-			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-			if (clients[i]._state != ST_INGAME) continue;
-		}
+		if (shooter_id == i) continue;             // 발사자 본인 제외
+		if (!player_snapshot[i].in_game) continue;
 		clients[i].do_send(&tp);
 	}
 }
@@ -835,53 +867,80 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	std::cout << "[NPC " << npc.id << "] Fire (ammo=" << npc.current_ammo << ")\n";
 
 	bool hit = false;
-	if (target_id >= 0 && player_snapshot[target_id].in_game) {
-		XMVECTOR vO = XMVectorSet(origin.x, origin.y, origin.z, 0.0f);
-		XMVECTOR vD = XMVector3Normalize(XMVectorSet(dir.x, dir.y, dir.z, 0.0f));
+	float hit_dist = 0.0f;
 
+	XMVECTOR vO = XMVectorSet(origin.x, origin.y, origin.z, 0.0f);
+	XMVECTOR vD = XMVector3Normalize(XMVectorSet(dir.x, dir.y, dir.z, 0.0f));
+
+	if (target_id >= 0 && player_snapshot[target_id].in_game) {
 		XMFLOAT3 tpos = { player_snapshot[target_id].x,
 						  player_snapshot[target_id].y,
 						  player_snapshot[target_id].z };
 		BoundingOrientedBox pbox = MakePlayerOOBB(tpos, player_snapshot[target_id].yaw);
 
-		float t{}; // Intersects out 파라미터
-		float hit_dist = 0.0f;
+		float t{};
 		if (pbox.Intersects(vO, vD, t) && t >= 0.0f && t <= spec.range) {
 			hit = true;
 			hit_dist = t;
 		}
+	}
 
-		if (hit) {
-			short dmg = ComputeDamage(spec, hit_dist);   // 거리 감쇠 포함
-			short new_hp = 0;
-			{
-				std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
-				if (clients[target_id]._state == ST_INGAME) {
-					clients[target_id].hp -= dmg;
-					if (clients[target_id].hp < 0) clients[target_id].hp = 0;
-					new_hp = clients[target_id].hp;
-					if (clients[target_id].in_escape_zone)		// 탈출 중 피격시 시간 초기화
-						clients[target_id].last_hit_time = std::chrono::steady_clock::now();
-				}
+	// 벽 막힘 판정
+	int wall_idx = -1;
+	float wall_t = NearestWallHit(vO, vD, g_mapOOBBs, &wall_idx);
+
+	unsigned char hit_kind = 0;
+	float         trace_dist = spec.range;
+	XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
+
+	if (hit && hit_dist < wall_t) {
+		// 플레이어 명중
+		hit_kind = 2;
+		trace_dist = hit_dist;
+
+		short dmg = ComputeDamage(spec, hit_dist);
+		short new_hp = 0;
+		{
+			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
+			if (clients[target_id]._state == ST_INGAME) {
+				clients[target_id].hp -= dmg;
+				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
+				new_hp = clients[target_id].hp;
+				if (clients[target_id].in_escape_zone)
+					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
 			}
-
-			std::cout << "[NPC " << npc.id << "] HIT player " << target_id
-				<< " (hp=" << new_hp << ")\n";
-			if (new_hp <= 0) {
-				std::cout << "[NPC " << npc.id << "] player " << target_id << " HP 0 (death deferred)\n";
-			}
-
-			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
-			hp_pkt.size = sizeof(hp_pkt);
-			hp_pkt.type = SC_PLAYER_HP_UPDATE;
-			hp_pkt.id = (short)target_id;
-			hp_pkt.hp = new_hp;
-			clients[target_id].do_send(&hp_pkt);
 		}
+
+		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
+			<< " (hp=" << new_hp << ")\n";
+		if (new_hp <= 0) {
+			std::cout << "[NPC " << npc.id << "] player " << target_id << " HP 0 (death deferred)\n";
+		}
+
+		SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+		hp_pkt.size = sizeof(hp_pkt);
+		hp_pkt.type = SC_PLAYER_HP_UPDATE;
+		hp_pkt.id = (short)target_id;
+		hp_pkt.hp = new_hp;
+		clients[target_id].do_send(&hp_pkt);
+	}
+	else if (wall_t < std::numeric_limits<float>::max()) {
+		// 벽에 막힘
+		hit_kind = 1;
+		trace_dist = wall_t;
+		XMVECTOR vHit = XMVectorMultiplyAdd(vD, XMVectorReplicate(wall_t), vO);
+		XMFLOAT3 hitPos; XMStoreFloat3(&hitPos, vHit);
+		normal = GetOOBBHitNormal(g_mapOOBBs[wall_idx], hitPos);
 	}
 
 	// 발사 이펙트: 머즐 플래시
 	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
+
+	// 트레이서 (발사자가 NPC이므로 shooter_id = -1, 전원 수신)
+	BroadcastFireTracer(
+		-1, origin, dir,
+		(short)npc.weapon_type, hit_kind, trace_dist, normal,
+		player_snapshot);
 
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
@@ -1116,12 +1175,39 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 			}
 		}
 
-		if (best_id >= 0) {
+		// 벽 막힘 검사
+		int wall_idx = -1;
+		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
+
+		unsigned char hit_kind = 0;   // 0 = 허공
+		float         trace_dist = max_range;
+		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
+
+		if (best_id >= 0 && best_t < wall_t) {
+			// 캐릭터 명중
+			hit_kind = 2;
+			trace_dist = best_t;
 			short dmg = ComputeDamage(spec, best_t);
 			if (dmg > 0) {
 				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
 			}
 		}
+		else if (wall_t < std::numeric_limits<float>::max()) {
+			// 벽에 막힘
+			hit_kind = 1;
+			trace_dist = wall_t;
+			XMVECTOR vHit = XMVectorMultiplyAdd(dir, XMVectorReplicate(wall_t), origin);
+			XMFLOAT3 hitPos; XMStoreFloat3(&hitPos, vHit);
+			normal = GetOOBBHitNormal(g_mapOOBBs[wall_idx], hitPos);
+		}
+
+		XMFLOAT3 o3, d3;
+		XMStoreFloat3(&o3, origin);
+		XMStoreFloat3(&d3, dir);
+		BroadcastFireTracer(
+			(short)e.attacker_client_id, o3, d3,
+			(short)e.weapon_type, hit_kind, trace_dist, normal,
+			player_snapshot);
 	}
 
 	break;
@@ -2170,9 +2256,20 @@ void process_packet(int c_id, char* packet)
 			}
 		}
 
-		// 명중 1번만 짧게 락, hp조정
-		if (best_id >= 0) {
-			short dmg = ComputeDamage(spec, best_t);   // 거리 감쇠 포함
+		// 벽 막힘 판정
+		int wall_idx = -1;
+		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
+
+		unsigned char hit_kind = 0;
+		float         trace_dist = spec.range;
+		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
+
+		if (best_id >= 0 && best_t < wall_t) {
+			// 캐릭터 명중
+			hit_kind = 2;
+			trace_dist = best_t;
+
+			short dmg = ComputeDamage(spec, best_t);
 			short new_hp = 0;
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
@@ -2180,7 +2277,7 @@ void process_packet(int c_id, char* packet)
 					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
 					new_hp = clients[best_id].hp;
-					if (clients[best_id].in_escape_zone)			// 탈출 중 피격시 시간 초기화
+					if (clients[best_id].in_escape_zone)
 						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
 				}
 			}
@@ -2188,7 +2285,6 @@ void process_packet(int c_id, char* packet)
 			std::cout << "[PvP] client " << c_id << " HIT player "
 				<< best_id << " (hp=" << new_hp << ")\n";
 
-			// 피격자 본인에게만 HP 통지
 			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
 			hp_pkt.size = sizeof(hp_pkt);
 			hp_pkt.type = SC_PLAYER_HP_UPDATE;
@@ -2196,16 +2292,24 @@ void process_packet(int c_id, char* packet)
 			hp_pkt.hp = new_hp;
 			clients[best_id].do_send(&hp_pkt);
 		}
+		else if (wall_t < std::numeric_limits<float>::max()) {
+			// 벽에 막힘
+			hit_kind = 1;
+			trace_dist = wall_t;
+			XMVECTOR vHit = XMVectorMultiplyAdd(dir, XMVectorReplicate(wall_t), origin);
+			XMFLOAT3 hitPos; XMStoreFloat3(&hitPos, vHit);
+			normal = GetOOBBHitNormal(g_mapOOBBs[wall_idx], hitPos);
+		}
 
 		// 머즐 플래시 전체 브로드캐스트
 		BroadcastAttachedEffectNoSnapshot(
 			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
-		BroadcastFireTracer(
+		BroadcastFireTracerNoSnapshot(
 			(short)c_id,
 			{ p->ray_ox, p->ray_oy, p->ray_oz },
 			{ p->ray_dx, p->ray_dy, p->ray_dz },
-			p->weapon_type, p->weapon_grade);
+			p->weapon_type, hit_kind, trace_dist, normal);
 
 		break;
 	}

@@ -156,3 +156,58 @@ std::vector<ColResult> CheckCollisionWithMap(const BoundingOrientedBox& playerOO
 
 	return results;
 }
+
+float NearestWallHit(const XMVECTOR& origin, const XMVECTOR& dir,
+	const std::vector<BoundingOrientedBox>& mapOOBBs, int* outWallIdx)
+{
+	float nearest = std::numeric_limits<float>::max();
+	int   idx = -1;
+	for (int i = 0; i < (int)mapOOBBs.size(); ++i) {
+		float t;
+		if (mapOOBBs[i].Intersects(origin, dir, t) && t >= 0.0f && t < nearest) {
+			nearest = t;
+			idx = i;
+		}
+	}
+	if (outWallIdx) *outWallIdx = idx;
+	return nearest;
+}
+
+XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos)
+{
+	XMVECTOR vHitPos = XMLoadFloat3(&hitPos);
+	XMVECTOR vCenter = XMLoadFloat3(&oobb.Center);
+	XMVECTOR vOrientation = XMLoadFloat4(&oobb.Orientation);
+
+	XMVECTOR vInverseRot = XMQuaternionInverse(vOrientation);
+	XMMATRIX matInverseRot = XMMatrixRotationQuaternion(vInverseRot);
+
+	XMVECTOR vLocalHit = XMVector3TransformCoord(vHitPos - vCenter, matInverseRot);
+	XMFLOAT3 localHit;
+	XMStoreFloat3(&localHit, vLocalHit);
+
+	float dx = abs(localHit.x) / oobb.Extents.x;
+	float dy = abs(localHit.y) / oobb.Extents.y;
+	float dz = abs(localHit.z) / oobb.Extents.z;
+
+	XMFLOAT3 localNormal = { 0.0f, 0.0f, 0.0f };
+
+	if (dx >= dy && dx >= dz) {
+		localNormal.x = (localHit.x > 0.0f) ? 1.0f : -1.0f;
+	}
+	else if (dy >= dx && dy >= dz) {
+		localNormal.y = (localHit.y > 0.0f) ? 1.0f : -1.0f;
+	}
+	else {
+		localNormal.z = (localHit.z > 0.0f) ? 1.0f : -1.0f;
+	}
+
+	XMMATRIX matRot = XMMatrixRotationQuaternion(vOrientation);
+	XMVECTOR vWorldNormal = XMVector3TransformNormal(XMLoadFloat3(&localNormal), matRot);
+	vWorldNormal = XMVector3Normalize(vWorldNormal);
+
+	XMFLOAT3 worldNormal;
+	XMStoreFloat3(&worldNormal, vWorldNormal);
+
+	return worldNormal;
+}
