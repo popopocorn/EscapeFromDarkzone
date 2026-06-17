@@ -897,6 +897,12 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		// 플레이어 명중
 		hit_kind = 2;
 		trace_dist = hit_dist;
+		XMVECTOR vHitC = XMVectorMultiplyAdd(vD, XMVectorReplicate(hit_dist), vO);
+		XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
+		BoundingOrientedBox pbox2 = MakePlayerOOBB(
+			{ player_snapshot[target_id].x, player_snapshot[target_id].y, player_snapshot[target_id].z },
+			player_snapshot[target_id].yaw);
+		normal = GetOOBBHitNormal(pbox2, hitPosC);
 
 		short dmg = ComputeDamage(spec, hit_dist);
 		short new_hp = 0;
@@ -1179,7 +1185,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		int wall_idx = -1;
 		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
 
-		unsigned char hit_kind = 0;   // 0 = 허공
+		unsigned char hit_kind = 0;		// 0 = 허공
 		float         trace_dist = max_range;
 		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
 
@@ -1187,6 +1193,10 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 			// 캐릭터 명중
 			hit_kind = 2;
 			trace_dist = best_t;
+			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
+			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
+			BoundingOrientedBox nbox = MakeNpcOOBB(g_npcs[best_id].position, g_npcs[best_id].yaw);
+			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
 			if (dmg > 0) {
 				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
@@ -2260,7 +2270,7 @@ void process_packet(int c_id, char* packet)
 		int wall_idx = -1;
 		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
 
-		unsigned char hit_kind = 0;
+		unsigned char hit_kind = 0;		// 0 = 허공
 		float         trace_dist = spec.range;
 		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
 
@@ -2271,16 +2281,28 @@ void process_packet(int c_id, char* packet)
 
 			short dmg = ComputeDamage(spec, best_t);
 			short new_hp = 0;
+
+			XMFLOAT3 tpos2{}; 
+			float tyaw2 = 0.0f;
+
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
 					clients[best_id].hp -= dmg;
-					if (clients[best_id].hp < 0) clients[best_id].hp = 0;
+					if (clients[best_id].hp < 0) {
+						clients[best_id].hp = 0;
+					}
 					new_hp = clients[best_id].hp;
-					if (clients[best_id].in_escape_zone)
+					if (clients[best_id].in_escape_zone) {
 						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
+					}
 				}
 			}
+
+			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
+			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
+			BoundingOrientedBox pbox2 = MakePlayerOOBB(tpos2, tyaw2);
+			normal = GetOOBBHitNormal(pbox2, hitPosC);
 
 			std::cout << "[PvP] client " << c_id << " HIT player "
 				<< best_id << " (hp=" << new_hp << ")\n";
