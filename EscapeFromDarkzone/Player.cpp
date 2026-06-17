@@ -2025,16 +2025,16 @@ bool PlayerRun::Enter(CPlayer* Player)
 	}
 	return true;
 }
-
+float runInterval = 0.5;
 
 void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
 	static float timeacu = 0;
 	timeacu += fTimeElapsed;
-	if (timeacu > 0.5)
+	if (timeacu > runInterval)
 	{
 		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
-		timeacu -= 0.5;
+		timeacu -= runInterval;
 	}
 	if (Player->IsReloading())
 	{
@@ -2128,10 +2128,10 @@ void PlayerGrenade::Update(CPlayer* Player, float fTimeElapsed)
 	{
 		static float timeacu = 0;
 		timeacu += fTimeElapsed;
-		if (timeacu > 0.5)
+		if (timeacu > runInterval)
 		{
 			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
-			timeacu -= 0.5;
+			timeacu -= runInterval;
 		}
 	}
 	int nextLowerAnim = bMove ? Player->GetRunAnimationFromInput(dir) : Player->GetIdleAnimationByWeapon();
@@ -2240,10 +2240,10 @@ void PlayerShoot::Update(CPlayer* Player, float fTimeElapsed)
 	{
 		static float timeacu = 0;
 		timeacu += fTimeElapsed;
-		if (timeacu > 0.5f)
+		if (timeacu > runInterval)
 		{
 			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
-			timeacu -= 0.5f;
+			timeacu -= runInterval;
 		}
 	}
 
@@ -2346,10 +2346,10 @@ void PlayerReload::Update(CPlayer* Player, float fTimeElapsed)
 	{
 		static float timeacu = 0;
 		timeacu += fTimeElapsed;
-		if (timeacu > 0.5)
+		if (timeacu > runInterval)
 		{
 			SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
-			timeacu -= 0.5;
+			timeacu -= runInterval;
 		}
 	}
 	auto* pCtrl = Player->GetAnimationController();

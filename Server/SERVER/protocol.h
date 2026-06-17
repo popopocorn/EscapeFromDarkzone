@@ -332,13 +332,15 @@ struct CS_PLAYER_STATE_CHANGE_PACKET {
 };
 
 struct SC_FIRE_TRACER_PACKET {
-	unsigned char size;
-	char          type;          // SC_FIRE_TRACER
-	short         shooter_id;     // 발사자 (수신 클라가 자기 자신이면 무시)
-	float         ox, oy, oz;     // 시작 위치
-	float         dx, dy, dz;     // 정규화 방향
-	short         weapon_type;    // WeaponType (ItemType 기준)
-	short         weapon_grade;   // WeaponGrade
+	unsigned char	size;
+	char			type;			// SC_FIRE_TRACER
+	short			shooter_id;		// 발사자 (수신 클라가 자기 자신이면 무시)
+	float			ox, oy, oz;		// 시작 위치
+	float			dx, dy, dz;		// 방향
+	short			weapon_type;	// WeaponType (ItemType 기준, 사운드 재생 용도)
+	unsigned char	hit_kind;		// 0=허공, 1=벽, 2=캐릭터
+	float			distance;		// 진행 거리 (시작점부터 종착점까지)
+	float			nx, ny, nz;		// 데칼 노멀 (hit_kind==1일 때만 유효)
 };
 
 #pragma pack (pop)

@@ -27,3 +27,10 @@ ColResult CalcCollision(
 
 BoundingOrientedBox MakePlayerOOBB(const XMFLOAT3& position, float yawRad);
 BoundingOrientedBox MakeNpcOOBB(const XMFLOAT3& position, float yawRad);
+
+// ray가 맵 벽과 만나는 가장 가까운 거리. 안 맞으면 FLT_MAX. dir은 정규화 필요.
+float NearestWallHit(const XMVECTOR& origin, const XMVECTOR& dir,
+	const std::vector<BoundingOrientedBox>& mapOOBBs, int* outWallIdx = nullptr);
+
+// 클라 Collision.cpp GetOOBBHitNormal 복제 — 박스 표면 점의 월드 법선
+XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos);

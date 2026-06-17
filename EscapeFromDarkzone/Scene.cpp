@@ -23,6 +23,7 @@
 #include "Decal.h"
 #include "Network.h"
 #include "NetSession.h"
+#include"SoundManager.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
 {
@@ -2142,6 +2143,33 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->OpenLootContainer(pLoot);
+	}
+}
+
+void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance)
+{
+	ProjectileManager::Instance()->SpawnProjectile(
+		ProjectileType::RIFLE_BULLET,
+		start,
+		direction,
+		distance
+	);
+	switch (weapon)
+	{
+	case ItemType::PISTOL:
+		SoundManager::Instance()->Play(SoundName::FIRE_PISTOL, start);
+		break;
+	case ItemType::RIFLE:
+		SoundManager::Instance()->Play(SoundName::FIRE_RIFLE, start);
+		break;
+	case ItemType::SMG:
+		SoundManager::Instance()->Play(SoundName::FIRE_SMG, start);
+		break;
+	case ItemType::SHOTGUN:
+		SoundManager::Instance()->Play(SoundName::FIRE_SHOTGUN, start);
+		break;
+	default:
+		break;
 	}
 }
 
