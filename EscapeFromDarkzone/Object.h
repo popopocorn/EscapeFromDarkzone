@@ -342,6 +342,8 @@ protected:
 	BoundingOrientedBox				OOBBWorld;
 private:
 	bool							Alive = true;
+	bool							m_bCastShadow = true;
+	bool							m_bRenderEnabled = true;
 	std::vector<BoundingOrientedBox*> OOBBs;
 public:
 	CGameObject();
@@ -448,6 +450,30 @@ public:
 	bool IsAlive() const { return Alive; }
 	void SetAlive(bool bAlive) { Alive = bAlive; }
 	void Kill() { Alive = false; }
+
+	void SetCastShadow(bool bCastShadow, bool bRecursive = false)
+	{
+		m_bCastShadow = bCastShadow;
+
+		if (bRecursive)
+		{
+			if (m_pChild) m_pChild->SetCastShadow(bCastShadow, true);
+			if (m_pSibling) m_pSibling->SetCastShadow(bCastShadow, true);
+		}
+	}
+	void SetRenderEnabled(bool bRenderEnabled, bool bRecursive = false)
+	{
+		m_bRenderEnabled = bRenderEnabled;
+
+		if (bRecursive)
+		{
+			if (m_pChild) m_pChild->SetRenderEnabled(bRenderEnabled, true);
+			if (m_pSibling) m_pSibling->SetRenderEnabled(bRenderEnabled, true);
+		}
+	}
+	bool IsRenderEnabled() const { return m_bRenderEnabled; }
+
+	bool CanCastShadow() const { return m_bCastShadow; }
 public:
 	void FindAndSetSkinnedMesh(CSkinnedMesh **ppSkinnedMeshes, int *pnSkinnedMesh);
 

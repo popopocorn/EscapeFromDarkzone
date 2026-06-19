@@ -443,6 +443,12 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 	{
 		if (m_ppObjects[j])
 		{
+			if (!m_ppObjects[j]->IsRenderEnabled())
+				continue;
+
+			if (nPipelineState == SHADOW && !m_ppObjects[j]->CanCastShadow())
+				continue;
+
 			bool inCamera = false;
 			for (auto& obb : m_ppObjects[j]->GetOOBB()) {
 				if (pCamera->GetFrustum().Intersects(*obb)) {
@@ -458,7 +464,6 @@ void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, 
 		}
 	}
 }
-
 void CStandardObjectsShader::DeleteObject(UINT64 fence)
 {
 	std::erase_if(m_ppObjects, [this, fence](CGameObject* obj) {
@@ -604,6 +609,12 @@ void CSkinnedAnimationObjectsShader::Render(ID3D12GraphicsCommandList* pd3dComma
 	for (const auto& pObject : m_ppObjects)
 	{
 		if (!pObject) continue;
+
+		if (!pObject->IsRenderEnabled())
+			continue;
+
+		if (nPipelineState == SHADOW && !pObject->CanCastShadow())
+			continue;
 
 		if (pObject->m_pSkinnedAnimationController)
 		{
