@@ -237,6 +237,9 @@ enum class UIName {
 	STATUS_PISTOL_BULLET,
 	STATUS_BULLET_DOT,
 	CROSSHAIR,
+
+	UI_WAIT,
+
 	UI_NONE_IMAGE
 };
 // 전방 선언

@@ -761,7 +761,8 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
 	for (const auto& o : objs)
 	{
-		shader->addObjects(o.get());
+		if(o->isopen)
+			shader->addObjects(o.get());
 	}
 	for (const auto& o : panels)
 	{
@@ -783,6 +784,12 @@ void HUDManager::Update(float fTimeElapsed)
 	}
 }
 
+
+void HUDManager::CloseUI(int idx)
+{
+	if (idx >= objs.size())return;
+	objs[idx]->isopen = false;
+}
 
 bool HUDManager::ProcessClick(POINT mouse)
 {
