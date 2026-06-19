@@ -49,7 +49,9 @@ class WeaponItem;
 class Inventory;
 class Equip;
 
+
 class EffectManager;
+
 
 class CPlayer : public CGameObject
 {

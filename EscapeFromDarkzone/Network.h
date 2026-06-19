@@ -12,6 +12,7 @@
 
 constexpr char SERVER_ADDR[] = "127.0.0.1";
 
+
 // 패킷 큐 최대 크기
 constexpr int MAX_PACKET_QUEUE_SIZE = 100;
 

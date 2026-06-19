@@ -756,6 +756,13 @@ void ResourceManager::BuildUIMesh(
 		L"UI/Crosshair_03.dds"
 	);
 
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::UI_WAIT,
+		L"UI/wait.dds"
+	);
+
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const

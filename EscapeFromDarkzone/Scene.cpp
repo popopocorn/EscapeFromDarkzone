@@ -1279,7 +1279,9 @@ void MainScene::ExplodeGrenade()
 }
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	
 	ClampGameplayCursorToAimLine(hWnd);
+	if (not IsGameStart)return;
 
 	switch (nMessageID)
 	{
@@ -1867,6 +1869,14 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.05f);
 
 	uiManager->AddToManager(m_pCrosshairUI);
+	
+	UIObject* waitMassage = new UIObject();
+	waitMassage->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::UI_WAIT));
+	waitMassage->SetScale(1, 0.6, 1.0);
+
+	uiManager->AddToManager(waitMassage);
+
+	
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -1875,6 +1885,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	if (!NetworkManager::Instance().Init("Player"))
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+	}
+	if (not NetworkManager::Instance().IsConnected())
+	{
+		StartGame();
 	}
 }
 
@@ -2530,9 +2544,16 @@ void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 dir
 	}
 }
 
+void MainScene::StartGame()
+{
+	IsGameStart = true;
+	uiManager->CloseUI(1);
+}
+
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
 {
 	name = SceneName::LOBBY;
+	
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)

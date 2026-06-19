@@ -63,7 +63,7 @@ public:
 	void setAABB();
 	CheckBox GetBox() { return CollisionBox; }
 
-
+	bool isopen = true;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
 };
 
@@ -183,6 +183,7 @@ private:
 	vector<unique_ptr<UIObject>> objs;
 	vector<unique_ptr<UIPanel>> panels;
 public:
+	void CloseUI(int idx);
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
 	void Release();
