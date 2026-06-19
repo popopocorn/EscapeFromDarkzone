@@ -6,6 +6,7 @@
 #include "Scene.h"
 #include "Player.h"
 #include "EnemyObject.h"
+#include "OtherPlayer.h"
 #include "Shader.h"
 #include"ShaderManager.h"
 #include "InputManager.h"
@@ -103,6 +104,103 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 			outBlockers.push_back(pObj);
 		}
 	}
+}
+static float RaycastFogVisibilityBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT3& worldDir, float maxDistance, const std::vector<CGameObject*>& blockers)
+{
+	float nearest = maxDistance;
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&worldOrigin);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&worldDir));
+
+	for (CGameObject* pObj : blockers)
+	{
+		if (!pObj) continue;
+
+		const auto& oobbs = pObj->GetOOBB();
+
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			if (pOOBB->Extents.y < 0.3f)
+				continue;
+
+			float hitDist = 0.0f;
+
+			if (pOOBB->Intersects(rayOrigin, rayDir, hitDist))
+			{
+				float clipDist = hitDist - 0.05f;
+
+				if (clipDist < 0.05f) clipDist = 0.05f;
+				if (clipDist < nearest) nearest = clipDist;
+			}
+		}
+	}
+
+	if (nearest > maxDistance) nearest = maxDistance;
+	if (nearest < 0.05f) nearest = 0.05f;
+
+	return nearest;
+}
+static void ApplyFogRenderState(CGameObject* pObject, bool bVisible)
+{
+	if (!pObject) return;
+
+	if (pObject->IsRenderEnabled() != bVisible)
+	{
+		pObject->SetRenderEnabled(bVisible, true);
+	}
+
+	if (pObject->CanCastShadow() != bVisible)
+	{
+		pObject->SetCastShadow(bVisible, true);
+	}
+}
+static XMFLOAT3 RotateVectorYLocal(const XMFLOAT3& v, float yaw)
+{
+	float c = cosf(yaw);
+	float s = sinf(yaw);
+
+	return XMFLOAT3(
+		v.x * c + v.z * s,
+		0.0f,
+		-v.x * s + v.z * c
+	);
+}
+static float RaycastFogShadowBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT3& worldDir, float maxDistance, const std::vector<CGameObject*>& blockers)
+{
+	float nearest = maxDistance;
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&worldOrigin);
+	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&worldDir));
+
+	for (CGameObject* pObj : blockers)
+	{
+		if (!pObj) continue;
+
+		const auto& oobbs = pObj->GetOOBB();
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			if (pOOBB->Extents.y < 0.3f)
+				continue;
+
+			float hitDist = 0.0f;
+			if (pOOBB->Intersects(rayOrigin, rayDir, hitDist))
+			{
+				float clipDist = hitDist - 0.05f;
+
+				if (clipDist < 0.05f) clipDist = 0.05f;
+				if (clipDist < nearest) nearest = clipDist;
+			}
+		}
+	}
+
+	if (nearest > maxDistance) nearest = maxDistance;
+	if (nearest < 0.05f) nearest = 0.05f;
+
+	return nearest;
 }
 static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer,XMFLOAT3& outPos,XMFLOAT3& outLook,XMFLOAT3& outRight,XMFLOAT3& outUp)
 {
@@ -1788,6 +1886,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
+	if (not NetworkManager::Instance().IsConnected())
+	{
+		StartGame();
+	}
 }
 
 void MainScene::ReleaseObjects()
@@ -1907,35 +2009,9 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pLights[1].m_xmf3Direction = m_pPlayer->GetLookVector();
 	}
 
-	// 시야 객체 blocker 갱신
-	{
-		if (m_pPlayer && m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
-		{
-			std::vector<CGameObject*> visionBlockers;
-			visionBlockers.reserve(32);
+	// 시야 객체 blocker 갱신 + 전장의 안개 렌더/그림자 표시 상태 갱신
+	UpdateFogShadowVisibility();
 
-			XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-
-			if (!m_vVisionMapChunks.empty())
-			{
-				GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, 18.0f, visionBlockers);
-			}
-			else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
-			{
-				GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], visionBlockers);
-			}
-
-			auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
-			if (viewObjs && !viewObjs->empty())
-			{
-				ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
-				if (pViewObj)
-				{
-					pViewObj->UpdateClippedMeshes(visionBlockers);
-				}
-			}
-		}
-	}
 	if (m_pPlayer && !IsAnyInventoryOpen())
 	{
 		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager);
@@ -1994,6 +2070,279 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
 
+bool MainScene::IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGameObject*>& blockers)
+{
+	if (!m_pPlayer) return true;
+	if (!pObject) return false;
+	if (!pObject->IsAlive()) return false;
+
+	constexpr float VIEW_CIRCLE_RADIUS = 3.0f;
+	constexpr float VIEW_CONE_RADIUS = 20.0f;
+	constexpr float VIEW_CONE_ANGLE_DEG = 75.0f;
+	constexpr float VISIBILITY_MARGIN = 0.35f;
+
+	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+	XMFLOAT3 targetPos = pObject->GetPosition();
+
+	XMFLOAT3 toTarget = XMFLOAT3(
+		targetPos.x - playerPos.x,
+		0.0f,
+		targetPos.z - playerPos.z
+	);
+
+	float distSq = toTarget.x * toTarget.x + toTarget.z * toTarget.z;
+
+	if (distSq < 0.000001f)
+		return true;
+
+	float dist = sqrtf(distSq);
+
+	XMFLOAT3 dir = XMFLOAT3(toTarget.x / dist, 0.0f, toTarget.z / dist);
+
+	XMFLOAT3 rayOrigin = playerPos;
+	rayOrigin.y += 0.5f;
+
+	auto HasLineOfSight = [&]() -> bool
+		{
+			float visibleDistance = RaycastFogShadowBlockers(rayOrigin, dir, dist + VISIBILITY_MARGIN, blockers);
+			return visibleDistance + VISIBILITY_MARGIN >= dist;
+		};
+
+	if (dist <= VIEW_CIRCLE_RADIUS)
+	{
+		return HasLineOfSight();
+	}
+
+	if (dist > VIEW_CONE_RADIUS)
+		return false;
+
+	XMFLOAT3 look = m_pPlayer->GetLookVector();
+
+	if (m_pPlayer->GetCamera())
+		look = m_pPlayer->GetCamera()->GetLookVector();
+
+	look.y = 0.0f;
+
+	float lookLenSq = look.x * look.x + look.z * look.z;
+	if (lookLenSq < 0.000001f)
+	{
+		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	}
+	else
+	{
+		float lookLen = sqrtf(lookLenSq);
+		look.x /= lookLen;
+		look.z /= lookLen;
+	}
+
+	float dot = look.x * dir.x + look.z * dir.z;
+	dot = max(-1.0f, min(1.0f, dot));
+
+	float angleDeg = XMConvertToDegrees(acosf(dot));
+	if (angleDeg > VIEW_CONE_ANGLE_DEG * 0.5f)
+		return false;
+
+	return HasLineOfSight();
+}
+
+void MainScene::UpdateFogShadowVisibility()
+{
+	if (m_ppShaders.size() <= SHADERIDX::ENEMY) return;
+	if (!m_ppShaders[SHADERIDX::ENEMY]) return;
+
+	std::vector<CGameObject*> blockers;
+	blockers.reserve(64);
+
+	XMFLOAT3 playerPos = m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	if (!m_vVisionMapChunks.empty())
+	{
+		GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, 20.0f, blockers);
+	}
+	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], blockers);
+	}
+
+	auto* enemyObjects = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+	if (!enemyObjects) return;
+
+	for (CGameObject* pObject : *enemyObjects)
+	{
+		if (!pObject) continue;
+
+		bool bVisible = IsObjectVisibleByFog(pObject, blockers);
+
+		pObject->SetRenderEnabled(bVisible, true);
+		pObject->SetCastShadow(bVisible, true);
+
+		if (CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(pObject))
+		{
+			CGameObject* pWeapon = pEnemy->GetRenderWeapon();
+			if (pWeapon)
+			{
+				pWeapon->SetRenderEnabled(bVisible, true);
+				pWeapon->SetCastShadow(bVisible, true);
+			}
+		}
+		else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pObject))
+		{
+			CGameObject* pWeapon = pOther->GetRenderWeapon();
+			if (pWeapon)
+			{
+				pWeapon->SetRenderEnabled(bVisible, true);
+				pWeapon->SetCastShadow(bVisible, true);
+			}
+		}
+	}
+}
+
+void MainScene::BuildVisionBlockersForCurrentFrame(float fHalfExtent, std::vector<CGameObject*>& outBlockers)
+{
+	outBlockers.clear();
+
+	if (!m_pPlayer)
+		return;
+
+	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+
+	if (!m_vVisionMapChunks.empty())
+	{
+		GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, fHalfExtent, outBlockers);
+	}
+	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], outBlockers);
+	}
+}
+
+//bool MainScene::IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGameObject*>& blockers)
+//{
+//	if (!m_pPlayer) return true;
+//	if (!pObject) return false;
+//	if (!pObject->IsAlive()) return false;
+//
+//	constexpr float VIEW_CIRCLE_RADIUS = 3.0f;
+//	constexpr float VIEW_CONE_RADIUS = 20.0f;
+//	constexpr float VIEW_CONE_ANGLE_DEG = 75.0f;
+//	constexpr float VISIBILITY_MARGIN = 0.35f;
+//
+//	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+//	XMFLOAT3 targetPos = pObject->GetPosition();
+//
+//	XMFLOAT3 toTarget = XMFLOAT3(
+//		targetPos.x - playerPos.x,
+//		0.0f,
+//		targetPos.z - playerPos.z
+//	);
+//
+//	float distSq = toTarget.x * toTarget.x + toTarget.z * toTarget.z;
+//
+//	if (distSq < 0.000001f)
+//		return true;
+//
+//	float dist = sqrtf(distSq);
+//
+//	if (dist > VIEW_CONE_RADIUS)
+//		return false;
+//
+//	XMFLOAT3 dir = XMFLOAT3(toTarget.x / dist, 0.0f, toTarget.z / dist);
+//
+//	XMFLOAT3 rayOrigin = playerPos;
+//	rayOrigin.y += 0.5f;
+//
+//	auto HasLineOfSight = [&]() -> bool
+//		{
+//			float visibleDistance = RaycastFogVisibilityBlockers(rayOrigin, dir, dist + VISIBILITY_MARGIN, blockers);
+//			return visibleDistance + VISIBILITY_MARGIN >= dist;
+//		};
+//
+//	if (dist <= VIEW_CIRCLE_RADIUS)
+//	{
+//		return HasLineOfSight();
+//	}
+//
+//	XMFLOAT3 look = m_pPlayer->GetLookVector();
+//
+//	if (m_pPlayer->GetCamera())
+//		look = m_pPlayer->GetCamera()->GetLookVector();
+//
+//	look.y = 0.0f;
+//
+//	float lookLenSq = look.x * look.x + look.z * look.z;
+//
+//	if (lookLenSq < 0.000001f)
+//	{
+//		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+//	}
+//	else
+//	{
+//		float lookLen = sqrtf(lookLenSq);
+//		look.x /= lookLen;
+//		look.z /= lookLen;
+//	}
+//
+//	float dot = look.x * dir.x + look.z * dir.z;
+//	dot = max(-1.0f, min(1.0f, dot));
+//
+//	float angleDeg = XMConvertToDegrees(acosf(dot));
+//
+//	if (angleDeg > VIEW_CONE_ANGLE_DEG * 0.5f)
+//		return false;
+//
+//	return HasLineOfSight();
+//}
+//
+
+//void MainScene::UpdateFogShadowVisibility()
+//{
+//	if (!m_pPlayer)
+//		return;
+//
+//	constexpr float VIEW_BLOCKER_QUERY_EXTENT = 20.0f;
+//
+//	BuildVisionBlockersForCurrentFrame(VIEW_BLOCKER_QUERY_EXTENT, m_vFrameVisionBlockers);
+//
+//	if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
+//	{
+//		auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+//
+//		if (viewObjs && !viewObjs->empty())
+//		{
+//			ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
+//
+//			if (pViewObj)
+//			{
+//				pViewObj->UpdateClippedMeshes(m_vFrameVisionBlockers);
+//			}
+//		}
+//	}
+//
+//	if (m_ppShaders.size() <= SHADERIDX::ENEMY) return;
+//	if (!m_ppShaders[SHADERIDX::ENEMY]) return;
+//
+//	auto* enemyObjects = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
+//	if (!enemyObjects) return;
+//
+//	for (CGameObject* pObject : *enemyObjects)
+//	{
+//		if (!pObject) continue;
+//
+//		bool bVisible = IsObjectVisibleByFog(pObject, m_vFrameVisionBlockers);
+//
+//		ApplyFogRenderState(pObject, bVisible);
+//
+//		if (CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(pObject))
+//		{
+//			ApplyFogRenderState(pEnemy->GetRenderWeapon(), bVisible);
+//		}
+//		else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pObject))
+//		{
+//			ApplyFogRenderState(pOther->GetRenderWeapon(), bVisible);
+//		}
+//	}
+//}
+
 void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
@@ -2015,12 +2364,14 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		{
 			if (m_ppShaders[i] && m_ppShaders[i]->DoShadow())
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-			if (m_pPlayer)
-			{
-				pd3dCommandList->OMSetStencilRef(0x04);
-				m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
-			}
 		}
+
+		if (m_pPlayer)
+		{
+			pd3dCommandList->OMSetStencilRef(0x04);
+			m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+		}
+
 		return;
 	}
 

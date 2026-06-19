@@ -65,6 +65,7 @@ public:
 	void ChangeWeaponFromServer(short weaponType, short weaponGrade);
 
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+	CGameObject* GetRenderWeapon() const { return m_pRenderWeapon; }
 	void SubmitWeaponToShader(CShader* shader);
 };
 

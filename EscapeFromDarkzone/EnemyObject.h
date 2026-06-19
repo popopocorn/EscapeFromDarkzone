@@ -109,6 +109,7 @@ public:
 	void EquipDefaultPistol();
 	ModelName GetWeaponModelNameByType(EnemyWeaponType eWeaponType) const;
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
+	CGameObject* GetRenderWeapon() const { return m_pRenderWeapon; }
 
 	EnemyModelType m_eEnemyModelType = EnemyModelType::Enemy01;
 	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Pistol;

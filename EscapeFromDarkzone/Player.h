@@ -81,7 +81,7 @@ protected:
 	std::queue<GameEvent>		event_queue;
 
 	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
-	float						speed{ 2.0};
+	float						speed{5.0};		//서버 이동속도랑 맞추기
 
 	// 충돌 노멀
 	std::vector<XMFLOAT3>		CollVector;

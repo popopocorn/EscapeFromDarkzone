@@ -30,6 +30,8 @@ static float ClampFloat(float v, float vmin, float vmax)
 	if (v > vmax) return vmax;
 	return v;
 }
+static constexpr float PLAYER_RUN_ANIM_SPEED = 1.2f;
+static constexpr float PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CPlayer::CPlayer()
@@ -2006,6 +2008,9 @@ bool PlayerIdle::Enter(CPlayer* Player)
 		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetIdleAnimationByWeapon());
 		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
 
+		pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
+
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackEnable(1, true);
 
@@ -2047,7 +2052,7 @@ void PlayerIdle::Exit(CPlayer* Player)
 //-------------------------------------------------------------------------
 bool PlayerRun::Enter(CPlayer* Player)
 {
-	
+
 	Player->ApplyWeaponPose(WEAPON_POSE::RUN);
 
 	XMFLOAT2 dir = Player->GetMoveInput2D();
@@ -2060,16 +2065,19 @@ bool PlayerRun::Enter(CPlayer* Player)
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
 
 		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
+		pCtrl->SetTrackSpeed(0, PLAYER_RUN_ANIM_SPEED);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
 		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
 	return true;
 }
-float runInterval = 0.5;
+
+float runInterval = 0.5f / PLAYER_RUN_ANIM_SPEED;
 
 void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 {
@@ -2110,10 +2118,12 @@ void PlayerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
 
 		pCtrl->SetTrackAnimationSetIfChanged(0, nextAnim);
+		pCtrl->SetTrackSpeed(0, PLAYER_RUN_ANIM_SPEED);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
 
 		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
 		pCtrl->SetTrackEnable(1, true);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}

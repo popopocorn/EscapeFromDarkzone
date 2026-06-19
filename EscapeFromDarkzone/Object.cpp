@@ -1149,9 +1149,9 @@ void CGameObject::Animate(float fTimeElapsed)
 	if (m_pChild) m_pChild->Animate(fTimeElapsed);
 }
 
-void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int nPipelineState, CCamera *pCamera)
+void CGameObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
 {
-	if (m_pMesh)
+	if (m_bRenderEnabled && m_pMesh)
 	{
 		UpdateShaderVariable(pd3dCommandList, &m_xmf4x4World);
 
@@ -1170,7 +1170,7 @@ void CGameObject::Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch,
 	}
 
 	if (m_pSibling) m_pSibling->Render(pd3dCommandList, batch, nPipelineState, pCamera);
-	if (m_pChild) m_pChild->Render(pd3dCommandList, batch, nPipelineState, pCamera);
+	if (m_bRenderEnabled && m_pChild) m_pChild->Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
 void CGameObject::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)

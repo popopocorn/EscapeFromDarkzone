@@ -234,6 +234,7 @@ public:
 	bool m_bCrosshairCursorHidden = false;
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker¿ë º¤ÅÍ
+	std::vector<CGameObject*> m_vFrameVisionBlockers;
 private:
 	unique_ptr<CollisionManager> colManager;
 
@@ -256,6 +257,10 @@ private:
 
 	void UpdateCrosshairUI(HWND hWnd);
 	void HideCrosshairUI();
+
+	void BuildVisionBlockersForCurrentFrame(float fHalfExtent, std::vector<CGameObject*>& outBlockers);
+	bool IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGameObject*>& blockers);
+	void UpdateFogShadowVisibility();
 
 	float CalculateGrenadeMaxAimDistance();
 	void ThrowGrenade();
