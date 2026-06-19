@@ -152,6 +152,12 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		// TODO: 탈출 성공 UI 표시 (된다면)
 		break;
 	}
+	case SC_GAME_OVER:
+	{
+		// 라운드 제한 시간 초과 (추후 패킷 확장 필요시 확장해서 사용할 것)
+		OutputDebugString(L"[ROUND] SC_GAME_OVER received\n");
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;

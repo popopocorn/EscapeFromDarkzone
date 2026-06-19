@@ -83,6 +83,11 @@ constexpr int ROUND_MIN_PLAYERS = 1;			// default: 8
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 std::atomic<int> g_round_state{ ROUND_WAITING };
 std::chrono::steady_clock::time_point g_round_start_time;
+
+// 라운드 제한 시간
+constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;		// 1분
+//constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
+std::atomic<bool> g_game_over_sent{ false };
 // =======================
 
 
@@ -1914,6 +1919,31 @@ static void npc_thread()
 			}
 		}
 		// =====================
+
+		// ===== 게임 오버(시간 초과) 판정 =====
+		if (g_round_state.load() == ROUND_IN_PROGRESS && !g_game_over_sent.load())
+		{
+			const auto  tnow = std::chrono::steady_clock::now();
+			const float elapsed = std::chrono::duration<float>(tnow - g_round_start_time).count();
+			if (elapsed >= ROUND_TIME_LIMIT_SEC) {
+				bool expected = false;
+				// CAS 성공 시 1회 전송 (라운드당 1번)
+				if (g_game_over_sent.compare_exchange_strong(expected, true)) {
+					std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
+					SC_GAME_OVER_PACKET gp;
+					gp.size = sizeof(gp);
+					gp.type = SC_GAME_OVER;
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+						}
+						pl.do_send(&gp);
+					}
+				}
+			}
+		}
+		// =====================================
 
 		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
 		++tick_count;

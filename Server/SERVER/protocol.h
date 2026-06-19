@@ -75,6 +75,9 @@ constexpr char CS_PLAYER_STATE_CHANGE = 30;
 // 총알 브로드캐스트
 constexpr char SC_FIRE_TRACER = 31;
 
+// 라운드 제한 시간 초과
+constexpr char SC_GAME_OVER = 32;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -341,6 +344,11 @@ struct SC_FIRE_TRACER_PACKET {
 	unsigned char	hit_kind;		// 0=허공, 1=벽, 2=캐릭터
 	float			distance;		// 진행 거리 (시작점부터 종착점까지)
 	float			nx, ny, nz;		// 데칼 노멀 (hit_kind==1일 때만 유효)
+};
+
+struct SC_GAME_OVER_PACKET {
+	unsigned char size;
+	char          type;
 };
 
 #pragma pack (pop)
