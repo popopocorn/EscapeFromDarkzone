@@ -343,12 +343,12 @@ void ResourceManager::BuildPlayerModelPrototypes(ID3D12Device* pd3dDevice, ID3D1
 
 	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_01, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_black.bin", PlayerShader);
 
-	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
+	/*LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_02, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_yellow.bin", PlayerShader);
 
 	LoadAndRegisterSkinnedModelPrototype(ModelName::PLAYER_03, pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, "Model/SM_Soldier_03_Complete_Reduced_green.bin", PlayerShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
-	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);*/
 }
 
 void ResourceManager::BuildSkinnedModelPrototypes(
@@ -366,7 +366,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	LoadAndRegisterSkinnedModelPrototype(
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
@@ -418,7 +418,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
-	);
+	);*/
 
 
 
@@ -526,6 +526,16 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
 		"Model/bullet2.bin",
+		Standardshader
+	);
+
+	//데칼
+	LoadAndRegisterModelPrototype(
+		ModelName::BULLET_DECAL,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/bullet_decal.bin",	//나중에 이름 변경
 		Standardshader
 	);
 }

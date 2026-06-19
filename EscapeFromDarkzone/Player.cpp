@@ -1289,19 +1289,20 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 #include"SoundManager.h"
 void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
 {
-	if (!TryFireWeapon()) 
+	if (!TryFireWeapon())
 	{
-		if(not m_bReloading)
+		if (!m_bReloading && m_pWeaponMuzzleSocket)
 			SoundManager::Instance()->Play(SoundName::DRY_RIFLE, m_pWeaponMuzzleSocket->GetPosition());
 		return;
 	}
+
 	NotifyWeaponFired();
-	
-	// 1. 총구 위치 계산
+
 	XMFLOAT3 muzzlePos, muzzleLook, muzzleRight, muzzleUp;
 	muzzleLook = GetLookVector();
 	muzzleRight = GetRightVector();
 	muzzleUp = GetUpVector();
+
 	if (Vector3::Length(muzzleLook) < 0.0001f) muzzleLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
 	if (Vector3::Length(muzzleRight) < 0.0001f) muzzleRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
 	if (Vector3::Length(muzzleUp) < 0.0001f) muzzleUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -1310,31 +1311,30 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	muzzleRight = Vector3::Normalize(muzzleRight);
 	muzzleUp = Vector3::Normalize(muzzleUp);
 
-	if (m_pWeaponMuzzleSocket) {
+	if (m_pWeaponMuzzleSocket)
+	{
 		UpdateTransform(NULL);
 		muzzlePos = m_pWeaponMuzzleSocket->GetPosition();
 		muzzlePos.x += muzzleLook.x * 0.05f;
 		muzzlePos.y += muzzleLook.y * 0.05f;
 		muzzlePos.z += muzzleLook.z * 0.05f;
 	}
-	else {
+	else
+	{
 		muzzlePos = GetPosition();
-		muzzlePos.y += 1.2f; // 총구가 없을 때 기본 오프셋
+		muzzlePos.y += 1.2f;
 	}
 
-
-	// PvP 송신 (단발 무기도 첫 발에서 전송)
 	if (NetworkManager::Instance().IsConnected())
 	{
 		short wType = GetEquippedWeaponTypeForWire();
 		short wGrade = GetEquippedWeaponGradeForWire();
 		NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
 		NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
-		//NetworkManager::Instance().SendHitNpc(muzzlePos, muzzleLook, 0);
-		//NetSession::Instance().FireHit(muzzlePos, muzzleLook, 0);
 	}
 
 	PlayerWeaponType weaponType = GetCurrentPlayerWeaponType();
+
 	switch (weaponType)
 	{
 	case PlayerWeaponType::Rifle:
@@ -1350,66 +1350,110 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		SoundManager::Instance()->Play(SoundName::FIRE_PISTOL, muzzlePos);
 		break;
 	}
-	
-	// 2. 이펙트 재생
-	
+
 	EFFECT_TYPE sparkType = (weaponType == PlayerWeaponType::Shotgun) ? EFFECT_SPARK_SHOTGUN :
 		(weaponType == PlayerWeaponType::Pistol) ? EFFECT_SPARK_PISTOL : EFFECT_SPARK_RIFLE_SMG;
 
-	XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType,muzzlePos, muzzleLook, muzzleUp );
+	XMFLOAT3 sparkPos = GetSparkPositionByWeapon(weaponType, muzzlePos, muzzleLook, muzzleUp);
 
-	if (pEffectManager) {
+	if (pEffectManager)
+	{
 		pEffectManager->RequestPlayEffect(sparkType, sparkPos, muzzleRight, muzzleUp);
 		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
 	}
 
-	float maxRange = 100.f;
+	float maxRange = 100.0f;
 	float hitDistance = maxRange;
+	bool hitEnemy = false;
+	bool hitMap = false;
+	DecalInfo decalInfo;
+
 	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
-	
-	// 적 충돌 검사
+
 	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY])
 	{
-		bool isIntersects = false;
 		auto* objs = ppShaders[SHADERIDX::ENEMY]->GetObj();
-		for (auto& obj : *objs) {
-			if (!obj) continue;
-			if (not obj->isColl) continue;
-			const auto& oobbs = obj->GetOOBB();
-			for (BoundingOrientedBox* pOOBB : oobbs) {
-				if (!pOOBB) continue;
-				float fDist = 0.0f;
-				if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
-					//CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj);
-					//if (pEnemy) pEnemy->HandleHP(GetWeaponDamage());
-					
-					isIntersects = true;
-					if (fDist < hitDistance) hitDistance = fDist;
-					break;
-				}
-			}
-		}
 
-		if (!isIntersects && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP]) {
-			auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
-			for (auto& obj : *maps) {
+		if (objs)
+		{
+			for (auto& obj : *objs)
+			{
 				if (!obj) continue;
-				if (not obj->isColl) continue;
+				if (!obj->isColl) continue;
+
 				const auto& oobbs = obj->GetOOBB();
-				for (BoundingOrientedBox* pOOBB : oobbs) {
+
+				for (BoundingOrientedBox* pOOBB : oobbs)
+				{
 					if (!pOOBB) continue;
+
 					float fDist = 0.0f;
-					if (pOOBB->Intersects(rayOrigin, rayDir, fDist)) {
-						if (fDist < hitDistance) hitDistance = fDist;
-						break;
+
+					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					{
+						if (fDist >= 0.0f && fDist < hitDistance)
+						{
+							hitEnemy = true;
+							hitDistance = fDist;
+						}
 					}
 				}
 			}
 		}
 	}
-	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, muzzleLook,hitDistance);
 
+	if (!hitEnemy && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP])
+	{
+		auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
+
+		if (maps)
+		{
+			CollisionManager collisionManager;
+
+			for (auto& obj : *maps)
+			{
+				if (!obj) continue;
+				if (!obj->isColl) continue;
+
+				const auto& oobbs = obj->GetOOBB();
+
+				for (BoundingOrientedBox* pOOBB : oobbs)
+				{
+					if (!pOOBB) continue;
+
+					float fDist = 0.0f;
+
+					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					{
+						if (fDist >= 0.0f && fDist < hitDistance)
+						{
+							hitMap = true;
+							hitDistance = fDist;
+
+							XMFLOAT3 hitPos;
+							hitPos.x = muzzlePos.x + muzzleLook.x * hitDistance;
+							hitPos.y = muzzlePos.y + muzzleLook.y * hitDistance;
+							hitPos.z = muzzlePos.z + muzzleLook.z * hitDistance;
+
+							decalInfo.enable = true;
+							decalInfo.decalType = 1;
+							decalInfo.normal = collisionManager.GetOOBBHitNormal(*pOOBB, hitPos);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (!hitMap)
+	{
+		decalInfo.enable = false;
+		decalInfo.decalType = 0;
+		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	}
+
+	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, muzzleLook, hitDistance, decalInfo);
 }
 
 bool CPlayer::CanFireWeapon() const

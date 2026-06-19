@@ -20,6 +20,7 @@
 #include "ResourceManager.h"
 #include "GameFramework.h"
 #include"Projectile.h"
+#include "Decal.h"
 #include "Network.h"
 #include "NetSession.h"
 #include"SoundManager.h"
@@ -1654,7 +1655,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		++name;
 	}
 	ProjectileManager::Instance()->Init(stdshader);
-
+	DecalManager::Instance()->Init(stdshader);
 
 	m_ppShaders.push_back(stdshader);
 
@@ -1988,6 +1989,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
 	ProjectileManager::Instance()->Update(fTimeElapsed);
+	DecalManager::Instance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
 	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
 }
@@ -2030,16 +2032,14 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
 
-	//if (m_pInventoryManager)
-	//{
-	//	m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, nPipelineState);
-	//}
+	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 	ProjectileManager::Instance()->Render(pd3dCommandList, pCamera, true);
+
 	if (m_pFogOverlayShader)
 	{
 		pd3dCommandList->OMSetStencilRef(0x00);
@@ -2156,14 +2156,24 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	}
 }
 
-void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance)
+void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind, XMFLOAT3 hitNormal)
 {
-	ProjectileManager::Instance()->SpawnProjectile(
-		ProjectileType::RIFLE_BULLET,
-		start,
-		direction,
-		distance
-	);
+	if (Vector3::Length(direction) < 0.0001f)
+		direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	direction = Vector3::Normalize(direction);
+
+	DecalInfo decalInfo;
+
+	if (hitKind == 1 && Vector3::Length(hitNormal) >= 0.0001f)
+	{
+		decalInfo.enable = true;
+		decalInfo.decalType = 1;
+		decalInfo.normal = Vector3::Normalize(hitNormal);
+	}
+
+	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, start, direction, distance, decalInfo);
+
 	switch (weapon)
 	{
 	case ItemType::PISTOL:
