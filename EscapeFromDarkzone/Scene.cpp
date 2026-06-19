@@ -1788,6 +1788,10 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
+	if (not NetworkManager::Instance().IsConnected())
+	{
+		StartGame();
+	}
 }
 
 void MainScene::ReleaseObjects()
