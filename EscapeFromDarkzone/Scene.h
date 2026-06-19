@@ -287,7 +287,6 @@ public:
 
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
 	void ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind = 0, XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f));
-	void ProcessFireRequest(ItemType weapon,  XMFLOAT3 start, XMFLOAT3 direction, float distance);
 	void StartGame();
 };
 
