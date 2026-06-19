@@ -111,6 +111,9 @@ static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
 		return PlayerWeaponType::Rifle;
 	}
 }
+static constexpr float OTHER_PLAYER_RUN_ANIM_SPEED = 1.2f;
+static constexpr float OTHER_PLAYER_NORMAL_ANIM_SPEED = 1.0f;
+
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -373,6 +376,9 @@ bool OtherPlayerIdle::Enter(OtherPlayer* Player)
 		pCtrl->SetTrackAnimationSetIfChanged(0, idleAnim);
 		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
 
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackEnable(1, true);
 
@@ -407,6 +413,9 @@ bool OtherPlayerRun::Enter(OtherPlayer* Player)
 		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
 		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
 
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackEnable(1, true);
 
@@ -421,10 +430,10 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 {
 	m_fFootstepTimer += fTimeElapsed;
 
-	if (m_fFootstepTimer > 0.5f)
+	if (m_fFootstepTimer > 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED)
 	{
 		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
-		m_fFootstepTimer -= 0.5f;
+		m_fFootstepTimer -= 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED;
 	}
 
 	auto* pCtrl = Player->GetAnimationController();
@@ -438,6 +447,9 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 
 		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
 		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
 
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackEnable(1, true);
