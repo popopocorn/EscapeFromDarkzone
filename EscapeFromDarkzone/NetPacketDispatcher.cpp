@@ -182,6 +182,20 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		gf.m_pNetEntityMgr->OnNpcStateChange(reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data()));
 		break;
 	}
+	case SC_AMMO_STATE: {
+		auto* p = reinterpret_cast<SC_AMMO_STATE_PACKET*>(packet.data());
+		//p->ammo : short[4] 형태의 배열
+		//if (gf.m_pPlayer) 총알개수를배열로덮어씌우는함수호출(p->ammo);
+		break;
+	}
+	case SC_GRENADE_COUNT: {
+		auto* p = reinterpret_cast<SC_GRENADE_COUNT_PACKET*>(packet.data());
+		if (!gf.m_pScene.empty()) {
+			//MainScene* s = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+			//if (s) 수류탄개수를덮어씌우는함수호출(p->grenade_count);
+		}
+		break;
+	}
 	case SC_INVENTORY_UPDATE:
 	{
 		SC_INVENTORY_UPDATE_PACKET* p = reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());

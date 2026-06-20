@@ -78,6 +78,10 @@ constexpr char SC_FIRE_TRACER = 31;
 // 라운드 제한 시간 초과
 constexpr char SC_GAME_OVER = 32;
 
+constexpr char CS_RELOAD_REQUEST = 33;		// C2S 재장전 시도
+constexpr char SC_AMMO_STATE = 34;			// S2C 
+constexpr char SC_GRENADE_COUNT = 35;
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -349,6 +353,24 @@ struct SC_FIRE_TRACER_PACKET {
 struct SC_GAME_OVER_PACKET {
 	unsigned char size;
 	char          type;
+};
+
+struct CS_RELOAD_REQUEST_PACKET {
+	unsigned char size;
+	char          type;
+	short         weapon_type;		// 재장전할 무기 (0~3)
+};
+
+struct SC_AMMO_STATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         ammo[4];			// WeaponType 인덱스별 현재 탄약
+};
+
+struct SC_GRENADE_COUNT_PACKET {
+	unsigned char size;
+	char          type;
+	short         grenade_count;
 };
 
 #pragma pack (pop)
