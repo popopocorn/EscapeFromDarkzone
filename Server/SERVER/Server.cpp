@@ -95,11 +95,12 @@ std::atomic<bool> g_game_over_sent{ false };
 constexpr float ESCAPE_HOLD_SEC = 10.0f;		// 탈출 소요 시간
 struct EscapeZone { float minX, maxX, minZ, maxZ; };
 constexpr EscapeZone ESCAPE_ZONES[] = {
-	{   40.0f,  50.0f, -150.0f, -140.0f },  // 탈출구역 A
-	{-150.0f, -140.0f, -150.0f, -140.0f },  // 탈출구역 B
-	{-150.0f, -140.0f,   40.0f,   50.0f },  // 탈출구역 C
+	{   40.0f,  50.0f, -150.0f, -140.0f },		// 탈출구역 A
+	{-150.0f, -140.0f, -150.0f, -140.0f },		// 탈출구역 B
+	{-150.0f, -140.0f,   40.0f,   50.0f },		// 탈출구역 C
 };
 constexpr int ESCAPE_ZONE_COUNT = sizeof(ESCAPE_ZONES) / sizeof(ESCAPE_ZONES[0]);
+constexpr int ESCAPE_ITEM_MIN_COUNT = 1;		// 탈출에 필요한 아이템 개수
 // ================
 
 
@@ -1861,6 +1862,18 @@ static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID it
 	return -1;
 }
 
+static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
+{
+	int total = 0;
+	for (const auto& s : inv) {
+		if (s.item == ItemID::ESCAPE_KEY) {
+			total += s.count;
+			if (total >= ESCAPE_ITEM_MIN_COUNT) return true;
+		}
+	}
+	return false;
+}
+
 static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
@@ -1981,12 +1994,15 @@ static void npc_thread()
 
 					if (now_in_zone) {
 						if (!clients[i].in_escape_zone) {
-							clients[i].in_escape_zone = true;
-							std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
-							clients[i].last_hit_time = tnow;       // 진행 시작
-							prog_event = ESCAPE_PROG_START;
+							if (HasEscapeItem(clients[i]._inventory)) {
+								clients[i].in_escape_zone = true;
+								std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+								clients[i].last_hit_time = tnow;       // 진행 시작
+								prog_event = ESCAPE_PROG_START;
+							}
 						}
-						if (std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+						if (clients[i].in_escape_zone && 
+							std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
 							clients[i].escaped = true;
 							success = true;
 							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
@@ -2158,6 +2174,9 @@ void process_packet(int c_id, char* packet)
 
 			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			clients[c_id].send_inventory_update_packet(2);
+
+			clients[c_id]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };		// 탈출키 임시 추가
+			clients[c_id].send_inventory_update_packet(3);
 		}
 
 		break;
