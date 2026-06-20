@@ -958,15 +958,25 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 
 		short dmg = ComputeDamage(spec, hit_dist);
 		short new_hp = 0;
+		bool reset_prog = false;
 		{
 			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
 			if (clients[target_id]._state == ST_INGAME) {
 				clients[target_id].hp -= dmg;
 				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 				new_hp = clients[target_id].hp;
-				if (clients[target_id].in_escape_zone)
+				if (clients[target_id].in_escape_zone) {
 					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
+					reset_prog = true;
+				}
 			}
+		}
+		if (reset_prog) {
+			SC_ESCAPE_PROGRESS_PACKET pp;
+			pp.size = sizeof(pp);
+			pp.type = SC_ESCAPE_PROGRESS;
+			pp.event = ESCAPE_PROG_RESET;
+			clients[target_id].do_send(&pp);
 		}
 
 		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
@@ -1307,6 +1317,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		for (int i = 0; i < MAX_USER; ++i) {
 			short new_hp = 0;
 			bool  hit = false;
+			bool  reset_prog = false;
 			{
 				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 				if (clients[i]._state != ST_INGAME) continue;
@@ -1322,8 +1333,10 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				new_hp = clients[i].hp;
 				hit = true;
 
-				if (clients[i].in_escape_zone)   // 탈출 중 피격 시 시간 초기화
+				if (clients[i].in_escape_zone) {	// 탈출 중 피격 시 시간 초기화
 					clients[i].last_hit_time = std::chrono::steady_clock::now();
+					reset_prog = true;
+				}
 			}   // 락 해제 후 송신
 
 			if (hit) {
@@ -1333,6 +1346,13 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				hp_pkt.id = (short)i;
 				hp_pkt.hp = new_hp;
 				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
+			}
+			if (reset_prog) {
+				SC_ESCAPE_PROGRESS_PACKET pp;
+				pp.size = sizeof(pp);
+				pp.type = SC_ESCAPE_PROGRESS;
+				pp.event = ESCAPE_PROG_RESET;
+				clients[i].do_send(&pp);
 			}
 		}
 
@@ -1952,6 +1972,7 @@ static void npc_thread()
 					}
 				}
 
+				char  prog_event = -1;
 				bool  success = false;
 				float escape_sec = 0.0f;
 				{
@@ -1963,6 +1984,7 @@ static void npc_thread()
 							clients[i].in_escape_zone = true;
 							std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
 							clients[i].last_hit_time = tnow;       // 진행 시작
+							prog_event = ESCAPE_PROG_START;
 						}
 						if (std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
 							clients[i].escaped = true;
@@ -1973,7 +1995,16 @@ static void npc_thread()
 					else if (true == clients[i].in_escape_zone && !now_in_zone) {
 						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
 						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+						prog_event = ESCAPE_PROG_CANCEL;
 					}
+				}
+
+				if (prog_event >= 0) {                              // ← 추가: 락 밖 송신
+					SC_ESCAPE_PROGRESS_PACKET pp;
+					pp.size = sizeof(pp);
+					pp.type = SC_ESCAPE_PROGRESS;
+					pp.event = prog_event;
+					clients[i].do_send(&pp);
 				}
 
 				if (success) {
@@ -2450,6 +2481,7 @@ void process_packet(int c_id, char* packet)
 			XMFLOAT3 tpos2{}; 
 			float tyaw2 = 0.0f;
 
+			bool reset_prog = false;
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
@@ -2460,8 +2492,16 @@ void process_packet(int c_id, char* packet)
 					new_hp = clients[best_id].hp;
 					if (clients[best_id].in_escape_zone) {
 						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
+						reset_prog = true;
 					}
 				}
+			}
+			if (reset_prog) {
+				SC_ESCAPE_PROGRESS_PACKET pp;
+				pp.size = sizeof(pp);
+				pp.type = SC_ESCAPE_PROGRESS;
+				pp.event = ESCAPE_PROG_RESET;
+				clients[best_id].do_send(&pp);
 			}
 
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);

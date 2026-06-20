@@ -82,6 +82,12 @@ constexpr char CS_RELOAD_REQUEST = 33;		// C2S 재장전 시도
 constexpr char SC_AMMO_STATE = 34;			// S2C 
 constexpr char SC_GRENADE_COUNT = 35;
 
+constexpr char SC_ESCAPE_PROGRESS = 36;
+
+constexpr char ESCAPE_PROG_START = 0;		// 탈출 진행 시작
+constexpr char ESCAPE_PROG_RESET = 1;		// 영역 내 피격으로 인한 타이머 리셋
+constexpr char ESCAPE_PROG_CANCEL = 2;		// 탈출 지역 이탈, 진행 취소
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -371,6 +377,12 @@ struct SC_GRENADE_COUNT_PACKET {
 	unsigned char size;
 	char          type;
 	short         grenade_count;
+};
+
+struct SC_ESCAPE_PROGRESS_PACKET {
+	unsigned char size;
+	char          type;
+	char          event;			// ESCAPE_PROG_START / RESET / CANCEL
 };
 
 #pragma pack (pop)

@@ -152,6 +152,24 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		// TODO: 탈출 성공 UI 표시 (된다면)
 		break;
 	}
+	case SC_ESCAPE_PROGRESS:
+	{
+		SC_ESCAPE_PROGRESS_PACKET* p =
+			reinterpret_cast<SC_ESCAPE_PROGRESS_PACKET*>(packet.data());
+		switch (p->event)
+		{
+		case ESCAPE_PROG_START:
+		case ESCAPE_PROG_RESET:
+			OutputDebugString(L"[ESCAPE] progress start/reset\n");
+			// 프로그래스 바 진행도 초기화하기 (10초로 하드코딩)
+			break;
+		case ESCAPE_PROG_CANCEL:
+			OutputDebugString(L"[ESCAPE] progress cancel\n");
+			// 프로그래스 바 없애기 (지역 이탈)
+			break;
+		}
+		break;
+	}
 	case SC_GAME_OVER:
 	{
 		// 라운드 제한 시간 초과 (추후 패킷 확장 필요시 확장해서 사용할 것)
