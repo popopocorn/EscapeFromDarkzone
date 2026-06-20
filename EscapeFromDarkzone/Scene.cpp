@@ -615,7 +615,7 @@ void CScene::DumpMapOOBBToCSV(const char* filename)
 
 bool CScene::ProcessInput(UCHAR *pKeysBuffer)
 {
-	return(false);
+	return false;
 }
 
 MainScene::MainScene(CGameFramework* game) : CScene(game)
@@ -1748,7 +1748,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		
 		CGameObject* map = new CGameObject();
 		map->SetChild(ResourceManager::Instance().GetModelPrototype(name));
-		map->SetPosition(-150, 0.0f, -150);
+		map->SetPosition(-150, 0.1f, -150);
 		map->SetOOBB(NULL);
 		m_vVisionMapChunks.push_back(map);
 		GameObjects.push_back(unique_ptr<CGameObject>(map));
@@ -1915,7 +1915,11 @@ void MainScene::ReleaseObjects()
 		s->ReleaseObjects();
 	}
 	m_ppShaders.clear();
-
+	for (auto& obj : GameObjects)
+	{
+		obj.reset();
+	}
+	GameObjects.clear();
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
 
 	//ResourceManager::Instance().ReleaseModelPrototypes();
@@ -1926,7 +1930,99 @@ void MainScene::ReleaseObjects()
 
 bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
 {
-	return false;
+	float cxDelta = 0.0f, cyDelta = 0.0f;
+	bool bInventoryOpen = false;
+	static bool bGameplayCursorInitialized = false;
+	if (m_pInventoryManager)
+	{
+		bInventoryOpen = m_pInventoryManager->IsAnyInventoryOpen();
+	}
+
+	bool bFreeMouseMode = frame->mouseMove || bInventoryOpen;
+
+	if (bFreeMouseMode)
+	{
+		::ClipCursor(NULL);
+		::ShowCursor(TRUE);
+		::GetCursorPos(&frame->m_ptOldCursorPos);
+		bGameplayCursorInitialized = false;
+	}
+	else
+	{
+		RECT rc;
+		::GetClientRect(frame->GetHWND(), &rc);
+
+		int width = rc.right - rc.left;
+		int height = rc.bottom - rc.top;
+
+		if (width > 0 && height > 0)
+		{
+			int centerX = width / 2;
+			int centerY = height / 2;
+
+			POINT ptCursorPos;
+			::GetCursorPos(&ptCursorPos);
+
+			POINT ptClientCursor = ptCursorPos;
+			::ScreenToClient(frame->GetHWND(), &ptClientCursor);
+
+			if (ptClientCursor.y < 0) ptClientCursor.y = 0;
+			if (ptClientCursor.y > centerY) ptClientCursor.y = centerY;
+
+			POINT ptFixedClientCursor = { centerX, ptClientCursor.y };
+			POINT ptFixedScreenCursor = ptFixedClientCursor;
+			::ClientToScreen(frame->GetHWND(), &ptFixedScreenCursor);
+
+			if (!bGameplayCursorInitialized)
+			{
+				::ClipCursor(NULL);
+				::ShowCursor(TRUE);
+				::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
+				frame->m_ptOldCursorPos = ptFixedScreenCursor;
+				bGameplayCursorInitialized = true;
+			}
+			else
+			{
+				cxDelta = (float)(ptCursorPos.x - frame->m_ptOldCursorPos.x) / 3.0f;
+				cyDelta = (float)(ptFixedScreenCursor.y - frame->m_ptOldCursorPos.y) / 3.0f;
+
+				::ClipCursor(NULL);
+				::ShowCursor(TRUE);
+				::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
+
+				frame->m_ptOldCursorPos = ptFixedScreenCursor;
+			}
+		}
+	}
+
+	DWORD dwDirection = 0;
+	if (pKeysBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
+	if (pKeysBuffer[VK_LEFT] & 0xF0)  dwDirection |= DIR_LEFT;
+	if (pKeysBuffer[VK_UP] & 0xF0)    dwDirection |= DIR_FORWARD;
+	if (pKeysBuffer[VK_DOWN] & 0xF0)  dwDirection |= DIR_BACKWARD;
+
+	if (dwDirection && frame->observing)
+	{
+		XMFLOAT3 move = XMFLOAT3(0, 0, 0);
+		if (dwDirection & DIR_RIGHT)    move.x += 1.0f;
+		if (dwDirection & DIR_LEFT)     move.x -= 1.0f;
+		if (dwDirection & DIR_FORWARD)  move.z += 1.0f;
+		if (dwDirection & DIR_BACKWARD) move.z -= 1.0f;
+		frame->GetObserver()->Move(move);
+		frame->GetObserver()->RegenerateViewMatrix();
+	}
+
+	if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
+	{
+		if (cxDelta || cyDelta)
+		{
+			if (pKeysBuffer[VK_RBUTTON] & 0xF0)
+				m_pPlayer->Rotate(cyDelta, 0.0f, -cxDelta);
+			else
+				m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
+		}
+	}
+	return true;
 }
 
 void MainScene::AnimateObjects(float fTimeElapsed)

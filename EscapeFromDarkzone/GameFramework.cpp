@@ -661,7 +661,7 @@ void CGameFramework::ProcessInput()
 	bool bProcessedByScene = false;
 	if (GetKeyboardState(pKeysBuffer) && !m_pScene.empty() && m_pScene.back()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
 
-	if (!bProcessedByScene)
+	/*if (!bProcessedByScene)
 	{
 		float cxDelta = 0.0f, cyDelta = 0.0f;
 		bool bInventoryOpen = false;
@@ -755,7 +755,7 @@ void CGameFramework::ProcessInput()
 					m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 			}
 		}
-	}
+	}*/
 }
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)

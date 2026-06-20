@@ -66,7 +66,11 @@ public:
 	void PopScene();
 	void PopScene(SceneName name);
 	bool						mouseMove = false;
+	bool						observing = false;
 	ShaderManager* GetShaderManager() { return shadermanager.get(); }
+	POINT						m_ptOldCursorPos;
+	HWND GetHWND() { return m_hWnd; }
+	CCamera* GetObserver() { return observer.get(); }
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
@@ -116,9 +120,9 @@ private:
 	unique_ptr<ShadowMap>		shadowmap;
 	unique_ptr<ShaderManager>	shadermanager;
 	
-	bool						observing = false;
+	
 
-	POINT						m_ptOldCursorPos;
+	
 
 	_TCHAR						m_pszFrameRate[70];
 
