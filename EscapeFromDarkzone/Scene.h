@@ -66,6 +66,8 @@ class ShaderManager;
 enum class SceneName{
 	LOBBY,
 	MAIN,
+	RESULT,
+
 };
 
 class CScene
@@ -107,12 +109,13 @@ public:
 
 	CPlayer								*m_pPlayer = NULL;//참조용 객체 관리 X, raw포인터가 맞음
 	SceneName name;
+	CGameFramework* frame;
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera*							m_pCamera = nullptr;	
 	
 	LightCameraManager*					ShadowCameraManager;
-	CGameFramework*						frame;
+	
 	unique_ptr<HUDManager>				uiManager;
 	
 	vector<unique_ptr<CGameObject>>		GameObjects;
@@ -295,4 +298,21 @@ public:
 	void StartGame();
 };
 
+class ResultScene : public CScene {
+public:
+	ResultScene(CGameFramework* game, bool win);
+	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+
+	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	virtual void ReleaseObjects();
+	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+
+private:
+	bool escapeSuccess = false;
+};
+
 XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp);
+
+

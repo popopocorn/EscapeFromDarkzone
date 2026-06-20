@@ -150,6 +150,9 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		swprintf_s(buf, L"[ESCAPE] success! time=%.2fs\n", p->escape_time_sec);
 		OutputDebugStringW(buf);
 		// TODO: 탈출 성공 UI 표시 (된다면)
+		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+		if (not pMainScene)break;
+		pMainScene->frame->nextScene = new ResultScene(pMainScene->frame, true);
 		break;
 	}
 	case SC_ESCAPE_PROGRESS:

@@ -2726,3 +2726,81 @@ void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipeli
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
 	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 }
+
+ResultScene::ResultScene(CGameFramework* game, bool win) : CScene(game)
+{
+	name = SceneName::RESULT;
+	escapeSuccess = win;
+}
+
+void ResultScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	switch (nMessageID)
+	{
+	case WM_LBUTTONDOWN:
+	{
+		uiManager->ProcessClick(InputManager::Instance().GetMousePos());
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+bool ResultScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	return false;
+}
+
+void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	frame->mouseMove = true;
+	BuildDefaultLightsAndMaterials();
+	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+
+	UIObject* lobbyBg = new UIObject();
+	lobbyBg->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_BACKGROUND));
+	lobbyBg->SetScale(2.0, 2.0, 1.0);
+	lobbyBg->SetLocate(0.0, 0.0, 0.5);
+	uiManager->AddToManager(lobbyBg);
+
+	UIObject* lobbybutton = new UIObject();
+	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
+	lobbybutton->SetScale(0.5, 0.5, 1.0);
+	lobbybutton->SetLocate(0.0, -0.6, 0.5);
+
+	lobbybutton->setAABB();
+	lobbybutton->SetFunc([this]() {
+		this->frame->nextScene = new MainScene(frame);
+		});
+
+	uiManager->AddToManager(lobbybutton);
+
+
+	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
+	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);
+
+
+}
+
+void ResultScene::ReleaseObjects()
+{
+	ShadowCameraManager->ReleaseShaderVariables();
+	ReleaseShaderVariables();
+}
+
+void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+{
+	uiManager->SubmitToShader(UIShader.get());
+	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
+	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
+	pd3dCommandList->SetDescriptorHeaps(1, &heap);
+
+	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
+	pCamera->UpdateShaderVariables(pd3dCommandList);
+	UpdateShaderVariables(pd3dCommandList);
+
+	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
+	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+}

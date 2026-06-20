@@ -71,6 +71,7 @@ public:
 	POINT						m_ptOldCursorPos;
 	HWND GetHWND() { return m_hWnd; }
 	CCamera* GetObserver() { return observer.get(); }
+	void CreatePopSceneRequest(SceneName target);
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
