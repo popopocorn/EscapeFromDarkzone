@@ -122,6 +122,7 @@ protected:
 
 public:
 	EquipUI*							equipUI = NULL;
+	PlayerStatus*						statusUI = NULL;
 	float								m_fElapsedTime = 0.0f;
 
 	ShaderManager*						shadermanager = nullptr;

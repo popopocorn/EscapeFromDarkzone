@@ -1861,6 +1861,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	PlayerStatus* s = new PlayerStatus(m_pPlayer);
 	s->Init(pd3dDevice, pd3dCommandList);
+	statusUI = s;
 	uiManager->AddToManager(s);
 
 	m_pCrosshairUI = new UIObject();
