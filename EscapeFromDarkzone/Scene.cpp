@@ -2755,6 +2755,9 @@ bool ResultScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM
 void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	frame->mouseMove = true;
+	::ClipCursor(NULL);
+	while (::ShowCursor(TRUE) < 0) {}
+
 	BuildDefaultLightsAndMaterials();
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
@@ -2763,15 +2766,27 @@ void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	lobbyBg->SetScale(2.0, 2.0, 1.0);
 	lobbyBg->SetLocate(0.0, 0.0, 0.5);
 	uiManager->AddToManager(lobbyBg);
+	UIObject* result = new UIObject();
+	if(escapeSuccess)
+	{
+		result->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::UI_SUCCESS));
+	}
+	else
+	{
+		result->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::UI_FAIL));
+	}
+	result->SetScale(0.5, 0.5, 1.0);
+	result->SetLocate(0.0, -0.1, 0.5);
+	uiManager->AddToManager(result);
 
 	UIObject* lobbybutton = new UIObject();
-	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
+	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::UI_RETURNTOLOBBY));
 	lobbybutton->SetScale(0.5, 0.5, 1.0);
 	lobbybutton->SetLocate(0.0, -0.6, 0.5);
 
 	lobbybutton->setAABB();
 	lobbybutton->SetFunc([this]() {
-		this->frame->nextScene = new MainScene(frame);
+		this->frame->nextScene = new LobbyScene(frame);
 		});
 
 	uiManager->AddToManager(lobbybutton);

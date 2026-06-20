@@ -763,6 +763,27 @@ void ResourceManager::BuildUIMesh(
 		L"UI/wait.dds"
 	);
 
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::UI_SUCCESS,
+		L"UI/Success.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::UI_FAIL,
+		L"UI/Fail.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::UI_RETURNTOLOBBY,
+		L"UI/ReturnToLobby.dds"
+	);
+
 }
 
 CGameObject* ResourceManager::GetModelPrototype(ModelName key) const
