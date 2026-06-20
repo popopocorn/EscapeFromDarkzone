@@ -2295,6 +2295,15 @@ void MainScene::UpdateFogShadowVisibility()
 			}
 		}
 	}
+	auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+	if (viewObjs && !viewObjs->empty())
+	{
+		ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
+		if (pViewObj)
+		{
+			pViewObj->UpdateClippedMeshes(blockers);
+		}
+	}
 }
 
 void MainScene::BuildVisionBlockersForCurrentFrame(float fHalfExtent, std::vector<CGameObject*>& outBlockers)
