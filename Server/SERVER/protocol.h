@@ -75,6 +75,19 @@ constexpr char CS_PLAYER_STATE_CHANGE = 30;
 // 총알 브로드캐스트
 constexpr char SC_FIRE_TRACER = 31;
 
+// 라운드 제한 시간 초과
+constexpr char SC_GAME_OVER = 32;
+
+constexpr char CS_RELOAD_REQUEST = 33;		// C2S 재장전 시도
+constexpr char SC_AMMO_STATE = 34;			// S2C 
+constexpr char SC_GRENADE_COUNT = 35;
+
+constexpr char SC_ESCAPE_PROGRESS = 36;
+
+constexpr char ESCAPE_PROG_START = 0;		// 탈출 진행 시작
+constexpr char ESCAPE_PROG_RESET = 1;		// 영역 내 피격으로 인한 타이머 리셋
+constexpr char ESCAPE_PROG_CANCEL = 2;		// 탈출 지역 이탈, 진행 취소
+
 // CS_MOVE_PACKET inputs 비트 플래그
 constexpr char MOVE_W = 0x01;
 constexpr char MOVE_S = 0x02;
@@ -341,6 +354,35 @@ struct SC_FIRE_TRACER_PACKET {
 	unsigned char	hit_kind;		// 0=허공, 1=벽, 2=캐릭터
 	float			distance;		// 진행 거리 (시작점부터 종착점까지)
 	float			nx, ny, nz;		// 데칼 노멀 (hit_kind==1일 때만 유효)
+};
+
+struct SC_GAME_OVER_PACKET {
+	unsigned char size;
+	char          type;
+};
+
+struct CS_RELOAD_REQUEST_PACKET {
+	unsigned char size;
+	char          type;
+	short         weapon_type;		// 재장전할 무기 (0~3)
+};
+
+struct SC_AMMO_STATE_PACKET {
+	unsigned char size;
+	char          type;
+	short         ammo[4];			// WeaponType 인덱스별 현재 탄약
+};
+
+struct SC_GRENADE_COUNT_PACKET {
+	unsigned char size;
+	char          type;
+	short         grenade_count;
+};
+
+struct SC_ESCAPE_PROGRESS_PACKET {
+	unsigned char size;
+	char          type;
+	char          event;			// ESCAPE_PROG_START / RESET / CANCEL
 };
 
 #pragma pack (pop)

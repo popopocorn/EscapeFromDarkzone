@@ -1036,7 +1036,10 @@ void MainScene::ThrowGrenade()
 		return;
 	}
 
-	m_nGrenadeCount--;
+	if (!NetworkManager::Instance().IsConnected()) {
+		// 네트워크 연결 시에는 Setter로 서버에서 받아온 값으로 덮어씌우는 동작으로 대체 (NetPacketDispatcher.cpp 파일 SC_GRENADE_COUNT 참조)
+		m_nGrenadeCount--;
+	}
 
 	wchar_t grenadeDebugText[128];
 	swprintf_s(grenadeDebugText, L"[Grenade] Throw. Remain = %d / %d\n", m_nGrenadeCount, m_nGrenadeMaxCount);

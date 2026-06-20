@@ -25,6 +25,11 @@ bool NetSession::ChangeWeapon(short weaponType, short weaponGrade)
 	return NetworkManager::Instance().SendChangeWeapon(weaponType, weaponGrade);
 }
 
+bool NetSession::ReloadRequest(short weaponType)
+{
+	return NetworkManager::Instance().SendReloadRequest(weaponType);
+}
+
 bool NetSession::ChangeState(char state)
 {
 	return NetworkManager::Instance().SendChangeState(state);

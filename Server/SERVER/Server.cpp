@@ -83,6 +83,11 @@ constexpr int ROUND_MIN_PLAYERS = 1;			// default: 8
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 std::atomic<int> g_round_state{ ROUND_WAITING };
 std::chrono::steady_clock::time_point g_round_start_time;
+
+// 라운드 제한 시간
+constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;		// 1분
+//constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
+std::atomic<bool> g_game_over_sent{ false };
 // =======================
 
 
@@ -90,11 +95,12 @@ std::chrono::steady_clock::time_point g_round_start_time;
 constexpr float ESCAPE_HOLD_SEC = 10.0f;		// 탈출 소요 시간
 struct EscapeZone { float minX, maxX, minZ, maxZ; };
 constexpr EscapeZone ESCAPE_ZONES[] = {
-	{   40.0f,  50.0f, -150.0f, -140.0f },  // 탈출구역 A
-	{-150.0f, -140.0f, -150.0f, -140.0f },  // 탈출구역 B
-	{-150.0f, -140.0f,   40.0f,   50.0f },  // 탈출구역 C
+	{   40.0f,  50.0f, -150.0f, -140.0f },		// 탈출구역 A
+	{-150.0f, -140.0f, -150.0f, -140.0f },		// 탈출구역 B
+	{-150.0f, -140.0f,   40.0f,   50.0f },		// 탈출구역 C
 };
 constexpr int ESCAPE_ZONE_COUNT = sizeof(ESCAPE_ZONES) / sizeof(ESCAPE_ZONES[0]);
+constexpr int ESCAPE_ITEM_MIN_COUNT = 1;		// 탈출에 필요한 아이템 개수
 // ================
 
 
@@ -313,6 +319,12 @@ public:
 	short hp = 100;
 	short max_hp = 100;
 
+	short ammo[4] = { 0, 0, 0, 0 };		// WeaponType별 탄약
+	bool  reloading = false;
+	float reload_timer = 0.0f;
+	short reload_weapon = -1;
+	short grenade_count = 0;
+
 	bool in_escape_zone = false;
 	bool escaped = false;
 	std::chrono::steady_clock::time_point last_hit_time;
@@ -338,6 +350,13 @@ public:
 		_prev_remain = 0;
 		hp = 100;
 		max_hp = 100;
+
+		for (int i = 0; i < 4; ++i) ammo[i] = 0;
+		reloading = false;
+		reload_timer = 0.0f;
+		reload_weapon = -1;
+		grenade_count = 0;
+
 		_last_move_recv_time = std::chrono::steady_clock::now();
 		last_hit_time = _last_move_recv_time;
 		in_escape_zone = false;
@@ -355,7 +374,6 @@ public:
 		WSARecv(_socket, &_recv_over._wsabuf, 1, 0, &recv_flag,
 			&_recv_over._over, 0);
 	}
-
 	void do_send(void* packet)
 	{
 		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
@@ -433,6 +451,9 @@ public:
 	}
 	void send_player_state_change_packet(int c_id);
 	void send_change_weapon_packet(int c_id);
+	void init_combat_resources();
+	void send_ammo_state(int c_id);
+	void send_grenade_count(int c_id);
 };
 
 std::array<SESSION, MAX_USER> clients;
@@ -487,6 +508,38 @@ void SESSION::send_change_weapon_packet(int c_id) {
 	p.weapon_type = clients[c_id].weapon_type;
 	p.weapon_grade = clients[c_id].weapon_grade;
 	do_send(&p);
+}
+
+void SESSION::init_combat_resources() {
+	// 락은 호출하기 전에 잡기
+	for (int i = 0; i < 4; ++i)
+		ammo[i] = LookupWeaponSpec(static_cast<WeaponType>(i), WeaponGrade::GRADE_1).magazineSize;
+	reloading = false;
+	reload_timer = 0.0f;
+	reload_weapon = -1;
+	grenade_count = 3;
+}
+
+void SESSION::send_ammo_state(int c_id) {
+	SC_AMMO_STATE_PACKET p;
+	p.size = sizeof(p);
+	p.type = SC_AMMO_STATE;
+	{
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+		for (int i = 0; i < 4; ++i) p.ammo[i] = clients[c_id].ammo[i];
+	}
+	clients[c_id].do_send(&p);
+}
+
+void SESSION::send_grenade_count(int c_id) {
+	SC_GRENADE_COUNT_PACKET p;
+	p.size = sizeof(p);
+	p.type = SC_GRENADE_COUNT;
+	{
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+		p.grenade_count = clients[c_id].grenade_count;
+	}
+	clients[c_id].do_send(&p);
 }
 
 bool load_mapOOBB_from_CSV(const char* filename)
@@ -906,15 +959,25 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 
 		short dmg = ComputeDamage(spec, hit_dist);
 		short new_hp = 0;
+		bool reset_prog = false;
 		{
 			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
 			if (clients[target_id]._state == ST_INGAME) {
 				clients[target_id].hp -= dmg;
 				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 				new_hp = clients[target_id].hp;
-				if (clients[target_id].in_escape_zone)
+				if (clients[target_id].in_escape_zone) {
 					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
+					reset_prog = true;
+				}
 			}
+		}
+		if (reset_prog) {
+			SC_ESCAPE_PROGRESS_PACKET pp;
+			pp.size = sizeof(pp);
+			pp.type = SC_ESCAPE_PROGRESS;
+			pp.event = ESCAPE_PROG_RESET;
+			clients[target_id].do_send(&pp);
 		}
 
 		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
@@ -1255,6 +1318,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		for (int i = 0; i < MAX_USER; ++i) {
 			short new_hp = 0;
 			bool  hit = false;
+			bool  reset_prog = false;
 			{
 				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 				if (clients[i]._state != ST_INGAME) continue;
@@ -1270,8 +1334,10 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				new_hp = clients[i].hp;
 				hit = true;
 
-				if (clients[i].in_escape_zone)   // 탈출 중 피격 시 시간 초기화
+				if (clients[i].in_escape_zone) {	// 탈출 중 피격 시 시간 초기화
 					clients[i].last_hit_time = std::chrono::steady_clock::now();
+					reset_prog = true;
+				}
 			}   // 락 해제 후 송신
 
 			if (hit) {
@@ -1281,6 +1347,13 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				hp_pkt.id = (short)i;
 				hp_pkt.hp = new_hp;
 				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
+			}
+			if (reset_prog) {
+				SC_ESCAPE_PROGRESS_PACKET pp;
+				pp.size = sizeof(pp);
+				pp.type = SC_ESCAPE_PROGRESS;
+				pp.event = ESCAPE_PROG_RESET;
+				clients[i].do_send(&pp);
 			}
 		}
 
@@ -1789,6 +1862,18 @@ static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID it
 	return -1;
 }
 
+static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
+{
+	int total = 0;
+	for (const auto& s : inv) {
+		if (s.item == ItemID::ESCAPE_KEY) {
+			total += s.count;
+			if (total >= ESCAPE_ITEM_MIN_COUNT) return true;
+		}
+	}
+	return false;
+}
+
 static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
@@ -1828,6 +1913,27 @@ static void npc_thread()
 		for (auto& npc : g_npcs) {
 			if (!npc.alive) continue;
 			UpdateNpc(npc, DT, player_snapshot);
+		}
+
+		// 플레이어 재장전 타이머 갱신
+		for (int i = 0; i < MAX_USER; ++i) {
+			bool completed = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state != ST_INGAME) continue;
+				if (!clients[i].reloading) continue;
+				clients[i].reload_timer -= DT;
+				if (clients[i].reload_timer <= 0.0f) {
+					short w = clients[i].reload_weapon;
+					if (w >= 0 && w < 4)
+						clients[i].ammo[w] = LookupWeaponSpec(static_cast<WeaponType>(w), WeaponGrade::GRADE_1).magazineSize;
+					clients[i].reloading = false;
+					clients[i].reload_timer = 0.0f;
+					clients[i].reload_weapon = -1;
+					completed = true;
+				}
+			}
+			if (completed) clients[i].send_ammo_state(i);	// 락 해제 후 송신
 		}
 
 		const auto now = std::chrono::steady_clock::now();
@@ -1879,6 +1985,7 @@ static void npc_thread()
 					}
 				}
 
+				char  prog_event = -1;
 				bool  success = false;
 				float escape_sec = 0.0f;
 				{
@@ -1887,11 +1994,15 @@ static void npc_thread()
 
 					if (now_in_zone) {
 						if (!clients[i].in_escape_zone) {
-							clients[i].in_escape_zone = true;
-							std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
-							clients[i].last_hit_time = tnow;       // 진행 시작
+							if (HasEscapeItem(clients[i]._inventory)) {
+								clients[i].in_escape_zone = true;
+								std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+								clients[i].last_hit_time = tnow;       // 진행 시작
+								prog_event = ESCAPE_PROG_START;
+							}
 						}
-						if (std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+						if (clients[i].in_escape_zone && 
+							std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
 							clients[i].escaped = true;
 							success = true;
 							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
@@ -1900,7 +2011,16 @@ static void npc_thread()
 					else if (true == clients[i].in_escape_zone && !now_in_zone) {
 						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
 						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+						prog_event = ESCAPE_PROG_CANCEL;
 					}
+				}
+
+				if (prog_event >= 0) {                              // ← 추가: 락 밖 송신
+					SC_ESCAPE_PROGRESS_PACKET pp;
+					pp.size = sizeof(pp);
+					pp.type = SC_ESCAPE_PROGRESS;
+					pp.event = prog_event;
+					clients[i].do_send(&pp);
 				}
 
 				if (success) {
@@ -1914,6 +2034,31 @@ static void npc_thread()
 			}
 		}
 		// =====================
+
+		// ===== 게임 오버(시간 초과) 판정 =====
+		if (g_round_state.load() == ROUND_IN_PROGRESS && !g_game_over_sent.load())
+		{
+			const auto  tnow = std::chrono::steady_clock::now();
+			const float elapsed = std::chrono::duration<float>(tnow - g_round_start_time).count();
+			if (elapsed >= ROUND_TIME_LIMIT_SEC) {
+				bool expected = false;
+				// CAS 성공 시 1회 전송 (라운드당 1번)
+				if (g_game_over_sent.compare_exchange_strong(expected, true)) {
+					std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
+					SC_GAME_OVER_PACKET gp;
+					gp.size = sizeof(gp);
+					gp.type = SC_GAME_OVER;
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+						}
+						pl.do_send(&gp);
+					}
+				}
+			}
+		}
+		// =====================================
 
 		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
 		++tick_count;
@@ -1978,6 +2123,17 @@ void process_packet(int c_id, char* packet)
 						}
 						pl.do_send(&rp);
 					}
+
+					for (auto& pl : clients) {
+						{
+							std::lock_guard<std::mutex> ll(pl._s_lock);
+							if (ST_INGAME != pl._state) continue;
+							pl.init_combat_resources();				// 락 안에서 충전
+						}
+						pl.do_send(&rp);
+						pl.send_ammo_state(pl._id);					// 총알 push
+						pl.send_grenade_count(pl._id);				// 수류탄 push
+					}
 				}
 			}
 		}
@@ -2018,6 +2174,9 @@ void process_packet(int c_id, char* packet)
 
 			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			clients[c_id].send_inventory_update_packet(2);
+
+			clients[c_id]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };		// 탈출키 임시 추가
+			clients[c_id].send_inventory_update_packet(3);
 		}
 
 		break;
@@ -2145,6 +2304,8 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CRAFT_REQUEST: {
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_CRAFT_REQUEST_PACKET* p =
 			reinterpret_cast<CS_CRAFT_REQUEST_PACKET*>(packet);
 
@@ -2202,6 +2363,8 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_HIT_NPC_PACKET* p =
 			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
 
@@ -2214,13 +2377,65 @@ void process_packet(int c_id, char* packet)
 		ev.weapon_grade = p->weapon_grade;
 		// p->fire_time은 후속 lag compensation 시 사용 — 현재 미사용
 
+		short wtype = p->weapon_type;
+		bool blocked = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].reloading && clients[c_id].reload_weapon == wtype) {
+				blocked = true;							// 재장전 중 발사 무효 (push 안 함)
+			}
+			else if (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0) {
+				blocked = true;							// 탄약 0: 무효 + 교정 필요
+			}
+			else {
+				clients[c_id].ammo[wtype]--;			// 정상: 내부 차감만
+			}
+		}
+		if (blocked) {
+			bool need_sync = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+				if (!clients[c_id].reloading && (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0))
+					need_sync = true;
+			}
+			if (need_sync) clients[c_id].send_ammo_state(c_id);
+			break;										// 데미지, 이펙트 등 전부 안 보냄
+		}
+
 		g_npc_input_queue.Push(std::move(ev));
 
 		break;
 	}
 	case CS_HIT_PLAYER: {
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
 		CS_HIT_PLAYER_PACKET* p =
 			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
+
+		short wtype = p->weapon_type;
+		bool blocked = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].reloading && clients[c_id].reload_weapon == wtype) {
+				blocked = true;							// 재장전 중 발사 무효 (push 안 함)
+			}
+			else if (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0) {
+				blocked = true;							// 탄약 0: 무효 + 교정 필요
+			}
+			else {
+				clients[c_id].ammo[wtype]--;			// 정상: 내부 차감만
+			}
+		}
+		if (blocked) {
+			bool need_sync = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+				if (!clients[c_id].reloading && (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0))
+					need_sync = true;
+			}
+			if (need_sync) clients[c_id].send_ammo_state(c_id);
+			break;										// 데미지, 이펙트 등 전부 안 보냄
+		}
 
 		XMVECTOR origin = XMVectorSet(p->ray_ox, p->ray_oy, p->ray_oz, 0.0f);
 		XMVECTOR dir = XMVector3Normalize(
@@ -2285,6 +2500,7 @@ void process_packet(int c_id, char* packet)
 			XMFLOAT3 tpos2{}; 
 			float tyaw2 = 0.0f;
 
+			bool reset_prog = false;
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
@@ -2295,8 +2511,16 @@ void process_packet(int c_id, char* packet)
 					new_hp = clients[best_id].hp;
 					if (clients[best_id].in_escape_zone) {
 						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
+						reset_prog = true;
 					}
 				}
+			}
+			if (reset_prog) {
+				SC_ESCAPE_PROGRESS_PACKET pp;
+				pp.size = sizeof(pp);
+				pp.type = SC_ESCAPE_PROGRESS;
+				pp.event = ESCAPE_PROG_RESET;
+				clients[best_id].do_send(&pp);
 			}
 
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
@@ -2396,6 +2620,19 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_GRENADE_EXPLODE: {
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+
+		bool can_throw = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].grenade_count > 0) {
+				clients[c_id].grenade_count--;
+				can_throw = true;
+			}
+		}
+		if (!can_throw) break;							// 잔량 0: 폭발 판정 차단
+		clients[c_id].send_grenade_count(c_id);
+
 		CS_GRENADE_EXPLODE_PACKET* p =
 			reinterpret_cast<CS_GRENADE_EXPLODE_PACKET*>(packet);
 
@@ -2421,6 +2658,19 @@ void process_packet(int c_id, char* packet)
 			cl.send_player_state_change_packet(c_id);
 			std::cout << "send [SC_PLAYER_STATE_CHANGE_PACKET] to " << cl._id << " state=" << (int)clients[c_id].player_state << "\n";
 		}
+		break;
+	}
+	case CS_RELOAD_REQUEST: {
+		CS_RELOAD_REQUEST_PACKET* p = reinterpret_cast<CS_RELOAD_REQUEST_PACKET*>(packet);
+		short wtype = p->weapon_type;
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+		if (wtype < 0 || wtype >= 4) break;
+		if (clients[c_id].reloading) break;
+		short maxAmmo = LookupWeaponSpec(static_cast<WeaponType>(wtype), WeaponGrade::GRADE_1).magazineSize;
+		if (clients[c_id].ammo[wtype] >= maxAmmo) break;		// 이미 탄창이 가득 참
+		clients[c_id].reloading = true;
+		clients[c_id].reload_weapon = wtype;
+		clients[c_id].reload_timer = LookupWeaponSpec(static_cast<WeaponType>(wtype), WeaponGrade::GRADE_1).reloadTime;
 		break;
 	}
 	}

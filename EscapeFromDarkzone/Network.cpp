@@ -319,6 +319,16 @@ bool NetworkManager::SendChangeWeapon(short weaponType, short weaponGrade)
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
+bool NetworkManager::SendReloadRequest(short weaponType)
+{
+	CS_RELOAD_REQUEST_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_RELOAD_REQUEST_PACKET);
+	pkt.type = CS_RELOAD_REQUEST;
+	pkt.weapon_type = weaponType;
+	return NetworkManager::Instance().SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
+
 bool NetworkManager::SendChangeState(char state)
 {
 	CS_PLAYER_STATE_CHANGE_PACKET pkt;

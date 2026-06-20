@@ -1956,8 +1956,12 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 					if (!bGrenadeState)
 					{
 						StartReload();
-						if (IsReloading())
+						if (IsReloading()) {
 							ChangeState(std::make_unique<PlayerReload>());
+							if (NetworkManager::Instance().IsConnected()) {
+								NetSession::Instance().ReloadRequest(GetEquippedWeaponTypeForWire());
+							}
+						}
 					}
 					break;
 

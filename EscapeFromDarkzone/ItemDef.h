@@ -44,6 +44,7 @@ enum class ItemID : short {
 	ARMOR_SHOES_03,
 	ARMOR_SHOES_04,
 
+	ESCAPE_KEY,
 
 	ITEMID_END
 };

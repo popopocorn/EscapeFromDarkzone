@@ -152,6 +152,30 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		// TODO: 탈출 성공 UI 표시 (된다면)
 		break;
 	}
+	case SC_ESCAPE_PROGRESS:
+	{
+		SC_ESCAPE_PROGRESS_PACKET* p =
+			reinterpret_cast<SC_ESCAPE_PROGRESS_PACKET*>(packet.data());
+		switch (p->event)
+		{
+		case ESCAPE_PROG_START:
+		case ESCAPE_PROG_RESET:
+			OutputDebugString(L"[ESCAPE] progress start/reset\n");
+			// 프로그래스 바 진행도 초기화하기 (10초로 하드코딩)
+			break;
+		case ESCAPE_PROG_CANCEL:
+			OutputDebugString(L"[ESCAPE] progress cancel\n");
+			// 프로그래스 바 없애기 (지역 이탈)
+			break;
+		}
+		break;
+	}
+	case SC_GAME_OVER:
+	{
+		// 라운드 제한 시간 초과 (추후 패킷 확장 필요시 확장해서 사용할 것)
+		OutputDebugString(L"[ROUND] SC_GAME_OVER received\n");
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;
@@ -174,6 +198,20 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	{
 		if (!gf.m_pNetEntityMgr) break;
 		gf.m_pNetEntityMgr->OnNpcStateChange(reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data()));
+		break;
+	}
+	case SC_AMMO_STATE: {
+		auto* p = reinterpret_cast<SC_AMMO_STATE_PACKET*>(packet.data());
+		//p->ammo : short[4] 형태의 배열
+		//if (gf.m_pPlayer) 총알개수를배열로덮어씌우는함수호출(p->ammo);
+		break;
+	}
+	case SC_GRENADE_COUNT: {
+		auto* p = reinterpret_cast<SC_GRENADE_COUNT_PACKET*>(packet.data());
+		if (!gf.m_pScene.empty()) {
+			//MainScene* s = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+			//if (s) 수류탄개수를덮어씌우는함수호출(p->grenade_count);
+		}
 		break;
 	}
 	case SC_INVENTORY_UPDATE:
