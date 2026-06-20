@@ -13,6 +13,7 @@
 #include "EnemyObject.h"
 #include "EffectManager.h"
 #include "Projectile.h"
+#include "Decal.h"
 #include"Scene.h"
 #include "Network.h"	// 03.27 추가
 #include "NetSession.h"
@@ -1167,7 +1168,7 @@ bool CPlayer::EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName)
 	m_pEquippedWeaponItem = it->second.get();
 
 	ApplyWeaponVisualConfig(type);
-	
+
 	CGameObject* pWeaponInstance = m_pEquippedWeaponItem->GetModelPrototype();
 
 	EquipWeapon(pWeaponInstance, pstrSocketName);
@@ -1261,7 +1262,7 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 	}
 	if (m_bFireHeld)
 	{
-		
+
 		if (m_fFireCooldown <= 0.0f)
 		{
 			FireOneShot(ppShaders, pEffectManager);
@@ -1365,13 +1366,26 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	}
 
 	float maxRange = 100.0f;
+
+	float enemyDistance = maxRange;
+	float mapDistance = maxRange;
 	float hitDistance = maxRange;
+
 	bool hitEnemy = false;
 	bool hitMap = false;
+
+	XMFLOAT3 hitEnemyPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	DecalInfo decalInfo;
 
 	XMVECTOR rayOrigin = XMLoadFloat3(&muzzlePos);
 	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&muzzleLook));
+
+	const vector<CGameObject*>* mapObjects = nullptr;
+
+	if (ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP])
+	{
+		mapObjects = ppShaders[SHADERIDX::MAP]->GetObj();
+	}
 
 	if (ppShaders.size() > SHADERIDX::ENEMY && ppShaders[SHADERIDX::ENEMY])
 	{
@@ -1383,6 +1397,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 			{
 				if (!obj) continue;
 				if (!obj->isColl) continue;
+				if (!obj->IsAlive()) continue;
 
 				const auto& oobbs = obj->GetOOBB();
 
@@ -1394,10 +1409,14 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 
 					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 					{
-						if (fDist >= 0.0f && fDist < hitDistance)
+						if (fDist >= 0.0f && fDist < enemyDistance)
 						{
 							hitEnemy = true;
-							hitDistance = fDist;
+							enemyDistance = fDist;
+
+							hitEnemyPos.x = muzzlePos.x + muzzleLook.x * enemyDistance;
+							hitEnemyPos.y = muzzlePos.y + muzzleLook.y * enemyDistance;
+							hitEnemyPos.z = muzzlePos.z + muzzleLook.z * enemyDistance;
 						}
 					}
 				}
@@ -1405,51 +1424,62 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		}
 	}
 
-	if (!hitEnemy && ppShaders.size() > SHADERIDX::MAP && ppShaders[SHADERIDX::MAP])
+	if (mapObjects)
 	{
-		auto* maps = ppShaders[SHADERIDX::MAP]->GetObj();
+		CollisionManager collisionManager;
 
-		if (maps)
+		for (auto& obj : *mapObjects)
 		{
-			CollisionManager collisionManager;
+			if (!obj) continue;
+			if (!obj->isColl) continue;
 
-			for (auto& obj : *maps)
+			const auto& oobbs = obj->GetOOBB();
+
+			for (BoundingOrientedBox* pOOBB : oobbs)
 			{
-				if (!obj) continue;
-				if (!obj->isColl) continue;
+				if (!pOOBB) continue;
 
-				const auto& oobbs = obj->GetOOBB();
+				float fDist = 0.0f;
 
-				for (BoundingOrientedBox* pOOBB : oobbs)
+				if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
 				{
-					if (!pOOBB) continue;
-
-					float fDist = 0.0f;
-
-					if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+					if (fDist >= 0.0f && fDist < mapDistance)
 					{
-						if (fDist >= 0.0f && fDist < hitDistance)
-						{
-							hitMap = true;
-							hitDistance = fDist;
+						hitMap = true;
+						mapDistance = fDist;
 
-							XMFLOAT3 hitPos;
-							hitPos.x = muzzlePos.x + muzzleLook.x * hitDistance;
-							hitPos.y = muzzlePos.y + muzzleLook.y * hitDistance;
-							hitPos.z = muzzlePos.z + muzzleLook.z * hitDistance;
+						XMFLOAT3 hitPos;
+						hitPos.x = muzzlePos.x + muzzleLook.x * mapDistance;
+						hitPos.y = muzzlePos.y + muzzleLook.y * mapDistance;
+						hitPos.z = muzzlePos.z + muzzleLook.z * mapDistance;
 
-							decalInfo.enable = true;
-							decalInfo.decalType = 1;
-							decalInfo.normal = collisionManager.GetOOBBHitNormal(*pOOBB, hitPos);
-						}
+						decalInfo.enable = true;
+						decalInfo.decalType = 1;
+						decalInfo.normal = collisionManager.GetOOBBHitNormal(*pOOBB, hitPos);
 					}
 				}
 			}
 		}
 	}
 
-	if (!hitMap)
+	if (hitEnemy && enemyDistance < mapDistance)
 	{
+		hitDistance = enemyDistance;
+
+		decalInfo.enable = false;
+		decalInfo.decalType = 0;
+		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+		DecalManager::Instance()->SpawnBloodDecalOnFloor(hitEnemyPos, mapObjects);
+	}
+	else if (hitMap)
+	{
+		hitDistance = mapDistance;
+	}
+	else
+	{
+		hitDistance = maxRange;
+
 		decalInfo.enable = false;
 		decalInfo.decalType = 0;
 		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -1773,7 +1803,7 @@ CTerrainPlayer::CTerrainPlayer(
 
 
 	EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand");
-	
+
 
 	InitializeLeftHandIK();
 
@@ -1904,17 +1934,17 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 
 				case INPUT_KEY::KEY_2:
 					if (EquipWeaponItem(PlayerWeaponType::SMG, "mixamorig:RightHand"))
-					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
+						SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::KEY_3:
 					if (EquipWeaponItem(PlayerWeaponType::Shotgun, "mixamorig:RightHand"))
-					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
+						SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::KEY_4:
 					if (EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand"))
-					SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
+						SoundManager::Instance()->Play(SoundName::EQUIP_WEAPON, GetPosition());
 					break;
 
 				case INPUT_KEY::SPACE:

@@ -120,9 +120,9 @@ void Decal::BuildTransform()
 	UpdateTransform(NULL);
 }
 
-void Decal::Activate(DecalType type, XMFLOAT3 pos, XMFLOAT3 n, float decalSize, float decalLifeTime)
+void Decal::Activate(DecalType decalType, XMFLOAT3 pos, XMFLOAT3 n, float decalSize, float decalLifeTime)
 {
-	UNREFERENCED_PARAMETER(type);
+	type = decalType;
 
 	position = pos;
 	normal = NormalizeOrDefault(n, XMFLOAT3(0.0f, 1.0f, 0.0f));
@@ -175,21 +175,111 @@ BoundingOrientedBox* DecalManager::FindBestHitOOBB(CGameObject* pHitObject, cons
 	return pBestOOBB;
 }
 
+bool DecalManager::FindFloorBelowHit(const XMFLOAT3& hitPos, const vector<CGameObject*>* mapObjects, XMFLOAT3& outFloorPos, XMFLOAT3& outFloorNormal)
+{
+	if (!mapObjects)
+		return false;
+
+	XMFLOAT3 rayStart = hitPos;
+	rayStart.y += 1.0f;
+
+	XMVECTOR rayOrigin = XMLoadFloat3(&rayStart);
+	XMVECTOR rayDir = XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
+
+	constexpr float MAX_DOWN_DISTANCE = 8.0f;
+
+	bool bHit = false;
+	float bestDist = MAX_DOWN_DISTANCE;
+	BoundingOrientedBox* pBestOOBB = nullptr;
+
+	for (CGameObject* pObject : *mapObjects)
+	{
+		if (!pObject) continue;
+		if (!pObject->isColl) continue;
+
+		const auto& oobbs = pObject->GetOOBB();
+
+		for (BoundingOrientedBox* pOOBB : oobbs)
+		{
+			if (!pOOBB) continue;
+
+			float fDist = 0.0f;
+
+			if (pOOBB->Intersects(rayOrigin, rayDir, fDist))
+			{
+				if (fDist >= 0.0f && fDist < bestDist)
+				{
+					bHit = true;
+					bestDist = fDist;
+					pBestOOBB = pOOBB;
+				}
+			}
+		}
+	}
+
+	if (!bHit || !pBestOOBB)
+		return false;
+
+	outFloorPos = rayStart;
+	outFloorPos.y -= bestDist;
+
+	CollisionManager collisionManager;
+	outFloorNormal = collisionManager.GetOOBBHitNormal(*pBestOOBB, outFloorPos);
+	outFloorNormal = NormalizeOrDefault(outFloorNormal, XMFLOAT3(0.0f, 1.0f, 0.0f));
+
+	if (outFloorNormal.y < 0.35f)
+	{
+		outFloorNormal = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	}
+
+	return true;
+}
+
 void DecalManager::Init(CShader* s)
 {
-	decals.resize(poolSize);
+	bulletDecals.clear();
+	bloodDecals.clear();
+
+	bulletDecals.resize(bulletPoolSize);
+	bloodDecals.resize(bloodPoolSize);
+
+	lastBulletUse = 0;
+	lastBloodUse = 0;
+
 	shader = s;
 
-	for (int i = 0; i < poolSize; ++i)
-	{
-		CGameObject* pDecalInstance = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET_DECAL);
+	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET_DECAL);
+	CGameObject* pBloodPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BLOOD_DECAL);
 
-		if (pDecalInstance)
+	for (int i = 0; i < bulletPoolSize; ++i)
+	{
+		if (pBulletPrototype)
 		{
-			decals[i].SetChild(pDecalInstance);
-			decals[i].SetOOBB(NULL);
-			decals[i].isColl = false;
-			decals[i].Deactivate();
+			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBulletPrototype);
+
+			if (pDecalInstance)
+			{
+				bulletDecals[i].SetChild(pDecalInstance);
+				bulletDecals[i].SetOOBB(NULL);
+				bulletDecals[i].isColl = false;
+				bulletDecals[i].Deactivate();
+			}
+		}
+	}
+
+	for (int i = 0; i < bloodPoolSize; ++i)
+	{
+		if (pBloodPrototype)
+		{
+			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBloodPrototype);
+
+			if (pDecalInstance)
+			{
+				bloodDecals[i].SetChild(pDecalInstance);
+				bloodDecals[i].SetOOBB(NULL);
+				bloodDecals[i].isColl = false;
+				bloodDecals[i].Deactivate();
+			}
 		}
 	}
 }
@@ -199,18 +289,19 @@ void DecalManager::SpawnBulletDecal(XMFLOAT3 pos, XMFLOAT3 normal)
 	constexpr float DEFAULT_BULLET_DECAL_SIZE = 0.28f;
 	constexpr float DEFAULT_BULLET_DECAL_LIFETIME = 25.0f;
 
-	for (int i = 0; i < decals.size(); ++i)
+	for (int i = 0; i < bulletDecals.size(); ++i)
 	{
-		int idx = (lastUse + i) % decals.size();
+		int idx = (lastBulletUse + i) % bulletDecals.size();
 
-		if (!decals[idx].IsActive())
+		if (!bulletDecals[idx].IsActive())
 		{
-			decals[idx].Activate(DecalType::BULLET, pos, normal, DEFAULT_BULLET_DECAL_SIZE, DEFAULT_BULLET_DECAL_LIFETIME);
-			lastUse = (idx + 1) % decals.size();
+			bulletDecals[idx].Activate(DecalType::BULLET, pos, normal, DEFAULT_BULLET_DECAL_SIZE, DEFAULT_BULLET_DECAL_LIFETIME);
+			lastBulletUse = (idx + 1) % bulletDecals.size();
 			return;
 		}
 	}
 }
+
 void DecalManager::SpawnBulletDecal(CGameObject* pHitObject, XMFLOAT3 hitPos)
 {
 	if (!pHitObject)
@@ -227,9 +318,46 @@ void DecalManager::SpawnBulletDecal(CGameObject* pHitObject, XMFLOAT3 hitPos)
 	SpawnBulletDecal(hitPos, hitNormal);
 }
 
+void DecalManager::SpawnBloodDecal(XMFLOAT3 pos, XMFLOAT3 normal)
+{
+	constexpr float DEFAULT_BLOOD_DECAL_SIZE = 1.5f;
+	constexpr float DEFAULT_BLOOD_DECAL_LIFETIME = 120.0f;
+
+	for (int i = 0; i < bloodDecals.size(); ++i)
+	{
+		int idx = (lastBloodUse + i) % bloodDecals.size();
+
+		if (!bloodDecals[idx].IsActive())
+		{
+			bloodDecals[idx].Activate(DecalType::BLOOD, pos, normal, DEFAULT_BLOOD_DECAL_SIZE, DEFAULT_BLOOD_DECAL_LIFETIME);
+			lastBloodUse = (idx + 1) % bloodDecals.size();
+			return;
+		}
+	}
+}
+
+void DecalManager::SpawnBloodDecalOnFloor(const XMFLOAT3& hitPos, const vector<CGameObject*>* mapObjects)
+{
+	XMFLOAT3 floorPos;
+	XMFLOAT3 floorNormal;
+
+	if (!FindFloorBelowHit(hitPos, mapObjects, floorPos, floorNormal))
+		return;
+
+	SpawnBloodDecal(floorPos, floorNormal);
+}
+
 void DecalManager::Update(float fTimeElapsed)
 {
-	for (auto& decal : decals)
+	for (auto& decal : bulletDecals)
+	{
+		if (decal.IsActive())
+		{
+			decal.Animate(fTimeElapsed);
+		}
+	}
+
+	for (auto& decal : bloodDecals)
 	{
 		if (decal.IsActive())
 		{
@@ -245,7 +373,15 @@ void DecalManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* p
 
 	shader->OnPrepareRender(pd3dCommandList, 0);
 
-	for (auto& decal : decals)
+	for (auto& decal : bulletDecals)
+	{
+		if (decal.IsActive())
+		{
+			decal.Render(pd3dCommandList, batch, 0, pCamera);
+		}
+	}
+
+	for (auto& decal : bloodDecals)
 	{
 		if (decal.IsActive())
 		{
