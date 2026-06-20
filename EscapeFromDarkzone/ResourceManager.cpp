@@ -438,7 +438,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_3.bin",
 		SkinnedShader
-		);
+	);
 }
 
 void ResourceManager::BuildModelPrototypes(
@@ -535,7 +535,15 @@ void ResourceManager::BuildModelPrototypes(
 		pd3dDevice,
 		pd3dCommandList,
 		pd3dGraphicsRootSignature,
-		"Model/bullet_decal.bin",	//나중에 이름 변경
+		"Model/bullet_decal.bin",
+		Standardshader
+	);
+	LoadAndRegisterModelPrototype(
+		ModelName::BLOOD_DECAL,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
+		"Model/blood_decal.bin",
 		Standardshader
 	);
 }
@@ -545,7 +553,7 @@ void ResourceManager::LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	auto it = m_UIPrototypes.find(name);
 	if (it != m_UIPrototypes.end())return;
 	m_UIPrototypes[name] = make_unique<UIMesh>(pd3dDevice, pd3dCommandList);
-	m_UIPrototypes[name]->LoadTexture(pd3dDevice, pd3dCommandList,path);
+	m_UIPrototypes[name]->LoadTexture(pd3dDevice, pd3dCommandList, path);
 
 }
 void ResourceManager::BuildUIMesh(
@@ -707,7 +715,7 @@ void ResourceManager::BuildUIMesh(
 		UIName::STATUS_HEALTH_BAR,
 		L"UI/Health_Bar_Table.dds"
 	);
-	
+
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,

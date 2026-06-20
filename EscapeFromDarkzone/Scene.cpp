@@ -202,7 +202,7 @@ static float RaycastFogShadowBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT
 
 	return nearest;
 }
-static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer,XMFLOAT3& outPos,XMFLOAT3& outLook,XMFLOAT3& outRight,XMFLOAT3& outUp)
+static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer, XMFLOAT3& outPos, XMFLOAT3& outLook, XMFLOAT3& outRight, XMFLOAT3& outUp)
 {
 	if (!pPlayer)
 		return false;
@@ -480,7 +480,7 @@ static XMFLOAT3 ReflectVelocityByNormal(const XMFLOAT3& velocity, const XMFLOAT3
 
 CScene::CScene(CGameFramework* game)
 {
-	
+
 
 	m_pPlayer = nullptr;
 
@@ -489,7 +489,7 @@ CScene::CScene(CGameFramework* game)
 	m_pcbMappedLights = nullptr;
 
 	m_pSkyBox = nullptr;
-	
+
 	UIShader = make_unique<UIObjectShader>();
 
 	m_nLights = 0;
@@ -521,14 +521,14 @@ void CScene::BuildDefaultLightsAndMaterials()
 	m_nLights = m_pLights.size();
 }
 
-void CScene::CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList)
+void CScene::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	UINT ncbElementBytes = ((sizeof(LIGHTS) + 255) & ~255); //256의 배수
 	m_pd3dcbLights = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, ncbElementBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
 
-	m_pd3dcbLights->Map(0, NULL, (void **)&m_pcbMappedLights);
+	m_pd3dcbLights->Map(0, NULL, (void**)&m_pcbMappedLights);
 }
-void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
+void CScene::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	::memcpy(m_pcbMappedLights->m_pLights, m_pLights.data(), sizeof(LIGHT) * m_nLights);
 	::memcpy(&m_pcbMappedLights->m_xmf4GlobalAmbient, &m_xmf4GlobalAmbient, sizeof(XMFLOAT4));
@@ -541,7 +541,7 @@ void CScene::ReleaseShaderVariables()
 		m_pd3dcbLights->Unmap(0, NULL);
 		m_pd3dcbLights->Release();
 	}
-		}
+}
 
 CCamera* CScene::GetLightCamera(int idx)
 {
@@ -613,7 +613,7 @@ void CScene::DumpMapOOBBToCSV(const char* filename)
 	OutputDebugStringA(msg);
 }
 
-bool CScene::ProcessInput(UCHAR *pKeysBuffer)
+bool CScene::ProcessInput(UCHAR* pKeysBuffer)
 {
 	return false;
 }
@@ -1282,7 +1282,7 @@ void MainScene::ExplodeGrenade()
 }
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	
+
 	ClampGameplayCursorToAimLine(hWnd);
 	if (not IsGameStart)return;
 
@@ -1322,7 +1322,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (!m_pPlayer)
 			return;
 
-		
+
 		if (m_pPlayer)
 		{
 			m_pPlayer->SetFireHeld(true);
@@ -1355,7 +1355,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		}
 
 		if (m_pPlayer) m_pPlayer->SetFireHeld(false);
-	
+
 		if (IsAnyInventoryOpen())
 		{
 			if (m_pInventoryManager)
@@ -1724,7 +1724,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	frame->mouseMove = false;
 	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	
+
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
@@ -1745,7 +1745,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	ModelName name = ModelName::MAP_FLOOR;
 	for (int i = 0; i < s_mapFiles.size(); ++i)
 	{
-		
+
 		CGameObject* map = new CGameObject();
 		map->SetChild(ResourceManager::Instance().GetModelPrototype(name));
 		map->SetPosition(-150, 0.1f, -150);
@@ -1826,7 +1826,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
 	pSkinnedShader->addObjects(pEnemy);*/
 
-	
+
 
 	if (m_pInventoryManager)
 	{
@@ -1873,14 +1873,14 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pCrosshairUI->SetLocate(0.0f, -10.0f, 0.05f);
 
 	uiManager->AddToManager(m_pCrosshairUI);
-	
+
 	UIObject* waitMassage = new UIObject();
 	waitMassage->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::UI_WAIT));
 	waitMassage->SetScale(1, 0.6, 1.0);
 
 	uiManager->AddToManager(waitMassage);
 
-	
+
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
@@ -2631,6 +2631,22 @@ void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 dir
 		decalInfo.decalType = 1;
 		decalInfo.normal = Vector3::Normalize(hitNormal);
 	}
+	else if (hitKind == 2)
+	{
+		XMFLOAT3 hitPos;
+		hitPos.x = start.x + direction.x * distance;
+		hitPos.y = start.y + direction.y * distance;
+		hitPos.z = start.z + direction.z * distance;
+
+		const vector<CGameObject*>* mapObjects = nullptr;
+
+		if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+		{
+			mapObjects = m_ppShaders[SHADERIDX::MAP]->GetObj();
+		}
+
+		DecalManager::Instance()->SpawnBloodDecalOnFloor(hitPos, mapObjects);
+	}
 
 	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, start, direction, distance, decalInfo);
 
@@ -2662,7 +2678,7 @@ void MainScene::StartGame()
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
 {
 	name = SceneName::LOBBY;
-	
+
 }
 
 void LobbyScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -2705,7 +2721,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	lobbybutton->SetFunc([this]() {
 		this->frame->nextScene = new MainScene(frame);
 		});
-	
+
 	uiManager->AddToManager(lobbybutton);
 
 
@@ -2721,7 +2737,7 @@ void LobbyScene::ReleaseObjects()
 	ReleaseShaderVariables();
 }
 
-void LobbyScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
+void LobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	uiManager->SubmitToShader(UIShader.get());
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);

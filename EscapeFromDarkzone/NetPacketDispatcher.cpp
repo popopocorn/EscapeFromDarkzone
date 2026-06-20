@@ -296,7 +296,15 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_FIRE_TRACER:
 	{
+		if (packet.size() < sizeof(SC_FIRE_TRACER_PACKET))
+			break;
+
 		SC_FIRE_TRACER_PACKET* p = reinterpret_cast<SC_FIRE_TRACER_PACKET*>(packet.data());
+
+		if (gf.m_pNetEntityMgr && p->shooter_id == gf.m_pNetEntityMgr->GetMyId())
+		{
+			break;
+		}
 
 		if (gf.m_pScene.empty()) break;
 
