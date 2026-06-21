@@ -366,7 +366,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_2,
 		pd3dDevice,
 		pd3dCommandList,
@@ -418,9 +418,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_1.bin",
 		SkinnedShader
-	);*/
-
-
+	);
 
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_03_2,
@@ -790,6 +788,13 @@ void ResourceManager::BuildUIMesh(
 		pd3dCommandList,
 		UIName::UI_RETURNTOLOBBY,
 		L"UI/ReturnToLobby.dds"
+	);
+
+	LoadUIMesh(
+		pd3dDevice,
+		pd3dCommandList,
+		UIName::ICON_KEY,
+		L"UI/key.dds"
 	);
 
 }

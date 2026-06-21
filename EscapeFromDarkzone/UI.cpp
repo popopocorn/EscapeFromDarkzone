@@ -412,6 +412,7 @@ UIName MapItemIDToUIName(ItemID id)
 		{ ItemID::MAT_1_FIBER,        UIName::ICON_FIBER },
 		{ ItemID::MAT_2_METAL_PLATE,  UIName::ICON_METAL },
 		{ ItemID::MAT_3_BOLT_AND_NUT, UIName::ICON_NEEDLE },
+		{ ItemID::ESCAPE_KEY, UIName::ICON_KEY },
 
 		{ ItemID::ARMOR_HELMET_01,    UIName::ICON_HELMET_01 },
 		{ ItemID::ARMOR_HELMET_02,    UIName::ICON_HELMET_02 },
