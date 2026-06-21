@@ -2150,22 +2150,31 @@ bool MainScene::IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGa
 
 void MainScene::UpdateFogShadowVisibility()
 {
-	if (m_ppShaders.size() <= SHADERIDX::ENEMY) return;
-	if (!m_ppShaders[SHADERIDX::ENEMY]) return;
+	if (!m_pPlayer)
+		return;
 
 	std::vector<CGameObject*> blockers;
 	blockers.reserve(64);
 
-	XMFLOAT3 playerPos = m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3(0.0f, 0.0f, 0.0f);
+	BuildVisionBlockersForCurrentFrame(20.0f, blockers);
 
-	if (!m_vVisionMapChunks.empty())
+	if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
 	{
-		GatherVisionMapBlockersInRectFromList(m_vVisionMapChunks, playerPos, 20.0f, blockers);
+		auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
+
+		if (viewObjs && !viewObjs->empty())
+		{
+			ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
+
+			if (pViewObj)
+			{
+				pViewObj->UpdateClippedMeshes(blockers);
+			}
+		}
 	}
-	else if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
-	{
-		GatherVisionBlockersFromShader(m_ppShaders[SHADERIDX::MAP], blockers);
-	}
+
+	if (m_ppShaders.size() <= SHADERIDX::ENEMY) return;
+	if (!m_ppShaders[SHADERIDX::ENEMY]) return;
 
 	auto* enemyObjects = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
 	if (!enemyObjects) return;
@@ -2174,32 +2183,55 @@ void MainScene::UpdateFogShadowVisibility()
 	{
 		if (!pObject) continue;
 
-		bool bVisible = IsObjectVisibleByFog(pObject, blockers);
+		bool bAlive = pObject->IsAlive();
+		bool bVisible = bAlive && IsObjectVisibleByFog(pObject, blockers);
 
-		pObject->SetRenderEnabled(bVisible, true);
-		pObject->SetCastShadow(bVisible, true);
+		if (pObject->IsRenderEnabled() != bAlive)
+		{
+			pObject->SetRenderEnabled(bAlive, true);
+		}
+
+		if (pObject->CanCastShadow() != bVisible)
+		{
+			pObject->SetCastShadow(bVisible, true);
+		}
 
 		if (CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(pObject))
 		{
 			CGameObject* pWeapon = pEnemy->GetRenderWeapon();
+
 			if (pWeapon)
 			{
-				pWeapon->SetRenderEnabled(bVisible, true);
-				pWeapon->SetCastShadow(bVisible, true);
+				if (pWeapon->IsRenderEnabled() != bVisible)
+				{
+					pWeapon->SetRenderEnabled(bVisible, true);
+				}
+
+				if (pWeapon->CanCastShadow() != bVisible)
+				{
+					pWeapon->SetCastShadow(bVisible, true);
+				}
 			}
 		}
 		else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pObject))
 		{
 			CGameObject* pWeapon = pOther->GetRenderWeapon();
+
 			if (pWeapon)
 			{
-				pWeapon->SetRenderEnabled(bVisible, true);
-				pWeapon->SetCastShadow(bVisible, true);
+				if (pWeapon->IsRenderEnabled() != bVisible)
+				{
+					pWeapon->SetRenderEnabled(bVisible, true);
+				}
+
+				if (pWeapon->CanCastShadow() != bVisible)
+				{
+					pWeapon->SetCastShadow(bVisible, true);
+				}
 			}
 		}
 	}
 }
-
 void MainScene::BuildVisionBlockersForCurrentFrame(float fHalfExtent, std::vector<CGameObject*>& outBlockers)
 {
 	outBlockers.clear();
@@ -2375,15 +2407,41 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 			m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
 		}
 
+		pd3dCommandList->OMSetStencilRef(0xff);
 		return;
 	}
 
 	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
 
+	if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
+	{
+		pd3dCommandList->OMSetStencilRef(0xff);
+		m_ppShaders[SHADERIDX::MAP]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+	if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
+	{
+		pd3dCommandList->OMSetStencilRef(0xff);
+		m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+	if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
+	{
+		pd3dCommandList->OMSetStencilRef(0xff);
+		m_ppShaders[SHADERIDX::ENEMY]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
 	for (int i = 0; i < m_ppShaders.size(); i++)
 	{
+		if (i == SHADERIDX::MAP) continue;
+		if (i == SHADERIDX::VIEW) continue;
+		if (i == SHADERIDX::ENEMY) continue;
+
 		if (m_ppShaders[i])
+		{
+			pd3dCommandList->OMSetStencilRef(0xff);
 			m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
+		}
 	}
 
 	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
@@ -2392,6 +2450,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	{
 		m_pEffectManager->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
+
 	ProjectileManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pFogOverlayShader)
@@ -2400,7 +2459,9 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pFogOverlayShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
+
 	uiManager->SubmitToShader(UIShader.get());
+
 	if (UIShader)
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -2412,6 +2473,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pDebugShader->Render(pd3dCommandList, pCamera, nPipelineState);
 	}
 #endif
+
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
@@ -2421,6 +2483,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	{
 		pd3dCommandList->OMSetStencilRef(0x04);
 		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 }
 
