@@ -708,13 +708,13 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
-	float prb = 0.025;
+	float prb = 0.05;
 	for (int i = 0; i < 10; ++i)
 	{
 		UIObject* t = new UIObject();
 		t->SetScale(br.x * prb, br.y * prb, 1.0);
-		t->SetLocate(i * br.x * prb, 0.0, 0.5);
-		t->SetUIMesh(bullet);
+		t->SetLocate(i * br.x * prb - 0.1, -0.2, 0.5);
+		t->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
 		ProgressBar.push_back(unique_ptr<UIObject>(t));
 	}
 }
