@@ -2243,7 +2243,7 @@ void process_packet(int c_id, char* packet)
 		ApplySlide(c_id, dirX, dirZ);
 
 		// 이동 속도 (클라이언트와 동일하게 8.0f)
-		constexpr float MOVE_SPEED = 10.0f;
+		constexpr float MOVE_SPEED = 5.0f;
 		clients[c_id].x += dirX * MOVE_SPEED * fDeltaTime;
 		clients[c_id].z += dirZ * MOVE_SPEED * fDeltaTime;
 
