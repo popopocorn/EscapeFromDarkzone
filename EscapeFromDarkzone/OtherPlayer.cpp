@@ -445,7 +445,7 @@ void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
 
 	if (m_fFootstepTimer > 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED)
 	{
-		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
+		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
 		m_fFootstepTimer -= 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED;
 	}
 
