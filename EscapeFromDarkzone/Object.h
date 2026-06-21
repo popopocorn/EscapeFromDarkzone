@@ -454,21 +454,27 @@ public:
 	void SetCastShadow(bool bCastShadow, bool bRecursive = false)
 	{
 		m_bCastShadow = bCastShadow;
-
 		if (bRecursive)
 		{
-			if (m_pChild) m_pChild->SetCastShadow(bCastShadow, true);
-			if (m_pSibling) m_pSibling->SetCastShadow(bCastShadow, true);
+			CGameObject* pChild = m_pChild;
+			while (pChild)
+			{
+				pChild->SetCastShadow(bCastShadow, true);
+				pChild = pChild->m_pSibling;
+			}
 		}
 	}
 	void SetRenderEnabled(bool bRenderEnabled, bool bRecursive = false)
 	{
 		m_bRenderEnabled = bRenderEnabled;
-
 		if (bRecursive)
 		{
-			if (m_pChild) m_pChild->SetRenderEnabled(bRenderEnabled, true);
-			if (m_pSibling) m_pSibling->SetRenderEnabled(bRenderEnabled, true);
+			CGameObject* pChild = m_pChild;
+			while (pChild)
+			{
+				pChild->SetRenderEnabled(bRenderEnabled, true);
+				pChild = pChild->m_pSibling;
+			}
 		}
 	}
 	bool IsRenderEnabled() const { return m_bRenderEnabled; }

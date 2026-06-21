@@ -96,7 +96,7 @@ void NetEntityManager::OnAddPlayer(const SC_ADD_PLAYER_PACKET* p)
 	if (p->id == m_myId) return;
 	if (FindOtherPlayer(p->id)) return;
 
-	OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pRootSignature, p->x, p->y, p->z);
+	OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pRootSignature, p->x, p->y, p->z, p->id);
 	pOther->SetServerYaw(p->yaw);
 
 	switch (p->state) {

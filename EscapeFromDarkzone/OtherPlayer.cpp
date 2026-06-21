@@ -115,11 +115,24 @@ static constexpr float OTHER_PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float OTHER_PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 
 
-OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature)
+OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, short playerID)
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
-
-	CLoadedModelInfo* pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01);
+	short a = (playerID % 2) + 1;
+	CLoadedModelInfo* pPlayerModel;
+	switch (a)
+	{
+	case 2:
+		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02);
+		break;
+	case 3:
+		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03);
+		break;
+	default:
+		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03);
+		break;
+	}
+	
 
 	if (!pPlayerModel)
 	{
@@ -710,9 +723,9 @@ void OtherPlayerDie::Exit(OtherPlayer* Player)
 }
 
 OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,
-	float x, float y, float z)
+	float x, float y, float z, short playerID)
 {
-	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+	OtherPlayer* pOther = new OtherPlayer(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, playerID);
 	pOther->SetPosition(XMFLOAT3(x, y, z));
 	pOther->m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표 초기화(첫 프레임 튐 방지)
 	pOther->m_bUseServerLerp = true;
