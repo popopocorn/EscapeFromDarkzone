@@ -122,10 +122,10 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 	CLoadedModelInfo* pPlayerModel;
 	switch (a)
 	{
-	case 2:
+	case 1:
 		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_02);
 		break;
-	case 3:
+	case 2:
 		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03);
 		break;
 	default:
