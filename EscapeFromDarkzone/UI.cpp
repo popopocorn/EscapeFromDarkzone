@@ -708,6 +708,15 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
+	float prb = 0.025;
+	for (int i = 0; i < 10; ++i)
+	{
+		UIObject* t = new UIObject();
+		t->SetScale(br.x * prb, br.y * prb, 1.0);
+		t->SetLocate(i * br.x * prb, 0.0, 0.5);
+		t->SetUIMesh(bullet);
+		ProgressBar.push_back(unique_ptr<UIObject>(t));
+	}
 }
 
 bool PlayerStatus::ProcessClick(POINT mouse)
@@ -729,6 +738,13 @@ void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 	for (int i = 0; i < curammo; ++i)
 	{
 		shader->addObjects(Bullets[i].get());
+	}
+	int idx = (int)EscapeTime;
+	idx = min(idx, 10);
+	//OutputDebugStringW(to_wstring(idx).c_str());
+	for (int i = 0; i < idx; ++i)
+	{
+		shader->addObjects(ProgressBar[i].get());
 	}
 }
 
@@ -754,6 +770,12 @@ void PlayerStatus::Update(float fTimeElapsed)
 	//ammo update
 	int maxammo = player->GetMaxAmmo();
 	curammo = player->GetCurrentAmmo();
+
+	//escape progress bar
+	if (Escape)
+	{
+		EscapeTime += fTimeElapsed;
+	}
 
 }
 

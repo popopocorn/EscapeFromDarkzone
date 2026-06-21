@@ -158,6 +158,8 @@ public:
 	PlayerStatus(CPlayer* p);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual bool ProcessClick(POINT mouse);
+	void StartEscape() { Escape = true; EscapeTime = 0; }
+	void ResetEscape() { Escape = false; EscapeTime = 0; }
 	virtual void SubmitToShader(UIObjectShader* shader);
 	virtual void Update(float fTimeElapsed);
 private:
@@ -170,8 +172,11 @@ private:
 	UIMesh* Pistol = NULL;
 	UIMesh* Shotgun = NULL;
 	UIMesh* bullet = NULL;
+	bool Escape = false;
+	float EscapeTime = 0;
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
 	vector<unique_ptr<UIObject>>Bullets;
+	vector<unique_ptr<UIObject>>ProgressBar;
 public:
 	virtual void ToggleOpen() {};
 };

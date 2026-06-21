@@ -159,16 +159,20 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	{
 		SC_ESCAPE_PROGRESS_PACKET* p =
 			reinterpret_cast<SC_ESCAPE_PROGRESS_PACKET*>(packet.data());
+		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+		if (not pMainScene)break;
 		switch (p->event)
 		{
 		case ESCAPE_PROG_START:
 		case ESCAPE_PROG_RESET:
 			OutputDebugString(L"[ESCAPE] progress start/reset\n");
 			// 프로그래스 바 진행도 초기화하기 (10초로 하드코딩)
+			pMainScene->statusUI->StartEscape();
 			break;
 		case ESCAPE_PROG_CANCEL:
 			OutputDebugString(L"[ESCAPE] progress cancel\n");
 			// 프로그래스 바 없애기 (지역 이탈)
+			pMainScene->statusUI->ResetEscape();
 			break;
 		}
 		break;
