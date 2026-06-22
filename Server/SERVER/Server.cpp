@@ -327,6 +327,7 @@ public:
 
 	bool in_escape_zone = false;
 	bool escaped = false;
+	bool dead = false;
 	std::chrono::steady_clock::time_point last_hit_time;
 
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
@@ -361,6 +362,7 @@ public:
 		last_hit_time = _last_move_recv_time;
 		in_escape_zone = false;
 		escaped = false;
+		dead = false;
 	}
 
 	~SESSION() {}
@@ -540,6 +542,17 @@ void SESSION::send_grenade_count(int c_id) {
 		p.grenade_count = clients[c_id].grenade_count;
 	}
 	clients[c_id].do_send(&p);
+}
+
+static void BroadcastPlayerState(int c_id)
+{
+	for (auto& cl : clients) {
+		{
+			std::lock_guard<std::mutex> ll(cl._s_lock);
+			if (ST_INGAME != cl._state) continue;
+		}
+		cl.send_player_state_change_packet(c_id);
+	}
 }
 
 bool load_mapOOBB_from_CSV(const char* filename)
@@ -960,12 +973,20 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		short dmg = ComputeDamage(spec, hit_dist);
 		short new_hp = 0;
 		bool reset_prog = false;
+		bool  just_died = false;
 		{
 			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
 			if (clients[target_id]._state == ST_INGAME) {
 				clients[target_id].hp -= dmg;
 				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
 				new_hp = clients[target_id].hp;
+
+				if (new_hp <= 0 && !clients[target_id].dead) {
+					clients[target_id].dead = true;
+					clients[target_id].player_state = PLAYER_STATE_DIE;
+					just_died = true;
+				}
+
 				if (clients[target_id].in_escape_zone) {
 					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
 					reset_prog = true;
@@ -982,8 +1003,8 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 
 		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
 			<< " (hp=" << new_hp << ")\n";
-		if (new_hp <= 0) {
-			std::cout << "[NPC " << npc.id << "] player " << target_id << " HP 0 (death deferred)\n";
+		if (just_died) {
+			std::cout << "[NPC " << npc.id << "] player " << target_id << " DIED\n";
 		}
 
 		SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
@@ -992,6 +1013,7 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		hp_pkt.id = (short)target_id;
 		hp_pkt.hp = new_hp;
 		clients[target_id].do_send(&hp_pkt);
+		if (just_died) BroadcastPlayerState(target_id);
 	}
 	else if (wall_t < std::numeric_limits<float>::max()) {
 		// 벽에 막힘
@@ -1318,6 +1340,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		for (int i = 0; i < MAX_USER; ++i) {
 			short new_hp = 0;
 			bool  hit = false;
+			bool  just_died = false;
 			bool  reset_prog = false;
 			{
 				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
@@ -1334,6 +1357,12 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				new_hp = clients[i].hp;
 				hit = true;
 
+				if (new_hp <= 0 && !clients[i].dead) {
+					clients[i].dead = true;
+					clients[i].player_state = PLAYER_STATE_DIE;
+					just_died = true;
+				}
+
 				if (clients[i].in_escape_zone) {	// 탈출 중 피격 시 시간 초기화
 					clients[i].last_hit_time = std::chrono::steady_clock::now();
 					reset_prog = true;
@@ -1348,6 +1377,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				hp_pkt.hp = new_hp;
 				clients[i].do_send(&hp_pkt);   // 피격자 본인에게 통지
 			}
+			if (just_died) BroadcastPlayerState(i);
 			if (reset_prog) {
 				SC_ESCAPE_PROGRESS_PACKET pp;
 				pp.size = sizeof(pp);
@@ -1762,7 +1792,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 
 	npc.burst_shot_timer -= dt;
 	if (npc.burst_shot_timer <= 0.0f) {
-		NpcFireAtPlayer(npc, player_id, player_snapshot);   // Phase D: 탄 차감 + 로그
+		NpcFireAtPlayer(npc, player_id, player_snapshot);
 		npc.burst_shots_left--;
 		npc.burst_shot_timer = NPC_BURST_SHOT_INTERVAL;
 
@@ -1971,7 +2001,7 @@ static void npc_thread()
 				{
 					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 					if (clients[i]._state != ST_INGAME) continue;
-					if (clients[i].escaped) continue;
+					if (clients[i].escaped || clients[i].dead) continue;
 					px = clients[i].x; pz = clients[i].z;
 				}
 
@@ -1990,7 +2020,7 @@ static void npc_thread()
 				float escape_sec = 0.0f;
 				{
 					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-					if (clients[i].escaped) continue;   // 더블체크
+					if (clients[i].escaped || clients[i].dead) continue;
 
 					if (now_in_zone) {
 						if (!clients[i].in_escape_zone) {
@@ -2184,6 +2214,11 @@ void process_packet(int c_id, char* packet)
 	case CS_MOVE: {
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
 		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
 
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 
@@ -2305,6 +2340,11 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_CRAFT_REQUEST: {
 		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
 
 		CS_CRAFT_REQUEST_PACKET* p =
 			reinterpret_cast<CS_CRAFT_REQUEST_PACKET*>(packet);
@@ -2364,6 +2404,11 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_HIT_NPC: {
 		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
 
 		CS_HIT_NPC_PACKET* p =
 			reinterpret_cast<CS_HIT_NPC_PACKET*>(packet);
@@ -2408,6 +2453,11 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_HIT_PLAYER: {
 		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
 
 		CS_HIT_PLAYER_PACKET* p =
 			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
@@ -2496,6 +2546,7 @@ void process_packet(int c_id, char* packet)
 
 			short dmg = ComputeDamage(spec, best_t);
 			short new_hp = 0;
+			bool  just_died = false;
 
 			XMFLOAT3 tpos2{}; 
 			float tyaw2 = 0.0f;
@@ -2509,6 +2560,11 @@ void process_packet(int c_id, char* packet)
 						clients[best_id].hp = 0;
 					}
 					new_hp = clients[best_id].hp;
+					if (new_hp <= 0 && !clients[best_id].dead) {
+						clients[best_id].dead = true;
+						clients[best_id].player_state = PLAYER_STATE_DIE;
+						just_died = true;
+					}
 					if (clients[best_id].in_escape_zone) {
 						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
 						reset_prog = true;
@@ -2537,6 +2593,7 @@ void process_packet(int c_id, char* packet)
 			hp_pkt.id = best_id;
 			hp_pkt.hp = new_hp;
 			clients[best_id].do_send(&hp_pkt);
+			if (just_died) BroadcastPlayerState(best_id);
 		}
 		else if (wall_t < std::numeric_limits<float>::max()) {
 			// 벽에 막힘
@@ -2560,6 +2617,13 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_LOOT_PICKUP: {
+		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
+
 		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
 
 		// 박스 유효성
@@ -2621,6 +2685,11 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_GRENADE_EXPLODE: {
 		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
 
 		bool can_throw = false;
 		{

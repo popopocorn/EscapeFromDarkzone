@@ -141,7 +141,13 @@ void NetEntityManager::OnMovePlayer(const SC_MOVE_PLAYER_PACKET* p)
 
 void NetEntityManager::OnPlayerStateChange(const SC_PLAYER_STATE_CHANGE_PACKET* p)
 {
-	if (p->id == m_myId) return;
+	if (p->id == m_myId) {
+		if (p->state == PLAYER_STATE_DIE) {
+			OutputDebugString(L"[DEATH] local player died\n");
+			// TODO: 사망 처리 여기서
+		}
+		return;
+	}
 
 	if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
 		switch (p->state) {
