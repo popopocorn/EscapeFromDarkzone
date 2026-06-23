@@ -246,6 +246,18 @@ void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, boo
 	if (!pNewState)
 		return;
 
+	bool bNewStateIsDie = (typeid(*pNewState) == typeid(OtherPlayerDie));
+
+	if (m_bDead && !bNewStateIsDie)
+		return;
+
+	if (bNewStateIsDie)
+	{
+		m_bDead = true;
+		m_bServerMoving = false;
+		m_bUseServerLerp = false;
+	}
+
 	if (!bForce && m_pState && typeid(*m_pState) == typeid(*pNewState))
 		return;
 
@@ -256,6 +268,7 @@ void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, boo
 
 	m_pState->Enter(this);
 }
+
 int OtherPlayer::GetIdleAnimationByWeapon() const
 {
 	switch (m_eWeaponType)
@@ -359,18 +372,42 @@ void OtherPlayer::RefreshBaseAnimationByServerState()
 }
 void OtherPlayer::TriggerShootAnim()
 {
+	if (m_bDead)
+		return;
+
 	ChangeState(std::make_unique<OtherPlayerShoot>(), true);
 }
+
 void OtherPlayer::TriggerReloadAnim()
 {
+	if (m_bDead)
+		return;
+
 	ChangeState(std::make_unique<OtherPlayerReload>(), true);
 }
+
 void OtherPlayer::TriggerGrenadeAnim()
 {
+	if (m_bDead)
+		return;
+
 	ChangeState(std::make_unique<OtherPlayerGrenade>(), true);
 }
+
 void OtherPlayer::TriggerDieAnim()
 {
+	MarkDeadFromServer();
+}
+
+void OtherPlayer::MarkDeadFromServer()
+{
+	if (m_bDead)
+		return;
+
+	m_bDead = true;
+	m_bServerMoving = false;
+	m_bUseServerLerp = false;
+
 	ChangeState(std::make_unique<OtherPlayerDie>(), true);
 }
 
@@ -694,22 +731,29 @@ bool OtherPlayerDie::Enter(OtherPlayer* Player)
 	Player->SetServerMoving(false);
 
 	auto* pCtrl = Player->GetAnimationController();
-	if (!pCtrl) return false;
 
-	pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
-	pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+	if (pCtrl)
+	{
+		int dieAnim = Player->GetDieAnimationByWeapon();
 
-	pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetDieAnimationByWeapon());
-	pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetDieAnimationByWeapon());
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
 
-	pCtrl->SetTrackPosition(0, 0.0f);
-	pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackAnimationSetIfChanged(0, dieAnim);
+		pCtrl->SetTrackAnimationSetIfChanged(1, dieAnim);
 
-	pCtrl->SetTrackEnable(0, true);
-	pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackPosition(0, 0.0f);
+		pCtrl->SetTrackPosition(1, 0.0f);
 
-	pCtrl->SetTrackWeight(0, 1.0f);
-	pCtrl->SetTrackWeight(1, 1.0f);
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackEnable(1, true);
+
+		pCtrl->SetTrackWeight(0, 1.0f);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
 
 	return true;
 }
@@ -735,12 +779,18 @@ OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 
 void OtherPlayer::UpdatePosition(float x, float y, float z)
 {
-	m_xmf3ServerPosition = XMFLOAT3(x, y, z);   // 보간 목표
+	if (m_bDead)
+		return;
+
+	m_xmf3ServerPosition = XMFLOAT3(x, y, z);
 	m_bUseServerLerp = true;
 }
 
 void OtherPlayer::SetServerYaw(float yawRad)
 {
+	if (m_bDead)
+		return;
+
 	m_fServerYawDeg = XMConvertToDegrees(yawRad);
 }
 
@@ -819,6 +869,9 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 void OtherPlayer::ChangeWeaponFromServer(short weaponType, short weaponGrade)
 {
 	UNREFERENCED_PARAMETER(weaponGrade);
+
+	if (m_bDead)
+		return;
 
 	m_eWeaponType = GetOtherPlayerWeaponTypeFromPacket(weaponType);
 

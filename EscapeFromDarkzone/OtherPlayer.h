@@ -12,6 +12,7 @@ private:
 	float    m_fServerYawDeg = 0.0f;
 	bool     m_bUseServerLerp = false;
 	bool     m_bServerMoving = false;
+	bool     m_bDead = false;
 
 private:
 	CGameObject* m_pWeapon = nullptr;
@@ -40,8 +41,11 @@ public:
 	void SetServerYaw(float yawRad);
 	void Kill() { CGameObject::Kill(); }
 
-	void SetServerMoving(bool bMoving) { m_bServerMoving = bMoving; }
+	void SetServerMoving(bool bMoving) { if (m_bDead && bMoving) return; m_bServerMoving = bMoving; }
 	bool IsServerMoving() const { return m_bServerMoving; }
+
+	bool IsDead() const { return m_bDead; }
+	void MarkDeadFromServer();
 
 	PlayerWeaponType GetCurrentPlayerWeaponType() const { return m_eWeaponType; }
 
