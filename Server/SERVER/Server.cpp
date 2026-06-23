@@ -328,6 +328,8 @@ public:
 	bool in_escape_zone = false;
 	bool escaped = false;
 	bool dead = false;
+	bool loot_dropped = false;
+
 	std::chrono::steady_clock::time_point last_hit_time;
 
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
@@ -363,6 +365,7 @@ public:
 		in_escape_zone = false;
 		escaped = false;
 		dead = false;
+		loot_dropped = false;
 	}
 
 	~SESSION() {}
@@ -1915,6 +1918,48 @@ static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
 	return false;
 }
 
+static void DropPlayerLootBox(int victim_id, const std::array<PlayerSnapshot, MAX_USER>& snap)
+{
+	// 사망자 인벤토리 따 오고 인벤 비움
+	std::array<ItemSlot, INVENTORY_SIZE> inv;
+	float px, py, pz;
+	{
+		std::lock_guard<std::mutex> lk(clients[victim_id]._s_lock);
+		inv = clients[victim_id]._inventory;
+		px = clients[victim_id].x; py = clients[victim_id].y; pz = clients[victim_id].z;
+		clients[victim_id]._inventory.fill(ItemSlot{});
+	}
+
+	// g_npcs 상위 절반부터 빈 슬롯 검색
+	int slot = -1;
+	for (int i = MAX_NPC / 2; i < MAX_NPC; ++i) {
+		if (!g_npcs[i].alive && !g_npcs[i].loot_active) { slot = i; break; }
+	}
+	if (slot < 0) { std::cout << "[LOOT] no free slot for player box\n"; return; }
+
+	SERVER_NPC& box = g_npcs[slot];
+	box._inventory = inv;
+	box.position = { px, py, pz };
+	box.loot_active = true;
+	box.death_time = std::chrono::steady_clock::now();
+
+	// SC_ADD_LOOT_BOX 브로드캐스트 (NPC 박스와 동일)
+	SC_ADD_LOOT_BOX_PACKET pkt;
+	pkt.size = sizeof(pkt);
+	pkt.type = SC_ADD_LOOT_BOX;
+	pkt.npc_id = box.id;
+	pkt.x = px; pkt.y = py; pkt.z = pz;
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		pkt.items[i] = box._inventory[i].item;
+		pkt.counts[i] = box._inventory[i].count;
+	}
+	for (int i = 0; i < MAX_USER; ++i) {
+		if (!snap[i].in_game) continue;
+		clients[i].do_send(&pkt);
+	}
+	std::cout << "[LOOT] player " << victim_id << " dropped box at slot " << slot << "\n";
+}
+
 static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
@@ -1954,6 +1999,20 @@ static void npc_thread()
 		for (auto& npc : g_npcs) {
 			if (!npc.alive) continue;
 			UpdateNpc(npc, DT, player_snapshot);
+		}
+
+		// 사망 플레이어 루트박스 드롭 (한 번만) + 브로드캐스트
+		for (int i = 0; i < MAX_USER; ++i) {
+			bool need_drop = false;
+			{
+				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+				if (clients[i]._state == ST_INGAME &&
+					clients[i].dead && !clients[i].loot_dropped) {
+					clients[i].loot_dropped = true;
+					need_drop = true;
+				}
+			}
+			if (need_drop) DropPlayerLootBox(i, player_snapshot);
 		}
 
 		// 플레이어 재장전 타이머 갱신
@@ -2785,6 +2844,7 @@ void disconnect(int c_id)
 		clients[c_id]._socket = INVALID_SOCKET;			// 슬롯 무효화
 
 		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
+		clients[c_id].loot_dropped = false;
 	}
 	closesocket(old_socket);
 
