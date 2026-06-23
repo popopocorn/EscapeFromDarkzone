@@ -48,6 +48,7 @@ class CPlayerAnimationController;
 class WeaponItem;
 class Inventory;
 class Equip;
+class CGameFramework;
 
 
 class EffectManager;
@@ -153,6 +154,7 @@ protected:
 	std::unique_ptr<Inventory>	m_pInventory;
 	//equips
 	unique_ptr<Equip>			Equipments;
+	
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -312,10 +314,12 @@ public:
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 
-	void SetHP(short hp) { m_hp = hp; }			// 임시 체력 추가
+	void SetHP(short hp);
 	short GetHP() const { return m_hp; }
 	float	cameraDistance = 15.0f;
 	Equip* GetEquips() { return Equipments.get(); }
+	bool						m_bIsDead = false;
+	CGameFramework*				frame;
 };
 
 class CPlayerAnimationController : public CAnimationController
@@ -443,4 +447,5 @@ class PlayerDie : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player);
 	virtual void Update(CPlayer* Player, float fTimeElapsed);
 	virtual void Exit(CPlayer* Player);
+	float deadTimer = 0;;
 };

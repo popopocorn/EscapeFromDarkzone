@@ -1282,7 +1282,7 @@ void MainScene::ExplodeGrenade()
 }
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-
+	if (m_pPlayer->m_bIsDead)return;
 	ClampGameplayCursorToAimLine(hWnd);
 	if (not IsGameStart)return;
 
@@ -1467,19 +1467,19 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		switch (wParam)
 		{
-		case VK_F6:
-		case VK_F7:
-		{
-			if (wasDownBefore) return true;
+		//case VK_F6:
+		//case VK_F7:
+		//{
+		//	if (wasDownBefore) return true;
 
-			PlayTestEffectByKey(wParam);
-			return true;
-		}
+		//	PlayTestEffectByKey(wParam);
+		//	return true;
+		//}
 
 		case 'E':
 		{
 			if (wasDownBefore) return true;
-
+			if (m_pPlayer->m_bIsDead)break;
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->HandleIKeyToggle(m_fLootInteractDistance);
@@ -1515,7 +1515,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		case 'G':
 		{
 			if (wasDownBefore) return true;
-
+			if (m_pPlayer->m_bIsDead)break;
 			if (IsAnyInventoryOpen())
 			{
 				return true;
@@ -1540,6 +1540,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		case VK_TAB:
 		{
+			if (m_pPlayer->m_bIsDead)break;
 			if (m_pInventoryManager)
 			{
 				m_pInventoryManager->HandleTabPressed(m_fLootInteractDistance);
@@ -1568,7 +1569,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
 
-		case '9':
+		/*case '9':
 		{
 			if (wasDownBefore) return true;
 			if (NetworkManager::Instance().IsConnected()) {
@@ -1584,7 +1585,7 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
 			}
 			return true;
-		}
+		}*/
 
 		default:
 			break;
