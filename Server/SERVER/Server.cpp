@@ -703,6 +703,8 @@ struct PlayerSnapshot {
 	float x, y, z;
 	float yaw;
 	short hp;
+
+	bool targetable;
 };
 
 static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
@@ -711,6 +713,7 @@ static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
 		std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 		if (clients[i]._state == ST_INGAME) {
 			out[i].in_game = true;
+			out[i].targetable = (!clients[i].dead && !clients[i].escaped);
 			out[i].x = clients[i].x;
 			out[i].y = clients[i].y;
 			out[i].z = clients[i].z;
@@ -719,6 +722,7 @@ static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
 		}
 		else {
 			out[i].in_game = false;
+			out[i].targetable = false;
 		}
 	}
 }
@@ -729,7 +733,7 @@ static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapsho
 	float best_sq = 0.0f;
 
 	for (int i = 0; i < MAX_USER; ++i) {
-		if (!snapshot[i].in_game) continue;
+		if (!snapshot[i].targetable) continue;
 
 		float dx = snapshot[i].x - pos.x;
 		float dy = snapshot[i].y - pos.y;
@@ -938,7 +942,7 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	XMVECTOR vO = XMVectorSet(origin.x, origin.y, origin.z, 0.0f);
 	XMVECTOR vD = XMVector3Normalize(XMVectorSet(dir.x, dir.y, dir.z, 0.0f));
 
-	if (target_id >= 0 && player_snapshot[target_id].in_game) {
+	if (target_id >= 0 && player_snapshot[target_id].targetable) {
 		XMFLOAT3 tpos = { player_snapshot[target_id].x,
 						  player_snapshot[target_id].y,
 						  player_snapshot[target_id].z };
@@ -1013,7 +1017,11 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		hp_pkt.id = (short)target_id;
 		hp_pkt.hp = new_hp;
 		clients[target_id].do_send(&hp_pkt);
-		if (just_died) BroadcastPlayerState(target_id);
+		if (just_died) {
+			BroadcastPlayerState(target_id);
+			npc.has_last_seen_player = false;
+			npc.lose_sight_timer = 0.0f;
+		}
 	}
 	else if (wall_t < std::numeric_limits<float>::max()) {
 		// 벽에 막힘
@@ -1221,7 +1229,7 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, c
 
 	if (NPC_STATE_IDLE == npc.state) {
 		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
-		if (!player_snapshot[attacker_client_id].in_game) return;
+		if (!player_snapshot[attacker_client_id].targetable) return;
 
 		XMFLOAT3 attacker_pos = {
 			player_snapshot[attacker_client_id].x,
@@ -1461,8 +1469,9 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	float dist_sq;
 	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
 	if (player_id < 0) {
-		// 클라이언트 없으면 Idle 복귀
-		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		npc.has_last_seen_player = false;
+		npc.lose_sight_timer = 0.0f;
+		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
 		return;
 	}
 
@@ -1681,7 +1690,9 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	float dist_sq;
 	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
 	if (player_id < 0) {
-		ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+		npc.has_last_seen_player = false;
+		npc.lose_sight_timer = 0.0f;
+		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
 		return;
 	}
 	XMFLOAT3 player_pos = {
@@ -2307,6 +2318,12 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CHANGE_WEAPON: {
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			if (clients[c_id].dead) 
+				break; 
+		}
+
 		CS_CHANGE_WEAPON_PACKET* p = reinterpret_cast<CS_CHANGE_WEAPON_PACKET*>(packet);
 		clients[c_id].weapon_type = p->weapon_type;
 		clients[c_id].weapon_grade = p->weapon_grade;
@@ -2319,6 +2336,12 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_INVENTORY_CLICK: {
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
+		}
+
 		CS_INVENTORY_CLICK_PACKET* p =
 			reinterpret_cast<CS_INVENTORY_CLICK_PACKET*>(packet);
 
@@ -2730,6 +2753,12 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_RELOAD_REQUEST: {
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
+		}
+
 		CS_RELOAD_REQUEST_PACKET* p = reinterpret_cast<CS_RELOAD_REQUEST_PACKET*>(packet);
 		short wtype = p->weapon_type;
 		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
