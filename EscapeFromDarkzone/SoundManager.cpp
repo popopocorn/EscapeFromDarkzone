@@ -108,6 +108,13 @@ void SoundManager::BuildSound()
         false,
         false
         );
+
+    LoadSound(
+        SoundName::GRANDEBOOM,
+        "Sound/GranadeBoom.wav",
+        false,
+        false
+        );
 }
 
 void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool loop)

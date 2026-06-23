@@ -2507,7 +2507,9 @@ bool PlayerDie::Enter(CPlayer* Player)
 
 	pCtrl->SetTrackWeight(0, 1.0f);
 	pCtrl->SetTrackWeight(1, 1.0f);
-
+	Player->frame->mouseMove = true;
+	::ClipCursor(NULL);
+	while (::ShowCursor(TRUE) < 0) {}
 	return true;
 }
 

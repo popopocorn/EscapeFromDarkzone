@@ -418,6 +418,7 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		if (effectId == EffectID::GRENADE_EXPLOSION)
 		{
+			SoundManager::Instance()->Play(SoundName::GRANDEBOOM, pos);
 			dir = XMFLOAT3(0.0f, 1.0f, 0.0f);
 		}
 

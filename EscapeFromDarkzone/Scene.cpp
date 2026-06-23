@@ -1255,6 +1255,7 @@ void MainScene::ExplodeGrenade()
 
 	if (NetworkManager::Instance().IsConnected())
 	{
+		SoundManager::Instance()->Play(SoundName::GRANDEBOOM, explosionPos);
 		NetSession::Instance().GrenadeExplode(serverExplosionPos);
 	}
 	else
@@ -1283,8 +1284,9 @@ void MainScene::ExplodeGrenade()
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (m_pPlayer->m_bIsDead)return;
-	ClampGameplayCursorToAimLine(hWnd);
 	if (not IsGameStart)return;
+	ClampGameplayCursorToAimLine(hWnd);
+	
 
 	switch (nMessageID)
 	{
