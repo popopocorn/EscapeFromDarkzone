@@ -2515,7 +2515,7 @@ void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
 {
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
 	deadTimer += fTimeElapsed;
-	if (deadTimer >= 3.0)
+	if (deadTimer >= 5.0)
 	{
 		Player->ChangeState(make_unique<PlayerIdle>()); 
 		Player->frame->nextScene = new ResultScene(Player->frame, false);
