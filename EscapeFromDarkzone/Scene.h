@@ -140,7 +140,16 @@ public:
 	
 
 	unique_ptr<UIObjectShader>			UIShader;
-private:
+
+	HUDManager* GetUIManager()
+	{
+		return uiManager.get();
+	}
+
+	const HUDManager* GetUIManager() const
+	{
+		return uiManager.get();
+	}
 	
 public:
 	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }

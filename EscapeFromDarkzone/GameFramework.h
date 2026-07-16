@@ -17,7 +17,7 @@
 
 class NetPacketDispatcher;
 class NetEntityManager;
-
+class TextRenderer;
 class ShaderManager;
 
 class CGameFramework
@@ -106,7 +106,8 @@ private:
 	
 
 	unique_ptr<RootSignature>	root;
-
+	void BuildTextSystem();
+	void RenderTextSystem();
 #if defined(_DEBUG)
 	ID3D12Debug					*m_pd3dDebugController;
 #endif
@@ -130,5 +131,8 @@ private:
 	// 06.07 추가
 	std::unique_ptr<NetEntityManager> m_pNetEntityMgr;
 	std::unique_ptr<NetPacketDispatcher> m_pPacketDispatcher;
+
+	// 텍스트 렌더링
+	std::unique_ptr<TextRenderer> m_pTextRenderer;
 };
 

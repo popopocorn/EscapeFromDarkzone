@@ -9,6 +9,7 @@ class CEnemyObject;
 class CStandardObjectsShader;
 class CBoundingBoxShader;
 class CShader;
+class TextRenderer;
 
 class InventoryManager
 {
@@ -46,6 +47,7 @@ public:
 	/*void ProcessEnemyLootSpawnRequests(CShader* pEnemyShader);*/
 
 	void SubmitToShader(UIObjectShader* shader);
+	void SubmitText(TextRenderer* renderer);
 
 	bool ProcessClick(POINT mouse);
 

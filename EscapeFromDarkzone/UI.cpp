@@ -1,10 +1,13 @@
-
-#include"stdafx.h"
+#include "stdafx.h"
 #include "UI.h"
-#include"ResourceManager.h"
-#include"Shader.h"
-#include"Network.h"
-#include"Player.h"
+#include "ResourceManager.h"
+#include "Shader.h"
+#include "Network.h"
+#include "Player.h"
+#include "TextRenderer.h"
+#include "ItemTextData.h"
+
+UIName MapItemIDToUIName(ItemID id);
 
 UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 {
@@ -30,18 +33,18 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 
 
 	m_pd3dPositionBuffer = ::CreateBufferResource(
-		device, 
+		device,
 		commandlist,
-		m_pxmf3Positions.data(), 
-		sizeof(XMFLOAT3) * m_pxmf3Positions.size(), 
-		D3D12_HEAP_TYPE_DEFAULT, 
-		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, 
+		m_pxmf3Positions.data(),
+		sizeof(XMFLOAT3) * m_pxmf3Positions.size(),
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		&m_pd3dPositionUploadBuffer);
-	
+
 	m_d3dPositionBufferView.BufferLocation = m_pd3dPositionBuffer->GetGPUVirtualAddress();
 	m_d3dPositionBufferView.StrideInBytes = sizeof(XMFLOAT3);
 	m_d3dPositionBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_pxmf3Positions.size();
-	
+
 	UVBuffer = ::CreateBufferResource(
 		device,
 		commandlist,
@@ -55,7 +58,7 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	UVBufferView.BufferLocation = UVBuffer->GetGPUVirtualAddress();
 	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
 	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
-	
+
 	/*m_pd3dPositionBuffer->SetName(L"uivbuffer");
 	m_pd3dPositionBuffer->SetName(L"uivupuffer");
 	UVBuffer->SetName(L"uiuvbuffer");
@@ -92,7 +95,7 @@ void UIMesh::LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 	texture = make_unique<CTexture>(1, RESOURCE_TEXTURE2D, 0, 1);
 	texture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pszFileName, RESOURCE_TEXTURE2D, 0);
 	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, texture.get(), 0, 3);
-	
+
 }
 
 void UIMesh::OnPreRender(ID3D12GraphicsCommandList* pd3dCommandList, void* pContext)
@@ -156,9 +159,17 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 }
 
 
-
-Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CShader* pShader)
+Inventory::Inventory(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	ID3D12RootSignature* pd3dGraphicsRootSignature,
+	CShader* pShader)
 {
+	UNREFERENCED_PARAMETER(pd3dDevice);
+	UNREFERENCED_PARAMETER(pd3dCommandList);
+	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
+	UNREFERENCED_PARAMETER(pShader);
+
 	box.maxY = 0.55f;
 	box.minY = -0.75f;
 	box.minX = -0.4f;
@@ -175,6 +186,9 @@ Inventory::Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCo
 	m_pSharedMiddleMesh = ResourceManager::Instance().GetUIMesh(UIName::DIVIDER_001);
 
 	BuildSlotViews();
+	BuildNameTexts();
+	BuildCountTexts();
+
 	SetPosition(0.0f, 0.0f);
 }
 
@@ -228,6 +242,27 @@ void Inventory::BuildSlotViews()
 	}
 }
 
+void Inventory::BuildNameTexts()
+{
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		m_nameTexts[i] = std::make_unique<UIText>(
+			L"",
+			XMFLOAT2(0.0f, 0.0f),
+			UITextAlign::CENTER
+		);
+
+		m_nameTexts[i]->SetColor(
+			1.0f,
+			1.0f,
+			1.0f,
+			1.0f
+		);
+
+		m_nameTexts[i]->SetVisible(false);
+	}
+}
+
 void Inventory::LayoutSlotViews()
 {
 	const float iconW = m_slotW * m_iconRatio;
@@ -236,38 +271,199 @@ void Inventory::LayoutSlotViews()
 
 	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		float posY = m_baseY + (0.5f - (m_slotH * 0.5f) - (i * m_slotH));
+		float posY =
+			m_baseY +
+			(0.5f - (m_slotH * 0.5f) - (i * m_slotH));
 
-		float rowLeft = m_baseX - (m_slotW * 0.5f);
+		float rowLeft =
+			m_baseX -
+			(m_slotW * 0.5f);
 
-		float iconCenterX = rowLeft + (iconW * 0.5f);
-		float textCenterX = rowLeft + iconW + (textW * 0.5f);
-		float countCenterX = rowLeft + iconW + textW + (countW * 0.5f);
+		float iconCenterX =
+			rowLeft +
+			(iconW * 0.5f);
+
+		float textCenterX =
+			rowLeft +
+			iconW +
+			(textW * 0.5f);
+
+		float countCenterX =
+			rowLeft +
+			iconW +
+			textW +
+			(countW * 0.5f);
 
 		if (slotViews[i].hitBox)
 		{
-			slotViews[i].hitBox->SetLocate(m_baseX, posY, 0.5f);
+			slotViews[i].hitBox->SetLocate(
+				m_baseX,
+				posY,
+				0.5f
+			);
+
 			slotViews[i].hitBox->setAABB();
 		}
 
 		if (slotViews[i].iconCell)
 		{
-			slotViews[i].iconCell->SetLocate(iconCenterX, posY, 0.5f);
+			slotViews[i].iconCell->SetLocate(
+				iconCenterX,
+				posY,
+				0.5f
+			);
+
 			slotViews[i].iconCell->setAABB();
 		}
 
 		if (slotViews[i].textCell)
 		{
-			slotViews[i].textCell->SetLocate(textCenterX, posY, 0.5f);
+			slotViews[i].textCell->SetLocate(
+				textCenterX,
+				posY,
+				0.5f
+			);
+
 			slotViews[i].textCell->setAABB();
 		}
 
 		if (slotViews[i].countCell)
 		{
-			slotViews[i].countCell->SetLocate(countCenterX, posY, 0.5f);
+			slotViews[i].countCell->SetLocate(
+				countCenterX,
+				posY,
+				0.5f
+			);
+
 			slotViews[i].countCell->setAABB();
 		}
+
+		if (m_nameTexts[i])
+		{
+			XMFLOAT2 namePosition =
+				ConvertNdcToPixel(
+					textCenterX,
+					posY
+				);
+
+			namePosition.y -= 16.0f;
+
+			m_nameTexts[i]->SetPosition(
+				namePosition
+			);
+		}
+
+		if (m_countTexts[i])
+		{
+			XMFLOAT2 countPosition =
+				ConvertNdcToPixel(
+					countCenterX,
+					posY
+				);
+
+			countPosition.y -= 16.0f;
+
+			m_countTexts[i]->SetPosition(
+				countPosition
+			);
+		}
 	}
+}
+
+void Inventory::BuildCountTexts()
+{
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		m_countTexts[i] = std::make_unique<UIText>(
+			L"",
+			XMFLOAT2(0.0f, 0.0f),
+			UITextAlign::CENTER
+		);
+
+		m_countTexts[i]->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
+		m_countTexts[i]->SetVisible(false);
+	}
+}
+
+void Inventory::UpdateSlotNameText(int slotIndex)
+{
+	if (slotIndex < 0 || slotIndex >= MAX_SLOTS)
+		return;
+
+	UIText* pNameText =
+		m_nameTexts[slotIndex].get();
+
+	if (!pNameText)
+		return;
+
+	const ItemSlot& slot =
+		slots[slotIndex];
+
+	if (slot.item == ItemID::NONE ||
+		slot.count <= 0)
+	{
+		pNameText->SetText(L"");
+		pNameText->SetVisible(false);
+		return;
+	}
+
+	const wchar_t* pDisplayName =
+		GetItemDisplayName(slot.item);
+
+	if (!pDisplayName ||
+		pDisplayName[0] == L'\0')
+	{
+		pNameText->SetText(L"");
+		pNameText->SetVisible(false);
+		return;
+	}
+
+	pNameText->SetText(pDisplayName);
+	pNameText->SetVisible(true);
+}
+
+void Inventory::UpdateSlotCountText(int slotIndex)
+{
+	if (slotIndex < 0 || slotIndex >= MAX_SLOTS)
+		return;
+
+	UIText* pCountText = m_countTexts[slotIndex].get();
+
+	if (!pCountText)
+		return;
+
+	const ItemSlot& slot = slots[slotIndex];
+
+	if (slot.item == ItemID::NONE || slot.count <= 0)
+	{
+		pCountText->SetText(L"");
+		pCountText->SetVisible(false);
+		return;
+	}
+
+	pCountText->SetText(std::to_wstring(slot.count));
+	pCountText->SetVisible(true);
+}
+
+void Inventory::UpdateSlotTexts(int slotIndex)
+{
+	UpdateSlotNameText(slotIndex);
+	UpdateSlotCountText(slotIndex);
+}
+
+XMFLOAT2 Inventory::ConvertNdcToPixel(float ndcX, float ndcY)
+{
+	float pixelX =
+		(ndcX + 1.0f) *
+		0.5f *
+		static_cast<float>(FRAME_BUFFER_WIDTH);
+
+	float pixelY =
+		(1.0f - ndcY) *
+		0.5f *
+		static_cast<float>(FRAME_BUFFER_HEIGHT);
+
+	return XMFLOAT2(pixelX, pixelY);
 }
 
 void Inventory::SubmitToShader(UIObjectShader* shader)
@@ -291,6 +487,30 @@ void Inventory::SubmitToShader(UIObjectShader* shader)
 		if (slotViews[i].countCell)
 		{
 			shader->addObjects(slotViews[i].countCell.get());
+		}
+	}
+}
+
+void Inventory::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	if (!isOpen)
+		return;
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		UpdateSlotTexts(i);
+
+		if (m_nameTexts[i])
+		{
+			renderer->SubmitText(m_nameTexts[i].get());
+		}
+
+		if (m_countTexts[i])
+		{
+			renderer->SubmitText(m_countTexts[i].get());
 		}
 	}
 }
@@ -357,41 +577,91 @@ int Inventory::GetItemCnt(ItemID id) const
 
 void Inventory::ConsumeItem(ItemID id, int cnt)
 {
-	for (auto& s : slots)
+	if (id == ItemID::NONE ||
+		cnt <= 0)
 	{
-		if (s.item != ItemID::NONE && s.item == id)
+		return;
+	}
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		ItemSlot& slot =
+			slots[i];
+
+		if (slot.item == ItemID::NONE ||
+			slot.item != id)
 		{
-			s.count -= cnt;
-			if (s.count == 0)
-			{
-				s.item = ItemID::NONE;
-			}
-			break;
+			continue;
 		}
+
+		slot.count -= cnt;
+
+		if (slot.count <= 0)
+		{
+			slot.item = ItemID::NONE;
+			slot.count = 0;
+
+			if (slotViews[i].iconCell)
+			{
+				slotViews[i].iconCell->SetUIMesh(
+					nullptr
+				);
+			}
+		}
+
+		UpdateSlotTexts(i);
+
+		break;
 	}
 }
 
 bool Inventory::AddItem(ItemID item, int count)
 {
-	if (item == ItemID::NONE || count <= 0) return false;
-
-	for (auto& slot : slots)
+	if (item == ItemID::NONE ||
+		count <= 0)
 	{
-		if (slot.item != ItemID::NONE && slot.item == item)
+		return false;
+	}
+
+	for (int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (slots[i].item != ItemID::NONE &&
+			slots[i].item == item)
 		{
-			slot.count += count;
+			slots[i].count += count;
+
+			UpdateSlotTexts(i);
+
 			return true;
 		}
 	}
 
-	for (auto& slot : slots)
+	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		if (slot.item == ItemID::NONE)
+		if (slots[i].item != ItemID::NONE)
+			continue;
+
+		slots[i].item = item;
+		slots[i].count = count;
+
+		UIName uiName =
+			MapItemIDToUIName(item);
+
+		UIMesh* pMesh =
+			ResourceManager::Instance().GetUIMesh(
+				uiName
+			);
+
+		if (slotViews[i].iconCell)
 		{
-			slot.item = item;
-			slot.count = count;
-			return true;
+			slotViews[i].iconCell->SetUIMesh(
+				pMesh
+			);
 		}
+
+		UpdateSlotTexts(i);
+
+		return true;
 	}
 
 	return false;
@@ -399,10 +669,19 @@ bool Inventory::AddItem(ItemID item, int count)
 
 void Inventory::ClearItems()
 {
-	for (auto& slot : slots)
+	for (int i = 0; i < MAX_SLOTS; ++i)
 	{
-		slot.item = ItemID::NONE;
-		slot.count = 0;
+		slots[i].item = ItemID::NONE;
+		slots[i].count = 0;
+
+		if (slotViews[i].iconCell)
+		{
+			slotViews[i].iconCell->SetUIMesh(
+				nullptr
+			);
+		}
+
+		UpdateSlotTexts(i);
 	}
 }
 
@@ -448,38 +727,57 @@ ItemSlot* Inventory::GetSlot(int idx)
 	return &slots[idx];
 }
 
-bool Inventory::ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count)
+bool Inventory::ApplyServerSlotUpdate(
+	int slotIndex,
+	ItemID itemId,
+	int count)
 {
-	ItemSlot* pSlot = GetSlot(slotIndex);
-	if (!pSlot) return false;
+	ItemSlot* pSlot =
+		GetSlot(slotIndex);
 
-	// 서버가 NONE이나 수량 0을 보내면 슬롯 비우기
-	if (itemId == ItemID::NONE || count <= 0)
+	if (!pSlot)
+		return false;
+
+	if (itemId == ItemID::NONE ||
+		count <= 0)
 	{
 		pSlot->item = ItemID::NONE;
 		pSlot->count = 0;
-		slotViews[slotIndex].iconCell->SetUIMesh(NULL);
-		/*slotViews[slotIndex].countCell->SetUIMesh(m_pSharedMiddleMesh);
-		slotViews[slotIndex].textCell->SetUIMesh(m_pSharedMesh);*/
+
+		if (slotViews[slotIndex].iconCell)
+		{
+			slotViews[slotIndex].iconCell->SetUIMesh(
+				nullptr
+			);
+		}
+
+		UpdateSlotTexts(slotIndex);
+
 		return true;
 	}
-	else {
-		pSlot->item = itemId;
-		pSlot->count = count;
-		UIName n = MapItemIDToUIName(itemId);
-		UIMesh* mesh = ResourceManager::Instance().GetUIMesh(n);
-		slotViews[slotIndex].iconCell->SetUIMesh(mesh);
+
+	pSlot->item = itemId;
+	pSlot->count = count;
+
+	UIName uiName =
+		MapItemIDToUIName(itemId);
+
+	UIMesh* pMesh =
+		ResourceManager::Instance().GetUIMesh(
+			uiName
+		);
+
+	if (slotViews[slotIndex].iconCell)
+	{
+		slotViews[slotIndex].iconCell->SetUIMesh(
+			pMesh
+		);
 	}
 
-	// 슬롯에 이미 뭐가 있으면 수정하지 않음 --> 수정하되 로그 찍기? 나중에 수정
-	//if (pSlot->item != ItemID::NONE || pSlot->count > 0)
-	//{
-	//	return false;
-	//}
+	UpdateSlotTexts(slotIndex);
 
 	return true;
 }
-
 
 EquipUI::EquipUI(CPlayer* p)
 {
@@ -661,7 +959,7 @@ void EquipUI::SubmitToShader(UIObjectShader* shader)
 	{
 		shader->addObjects(p.second.get());
 	}
-	
+
 }
 
 
@@ -691,7 +989,7 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	UIs[HP_MAIN]->SetScale(0.33, 0.06, 1);
 	UIs[HP_MAIN]->SetLocate(-0.029, -0.9, 0.5);
 	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
-	
+
 	UIs[MAG_BASE] = make_unique<UIObject>();
 	XMFLOAT3 r = CalcPixelByRatio(1.0);
 	float wr = 0.15;
@@ -705,7 +1003,7 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	{
 		UIObject* t = new UIObject();
 		t->SetScale(br.x * bwr, br.y * bwr, 1.0);
-		t->SetLocate(0.3 + i * br.x*bwr, -0.9, 0.5);
+		t->SetLocate(0.3 + i * br.x * bwr, -0.9, 0.5);
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
@@ -784,7 +1082,7 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
 	for (const auto& o : objs)
 	{
-		if(o->isopen)
+		if (o->isopen)
 			shader->addObjects(o.get());
 	}
 	for (const auto& o : panels)
@@ -795,6 +1093,7 @@ void HUDManager::SubmitToShader(UIObjectShader* shader)
 
 void HUDManager::Release()
 {
+	texts.clear();
 	objs.clear();
 	panels.clear();
 }
@@ -829,8 +1128,56 @@ bool HUDManager::ProcessClick(POINT mouse)
 		if (o->isOpen)
 		{
 			o->ProcessClick(mouse);
-			
+
 		}
 	}
 	return false;
+}
+
+UIText* HUDManager::AddText(unique_ptr<UIText> text)
+{
+	if (!text)
+		return nullptr;
+
+	UIText* pText = text.get();
+
+	texts.push_back(std::move(text));
+
+	return pText;
+}
+
+void HUDManager::RemoveText(UIText* text)
+{
+	if (!text)
+		return;
+
+	auto removeBegin = std::remove_if(
+		texts.begin(),
+		texts.end(),
+		[text](const unique_ptr<UIText>& ownedText)
+		{
+			return ownedText.get() == text;
+		}
+	);
+
+	texts.erase(removeBegin, texts.end());
+}
+
+void HUDManager::ClearTexts()
+{
+	texts.clear();
+}
+
+void HUDManager::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	for (const auto& text : texts)
+	{
+		if (!text)
+			continue;
+
+		renderer->SubmitText(text.get());
+	}
 }
