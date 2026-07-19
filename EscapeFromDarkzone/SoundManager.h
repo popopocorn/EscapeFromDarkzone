@@ -18,6 +18,7 @@ enum class SoundName {
 
     RELOAD_PLAYER_RIFLE,
     RELOAD_ENEMY_RIFLE,
+    GRANDEBOOM, 
 
     DRY_RIFLE,
 

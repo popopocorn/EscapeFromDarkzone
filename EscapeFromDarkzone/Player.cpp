@@ -17,6 +17,7 @@
 #include"Scene.h"
 #include "Network.h"	// 03.27 추가
 #include "NetSession.h"
+#include "GameFramework.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -1544,6 +1545,8 @@ void CPlayer::StartReload()
 
 XMFLOAT2 CPlayer::GetMoveInput2D() const
 {
+	if (m_bIsDead) return XMFLOAT2(0, 0);
+
 	auto& input = InputManager::Instance();
 
 	XMFLOAT2 dir = XMFLOAT2(0, 0);
@@ -1724,6 +1727,16 @@ void CPlayer::InitializeInventory(
 
 	m_pInventory->SetPosition(-0.25f, 0.0f);
 	m_pInventory->isOpen = false;
+}
+
+void CPlayer::SetHP(short hp)
+{
+	m_hp = hp;
+	if (m_hp <= 0)
+	{
+		m_bIsDead = true;
+		ChangeState(std::make_unique<PlayerDie>());
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1915,6 +1928,15 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 {
 	while (!event_queue.empty())
 	{
+		if (m_bIsDead)
+		{
+			while (not event_queue.empty())
+			{
+				event_queue.pop();
+
+			}
+			break;
+		}
 		const GameEvent& ev = event_queue.front();
 
 		switch (ev.type)
@@ -2485,13 +2507,21 @@ bool PlayerDie::Enter(CPlayer* Player)
 
 	pCtrl->SetTrackWeight(0, 1.0f);
 	pCtrl->SetTrackWeight(1, 1.0f);
-
+	Player->frame->mouseMove = true;
+	::ClipCursor(NULL);
+	while (::ShowCursor(TRUE) < 0) {}
 	return true;
 }
 
 void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
 {
 	Player->SetMoveDir(XMFLOAT3(0, 0, 0));
+	deadTimer += fTimeElapsed;
+	if (deadTimer >= 5.0)
+	{
+		Player->ChangeState(make_unique<PlayerIdle>()); 
+		Player->frame->nextScene = new ResultScene(Player->frame, false);
+	}
 }
 
 void PlayerDie::Exit(CPlayer* Player)

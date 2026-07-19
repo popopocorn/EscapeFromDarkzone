@@ -638,7 +638,7 @@ void CGameFramework::BuildObjects()
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
 		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
 	);
-
+	pPlayer->frame = this;
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));
 
 	pPlayer->InitializeInventory(
