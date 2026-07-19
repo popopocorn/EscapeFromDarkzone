@@ -190,6 +190,21 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		OutputDebugString(L"[ROUND] SC_GAME_OVER received\n");
 		break;
 	}
+	case SC_ROUND_RESET:
+	{
+		OutputDebugString(L"[ROUND] SC_ROUND_RESET received -> back to lobby\n");
+
+		if (gf.m_pNetEntityMgr) {
+			gf.m_pNetEntityMgr->OnRoundReset();
+		}
+		// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함. 
+		// 아니면 위 OnRoundReset() 함수에서 처리
+
+		// 테스트 용도로 자동 재참가 기능 추가
+		// 나중에 다시 하기 버튼같은 걸 붙이면 좋을 듯. 
+		NetSession::Instance().RoundJoin();
+		break;
+	}
 	case SC_ADD_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;

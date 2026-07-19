@@ -333,6 +333,8 @@ public:
 	short    room_slot = -1;	// 각 룸의 로컬 인덱스
 	uint32_t room_gen = 0;		// 룸 세대값 (재사용 방지)
 
+	std::atomic<bool> in_round{ false };	// 라운드 진행 중 여부
+
 	std::chrono::steady_clock::time_point last_hit_time;
 
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
@@ -610,6 +612,7 @@ static void start_new_round(Room& r)
 			clients[cid].dead = false;
 			clients[cid].loot_dropped = false;
 			clients[cid].hp = clients[cid].max_hp;
+			clients[cid].in_round.store(true);
 			clients[cid].init_combat_resources();
 
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
@@ -671,6 +674,44 @@ static void start_new_round(Room& r)
 				npc.yaw, npc.hp);
 		}
 	}
+}
+
+static void end_round(Room& r, const char* reason)
+{
+	std::cout << "[ROUND] end (reason=" << reason << ")\n";
+
+	SC_GAME_OVER_PACKET gp;
+	gp.size = sizeof(gp);
+	gp.type = SC_GAME_OVER;
+	SC_ROUND_RESET_PACKET rp;
+	rp.size = sizeof(rp);
+	rp.type = SC_ROUND_RESET;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int cid = r.participants[k];
+		if (cid < 0) continue;
+		clients[cid].do_send(&gp);
+		clients[cid].do_send(&rp);
+	}
+
+	// 참가자 로비 복귀 + 룸 바인딩 해제
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int cid = r.participants[k];
+		if (cid < 0) continue;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			if (clients[cid]._state == ST_INGAME) clients[cid]._state = ST_LOBBY;
+			clients[cid].room_id = -1;
+			clients[cid].room_slot = -1;
+			clients[cid].room_gen = 0;
+		}
+		clients[cid].in_round.store(false);
+
+		r.participants[k] = -1;
+	}
+
+	r.state.store(ROOM_WAITING);
+	r.game_over_sent = false;
 }
 
 AstarNavigation g_astar;
@@ -2374,25 +2415,39 @@ static void npc_thread()
 		}
 		// =====================
 
-		// ===== 게임 오버(시간 초과) 판정 =====
-		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS && !g_rooms[0].game_over_sent)
+		// ===== 라운드 종료 (4종) 판정 =====
+		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS)
 		{
-			const auto tnow = std::chrono::steady_clock::now();
-			const float elapsed = std::chrono::duration<float>(tnow - g_rooms[0].start_time).count();
-			if (elapsed >= ROUND_TIME_LIMIT_SEC) {
-				g_rooms[0].game_over_sent = true;
-				std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
-				SC_GAME_OVER_PACKET gp;
-				gp.size = sizeof(gp);
-				gp.type = SC_GAME_OVER;
-				for (auto& pl : clients) {
-					{
-						std::lock_guard<std::mutex> ll(pl._s_lock);
-						if (ST_INGAME != pl._state) continue;
-					}
-					pl.do_send(&gp);
-				}
+			Room& r = g_rooms[0];
+
+			int total = 0;		// ST_INGAME 참가자 수
+			int active = 0;		// 아직 탈출, 사망 안 한 플레이어
+			int dead = 0;
+			for (int k = 0; k < ROOM_CAPACITY; ++k) {
+				int cid = r.participants[k];
+				if (cid < 0) continue;
+				std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+				if (clients[cid]._state != ST_INGAME) continue;
+				++total;
+				if (clients[cid].dead) ++dead;
+				if (!clients[cid].escaped && !clients[cid].dead) ++active;
 			}
+
+			const char* reason = nullptr;
+			if (total == 0) {
+				reason = "no participants";									// case 4 - 참가자 0명
+			}
+			else if (active == 0) {
+				if (dead >= total) reason = "all dead";						// case 2 - 전원 사망
+				else reason = "all escaped/dead";							// case 1 - 전원 탈출(or 혼합)
+			}
+			else {
+				const float elapsed = std::chrono::duration<float>(
+					std::chrono::steady_clock::now() - r.start_time).count();
+				if (elapsed >= ROUND_TIME_LIMIT_SEC) reason = "time over";  // case 3 - 시간 초과
+			}
+
+			if (reason) end_round(r, reason);
 		}
 		// =====================================
 
@@ -2456,7 +2511,7 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_MOVE: {
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2594,7 +2649,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CRAFT_REQUEST: {
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2658,7 +2713,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2707,7 +2762,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_PLAYER: {
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2872,7 +2927,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_LOOT_PICKUP: {
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2946,7 +3001,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_GRENADE_EXPLODE: {
-		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -3031,6 +3086,7 @@ void disconnect(int c_id)
 		clients[c_id].room_id = -1;
 		clients[c_id].room_slot = -1;
 		clients[c_id].room_gen = 0;
+		clients[c_id].in_round.store(false);
 	}
 	closesocket(old_socket);
 
@@ -3073,16 +3129,6 @@ void worker_thread(HANDLE h_iocp)
 
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
-			// 라운드 중 접속 차단
-			if (g_rooms[0].state.load() == ROUND_IN_PROGRESS) {
-				closesocket(g_c_socket); 
-				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
-				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
-				int addr_size = sizeof(SOCKADDR_IN); 
-				AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over); 
-				break; 
-			}
-
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				//{

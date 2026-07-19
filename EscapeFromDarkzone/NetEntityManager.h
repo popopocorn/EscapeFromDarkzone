@@ -44,6 +44,7 @@ public:
 	// 수신 핸들러 (엔티티 복제)
 	void OnLoginInfo(const SC_LOGIN_INFO_PACKET* p);
 	void OnRoundStart(const SC_ROUND_START_PACKET* p);
+	void OnRoundReset();
 
 	void OnAddPlayer(const SC_ADD_PLAYER_PACKET* p);
 	void OnRemovePlayer(const SC_REMOVE_PLAYER_PACKET* p);
