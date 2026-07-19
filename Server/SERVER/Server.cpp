@@ -959,8 +959,9 @@ static void BroadcastAttachedEffect(
 	ep.entity_kind = static_cast<unsigned char>(kind);
 	ep.entity_id = entity_id;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = g_rooms[0].participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&ep);
 	}
 }
@@ -983,9 +984,10 @@ static void BroadcastFireTracer(
 	tp.distance = distance;
 	tp.nx = normal.x; tp.ny = normal.y; tp.nz = normal.z;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (shooter_id == i) continue;             // 발사자 본인 제외
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = g_rooms[0].participants[k];
+		if (i < 0) continue;
+		if (shooter_id == i) continue;				// 발사자 본인 제외
 		clients[i].do_send(&tp);
 	}
 }
@@ -1001,8 +1003,9 @@ static void BroadcastWorldEffect(
 	ep.x = pos.x; ep.y = pos.y; ep.z = pos.z;
 	ep.dx = dir.x; ep.dy = dir.y; ep.dz = dir.z;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = g_rooms[0].participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&ep);
 	}
 }
@@ -1206,8 +1209,9 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 	p.npc_id = npc.id;
 	p.state = new_state;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = g_rooms[0].participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&p);
 	}
 
@@ -1227,8 +1231,9 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 			box.items[i] = npc._inventory[i].item;
 			box.counts[i] = npc._inventory[i].count;
 		}
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = g_rooms[0].participants[k];
+			if (i < 0) continue;
 			clients[i].do_send(&box);
 		}
 	}
@@ -1322,8 +1327,9 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, c
 		p.npc_id = npc.id;
 		p.hp = npc.hp;
 
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = g_rooms[0].participants[k];
+			if (i < 0) continue;
 			clients[i].do_send(&p);
 		}
 	}
@@ -1942,8 +1948,9 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	p.type = SC_REMOVE_NPC;
 	p.npc_id = npc.id;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = g_rooms[0].participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&p);
 	}
 
@@ -1982,14 +1989,11 @@ static void BroadcastNpcPositions(Room& r, const std::array<PlayerSnapshot, MAX_
 	for (const auto& npc : r.npcs) {
 		if (!npc.alive) continue;
 
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
 
-			clients[i].send_move_npc_packet(
-				npc.id,
-				npc.position.x, npc.position.y, npc.position.z,
-				npc.yaw
-			);
+			clients[i].send_move_npc_packet(npc.id, npc.position.x, npc.position.y, npc.position.z, npc.yaw);
 		}
 	}
 }
@@ -2063,8 +2067,9 @@ static void DropPlayerLootBox(Room& r, int victim_id, const std::array<PlayerSna
 		pkt.items[i] = box._inventory[i].item;
 		pkt.counts[i] = box._inventory[i].count;
 	}
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!snap[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&pkt);
 	}
 	std::cout << "[LOOT] player " << victim_id << " dropped box at slot " << slot << "\n";
