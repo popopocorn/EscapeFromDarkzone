@@ -10,6 +10,8 @@
 
 using namespace DirectX;
 
+constexpr int MAX_NPC_PER_ROOM = 66;
+
 struct SERVER_NPC {
     short    id;                 // NPC ID
     char     kind;               // NPC ´Ü°è(tier): 1=PISTOL, 2=SMG, 3=RIFLE

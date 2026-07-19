@@ -21,6 +21,7 @@
 
 #include "Server_Collision.h"
 #include "Server_Npc.h"
+#include "Server_Room.h"
 #include "Server_AI.h"
 #include "Server_Effect.h"
 #include "Server_Weapon.h"
@@ -330,6 +331,11 @@ public:
 	bool dead = false;
 	bool loot_dropped = false;
 
+	// 개별 룸 바인딩
+	int      room_id = -1;		// -1 : 룸 미소속
+	short    room_slot = -1;	// 각 룸의 로컬 인덱스
+	uint32_t room_gen = 0;		// 룸 세대값 (재사용 방지)
+
 	std::chrono::steady_clock::time_point last_hit_time;
 
 	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
@@ -462,6 +468,54 @@ public:
 };
 
 std::array<SESSION, MAX_USER> clients;
+std::array<Room, MAX_ROOMS>   g_rooms;
+
+void disconnect(int c_id); 
+
+static bool BindClientToRoom(Room& r, int c_id)
+{
+	if (!r.alive) return false;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		if (r.participants[k] != -1) continue;
+
+		r.participants[k] = c_id;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			clients[c_id].room_id = r.id;
+			clients[c_id].room_slot = static_cast<short>(k);
+			clients[c_id].room_gen = r.generation;
+		}
+		std::cout << "[ROOM] bind client " << c_id
+			<< " -> room " << r.id << " slot " << k << "\n";
+		return true;
+	}
+	return false;
+}
+
+static void ReconcileRoomParticipants(Room& r)
+{
+	if (!r.alive) return;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int pid = r.participants[k];
+		if (pid < 0) continue;
+
+		bool stale = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[pid]._s_lock);
+			if (clients[pid]._state != ST_INGAME)       stale = true;
+			else if (clients[pid].room_id != r.id)      stale = true;
+			else if (clients[pid].room_gen != r.generation) stale = true;
+		}
+
+		if (stale) {
+			r.participants[k] = -1;
+			std::cout << "[ROOM] unbind client " << pid
+				<< " from room " << r.id << " slot " << k << "\n";
+		}
+	}
+}
 
 AstarNavigation g_astar;
 SOCKET g_s_socket, g_c_socket;
@@ -700,15 +754,6 @@ int get_new_client_id()
 	}
 	return -1;
 }
-
-struct PlayerSnapshot {
-	bool  in_game;
-	float x, y, z;
-	float yaw;
-	short hp;
-
-	bool targetable;
-};
 
 static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
 {
@@ -1328,6 +1373,14 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 			if (clients[e.new_client_id]._state != ST_INGAME) {
 				break;
 			}
+		}
+
+		// ===== 룸 바인딩 (룸 0 고정. R4에서 매치메이커가 대체) =====
+		if (!BindClientToRoom(g_rooms[0], e.new_client_id)) {
+			std::cout << "[ROOM] room 0 full, disconnect client "
+				<< e.new_client_id << "\n";
+			disconnect(e.new_client_id);
+			break;
 		}
 
 		// 살아있는 모든 NPC를 그 클라에 SC_ADD_NPC 송신
@@ -1985,6 +2038,11 @@ static void npc_thread()
 			std::cout << "[NPC] tick " << debug_tick << "\n";
 		}
 		*/
+
+		// 룸 참가자 정합성 검사 (룸 0 고정. R4에서 전 룸 순회로 교체)
+		// disconnect/슬롯 재사용으로 이탈한 참가자를 participants[]에서 제거.
+		// 드레인보다 먼저 돌려서, 이번 틱에 비워진 슬롯을 신규 바인딩이 쓸 수 있게 한다.
+		ReconcileRoomParticipants(g_rooms[0]);
 
 		// 워커가 보낸 입력 처리
 		g_npc_input_queue.DrainTo(events);
@@ -2845,6 +2903,12 @@ void disconnect(int c_id)
 
 		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
 		clients[c_id].loot_dropped = false;
+
+		// 룸 바인딩 해제 표시. 
+		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.
+		clients[c_id].room_id = -1;
+		clients[c_id].room_slot = -1;
+		clients[c_id].room_gen = 0;
 	}
 	closesocket(old_socket);
 
@@ -3063,6 +3127,19 @@ int main()
 
 	g_astar.LoadNavMeshFromFile("Model/NavMeshData.bin");
 	std::cout << "NavMesh loaded from Model / NavMeshData.bin\n";
+
+	// ===== 룸 초기화 (룸 0 고정 생성) =====
+	// R4에서 매치메이커가 동적 생성/해산하도록 교체한다.
+	for (int i = 0; i < MAX_ROOMS; ++i) g_rooms[i].id = i;
+	{
+		Room& r = g_rooms[0];
+		r.generation = 1;
+		r.alive = true;
+		r.state.store(ROOM_WAITING);
+		r.game_over_sent = false;
+		r.participants.fill(-1);
+	}
+	std::cout << "[ROOM] room 0 created (capacity " << ROOM_CAPACITY << ")\n";
 
 	init_npcs();
 
