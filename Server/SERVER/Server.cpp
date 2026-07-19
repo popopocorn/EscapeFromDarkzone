@@ -472,6 +472,63 @@ std::array<Room, MAX_ROOMS>   g_rooms;
 
 void disconnect(int c_id); 
 
+static void init_room_npcs(Room& r)
+{
+	for (short i = 0; i < MAX_NPC_PER_ROOM; ++i) {
+		SERVER_NPC& npc = r.npcs[i];
+
+		npc.id = i;
+		npc.kind = NPC_TIER_1;
+		npc.outfit = 0;
+		npc.alive = false;
+		npc.state = NPC_STATE_IDLE;
+
+		npc.position = { 0.0f, 0.0f, 0.0f };
+		npc.spawn_position = { 0.0f, 0.0f, 0.0f };
+		npc.yaw = 0.0f;
+
+		npc.hp = 0;
+		npc.max_hp = 0;
+
+		npc.path_update_timer = 0.0f;
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+		npc.die_timer = 0.0f;
+
+		npc.coll_normals.clear();
+
+		npc.think_timer = 0.0f;
+
+		npc.lose_sight_timer = 0.0f;
+		npc.has_last_seen_player = false;
+		npc.last_seen_player_pos = { 0.0f, 0.0f, 0.0f };
+
+		npc.return_ignore_timer = 0.0f;
+
+		npc.aim_timer = 0.0f;
+		npc.attack_cooldown = 0.0f;
+
+		npc.burst_shots_left = 0;
+		npc.burst_serial = 0;
+		npc.burst_shot_timer = 0.0f;
+		npc.burst_rest_timer = 0.0f;
+
+		npc.strafe_timer = 0.0f;
+		npc.strafe_sign = 1.0f;
+
+		npc.current_ammo = 0;
+		npc.reloading = false;
+		npc.reload_timer = 0.0f;
+
+		npc.weapon_type = static_cast<short>(WeaponType::PISTOL);
+		npc.weapon_grade = static_cast<short>(WeaponGrade::BASIC);
+
+		npc._inventory.fill(ItemSlot{});
+		npc.loot_active = false;
+		npc.death_time = {};
+	}
+}
+
 static bool BindClientToRoom(Room& r, int c_id)
 {
 	if (!r.alive) return false;
@@ -1297,7 +1354,7 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, c
 	}
 }
 
-static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void HandleNpcEvent(Room& r, const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
 	switch (e.type) {
 	case NpcInputEvent::HIT:
@@ -1312,7 +1369,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		short best_id = -1;
 		float best_t = max_range;
-		for (auto& npc : g_npcs) {
+		for (auto& npc : r.npcs) {
 			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
 			BoundingOrientedBox oobb = MakeNpcOOBB(npc.position, npc.yaw);
 			float t;
@@ -1336,11 +1393,11 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 			trace_dist = best_t;
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
 			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
-			BoundingOrientedBox nbox = MakeNpcOOBB(g_npcs[best_id].position, g_npcs[best_id].yaw);
+			BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
 			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
 			if (dmg > 0) {
-				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
+				ApplyDamage(r.npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
 			}
 		}
 		else if (wall_t < std::numeric_limits<float>::max()) {
@@ -1384,7 +1441,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 
 		// 살아있는 모든 NPC를 그 클라에 SC_ADD_NPC 송신
-		for (const auto& npc : g_npcs) {
+		for (const auto& npc : r.npcs) {
 			if (!npc.alive) continue;
 			clients[e.new_client_id].send_add_npc_packet(
 				npc.id, npc.kind, npc.outfit,
@@ -1452,7 +1509,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 
 		// ---- NPC 피해 ----
-		for (auto& npc : g_npcs) {
+		for (auto& npc : r.npcs) {
 			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
 			float dist = DistanceXZ(npc.position, C);
 			short dmg = ComputeGrenadeDamage(g, dist);
@@ -1920,9 +1977,9 @@ static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot
 	}
 }
 
-static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastNpcPositions(Room& r, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
 {
-	for (const auto& npc : g_npcs) {
+	for (const auto& npc : r.npcs) {
 		if (!npc.alive) continue;
 
 		for (int i = 0; i < MAX_USER; ++i) {
@@ -1971,7 +2028,7 @@ static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
 	return false;
 }
 
-static void DropPlayerLootBox(int victim_id, const std::array<PlayerSnapshot, MAX_USER>& snap)
+static void DropPlayerLootBox(Room& r, int victim_id, const std::array<PlayerSnapshot, MAX_USER>& snap)
 {
 	// 사망자 인벤토리 따 오고 인벤 비움
 	std::array<ItemSlot, INVENTORY_SIZE> inv;
@@ -1983,14 +2040,14 @@ static void DropPlayerLootBox(int victim_id, const std::array<PlayerSnapshot, MA
 		clients[victim_id]._inventory.fill(ItemSlot{});
 	}
 
-	// g_npcs 상위 절반부터 빈 슬롯 검색
+	// npcs 상위 절반부터 빈 슬롯 검색
 	int slot = -1;
-	for (int i = MAX_NPC / 2; i < MAX_NPC; ++i) {
-		if (!g_npcs[i].alive && !g_npcs[i].loot_active) { slot = i; break; }
+	for (int i = MAX_NPC_PER_ROOM / 2; i < MAX_NPC_PER_ROOM; ++i) {
+		if (!r.npcs[i].alive && !r.npcs[i].loot_active) { slot = i; break; }
 	}
 	if (slot < 0) { std::cout << "[LOOT] no free slot for player box\n"; return; }
 
-	SERVER_NPC& box = g_npcs[slot];
+	SERVER_NPC& box = r.npcs[slot];
 	box._inventory = inv;
 	box.position = { px, py, pz };
 	box.loot_active = true;
@@ -2047,14 +2104,14 @@ static void npc_thread()
 		// 워커가 보낸 입력 처리
 		g_npc_input_queue.DrainTo(events);
 		for (auto& e : events) {
-			HandleNpcEvent(e, player_snapshot);
+			HandleNpcEvent(g_rooms[0], e, player_snapshot);
 		}
 
 		// 플레이어 위치 스냅샷
 		SnapshotPlayers(player_snapshot);
 
 		// 각 살아있는 NPC 갱신
-		for (auto& npc : g_npcs) {
+		for (auto& npc : g_rooms[0].npcs) {
 			if (!npc.alive) continue;
 			UpdateNpc(npc, DT, player_snapshot);
 		}
@@ -2070,7 +2127,7 @@ static void npc_thread()
 					need_drop = true;
 				}
 			}
-			if (need_drop) DropPlayerLootBox(i, player_snapshot);
+			if (need_drop) DropPlayerLootBox(g_rooms[0], i, player_snapshot);
 		}
 
 		// 플레이어 재장전 타이머 갱신
@@ -2095,7 +2152,7 @@ static void npc_thread()
 		}
 
 		const auto now = std::chrono::steady_clock::now();
-		for (auto& npc : g_npcs) {
+		for (auto& npc : g_rooms[0].npcs) {
 			if (false == npc.loot_active) continue;
 
 			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
@@ -2222,7 +2279,7 @@ static void npc_thread()
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
 			tick_count = 0;
-			BroadcastNpcPositions(player_snapshot);
+			BroadcastNpcPositions(g_rooms[0], player_snapshot);
 		}
 
 		std::this_thread::sleep_until(next);
@@ -2767,8 +2824,15 @@ void process_packet(int c_id, char* packet)
 		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
 
 		// 박스 유효성
-		if (p->box_id < 0 || p->box_id >= MAX_NPC) break;
-		SERVER_NPC& box = g_npcs[p->box_id];
+		int rid = -1;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			rid = clients[c_id].room_id;
+		}
+		if (rid < 0 || rid >= MAX_ROOMS || !g_rooms[rid].alive) break;
+
+		if (p->box_id < 0 || p->box_id >= MAX_NPC_PER_ROOM) break;
+		SERVER_NPC& box = g_rooms[rid].npcs[p->box_id];
 		if (!box.loot_active) break;
 
 		// 슬롯 범위
@@ -3141,7 +3205,7 @@ int main()
 	}
 	std::cout << "[ROOM] room 0 created (capacity " << ROOM_CAPACITY << ")\n";
 
-	init_npcs();
+	init_room_npcs(g_rooms[0]);
 
 	// NPC 배치: 위치(x,z) + 단계(tier) + 외형(outfit). y는 0.0f 고정.
 	// 1·2단계: 10그룹 x 3마리(a,b=1단계, c=2단계). 3단계: A,B,C.
@@ -3175,7 +3239,7 @@ int main()
 	for (int i = 0; i < npc_count; ++i)
 	{
 		// NPC 1개 — id 0, (7, 0, -14) 위치
-		SERVER_NPC& npc = g_npcs[i];
+		SERVER_NPC& npc = g_rooms[0].npcs[i];
 		npc.alive = true;
 		npc.outfit = main_npc_def[i].outfit;
 		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정

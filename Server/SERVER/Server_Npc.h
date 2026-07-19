@@ -65,10 +65,6 @@ struct SERVER_NPC {
     std::chrono::steady_clock::time_point   death_time;     // lifetime 기준
 };
 
-extern std::array<SERVER_NPC, MAX_NPC> g_npcs;
-
-void init_npcs();
-
 // NPC 단계(tier) 상수
 constexpr char NPC_TIER_1 = 1;   // PISTOL
 constexpr char NPC_TIER_2 = 2;   // SMG

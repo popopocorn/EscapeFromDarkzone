@@ -41,7 +41,7 @@ struct Room {
 
     std::array<int, ROOM_CAPACITY> participants;
 
-    std::array<SERVER_NPC, MAX_NPC_PER_ROOM>  npcs;
+    std::array<SERVER_NPC, MAX_NPC_PER_ROOM> npcs;
 
     std::array<PlayerSnapshot, ROOM_CAPACITY> player_snapshot;
 
