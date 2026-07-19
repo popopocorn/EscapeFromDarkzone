@@ -82,11 +82,11 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 constexpr int ROUND_MIN_PLAYERS = 2;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
-std::atomic<int> g_round_state{ ROUND_WAITING };
-std::chrono::steady_clock::time_point g_round_start_time;
+//std::atomic<int> g_round_state{ ROUND_WAITING };
+//std::chrono::steady_clock::time_point g_round_start_time;
 
 // 라운드 제한 시간
-constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;		// 1분
+constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
 //constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
 std::atomic<bool> g_game_over_sent{ false };
 // =======================
@@ -812,32 +812,46 @@ int get_new_client_id()
 	return -1;
 }
 
-static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
+static void SnapshotPlayers(Room& r)
 {
-	for (int i = 0; i < MAX_USER; ++i) {
-		std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-		if (clients[i]._state == ST_INGAME) {
-			out[i].in_game = true;
-			out[i].targetable = (!clients[i].dead && !clients[i].escaped);
-			out[i].x = clients[i].x;
-			out[i].y = clients[i].y;
-			out[i].z = clients[i].z;
-			out[i].yaw = clients[i].yaw;
-			out[i].hp = clients[i].hp;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int pid = r.participants[k];
+		PlayerSnapshot& out = r.player_snapshot[k];
+
+		if (pid < 0) {
+			out.in_game = false;
+			out.targetable = false;
+			out.client_id = -1;
+			continue;
+		}
+
+		std::lock_guard<std::mutex> lk(clients[pid]._s_lock);
+		if (clients[pid]._state == ST_INGAME) {
+			out.in_game = true;
+			out.client_id = pid;				// 전역 clients[] id
+			out.targetable = (!clients[pid].dead && !clients[pid].escaped);
+			out.x = clients[pid].x;
+			out.y = clients[pid].y;
+			out.z = clients[pid].z;
+			out.yaw = clients[pid].yaw;
+			out.hp = clients[pid].hp;
 		}
 		else {
-			out[i].in_game = false;
-			out[i].targetable = false;
+			out.in_game = false;
+			out.targetable = false;
+			out.client_id = -1;
 		}
 	}
 }
 
-static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapshot, MAX_USER>& snapshot, float& out_dist_sq)
+static int FindNearestPlayer(const XMFLOAT3& pos, const Room& r, float& out_dist_sq)
 {
+	const auto& snapshot = r.player_snapshot;
+
 	int   best_id = -1;
 	float best_sq = 0.0f;
 
-	for (int i = 0; i < MAX_USER; ++i) {
+	for (int i = 0; i < ROOM_CAPACITY; ++i) {
 		if (!snapshot[i].targetable) continue;
 
 		float dx = snapshot[i].x - pos.x;
@@ -854,7 +868,7 @@ static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapsho
 	if (best_id >= 0) {
 		out_dist_sq = best_sq;
 	}
-	return best_id;
+	return best_id;		// 룸 로컬 인덱스 (0~7), 없으면 -1
 }
 
 static void StartNpcBurst(SERVER_NPC& npc)
@@ -949,8 +963,7 @@ static void BroadcastFireTracerNoSnapshot(
 }
 
 static void BroadcastAttachedEffect(
-	EffectID id, EffectEntityKind kind, short entity_id,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+	EffectID id, EffectEntityKind kind, short entity_id)
 {
 	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
 	ep.size = sizeof(ep);
@@ -970,8 +983,7 @@ static void BroadcastAttachedEffect(
 static void BroadcastFireTracer(
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
-	const XMFLOAT3& normal,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+	const XMFLOAT3& normal)
 {
 	SC_FIRE_TRACER_PACKET tp;
 	tp.size = sizeof(tp);
@@ -993,8 +1005,7 @@ static void BroadcastFireTracer(
 }
 
 static void BroadcastWorldEffect(
-	EffectID id, const XMFLOAT3& pos, const XMFLOAT3& dir,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+	EffectID id, const XMFLOAT3& pos, const XMFLOAT3& dir)
 {
 	SC_PLAY_EFFECT_WORLD_PACKET ep;
 	ep.size = sizeof(ep);
@@ -1010,15 +1021,17 @@ static void BroadcastWorldEffect(
 	}
 }
 
-static void ChangeNpcState(SERVER_NPC&, char, const std::array<PlayerSnapshot, MAX_USER>&);
+static void ChangeNpcState(SERVER_NPC&, char);
 
-static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RELOAD);
 		return;
 	}
 
@@ -1083,24 +1096,25 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		normal = GetOOBBHitNormal(pbox2, hitPosC);
 
 		short dmg = ComputeDamage(spec, hit_dist);
+		int  target_cid = player_snapshot[target_id].client_id;
 		short new_hp = 0;
 		bool reset_prog = false;
 		bool  just_died = false;
 		{
-			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
-			if (clients[target_id]._state == ST_INGAME) {
-				clients[target_id].hp -= dmg;
-				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
-				new_hp = clients[target_id].hp;
+			std::lock_guard<std::mutex> lk(clients[target_cid]._s_lock);
+			if (clients[target_cid]._state == ST_INGAME) {
+				clients[target_cid].hp -= dmg;
+				if (clients[target_cid].hp < 0) clients[target_cid].hp = 0;
+				new_hp = clients[target_cid].hp;
 
-				if (new_hp <= 0 && !clients[target_id].dead) {
-					clients[target_id].dead = true;
-					clients[target_id].player_state = PLAYER_STATE_DIE;
+				if (new_hp <= 0 && !clients[target_cid].dead) {
+					clients[target_cid].dead = true;
+					clients[target_cid].player_state = PLAYER_STATE_DIE;
 					just_died = true;
 				}
 
-				if (clients[target_id].in_escape_zone) {
-					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
+				if (clients[target_cid].in_escape_zone) {
+					clients[target_cid].last_hit_time = std::chrono::steady_clock::now();
 					reset_prog = true;
 				}
 			}
@@ -1110,23 +1124,23 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 			pp.size = sizeof(pp);
 			pp.type = SC_ESCAPE_PROGRESS;
 			pp.event = ESCAPE_PROG_RESET;
-			clients[target_id].do_send(&pp);
+			clients[target_cid].do_send(&pp);
 		}
 
-		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
+		std::cout << "[NPC " << npc.id << "] HIT player " << target_cid
 			<< " (hp=" << new_hp << ")\n";
 		if (just_died) {
-			std::cout << "[NPC " << npc.id << "] player " << target_id << " DIED\n";
+			std::cout << "[NPC " << npc.id << "] player " << target_cid << " DIED\n";
 		}
 
 		SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
 		hp_pkt.size = sizeof(hp_pkt);
 		hp_pkt.type = SC_PLAYER_HP_UPDATE;
-		hp_pkt.id = (short)target_id;
+		hp_pkt.id = (short)target_cid;
 		hp_pkt.hp = new_hp;
-		clients[target_id].do_send(&hp_pkt);
+		clients[target_cid].do_send(&hp_pkt);
 		if (just_died) {
-			BroadcastPlayerState(target_id);
+			BroadcastPlayerState(target_cid);
 			npc.has_last_seen_player = false;
 			npc.lose_sight_timer = 0.0f;
 		}
@@ -1141,17 +1155,16 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	}
 
 	// 발사 이펙트: 머즐 플래시
-	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
+	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id);
 
 	// 트레이서 (발사자가 NPC이므로 shooter_id = -1, 전원 수신)
 	BroadcastFireTracer(
 		-1, origin, dir,
-		(short)npc.weapon_type, hit_kind, trace_dist, normal,
-		player_snapshot);
+		(short)npc.weapon_type, hit_kind, trace_dist, normal);
 
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RELOAD);
 	}
 }
 
@@ -1182,7 +1195,7 @@ static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& p
 	return move_dir;
 }
 
-static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void ChangeNpcState(SERVER_NPC& npc, char new_state)
 {
 	if (npc.state == new_state) return;
 
@@ -1314,8 +1327,10 @@ static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
 
 static void EnterNpcAttack(SERVER_NPC&);
 
-static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (NPC_STATE_DIE == npc.state) return;
 
 	npc.hp -= damage;
@@ -1335,32 +1350,36 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, c
 	}
 
 	if (npc.hp <= 0) {
-		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_DIE);
 	}
 
 	if (NPC_STATE_IDLE == npc.state) {
-		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
-		if (!player_snapshot[attacker_client_id].targetable) return;
+		int aslot = -1;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			if (player_snapshot[k].client_id == attacker_client_id) { aslot = k; break; }
+			// 전역 id attacker_client_id -> 룸 로컬 인덱스 k로 변환
+		}
+		if (aslot < 0 || !player_snapshot[aslot].targetable) return;
 
 		XMFLOAT3 attacker_pos = {
-			player_snapshot[attacker_client_id].x,
-			player_snapshot[attacker_client_id].y,
-			player_snapshot[attacker_client_id].z
+			player_snapshot[aslot].x,
+			player_snapshot[aslot].y,
+			player_snapshot[aslot].z
 		};
 
 		RefreshLastSeenPlayer(npc, attacker_pos);
 
 		if (CanShootPlayer(npc, attacker_pos)) {
 			EnterNpcAttack(npc);
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_ATTACK);
 		}
 		else {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_RUN);
 		}
 	}
 }
 
-static void HandleNpcEvent(Room& r, const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 {
 	switch (e.type) {
 	case NpcInputEvent::HIT:
@@ -1403,7 +1422,7 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e, const std::array<Pla
 			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
 			if (dmg > 0) {
-				ApplyDamage(r.npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
+				ApplyDamage(r.npcs[best_id], dmg, e.attacker_client_id, r);
 			}
 		}
 		else if (wall_t < std::numeric_limits<float>::max()) {
@@ -1420,8 +1439,7 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e, const std::array<Pla
 		XMStoreFloat3(&d3, dir);
 		BroadcastFireTracer(
 			(short)e.attacker_client_id, o3, d3,
-			(short)e.weapon_type, hit_kind, trace_dist, normal,
-			player_snapshot);
+			(short)e.weapon_type, hit_kind, trace_dist, normal);
 	}
 
 	break;
@@ -1520,13 +1538,13 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e, const std::array<Pla
 			float dist = DistanceXZ(npc.position, C);
 			short dmg = ComputeGrenadeDamage(g, dist);
 			if (dmg <= 0) continue;
-			ApplyDamage(npc, dmg, e.attacker_client_id, player_snapshot);
+			ApplyDamage(npc, dmg, e.attacker_client_id, r);
 		}
 
 		// ---- 폭발 이펙트 전체 브로드캐스트 ----
 		// dir은 클라가 GRENADE_EXPLOSION이면 위로 강제하므로 형식상 값.
 		XMFLOAT3 dir = { 0.0f, 1.0f, 0.0f };
-		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir, player_snapshot);
+		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir);
 
 		std::cout << "[Grenade] explode at (" << C.x << "," << C.z
 			<< ") by client " << e.attacker_client_id << "\n";
@@ -1547,8 +1565,10 @@ static void EnterNpcAttack(SERVER_NPC& npc)
 	npc.strafe_sign *= -1.0f;
 }
 
-static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (npc.return_ignore_timer > 0.0f) {
 		npc.return_ignore_timer -= dt;
 		return;
@@ -1560,7 +1580,7 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 	npc.think_timer = 0.0f;
 
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(npc.position, r, dist_sq);
 	if (player_id < 0) return;  // 게임 중인 플레이어 없음
 
 	XMFLOAT3 player_pos = {
@@ -1575,22 +1595,24 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 
 	if (CanShootPlayer(npc, player_pos)) {
 		EnterNpcAttack(npc);
-		ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_ATTACK);
 		return;
 	}
 
-	ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+	ChangeNpcState(npc, NPC_STATE_RUN);
 }
 
-static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcRun(SERVER_NPC& npc, float dt, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 1. 가장 가까운 플레이어 검색
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(npc.position, r, dist_sq);
 	if (player_id < 0) {
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RETURN);
 		return;
 	}
 
@@ -1602,7 +1624,7 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	};
 
 	if (IsOutsideLeashRange(npc)) {
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RETURN);
 		return;
 	}
 
@@ -1621,12 +1643,12 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 		// (Phase D: CanShootPlayer → ATTACK. 지금은 사격 거리 안이면 IDLE)
 		if (CanShootPlayer(npc, player_pos)) {
 			EnterNpcAttack(npc);
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_ATTACK);
 			return;
 		}
 
 		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
-			ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_RETURN);
 			return;
 		}
 	}
@@ -1716,15 +1738,17 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	ResolveNpcCollision(npc, npc.yaw);
 }
 
-static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 복귀 중에도 플레이어가 시야+사거리 안으로 다시 들어오면 즉시 재교전
 	npc.think_timer += dt;
 	if (npc.think_timer >= NPC_THINK_INTERVAL) {
 		npc.think_timer = 0.0f;
 
 		float dist_sq;
-		int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+		int player_id = FindNearestPlayer(npc.position, r, dist_sq);
 		if (player_id >= 0) {
 			XMFLOAT3 player_pos = {
 				player_snapshot[player_id].x,
@@ -1733,7 +1757,7 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 			};
 			if (CanDetectPlayer(npc, player_pos)) {
 				RefreshLastSeenPlayer(npc, player_pos);
-				ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+				ChangeNpcState(npc, NPC_STATE_RUN);
 				return;
 			}
 		}
@@ -1746,7 +1770,7 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
 		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
-		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_IDLE);
 		return;
 	}
 
@@ -1798,20 +1822,22 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	ResolveNpcCollision(npc, npc.yaw);
 }
 
-static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const Room& r)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 1. Leash 밖이면 Return
 	if (IsOutsideLeashRange(npc)) {
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RETURN);
 		return;
 	}
 
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(npc.position, r, dist_sq);
 	if (player_id < 0) {
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(npc, NPC_STATE_RETURN);
 		return;
 	}
 	XMFLOAT3 player_pos = {
@@ -1832,7 +1858,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		}
 		if (justFinished) {
 			// 재장전 종료 -> ATTACK 복귀 통지
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_ATTACK);
 		}
 		return;  // 이동 없음
 	}
@@ -1856,11 +1882,11 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		npc.think_timer = 0.0f;
 
 		if (IsPlayerOutOfAttackRange(npc, player_pos)) {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_RUN);
 			return;
 		}
 		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(npc, NPC_STATE_RUN);
 			return;
 		}
 	}
@@ -1868,7 +1894,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	// 5. 탄약 0이면 재장전
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);   // 클라에 재장전 시작 통지
+		ChangeNpcState(npc, NPC_STATE_RELOAD);   // 클라에 재장전 시작 통지
 		return;
 	}
 
@@ -1922,7 +1948,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 
 	npc.burst_shot_timer -= dt;
 	if (npc.burst_shot_timer <= 0.0f) {
-		NpcFireAtPlayer(npc, player_id, player_snapshot);
+		NpcFireAtPlayer(npc, player_id, r);
 		npc.burst_shots_left--;
 		npc.burst_shot_timer = NPC_BURST_SHOT_INTERVAL;
 
@@ -1934,7 +1960,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	}
 }
 
-static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcDie(SERVER_NPC& npc, float dt)
 {
 	npc.die_timer += dt;
 	if (npc.die_timer < NPC_DIE_DURATION) return;
@@ -1962,29 +1988,29 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
 }
 
-static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpc(SERVER_NPC& npc, float dt, const Room& r)
 {
 	switch (npc.state) {
 	case NPC_STATE_IDLE:
-		UpdateNpcIdle(npc, dt, player_snapshot);
+		UpdateNpcIdle(npc, dt, r);
 		break;
 	case NPC_STATE_RUN:
-		UpdateNpcRun(npc, dt, player_snapshot);
+		UpdateNpcRun(npc, dt, r);
 		break;
 	case NPC_STATE_RETURN:
-		UpdateNpcReturn(npc, dt, player_snapshot);
+		UpdateNpcReturn(npc, dt, r);
 		break;
 	case NPC_STATE_ATTACK:
 	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
-		UpdateNpcAttack(npc, dt, player_snapshot);
+		UpdateNpcAttack(npc, dt, r);
 		break;
 	case NPC_STATE_DIE:
-		UpdateNpcDie(npc, dt, player_snapshot);
+		UpdateNpcDie(npc, dt);
 		break;
 	}
 }
 
-static void BroadcastNpcPositions(Room& r, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastNpcPositions(Room& r)
 {
 	for (const auto& npc : r.npcs) {
 		if (!npc.alive) continue;
@@ -2032,7 +2058,7 @@ static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
 	return false;
 }
 
-static void DropPlayerLootBox(Room& r, int victim_id, const std::array<PlayerSnapshot, MAX_USER>& snap)
+static void DropPlayerLootBox(Room& r, int victim_id)
 {
 	// 사망자 인벤토리 따 오고 인벤 비움
 	std::array<ItemSlot, INVENTORY_SIZE> inv;
@@ -2086,7 +2112,6 @@ static void npc_thread()
 
 	std::vector<NpcInputEvent>            events;
 	events.reserve(32);
-	std::array<PlayerSnapshot, MAX_USER>  player_snapshot;
 
 	auto next = clock::now();
 	int  tick_count = 0;
@@ -2109,16 +2134,16 @@ static void npc_thread()
 		// 워커가 보낸 입력 처리
 		g_npc_input_queue.DrainTo(events);
 		for (auto& e : events) {
-			HandleNpcEvent(g_rooms[0], e, player_snapshot);
+			HandleNpcEvent(g_rooms[0], e);
 		}
 
 		// 플레이어 위치 스냅샷
-		SnapshotPlayers(player_snapshot);
+		SnapshotPlayers(g_rooms[0]);
 
 		// 각 살아있는 NPC 갱신
 		for (auto& npc : g_rooms[0].npcs) {
 			if (!npc.alive) continue;
-			UpdateNpc(npc, DT, player_snapshot);
+			UpdateNpc(npc, DT, g_rooms[0]);
 		}
 
 		// 사망 플레이어 루트박스 드롭 (한 번만) + 브로드캐스트
@@ -2132,7 +2157,7 @@ static void npc_thread()
 					need_drop = true;
 				}
 			}
-			if (need_drop) DropPlayerLootBox(g_rooms[0], i, player_snapshot);
+			if (need_drop) DropPlayerLootBox(g_rooms[0], i);
 		}
 
 		// 플레이어 재장전 타이머 갱신
@@ -2284,7 +2309,7 @@ static void npc_thread()
 		++tick_count;
 		if (tick_count >= BROADCAST_EVERY) {
 			tick_count = 0;
-			BroadcastNpcPositions(g_rooms[0], player_snapshot);
+			BroadcastNpcPositions(g_rooms[0]);
 		}
 
 		std::this_thread::sleep_until(next);
