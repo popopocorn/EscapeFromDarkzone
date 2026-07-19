@@ -82,13 +82,10 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 constexpr int ROUND_MIN_PLAYERS = 2;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
-//std::atomic<int> g_round_state{ ROUND_WAITING };
-//std::chrono::steady_clock::time_point g_round_start_time;
 
 // 라운드 제한 시간
 constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
 //constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
-std::atomic<bool> g_game_over_sent{ false };
 // =======================
 
 
@@ -2208,7 +2205,7 @@ static void npc_thread()
 		}
 
 		// ===== 탈출 판정 =====
-		if (g_round_state.load() == ROUND_IN_PROGRESS)
+		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS)
 		{
 			const auto tnow = std::chrono::steady_clock::now();
 			for (int i = 0; i < MAX_USER; ++i) {
@@ -2250,7 +2247,7 @@ static void npc_thread()
 							std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
 							clients[i].escaped = true;
 							success = true;
-							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
+							escape_sec = std::chrono::duration<float>(tnow - g_rooms[0].start_time).count();
 						}
 					}
 					else if (true == clients[i].in_escape_zone && !now_in_zone) {
@@ -2281,25 +2278,22 @@ static void npc_thread()
 		// =====================
 
 		// ===== 게임 오버(시간 초과) 판정 =====
-		if (g_round_state.load() == ROUND_IN_PROGRESS && !g_game_over_sent.load())
+		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS && !g_rooms[0].game_over_sent)
 		{
-			const auto  tnow = std::chrono::steady_clock::now();
-			const float elapsed = std::chrono::duration<float>(tnow - g_round_start_time).count();
+			const auto tnow = std::chrono::steady_clock::now();
+			const float elapsed = std::chrono::duration<float>(tnow - g_rooms[0].start_time).count();
 			if (elapsed >= ROUND_TIME_LIMIT_SEC) {
-				bool expected = false;
-				// CAS 성공 시 1회 전송 (라운드당 1번)
-				if (g_game_over_sent.compare_exchange_strong(expected, true)) {
-					std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
-					SC_GAME_OVER_PACKET gp;
-					gp.size = sizeof(gp);
-					gp.type = SC_GAME_OVER;
-					for (auto& pl : clients) {
-						{
-							std::lock_guard<std::mutex> ll(pl._s_lock);
-							if (ST_INGAME != pl._state) continue;
-						}
-						pl.do_send(&gp);
+				g_rooms[0].game_over_sent = true;
+				std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
+				SC_GAME_OVER_PACKET gp;
+				gp.size = sizeof(gp);
+				gp.type = SC_GAME_OVER;
+				for (auto& pl : clients) {
+					{
+						std::lock_guard<std::mutex> ll(pl._s_lock);
+						if (ST_INGAME != pl._state) continue;
 					}
+					pl.do_send(&gp);
 				}
 			}
 		}
@@ -2343,7 +2337,7 @@ void process_packet(int c_id, char* packet)
 		}
 
 		// ===== 라운드 시작 판정 =====
-		if (g_round_state.load() == ROUND_WAITING) {
+		if (g_rooms[0].state.load() == ROUND_WAITING) {
 			// ST_INGAME 인원 카운트
 			int ingame = 0;
 			for (auto& pl : clients) {
@@ -2354,20 +2348,13 @@ void process_packet(int c_id, char* packet)
 			if (ingame >= ROUND_MIN_PLAYERS) {
 				int expected = ROUND_WAITING;
 				// CAS 성공자 단 하나만 전환, 브로드캐스트
-				if (g_round_state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
-					g_round_start_time = std::chrono::steady_clock::now();
+				if (g_rooms[0].state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
+					g_rooms[0].start_time = std::chrono::steady_clock::now();
 					std::cout << "[ROUND] start (players=" << ingame << ")\n";
 
 					SC_ROUND_START_PACKET rp;
 					rp.size = sizeof(rp);
 					rp.type = SC_ROUND_START;
-					for (auto& pl : clients) {
-						{
-							std::lock_guard<std::mutex> ll(pl._s_lock);
-							if (ST_INGAME != pl._state) continue;
-						}
-						pl.do_send(&rp);
-					}
 
 					for (auto& pl : clients) {
 						{
@@ -2428,7 +2415,7 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_MOVE: {
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2566,7 +2553,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CRAFT_REQUEST: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2630,7 +2617,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2679,7 +2666,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_PLAYER: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2844,7 +2831,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_LOOT_PICKUP: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2918,7 +2905,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_GRENADE_EXPLODE: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (g_rooms[0].state.load() != ROUND_IN_PROGRESS) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -3046,7 +3033,7 @@ void worker_thread(HANDLE h_iocp)
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
 			// 라운드 중 접속 차단
-			if (g_round_state.load() == ROUND_IN_PROGRESS) { 
+			if (g_rooms[0].state.load() == ROUND_IN_PROGRESS) {
 				closesocket(g_c_socket); 
 				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
 				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
