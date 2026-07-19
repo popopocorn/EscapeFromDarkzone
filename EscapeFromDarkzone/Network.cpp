@@ -372,3 +372,13 @@ bool NetworkManager::SendCraftRequest(ItemID target)
 	OutputDebugString(L"SendItemRequest\n");
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendRoundJoin()
+{
+	CS_ROUND_JOIN_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_ROUND_JOIN_PACKET);
+	pkt.type = CS_ROUND_JOIN;
+
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}

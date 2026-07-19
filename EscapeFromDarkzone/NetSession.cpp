@@ -54,3 +54,8 @@ bool NetSession::LootPickup(short box_id, short slotidx)
 {
 	return NetworkManager::Instance().SendLootPickup(box_id, slotidx);
 }
+
+bool NetSession::RoundJoin()
+{
+	return NetworkManager::Instance().SendRoundJoin();
+}

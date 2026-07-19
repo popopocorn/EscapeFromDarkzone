@@ -99,7 +99,7 @@ inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 
 // NpcInputEvent
 struct NpcInputEvent {
-    enum Type { HIT, NEW_CLIENT_JOINED, GRENADE_EXPLODE };
+    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN };
     Type type;
 
     int      attacker_client_id;
