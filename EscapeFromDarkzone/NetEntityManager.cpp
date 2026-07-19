@@ -207,12 +207,12 @@ void NetEntityManager::OnAddNpc(const SC_ADD_NPC_PACKET* p)
 	// tier(npc_kind) + outfit으로 외형 모델 선택
 	ModelName enemyModelName = NpcModelFromTierOutfit(p->npc_kind, p->npc_outfit);
 
-	CLoadedModelInfo* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(enemyModelName);		// 리소스 매니저에서 모델 받아옴
+	ModelInstance* pModel = ResourceManager::Instance().CreateSkinnedModelInstance(enemyModelName);		// 리소스 매니저에서 모델 받아옴
 	{
 		wchar_t szLog[256];
 		swprintf_s(szLog, L"[SC_ADD_NPC] id=%d, tier=%d, outfit=%d, model=%s\n",
 			p->npc_id, (int)p->npc_kind, (int)p->npc_outfit,
-			(pModel && pModel->m_pModelRootObject) ? L"OK" : L"NULL");
+			(pModel && pModel->m_pRootObject) ? L"OK" : L"NULL");
 		OutputDebugStringW(szLog);
 	}
 

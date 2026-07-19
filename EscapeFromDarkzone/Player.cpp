@@ -1770,7 +1770,7 @@ CTerrainPlayer::CTerrainPlayer(
 	ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* shader,
-	CLoadedModelInfo* pPlayerModel,
+	ModelInstance* pPlayerModel,
 	CGameObject* pDefaultWeaponPrototype)
 {
 	m_pCamera = ChangeCamera(THIRD_PERSON_CAMERA, 0.0f);
@@ -1786,7 +1786,7 @@ CTerrainPlayer::CTerrainPlayer(
 		pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 	}
 
-	SetChild(pPlayerModel->m_pModelRootObject, true);
+	SetChild(pPlayerModel->m_pRootObject, true);
 
 	BoundingOrientedBox playerBox;
 	playerBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -1797,21 +1797,21 @@ CTerrainPlayer::CTerrainPlayer(
 	///*
 	PlayerOwnWeapons[PlayerWeaponType::Rifle] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::RIFLE);
 	PlayerOwnWeapons[PlayerWeaponType::Rifle]->SetModelPrototype(
-		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
+		ResourceManager::Instance().GetModelInstance(ModelName::RIFLE)
 	);
 	PlayerOwnWeapons[PlayerWeaponType::Shotgun] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::SHOTGUN);
 	PlayerOwnWeapons[PlayerWeaponType::Shotgun]->SetModelPrototype(
-		ResourceManager::Instance().GetModelPrototype(ModelName::SHOTGUN)
+		ResourceManager::Instance().GetModelInstance(ModelName::SHOTGUN)
 	);
 	PlayerOwnWeapons[PlayerWeaponType::SMG] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::SMG);
 	PlayerOwnWeapons[PlayerWeaponType::SMG]->SetModelPrototype(
-		ResourceManager::Instance().GetModelPrototype(ModelName::SMG)
+		ResourceManager::Instance().GetModelInstance(ModelName::SMG)
 	);
 	//*/
 
 	PlayerOwnWeapons[PlayerWeaponType::Pistol] = make_unique<WeaponItem>(ItemGrade::GRADE_1, ItemType::PISTOL);
 	PlayerOwnWeapons[PlayerWeaponType::Pistol]->SetModelPrototype(
-		ResourceManager::Instance().GetModelPrototype(ModelName::PISTOL)
+		ResourceManager::Instance().GetModelInstance(ModelName::PISTOL)
 	);
 
 
@@ -2526,4 +2526,5 @@ void PlayerDie::Update(CPlayer* Player, float fTimeElapsed)
 
 void PlayerDie::Exit(CPlayer* Player)
 {
+
 }

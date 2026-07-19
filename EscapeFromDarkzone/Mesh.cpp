@@ -455,6 +455,7 @@ void CStandardMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void
 //
 CSkinnedMesh::CSkinnedMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) : CStandardMesh(pd3dDevice, pd3dCommandList)
 {
+
 }
 
 CSkinnedMesh::~CSkinnedMesh()
@@ -931,6 +932,7 @@ void CViewCircleMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, const std::
 			localDir.z * hitDist
 		);
 	}
+	//OutputDebugString(L"circlecip\n");
 }
 
 void CViewConeMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, float fYaw, const std::vector<CGameObject*>& blockers)

@@ -338,18 +338,15 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 	pLoot->SetBoxId(npc_id);
 	pLoot->SetPosition(spawnPos);
 
-	CGameObject* pLootPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::LOOT_BOX);
+	CGameObject* pLootBoxModel = ResourceManager::Instance().GetModelInstance(ModelName::LOOT_BOX);
 
-	if (pLootPrototype)
+	if (pLootBoxModel)
 	{
-		CGameObject* pLootBoxModel = CGameObject::CreateModelInstance(pLootPrototype);
 
-		if (pLootBoxModel)
-		{
-			pLootBoxModel->SetScale(3.0f, 3.0f, 3.0f);
-			pLootBoxModel->SetPosition(0.0f, 0.55f, 0.0f);
-			pLoot->SetVisualModel(pLootBoxModel);
-		}
+		pLootBoxModel->SetScale(3.0f, 3.0f, 3.0f);
+		pLootBoxModel->SetPosition(0.0f, 0.55f, 0.0f);
+		pLoot->SetVisualModel(pLootBoxModel);
+
 	}
 	
 	if (pLoot->GetOOBB().empty())

@@ -332,7 +332,7 @@ public:
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		int nAnimationTracks,
-		CLoadedModelInfo* pModel,
+		ModelInstance* pModel,
 		CPlayer* pOwner)
 		: CAnimationController(pd3dDevice, pd3dCommandList, nAnimationTracks, pModel)
 	{
@@ -385,7 +385,7 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* shader,
-		CLoadedModelInfo* pPlayerModelInstance,
+		ModelInstance* pPlayerModelInstance,
 		CGameObject* pDefaultWeaponPrototype
 	);
 	virtual ~CTerrainPlayer();

@@ -651,6 +651,7 @@ bool EquipUI::ProcessClick(POINT mouse)
 			p.second->HandleClick();
 		}
 	}
+	return false;
 }
 
 void EquipUI::SubmitToShader(UIObjectShader* shader)
@@ -729,6 +730,7 @@ bool PlayerStatus::ProcessClick(POINT mouse)
 			p.second->HandleClick();
 		}
 	}
+	return false;
 }
 void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 {

@@ -62,7 +62,7 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* pShader = nullptr,
-		CLoadedModelInfo* pEnemyModelInstance = nullptr
+		ModelInstance* pEnemyModelInstance = nullptr
 	);
 	virtual ~CEnemyObject();
 	void SubmitWeaponToShader(CShader* shader);

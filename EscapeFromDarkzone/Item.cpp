@@ -9,11 +9,11 @@
 
 
 
-CGameObject* Item::CreateModelInstance() const
-{
-	if (!model) return nullptr;
-	return CGameObject::CreateModelInstance(model);
-}
+//CGameObject* Item::CreateModelInstance() const
+//{
+//	if (!model) return nullptr;
+//	return CGameObject::CreateModelInstance(model);
+//}
 
 WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)

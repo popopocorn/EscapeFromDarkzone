@@ -119,7 +119,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
 	short a = (playerID % 2) + 1;
-	CLoadedModelInfo* pPlayerModel;
+	ModelInstance* pPlayerModel;
 	switch (a)
 	{
 	case 1:
@@ -139,13 +139,13 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		return;
 	}
 
-	if (!pPlayerModel->m_pModelRootObject)
+	if (!pPlayerModel->m_pRootObject)
 	{
 		delete pPlayerModel;
 		return;
 	}
 
-	SetChild(pPlayerModel->m_pModelRootObject, true);
+	SetChild(pPlayerModel->m_pRootObject, true);
 
 	m_pRenderWeapon = new CGameObject();
 	m_pRenderWeapon->SetOOBB(NULL);
@@ -801,7 +801,7 @@ void OtherPlayer::EquipDefaultPistol()
 
 void OtherPlayer::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelPrototype(modelName);
+	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelInstance(modelName);
 
 	if (!pWeaponInstance)
 	{

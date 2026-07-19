@@ -29,6 +29,9 @@ enum class ModelName
 	GRENADE,
 	LOOT_BOX,
 
+	VIEW_CONE,
+	VIEW_CIRCLE,
+
 	MAP_FLOOR,
 
 	MAP_BLOCK01,   // block1
@@ -109,6 +112,7 @@ enum class ModelName
 	MAP_CARS_C6,
 
 	MAP_ROAD,
+
 
 	MODEL_TYPE_END
 };
@@ -272,13 +276,16 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE m_d3dSrvGPUDescriptorNextHandle{};
 
 	// 애니메이션 없는 모델 원본
-	unordered_map<ModelName, unique_ptr<CGameObject>> m_ModelPrototypes;
+	unordered_map<ModelName, unique_ptr<ModelResource>> m_ModelPrototypes;
 
 	// 애니메이션 있는 모델 원본
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
 	// UI 원본
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
+
+	//texture map
+	unordered_map<string, CTexture*> textureMap;
 
 private:
 	ResourceManager() = default;
@@ -394,10 +401,23 @@ public:
 	);
 
 	// 정적 모델 원본 가져오기
-	CGameObject* GetModelPrototype(ModelName key) const;
+	CGameObject* GetModelInstance(ModelName key) const;
 
 	// 스킨드 모델 인스턴스 생성
-	CLoadedModelInfo* CreateSkinnedModelInstance(ModelName key);
+	ModelInstance* CreateSkinnedModelInstance(ModelName key);
+
 
 	UIMesh* GetUIMesh(UIName name);
+	void SaveTexture(string name, CTexture* tex);
+	CTexture* GetTexture(string name);
+
+
+private:
+		static void LoadMaterialsFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ModelResource* pParent, FILE* pInFile, CShader* pShader);
+
+		static void LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel);
+		static ModelResource* LoadFrameHierarchyFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, ModelResource* pParent, FILE* pInFile, CShader* pShader, int* pnSkinnedMeshes, const char* pstrFileName);
+		static ModelResource* LoadGeometryModelByName(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, ModelResource* pParent, const char* name, CShader* pShader, int* pnSkinnedMeshes);
+		static CLoadedModelInfo* LoadGeometryAndAnimationFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, const char* pstrFileName, CShader* pShader);
+
 };

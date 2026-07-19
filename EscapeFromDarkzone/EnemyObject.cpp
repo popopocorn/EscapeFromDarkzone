@@ -164,7 +164,7 @@ CEnemyObject::CEnemyObject(
 	ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* pShader,
-	CLoadedModelInfo* pEnemyModel)
+	ModelInstance* pEnemyModel)
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
 	UNREFERENCED_PARAMETER(pShader);
@@ -180,7 +180,7 @@ CEnemyObject::CEnemyObject(
 		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
 	}
 
-	SetChild(pEnemyModel->m_pModelRootObject, true);
+	SetChild(pEnemyModel->m_pRootObject, true);
 
 	m_pRenderWeapon = new CGameObject();
 	m_pWeapon = nullptr;
@@ -189,9 +189,9 @@ CEnemyObject::CEnemyObject(
 
 	ClearOOBB(false);
 
-	if (pEnemyModel->m_pModelRootObject)
+	if (pEnemyModel->m_pRootObject)
 	{
-		pEnemyModel->m_pModelRootObject->ClearOOBB(true);
+		pEnemyModel->m_pRootObject->ClearOOBB(true);
 	}
 
 	BoundingOrientedBox enemyBox;
@@ -601,9 +601,9 @@ void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
 
 void CEnemyObject::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponPrototype = ResourceManager::Instance().GetModelPrototype(modelName);
+	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelInstance(modelName);
 
-	if (!pWeaponPrototype)
+	if (!pWeaponInstance)
 	{
 		wchar_t debugText[128];
 		swprintf_s(debugText, L"[Enemy] weapon prototype not found. ModelName = %d\n", static_cast<int>(modelName));
@@ -611,7 +611,6 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		return;
 	}
 
-	CGameObject* pWeaponInstance = CGameObject::CreateModelInstance(pWeaponPrototype);
 
 	if (!pWeaponInstance)
 	{

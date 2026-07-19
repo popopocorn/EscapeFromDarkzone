@@ -83,7 +83,7 @@ void ProjectileManager::Init(CShader*s)
 	shader = s;
 	for (int i = 0; i < poolSize; ++i)
 	{
-		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
+		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelInstance(ModelName::BULLET);
 		bullets[i].SetChild(pBulletInstance);
 	}
 }

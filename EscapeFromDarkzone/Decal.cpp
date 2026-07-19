@@ -248,38 +248,33 @@ void DecalManager::Init(CShader* s)
 
 	shader = s;
 
-	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET_DECAL);
-	CGameObject* pBloodPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BLOOD_DECAL);
-
 	for (int i = 0; i < bulletPoolSize; ++i)
 	{
+		CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelInstance(ModelName::BULLET_DECAL);
+
 		if (pBulletPrototype)
 		{
-			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBulletPrototype);
+		
+			bulletDecals[i].SetChild(pBulletPrototype);
+			bulletDecals[i].SetOOBB(NULL);
+			bulletDecals[i].isColl = false;
+			bulletDecals[i].Deactivate();
 
-			if (pDecalInstance)
-			{
-				bulletDecals[i].SetChild(pDecalInstance);
-				bulletDecals[i].SetOOBB(NULL);
-				bulletDecals[i].isColl = false;
-				bulletDecals[i].Deactivate();
-			}
 		}
 	}
 
 	for (int i = 0; i < bloodPoolSize; ++i)
 	{
+
+		CGameObject* pBloodPrototype = ResourceManager::Instance().GetModelInstance(ModelName::BLOOD_DECAL);
+
 		if (pBloodPrototype)
 		{
-			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBloodPrototype);
+			bloodDecals[i].SetChild(pBloodPrototype);
+			bloodDecals[i].SetOOBB(NULL);
+			bloodDecals[i].isColl = false;
+			bloodDecals[i].Deactivate();
 
-			if (pDecalInstance)
-			{
-				bloodDecals[i].SetChild(pDecalInstance);
-				bloodDecals[i].SetOOBB(NULL);
-				bloodDecals[i].isColl = false;
-				bloodDecals[i].Deactivate();
-			}
 		}
 	}
 }
