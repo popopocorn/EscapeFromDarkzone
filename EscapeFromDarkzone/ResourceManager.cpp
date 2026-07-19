@@ -697,14 +697,14 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::LOBBY_START_BUTTON,
-		L"UI/Start_BTN.dds"
+		L"UI/Start.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::TABLE_VERTICAL,
-		L"UI/Table_02.dds"
+		L"UI/Table.dds"
 	);
 
 	LoadUIMesh(
@@ -732,105 +732,105 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_FIBER,
-		L"UI/yarn.dds"
+		L"UI/Fiber.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_NEEDLE,
-		L"UI/needle.dds"
+		L"UI/Needle.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_METAL,
-		L"UI/metalbar.dds"
+		L"UI/MetalBar.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_01,
-		L"UI/Icon_Helmet_01.dds"
+		L"UI/Helmet01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_02,
-		L"UI/Icon_Helmet_02.dds"
+		L"UI/Helmet02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_03,
-		L"UI/Icon_Helmet_03.dds"
+		L"UI/Helmet03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_04,
-		L"UI/Icon_Helmet_04.dds"
+		L"UI/Helmet04.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_01,
-		L"UI/Icon_Body_01.dds"
+		L"UI/Body01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_02,
-		L"UI/Icon_Body_02.dds"
+		L"UI/Body02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_03,
-		L"UI/Icon_Body_03.dds"
+		L"UI/Body03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_04,
-		L"UI/Icon_Body_04.dds"
+		L"UI/Body04.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_01,
-		L"UI/Icon_Shoes_01.dds"
+		L"UI/Shoes01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_02,
-		L"UI/Icon_Shoes_02.dds"
+		L"UI/Shoes02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_03,
-		L"UI/Icon_Shoes_03.dds"
+		L"UI/Shoes03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_04,
-		L"UI/Icon_Shoes_04.dds"
+		L"UI/Shoes04.dds"
 	);
 
 	//status
@@ -838,14 +838,14 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_BAR,
-		L"UI/Health_Bar_Table.dds"
+		L"UI/HealthBar.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_DOT,
-		L"UI/Health_Dot.dds"
+		L"UI/HealthDot.dds"
 	);
 	LoadUIMesh(
 		pd3dDevice,
@@ -893,7 +893,7 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::UI_WAIT,
-		L"UI/wait.dds"
+		L"UI/Waiting.dds"
 	);
 
 	LoadUIMesh(
