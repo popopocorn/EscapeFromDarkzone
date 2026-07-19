@@ -632,7 +632,7 @@ static void start_new_round(Room& r)
 	// 월드 리셋
 	spawn_room_npcs(r);
 
-	r.state.store(ROOM_IN_PROGRESS);
+	r.state = ROOM_IN_PROGRESS;
 	r.start_time = std::chrono::steady_clock::now();
 	r.game_over_sent = false;
 	std::cout << "[ROUND] start (players=" << bound << ")\n";
@@ -710,7 +710,7 @@ static void end_round(Room& r, const char* reason)
 		r.participants[k] = -1;
 	}
 
-	r.state.store(ROOM_WAITING);
+	r.state = ROOM_WAITING;
 	r.game_over_sent = false;
 }
 
@@ -2266,7 +2266,7 @@ static void npc_thread()
 		}
 
 		// 라운드 시작 판정 
-		if (g_rooms[0].state.load() == ROOM_WAITING && static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
+		if (g_rooms[0].state == ROOM_WAITING && static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
 			start_new_round(g_rooms[0]);
 		}
 
@@ -2274,7 +2274,7 @@ static void npc_thread()
 		SnapshotPlayers(g_rooms[0]);
 
 		// 각 살아있는 NPC 갱신 (라운드 진행 중에만)
-		if (g_rooms[0].state.load() == ROOM_IN_PROGRESS) {
+		if (g_rooms[0].state == ROOM_IN_PROGRESS) {
 			for (auto& npc : g_rooms[0].npcs) {
 				if (!npc.alive) continue;
 				UpdateNpc(npc, DT, g_rooms[0]);
@@ -2343,7 +2343,7 @@ static void npc_thread()
 		}
 
 		// ===== 탈출 판정 =====
-		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS)
+		if (g_rooms[0].state == ROUND_IN_PROGRESS)
 		{
 			const auto tnow = std::chrono::steady_clock::now();
 			for (int i = 0; i < MAX_USER; ++i) {
@@ -2416,7 +2416,7 @@ static void npc_thread()
 		// =====================
 
 		// ===== 라운드 종료 (4종) 판정 =====
-		if (g_rooms[0].state.load() == ROUND_IN_PROGRESS)
+		if (g_rooms[0].state == ROUND_IN_PROGRESS)
 		{
 			Room& r = g_rooms[0];
 
@@ -3339,7 +3339,7 @@ int main()
 		Room& r = g_rooms[0];
 		r.generation = 1;
 		r.alive = true;
-		r.state.store(ROOM_WAITING);
+		r.state = ROOM_WAITING;
 		r.game_over_sent = false;
 		r.participants.fill(-1);
 	}

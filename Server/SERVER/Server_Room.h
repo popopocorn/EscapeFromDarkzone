@@ -32,12 +32,11 @@ struct PlayerSnapshot {
 struct Room {
     int      id = -1;               // 배열 인덱스. 기동 시 1회 설정
     bool     alive = false;
-    uint32_t generation = 0;        // 슬롯 재사용마다 +1 (R4에서 stale 이벤트 가드에 사용)
-
-    std::atomic<int> state{ ROOM_WAITING };
+    uint32_t generation = 0;        // 룸 슬롯 재사용마다 +1
+    bool     game_over_sent = false;
 
     std::chrono::steady_clock::time_point start_time;
-    bool     game_over_sent = false;
+    int state = ROOM_WAITING;
 
     std::array<int, ROOM_CAPACITY> participants;
 
