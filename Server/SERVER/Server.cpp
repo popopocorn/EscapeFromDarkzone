@@ -1056,8 +1056,7 @@ static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 	return false;
 }
 
-static void BroadcastAttachedEffectNoSnapshot(
-	EffectID id, EffectEntityKind kind, short entity_id)
+static void BroadcastAttachedEffectNoSnapshot(int room_id, EffectID id, EffectEntityKind kind, short entity_id)
 {
 	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
 	ep.size = sizeof(ep);
@@ -1070,6 +1069,7 @@ static void BroadcastAttachedEffectNoSnapshot(
 		{
 			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 			if (clients[i]._state != ST_INGAME) continue;
+			if (clients[i].room_id != room_id) continue;
 		}
 		clients[i].do_send(&ep);
 	}
@@ -1077,6 +1077,7 @@ static void BroadcastAttachedEffectNoSnapshot(
 
 // 스냅샷 없이 (IOCP 워커 경로: PvP)
 static void BroadcastFireTracerNoSnapshot(
+	int room_id, 
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
 	const XMFLOAT3& normal)
@@ -1097,6 +1098,7 @@ static void BroadcastFireTracerNoSnapshot(
 		{
 			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 			if (clients[i]._state != ST_INGAME) continue;
+			if (clients[i].room_id != room_id) continue;
 		}
 		clients[i].do_send(&tp);
 	}
@@ -1607,7 +1609,10 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		GrenadeSpec g = GetGrenadeSpec();
 
 		// ---- 플레이어 피해 ----
-		for (int i = 0; i < MAX_USER; ++i) {
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
+
 			short new_hp = 0;
 			bool  hit = false;
 			bool  just_died = false;
@@ -2777,10 +2782,15 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_HIT_PLAYER: {
 		if (false == clients[c_id].in_round.load()) break;
+
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+
+			if (clients[c_id].dead)
+				break;
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_HIT_PLAYER_PACKET* p =
@@ -2842,6 +2852,7 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].room_id != sroom) continue;
 				if (clients[i].hp <= 0) continue;     // 이미 사망
 				tpos = { clients[i].x, clients[i].y, clients[i].z };
 				tyaw = clients[i].yaw;
@@ -2929,11 +2940,10 @@ void process_packet(int c_id, char* packet)
 		}
 
 		// 머즐 플래시 전체 브로드캐스트
-		BroadcastAttachedEffectNoSnapshot(
-			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
+		BroadcastAttachedEffectNoSnapshot(sroom, EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
 		BroadcastFireTracerNoSnapshot(
-			(short)c_id,
+			sroom, (short)c_id,
 			{ p->ray_ox, p->ray_oy, p->ray_oz },
 			{ p->ray_dx, p->ray_dy, p->ray_dz },
 			p->weapon_type, hit_kind, trace_dist, normal);
@@ -3001,6 +3011,7 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> ll(pl._s_lock);
 				if (ST_INGAME != pl._state) continue;
+				if (pl.room_id != rid) continue;
 			}
 			pl.do_send(&bp);
 		}
@@ -3087,6 +3098,8 @@ void process_packet(int c_id, char* packet)
 void disconnect(int c_id)
 {
 	SOCKET old_socket = INVALID_SOCKET;
+
+	int leaving_room = -1;
 	{
 		std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 		if (clients[c_id]._state == ST_FREE) return;	// 이중 호출 방지
@@ -3099,6 +3112,7 @@ void disconnect(int c_id)
 
 		// 룸 바인딩 해제 표시. 
 		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.
+		leaving_room = clients[c_id].room_id;			// 캡처
 		clients[c_id].room_id = -1;
 		clients[c_id].room_slot = -1;
 		clients[c_id].room_gen = 0;
@@ -3112,6 +3126,7 @@ void disconnect(int c_id)
 		{
 			std::lock_guard<std::mutex> ll(pl._s_lock);
 			if (ST_INGAME != pl._state) continue;
+			if (pl.room_id != leaving_room) continue;
 		}
 		if (pl._id == c_id) continue;
 		pl.send_remove_player_packet(c_id);
