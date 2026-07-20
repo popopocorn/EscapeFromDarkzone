@@ -85,6 +85,7 @@ enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 
 // 라운드 제한 시간
 constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
+//constexpr float ROUND_TIME_LIMIT_SEC = 180.0f;		// 3분
 //constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
 // =======================
 
@@ -2305,8 +2306,8 @@ static void npc_thread()
 
 		// 이번 틱 위치 브로드캐스트 여부
 		++tick_count;
-		bool do_broadcast = (tick_count >= BROADCAST_EVERY);
-		if (do_broadcast) tick_count = 0;
+		//bool do_broadcast = (tick_count >= BROADCAST_EVERY);
+		//if (do_broadcast) tick_count = 0;
 
 		const auto now = std::chrono::steady_clock::now();
 
@@ -2493,7 +2494,8 @@ static void npc_thread()
 			}
 
 			// 위치 브로드캐스트
-			if (do_broadcast) BroadcastNpcPositions(r);
+			//if (do_broadcast) BroadcastNpcPositions(r);
+			if ((tick_count + r.id) % BROADCAST_EVERY == 0) BroadcastNpcPositions(r);
 
 		}
 
