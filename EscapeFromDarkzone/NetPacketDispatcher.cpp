@@ -139,6 +139,7 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
 		if (not pMainScene)break;
+		pMainScene->ResetForNewRound(100);
 		pMainScene->StartGame();
 		break;
 	}

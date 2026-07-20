@@ -71,6 +71,7 @@ public:
 	void HandleTabReleased();
 
 	void CloseAll();
+	void ResetForNewRound();
 
 	CLootContainerObject* FindNearestLootContainer(float fMaxDistance) const;
 

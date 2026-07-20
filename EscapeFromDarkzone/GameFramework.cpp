@@ -492,6 +492,10 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				m_pCamera = m_pPlayer->GetCamera();
 			}
 			break;
+		//갓 모드
+		case 'P':
+			
+			break;
 
 		default:
 			break;

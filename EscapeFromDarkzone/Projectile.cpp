@@ -77,15 +77,58 @@ void Projectile::Animate(float fTimeElapsed)
 
 	SetPosition(currentPos.x, currentPos.y, currentPos.z);
 }
-void ProjectileManager::Init(CShader*s)
+void Projectile::Deactivate()
 {
+	active = false;
+
+	start = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	speed = 100.0f;
+	totalDistance = 0.0f;
+	curDistance = 0.0f;
+
+	decalInfo = DecalInfo();
+
+	SetPosition(0.0f, 0.0f, 0.0f);
+}
+
+void ProjectileManager::Init(CShader* s)
+{
+	bullets.clear();
 	bullets.resize(poolSize);
+
+	lastUse = 0;
 	shader = s;
+
+	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
+
 	for (int i = 0; i < poolSize; ++i)
 	{
-		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
-		bullets[i].SetChild(pBulletInstance);
+		if (pBulletPrototype)
+		{
+			CGameObject* pBulletInstance = CGameObject::CreateModelInstance(pBulletPrototype);
+
+			if (pBulletInstance)
+			{
+				bullets[i].SetChild(pBulletInstance);
+			}
+		}
+
+		bullets[i].Deactivate();
 	}
+}
+
+void ProjectileManager::ResetForNewRound()
+{
+	for (auto& bullet : bullets)
+	{
+		bullet.Deactivate();
+	}
+
+	lastUse = 0;
+
+	OutputDebugString(L"[RoundReset] ProjectileManager 초기화 완료\n");
 }
 
 void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 dir, float dist)
@@ -124,12 +167,16 @@ void ProjectileManager::Update(float fTimeElapsed)
 
 void ProjectileManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch)
 {
+	if (!shader)
+		return;
+
 	shader->OnPrepareRender(pd3dCommandList, 0);
-	for (auto& b : bullets)
+
+	for (auto& bullet : bullets)
 	{
-		if (b.IsActive())
+		if (bullet.IsActive())
 		{
-			b.Render(pd3dCommandList, batch, 0, pCamera);
+			bullet.Render(pd3dCommandList, batch, 0, pCamera);
 		}
 	}
 }

@@ -1893,9 +1893,13 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	{
 		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	}
-	if (not NetworkManager::Instance().IsConnected())
+
+	if (!NetworkManager::Instance().IsConnected())
 	{
+		ResetForNewRound(100);
 		StartGame();
+
+		OutputDebugString(L"[ROUND] Offline round reset completed.\n");
 	}
 }
 
@@ -2738,7 +2742,121 @@ void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 dir
 void MainScene::StartGame()
 {
 	IsGameStart = true;
-	uiManager->CloseUI(1);
+
+	if (uiManager)
+	{
+		uiManager->CloseUI(1);
+	}
+
+	if (frame)
+	{
+		frame->observing = false;
+		frame->mouseMove = false;
+	}
+
+	if (m_pPlayer)
+	{
+		m_pPlayer->SetFireHeld(false);
+	}
+
+	HWND hWnd = frame ? frame->GetHWND() : NULL;
+
+	if (hWnd)
+	{
+		ClampGameplayCursorToAimLine(hWnd);
+	}
+
+	OutputDebugString(L"[RoundReset] MainScene 게임 시작\n");
+}
+
+void MainScene::ResetForNewRound(short fullHp)
+{
+	// 초기화가 끝날 때까지 게임 입력 정지
+	IsGameStart = false;
+	m_fElapsedTime = 0.0f;
+
+	// 레이저와 연속 발사 이펙트 상태 초기화
+	m_bLaserActive = false;
+	m_fLaserLength = 15.0f;
+
+	m_bSparkFireActive = false;
+	m_fSparkSpawnTimer = 0.0f;
+
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->HideLaser(0);
+	}
+
+	// 수류탄 조준 상태 초기화
+	m_bGrenadeAimMode = false;
+	m_fGrenadeAimDistance = 6.0f;
+	m_fGrenadeAimMinDistance = 2.0f;
+	m_fGrenadeAimMaxDistance = 18.0f;
+
+	// 수류탄 비행 상태 초기화
+	m_bGrenadeFlying = false;
+	m_xmf3GrenadePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_xmf3GrenadeVelocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	m_fGrenadeLifeTimer = 0.0f;
+
+	// 수류탄 투척 애니메이션 대기 상태 초기화
+	m_bGrenadeThrowPending = false;
+	m_fGrenadeThrowTimer = 0.0f;
+
+	// 오프라인 테스트와 서버 동기화 이전의 기본 수류탄 값
+	m_nGrenadeCount = m_nGrenadeMaxCount;
+
+	// 이전 라운드에서 던진 수류탄 모델 숨김
+	if (m_pGrenadeDebugObject)
+	{
+		m_pGrenadeDebugObject->SetPosition(0.0f, -10000.0f, 0.0f);
+		m_pGrenadeDebugObject->UpdateTransform(NULL);
+	}
+
+	// 사격 및 조준 UI 정리
+	HideCrosshairUI();
+
+	// 이전 라운드의 시야 계산 임시 데이터 제거
+	m_vFrameVisionBlockers.clear();
+
+	// 플레이어 생존, HP, 무기, 애니메이션, IK, 카메라 초기화
+	if (m_pPlayer)
+	{
+		m_pPlayer->ResetForNewRound(fullHp);
+	}
+
+	// 실제 장비 데이터와 장비 UI 초기화
+	if (equipUI)
+	{
+		equipUI->ResetForNewRound();
+	}
+
+	// 인벤토리, 루팅 창, 제작 창과 월드 루팅 박스 초기화
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->ResetForNewRound();
+	}
+
+	// 이전 라운드 투사체와 데칼 초기화
+	ProjectileManager::Instance()->ResetForNewRound();
+	DecalManager::Instance()->ResetForNewRound();
+
+	// HP, 탄약과 탈출 HUD 초기화
+	if (statusUI)
+	{
+		statusUI->ResetForNewRound(fullHp);
+	}
+
+	// 이전 사망 상태에서 활성화된 관전자와 자유 마우스 상태 정리
+	if (frame)
+	{
+		frame->observing = false;
+		frame->mouseMove = true;
+	}
+
+	ReleaseGameplayCursor();
+
+	OutputDebugString(L"[RoundReset] MainScene 초기화 완료\n");
 }
 
 LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)

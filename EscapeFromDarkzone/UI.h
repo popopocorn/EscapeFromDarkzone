@@ -141,7 +141,7 @@ public:
 	virtual void ToggleOpen() { isOpen = !isOpen; }
 	virtual void Update(float fTimeElapsed) {};
 };
-class EquipUI :public UIPanel{
+class EquipUI :public UIPanel {
 private:
 	Equip* player;
 	ItemID		helmet = ItemID::NONE;
@@ -155,9 +155,10 @@ public:
 	EquipUI(CPlayer* player);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void EquipItem(ItemID item);
+	void ResetForNewRound();
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
-	
+
 };
 enum StatusType {
 	HP_BASE,
@@ -173,10 +174,14 @@ public:
 	PlayerStatus(CPlayer* p);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual bool ProcessClick(POINT mouse);
+
 	void StartEscape() { Escape = true; EscapeTime = 0; }
 	void ResetEscape() { Escape = false; EscapeTime = 0; }
+	void ResetForNewRound(short fullHp = 100);
+
 	virtual void SubmitToShader(UIObjectShader* shader);
 	virtual void Update(float fTimeElapsed);
+
 private:
 	CPlayer* player;
 	short hp;
@@ -192,10 +197,10 @@ private:
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
 	vector<unique_ptr<UIObject>>Bullets;
 	vector<unique_ptr<UIObject>>ProgressBar;
+
 public:
 	virtual void ToggleOpen() {};
 };
-
 class UIObjectShader;
 
 class HUDManager

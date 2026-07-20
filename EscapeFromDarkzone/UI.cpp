@@ -889,6 +889,9 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 
 void EquipUI::EquipItem(ItemID item)
 {
+	if (!player)
+		return;
+
 	switch (item)
 	{
 	case ItemID::ARMOR_HELMET_01:
@@ -896,9 +899,13 @@ void EquipUI::EquipItem(ItemID item)
 	case ItemID::ARMOR_HELMET_03:
 	case ItemID::ARMOR_HELMET_04:
 	{
-
 		UIName n = MapItemIDToUIName(item);
-		UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+
+		auto ui = UIs.find(ItemType::ARMOR_HELMET);
+		if (ui != UIs.end() && ui->second)
+		{
+			ui->second->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+		}
 
 		player->helmet = ArmorItem(ItemType::ARMOR_HELMET, item);
 		helmet = item;
@@ -910,11 +917,15 @@ void EquipUI::EquipItem(ItemID item)
 	case ItemID::ARMOR_BODY_03:
 	case ItemID::ARMOR_BODY_04:
 	{
-
 		UIName n = MapItemIDToUIName(item);
-		UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
 
-		player->helmet = ArmorItem(ItemType::ARMOR_BODY, item);
+		auto ui = UIs.find(ItemType::ARMOR_BODY);
+		if (ui != UIs.end() && ui->second)
+		{
+			ui->second->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+		}
+
+		player->body = ArmorItem(ItemType::ARMOR_BODY, item);
 		body = item;
 		break;
 	}
@@ -924,21 +935,67 @@ void EquipUI::EquipItem(ItemID item)
 	case ItemID::ARMOR_SHOES_03:
 	case ItemID::ARMOR_SHOES_04:
 	{
-
 		UIName n = MapItemIDToUIName(item);
-		UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
 
-		player->helmet = ArmorItem(ItemType::ARMOR_SHOES, item);
+		auto ui = UIs.find(ItemType::ARMOR_SHOES);
+		if (ui != UIs.end() && ui->second)
+		{
+			ui->second->SetUIMesh(ResourceManager::Instance().GetUIMesh(n));
+		}
+
+		player->shoes = ArmorItem(ItemType::ARMOR_SHOES, item);
 		shoes = item;
 		break;
 	}
+
 	case ItemID::ARMOR_PLATE:
+	{
 		player->plate = Plate(ItemType::PLATE, item);
 		plate = item;
 		break;
 	}
+
+	default:
+		break;
+	}
 }
 
+void EquipUI::ResetForNewRound()
+{
+	if (player)
+	{
+		player->ResetForNewRound();
+	}
+
+	helmet = ItemID::NONE;
+	body = ItemID::NONE;
+	shoes = ItemID::NONE;
+	plate = ItemID::NONE;
+
+	UIMesh* pEmptyMesh = ResourceManager::Instance().GetUIMesh(UIName::PANEL_001);
+
+	auto helmetUI = UIs.find(ItemType::ARMOR_HELMET);
+	if (helmetUI != UIs.end() && helmetUI->second)
+	{
+		helmetUI->second->SetUIMesh(pEmptyMesh);
+	}
+
+	auto bodyUI = UIs.find(ItemType::ARMOR_BODY);
+	if (bodyUI != UIs.end() && bodyUI->second)
+	{
+		bodyUI->second->SetUIMesh(pEmptyMesh);
+	}
+
+	auto shoesUI = UIs.find(ItemType::ARMOR_SHOES);
+	if (shoesUI != UIs.end() && shoesUI->second)
+	{
+		shoesUI->second->SetUIMesh(pEmptyMesh);
+	}
+
+	isOpen = false;
+
+	OutputDebugString(L"[RoundReset] EquipUI 초기화 완료\n");
+}
 
 bool EquipUI::ProcessClick(POINT mouse)
 {
@@ -1018,6 +1075,27 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	}
 }
 
+void PlayerStatus::ResetForNewRound(short fullHp)
+{
+	FullHp = (fullHp > 0) ? fullHp : 100;
+	hp = player ? player->GetHP() : FullHp;
+	curammo = player ? player->GetCurrentAmmo() : 0;
+
+	Escape = false;
+	EscapeTime = 0.0f;
+	isOpen = true;
+
+	if (UIs[HP_MAIN])
+	{
+		UIs[HP_MAIN]->SetScale(0.33f, 0.06f, 1.0f);
+		UIs[HP_MAIN]->SetLocate(-0.029f, -0.9f, 0.5f);
+	}
+
+	Update(0.0f);
+
+	OutputDebugString(L"[RoundReset] PlayerStatus 초기화 완료\n");
+}
+
 bool PlayerStatus::ProcessClick(POINT mouse)
 {
 	for (auto& p : UIs)
@@ -1050,34 +1128,59 @@ void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 void PlayerStatus::Update(float fTimeElapsed)
 {
 	if (!player) return;
-	//playerhp update
-	hp = player->GetHP();
-	float ratio = static_cast<float>(hp) / static_cast<float>(FullHp);
-	if (ratio < 0.0f) ratio = 0.0f;
-	if (ratio > 1.0f) ratio = 1.0f;
 
-	float maxWidth = 0.33f;
-	float defaultX = -0.029f;
-	float currentWidth = maxWidth * ratio;
-	float currentX = defaultX - (maxWidth * (1.0f - ratio) / 2.0f);
-	if (UIs[HP_MAIN])
+	// HP 바 갱신
+	hp = player->GetHP();
+
+	if (FullHp <= 0)
 	{
-		UIs[HP_MAIN]->SetScale(currentWidth, 0.06f, 1.0f);
-		UIs[HP_MAIN]->SetLocate(currentX, -0.9f, 0.5f);
+		FullHp = 100;
 	}
 
-	//ammo update
-	int maxammo = player->GetMaxAmmo();
+	float hpRatio = static_cast<float>(hp) / static_cast<float>(FullHp);
+	hpRatio = std::clamp(hpRatio, 0.0f, 1.0f);
+
+	const float hpFullScaleX = 0.4f;
+	const float hpScaleY = 0.06f;
+	const float hpFullCenterX = 0.0f;
+	const float hpCenterY = -0.9f;
+
+	// 체력 100일 때 HP 바의 왼쪽 끝
+	const float hpLeftX = hpFullCenterX - hpFullScaleX;
+
+	// 현재 체력에 따른 초록색 바 크기
+	const float currentScaleX = hpFullScaleX * hpRatio;
+
+	// 왼쪽 끝은 고정하고 오른쪽 끝만 왼쪽으로 이동
+	const float currentCenterX = hpLeftX + currentScaleX;
+
+	auto hpMain = UIs.find(HP_MAIN);
+
+	if (hpMain != UIs.end() && hpMain->second)
+	{
+		hpMain->second->SetScale(currentScaleX, hpScaleY, 1.0f);
+		hpMain->second->SetLocate(currentCenterX, hpCenterY, 0.5f);
+	}
+
+	// 현재 총알 수
 	curammo = player->GetCurrentAmmo();
 
-	//escape progress bar
+	if (curammo < 0)
+	{
+		curammo = 0;
+	}
+
+	if (curammo > static_cast<int>(Bullets.size()))
+	{
+		curammo = static_cast<int>(Bullets.size());
+	}
+
+	// 탈출 진행도
 	if (Escape)
 	{
 		EscapeTime += fTimeElapsed;
 	}
-
 }
-
 void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
 	for (const auto& o : objs)

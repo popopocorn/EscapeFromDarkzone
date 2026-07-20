@@ -32,7 +32,7 @@ public:
 	virtual void Animate(float fTimeElapsed) override;
 
 	bool IsActive() const { return active; }
-	void Deactivate() { active = false; }
+	void Deactivate();
 };
 
 class DecalManager : public Singleton<DecalManager>
@@ -57,6 +57,7 @@ private:
 
 public:
 	void Init(CShader* s);
+	void ResetForNewRound();
 
 	void SpawnBulletDecal(XMFLOAT3 pos, XMFLOAT3 normal);
 	void SpawnBulletDecal(CGameObject* pHitObject, XMFLOAT3 hitPos);
