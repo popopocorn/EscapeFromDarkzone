@@ -2256,216 +2256,239 @@ static void npc_thread()
 		}
 		*/
 
-		// 룸 참가자 정합성 검사 (룸 0 고정. R4에서 전 룸 순회로 교체)
-		// disconnect/슬롯 재사용으로 이탈한 참가자를 participants[]에서 제거.
-		// 드레인보다 먼저 돌려서, 이번 틱에 비워진 슬롯을 신규 바인딩이 쓸 수 있게 한다.
-		ReconcileRoomParticipants(g_rooms[0]);
+		for (int s = 0; s < MAX_ROOMS; ++s) {
+			if (!g_rooms[s].alive) continue;
+			ReconcileRoomParticipants(g_rooms[s]);
+		}
 
-		// 워커가 보낸 입력 처리
 		g_npc_input_queue.DrainTo(events);
 		for (auto& e : events) {
 			if (e.type == NpcInputEvent::ROUND_JOIN) {
-				HandleNpcEvent(g_rooms[0], e);
+				HandleNpcEvent(g_rooms[0], e);   // 로비 이벤트 (r 미사용)
 				continue;
 			}
-
 			if (e.room_id < 0 || e.room_id >= MAX_ROOMS) continue;
 			Room& r = g_rooms[e.room_id];
 			if (!r.alive || r.generation != e.room_gen) continue;
 			HandleNpcEvent(r, e);
 		}
 
-		// 라운드 시작 판정 
-		if (g_rooms[0].state == ROOM_WAITING && static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
-			start_new_round(g_rooms[0]);
-		}
-
-		// 플레이어 위치 스냅샷
-		SnapshotPlayers(g_rooms[0]);
-
-		// 각 살아있는 NPC 갱신 (라운드 진행 중에만)
-		if (g_rooms[0].state == ROOM_IN_PROGRESS) {
-			for (auto& npc : g_rooms[0].npcs) {
-				if (!npc.alive) continue;
-				UpdateNpc(g_rooms[0], npc, DT);
+		// ===== 매치메이킹 =====
+		if (static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
+			// 빈 룸 슬롯 탐색
+			int slot = -1;
+			for (int s = 0; s < MAX_ROOMS; ++s) {
+				if (!g_rooms[s].alive) { slot = s; break; }
 			}
-		}
+			if (slot >= 0) {
+				Room& r = g_rooms[slot];
+				r.generation++;               // 슬롯 재사용마다 +1
+				r.alive = true;
+				r.state = ROOM_WAITING;
+				r.game_over_sent = false;
+				r.participants.fill(-1);
 
-		// 사망 플레이어 루트박스 드롭 (한 번만) + 브로드캐스트
-		for (int i = 0; i < MAX_USER; ++i) {
-			bool need_drop = false;
-			{
-				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-				if (clients[i]._state == ST_INGAME &&
-					clients[i].dead && !clients[i].loot_dropped) {
-					clients[i].loot_dropped = true;
-					need_drop = true;
+				start_new_round(r);
+
+				// 0명이면 룸 회수
+				if (r.state != ROOM_IN_PROGRESS) {
+					r.alive = false;
 				}
 			}
-			if (need_drop) DropPlayerLootBox(g_rooms[0], i);
 		}
 
-		// 플레이어 재장전 타이머 갱신
-		for (int i = 0; i < MAX_USER; ++i) {
-			bool completed = false;
-			{
-				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-				if (clients[i]._state != ST_INGAME) continue;
-				if (!clients[i].reloading) continue;
-				clients[i].reload_timer -= DT;
-				if (clients[i].reload_timer <= 0.0f) {
-					short w = clients[i].reload_weapon;
-					if (w >= 0 && w < 4)
-						clients[i].ammo[w] = LookupWeaponSpec(static_cast<WeaponType>(w), WeaponGrade::GRADE_1).magazineSize;
-					clients[i].reloading = false;
-					clients[i].reload_timer = 0.0f;
-					clients[i].reload_weapon = -1;
-					completed = true;
-				}
-			}
-			if (completed) clients[i].send_ammo_state(i);	// 락 해제 후 송신
-		}
+		// 이번 틱 위치 브로드캐스트 여부
+		++tick_count;
+		bool do_broadcast = (tick_count >= BROADCAST_EVERY);
+		if (do_broadcast) tick_count = 0;
 
 		const auto now = std::chrono::steady_clock::now();
-		for (auto& npc : g_rooms[0].npcs) {
-			if (false == npc.loot_active) continue;
 
-			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
-			if (elapsed < 30) continue;
+		// ===== 전 룸 틱 처리 =====
+		for (int s = 0; s < MAX_ROOMS; ++s) {
+			Room& r = g_rooms[s];
+			if (!r.alive) continue;
 
-			// 만료 — 비활성화 + 브로드캐스트
-			npc.loot_active = false;
+			// 플레이어 위치 스냅샷
+			SnapshotPlayers(r);
 
-			SC_DEACTIVATE_LOOT_BOX_PACKET dp;
-			dp.size = sizeof(dp);
-			dp.type = SC_DEACTIVATE_LOOT_BOX;
-			dp.npc_id = npc.id;
-
-			for (auto& pl : clients) {
-				{
-					std::lock_guard<std::mutex> ll(pl._s_lock);
-					if (ST_INGAME != pl._state) continue;
+			// NPC 갱신 (라운드 진행 중에만)
+			if (r.state == ROOM_IN_PROGRESS) {
+				for (auto& npc : r.npcs) {
+					if (!npc.alive) continue;
+					UpdateNpc(r, npc, DT);
 				}
-				pl.do_send(&dp);
 			}
 
-			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
-		}
+			// 사망 플레이어 루트박스 드롭
+			for (int k = 0; k < ROOM_CAPACITY; ++k) {
+				int i = r.participants[k];
+				if (i < 0) continue;
+				bool need_drop = false;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i]._state == ST_INGAME &&
+						clients[i].dead && !clients[i].loot_dropped) {
+						clients[i].loot_dropped = true;
+						need_drop = true;
+					}
+				}
+				if (need_drop) DropPlayerLootBox(r, i);
+			}
 
-		// ===== 탈출 판정 =====
-		if (g_rooms[0].state == ROUND_IN_PROGRESS)
-		{
-			const auto tnow = std::chrono::steady_clock::now();
-			for (int i = 0; i < MAX_USER; ++i) {
-				float px = 0.0f, pz = 0.0f;
+			// 플레이어 재장전 타이머
+			for (int k = 0; k < ROOM_CAPACITY; ++k) {
+				int i = r.participants[k];
+				if (i < 0) continue;
+				bool completed = false;
 				{
 					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 					if (clients[i]._state != ST_INGAME) continue;
-					if (clients[i].escaped || clients[i].dead) continue;
-					px = clients[i].x; pz = clients[i].z;
-				}
-
-				// 영역 판정 (XZ, OR)
-				bool now_in_zone = false;
-				for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
-					const auto& ez = ESCAPE_ZONES[z];
-					if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
-						now_in_zone = true; 
-						break;
+					if (!clients[i].reloading) continue;
+					clients[i].reload_timer -= DT;
+					if (clients[i].reload_timer <= 0.0f) {
+						short w = clients[i].reload_weapon;
+						if (w >= 0 && w < 4)
+							clients[i].ammo[w] = LookupWeaponSpec(static_cast<WeaponType>(w), WeaponGrade::GRADE_1).magazineSize;
+						clients[i].reloading = false;
+						clients[i].reload_timer = 0.0f;
+						clients[i].reload_weapon = -1;
+						completed = true;
 					}
 				}
+				if (completed) clients[i].send_ammo_state(i);
+			}
 
-				char  prog_event = -1;
-				bool  success = false;
-				float escape_sec = 0.0f;
-				{
-					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-					if (clients[i].escaped || clients[i].dead) continue;
+			// 루팅박스 
+			for (auto& npc : r.npcs) {
+				if (false == npc.loot_active) continue;
+				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
+				if (elapsed < 30) continue;
+				npc.loot_active = false;
 
-					if (now_in_zone) {
-						if (!clients[i].in_escape_zone) {
-							if (HasEscapeItem(clients[i]._inventory)) {
-								clients[i].in_escape_zone = true;
-								std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
-								clients[i].last_hit_time = tnow;       // 진행 시작
-								prog_event = ESCAPE_PROG_START;
+				SC_DEACTIVATE_LOOT_BOX_PACKET dp;
+				dp.size = sizeof(dp);
+				dp.type = SC_DEACTIVATE_LOOT_BOX;
+				dp.npc_id = npc.id;
+
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int i = r.participants[k];
+					if (i < 0) continue;
+					clients[i].do_send(&dp);
+				}
+				std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
+			}
+
+			// ===== 탈출 판정 (룸 참가자만) =====
+			if (r.state == ROOM_IN_PROGRESS)
+			{
+				const auto tnow = now;
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int i = r.participants[k];
+					if (i < 0) continue;
+
+					float px = 0.0f, pz = 0.0f;
+					{
+						std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+						if (clients[i]._state != ST_INGAME) continue;
+						if (clients[i].escaped || clients[i].dead) continue;
+						px = clients[i].x; pz = clients[i].z;
+					}
+
+					bool now_in_zone = false;
+					for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
+						const auto& ez = ESCAPE_ZONES[z];
+						if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
+							now_in_zone = true;
+							break;
+						}
+					}
+
+					char  prog_event = -1;
+					bool  success = false;
+					float escape_sec = 0.0f;
+					{
+						std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+						if (clients[i].escaped || clients[i].dead) continue;
+
+						if (now_in_zone) {
+							if (!clients[i].in_escape_zone) {
+								if (HasEscapeItem(clients[i]._inventory)) {
+									clients[i].in_escape_zone = true;
+									std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+									clients[i].last_hit_time = tnow;
+									prog_event = ESCAPE_PROG_START;
+								}
+							}
+							if (clients[i].in_escape_zone &&
+								std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+								clients[i].escaped = true;
+								success = true;
+								escape_sec = std::chrono::duration<float>(tnow - r.start_time).count();
 							}
 						}
-						if (clients[i].in_escape_zone && 
-							std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
-							clients[i].escaped = true;
-							success = true;
-							escape_sec = std::chrono::duration<float>(tnow - g_rooms[0].start_time).count();
+						else if (true == clients[i].in_escape_zone && !now_in_zone) {
+							clients[i].in_escape_zone = false;
+							std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+							prog_event = ESCAPE_PROG_CANCEL;
 						}
 					}
-					else if (true == clients[i].in_escape_zone && !now_in_zone) {
-						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
-						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
-						prog_event = ESCAPE_PROG_CANCEL;
+
+					if (prog_event >= 0) {
+						SC_ESCAPE_PROGRESS_PACKET pp;
+						pp.size = sizeof(pp);
+						pp.type = SC_ESCAPE_PROGRESS;
+						pp.event = prog_event;
+						clients[i].do_send(&pp);
+					}
+
+					if (success) {
+						SC_ESCAPE_SUCCESS_PACKET ep;
+						ep.size = sizeof(ep);
+						ep.type = SC_ESCAPE_SUCCESS;
+						ep.escape_time_sec = escape_sec;
+						clients[i].do_send(&ep);
+						std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
 					}
 				}
+			}
 
-				if (prog_event >= 0) {                              // ← 추가: 락 밖 송신
-					SC_ESCAPE_PROGRESS_PACKET pp;
-					pp.size = sizeof(pp);
-					pp.type = SC_ESCAPE_PROGRESS;
-					pp.event = prog_event;
-					clients[i].do_send(&pp);
+			// ===== 라운드 종료 (4종) 판정 =====
+			if (r.state == ROOM_IN_PROGRESS)
+			{
+				int total = 0;		// ST_INGAME 참가자 수
+				int active = 0;		// 아직 탈출, 사망 안 한 플레이어
+				int dead = 0;
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int cid = r.participants[k];
+					if (cid < 0) continue;
+					std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+					if (clients[cid]._state != ST_INGAME) continue;
+					++total;
+					if (clients[cid].dead) ++dead;
+					if (!clients[cid].escaped && !clients[cid].dead) ++active;
 				}
 
-				if (success) {
-					SC_ESCAPE_SUCCESS_PACKET ep;
-					ep.size = sizeof(ep);
-					ep.type = SC_ESCAPE_SUCCESS;
-					ep.escape_time_sec = escape_sec;
-					clients[i].do_send(&ep);
-					std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
+				const char* reason = nullptr;
+				if (total == 0) {
+					reason = "no participants";									// case 4 - 참가자 0명
 				}
-			}
-		}
-		// =====================
+				else if (active == 0) {
+					if (dead >= total) reason = "all dead";						// case 2 - 전원 사망
+					else reason = "all escaped/dead";							// case 1 - 전원 탈출(or 혼합)
+				}
+				else {
+					const float elapsed = std::chrono::duration<float>(
+						now - r.start_time).count();
+					if (elapsed >= ROUND_TIME_LIMIT_SEC) reason = "time over";  // case 3 - 시간 초과
+				}
 
-		// ===== 라운드 종료 (4종) 판정 =====
-		if (g_rooms[0].state == ROUND_IN_PROGRESS)
-		{
-			Room& r = g_rooms[0];
-
-			int total = 0;		// ST_INGAME 참가자 수
-			int active = 0;		// 아직 탈출, 사망 안 한 플레이어
-			int dead = 0;
-			for (int k = 0; k < ROOM_CAPACITY; ++k) {
-				int cid = r.participants[k];
-				if (cid < 0) continue;
-				std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
-				if (clients[cid]._state != ST_INGAME) continue;
-				++total;
-				if (clients[cid].dead) ++dead;
-				if (!clients[cid].escaped && !clients[cid].dead) ++active;
+				if (reason) end_round(r, reason);
 			}
 
-			const char* reason = nullptr;
-			if (total == 0) {
-				reason = "no participants";									// case 4 - 참가자 0명
-			}
-			else if (active == 0) {
-				if (dead >= total) reason = "all dead";						// case 2 - 전원 사망
-				else reason = "all escaped/dead";							// case 1 - 전원 탈출(or 혼합)
-			}
-			else {
-				const float elapsed = std::chrono::duration<float>(
-					std::chrono::steady_clock::now() - r.start_time).count();
-				if (elapsed >= ROUND_TIME_LIMIT_SEC) reason = "time over";  // case 3 - 시간 초과
-			}
+			// 위치 브로드캐스트
+			if (do_broadcast) BroadcastNpcPositions(r);
 
-			if (reason) end_round(r, reason);
-		}
-		// =====================================
-
-		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
-		++tick_count;
-		if (tick_count >= BROADCAST_EVERY) {
-			tick_count = 0;
-			BroadcastNpcPositions(g_rooms[0]);
 		}
 
 		std::this_thread::sleep_until(next);
