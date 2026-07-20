@@ -809,7 +809,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	float BtnSize = 0.15f;
 	XMFLOAT3 scale = CalcPixelByRatio(1.0f);
 	UIs[ItemType::ARMOR_HELMET] = make_unique<UIObject>();
-	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.35, 0.2, 0.5);
+	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.38, 0.25, 0.5);
 	UIs[ItemType::ARMOR_HELMET]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_HELMET]->SetFunc([this]() {
@@ -835,7 +835,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 
 
 	UIs[ItemType::ARMOR_BODY] = make_unique<UIObject>();
-	UIs[ItemType::ARMOR_BODY]->SetLocate(0.35, 0.0, 0.5);
+	UIs[ItemType::ARMOR_BODY]->SetLocate(0.38, 0.08, 0.5);
 	UIs[ItemType::ARMOR_BODY]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
@@ -861,7 +861,7 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 
 
 	UIs[ItemType::ARMOR_SHOES] = make_unique<UIObject>();
-	UIs[ItemType::ARMOR_SHOES]->SetLocate(0.35, -0.2, 0.5);
+	UIs[ItemType::ARMOR_SHOES]->SetLocate(0.38, -0.09, 0.5);
 	UIs[ItemType::ARMOR_SHOES]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
