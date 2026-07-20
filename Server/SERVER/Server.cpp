@@ -710,8 +710,7 @@ static void end_round(Room& r, const char* reason)
 		r.participants[k] = -1;
 	}
 
-	r.state = ROOM_WAITING;
-	r.game_over_sent = false;
+	r.alive = false;
 }
 
 AstarNavigation g_astar;
@@ -800,10 +799,17 @@ void SESSION::send_grenade_count(int c_id) {
 
 static void BroadcastPlayerState(int c_id)
 {
+	int sroom;
+	{ 
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+		sroom = clients[c_id].room_id; 
+	}
+
 	for (auto& cl : clients) {
 		{
 			std::lock_guard<std::mutex> ll(cl._s_lock);
 			if (ST_INGAME != cl._state) continue;
+			if (cl.room_id != sroom) continue;
 		}
 		cl.send_player_state_change_packet(c_id);
 	}
@@ -2553,10 +2559,14 @@ void process_packet(int c_id, char* packet)
 	case CS_MOVE: {
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
 		if (false == clients[c_id].in_round.load()) break;
+
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -2604,6 +2614,7 @@ void process_packet(int c_id, char* packet)
 		if (dirX == 0.0f && dirZ == 0.0f) {
 			for (auto& cl : clients) {
 				if (cl._state != ST_INGAME) continue;
+				if (cl.room_id != sroom) continue;
 				cl.send_move_packet(c_id);
 			}
 			break;
@@ -2637,6 +2648,7 @@ void process_packet(int c_id, char* packet)
 		// 계산된 좌표 전체 중계
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_move_packet(c_id);
 			/*printf("[MOVE] id:%d inputs:0x%02X yaw:%.1f dt:%.4f -> (%.2f, %.2f, %.2f) SEND TO %d\n",
 				c_id, (unsigned char)p->inputs, p->yaw, fDeltaTime,
@@ -2646,10 +2658,13 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CHANGE_WEAPON: {
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_CHANGE_WEAPON_PACKET* p = reinterpret_cast<CS_CHANGE_WEAPON_PACKET*>(packet);
@@ -2658,6 +2673,7 @@ void process_packet(int c_id, char* packet)
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
 			if (cl._id == c_id) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_change_weapon_packet(c_id);
 			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, cl._id);
 		}
@@ -3088,9 +3104,17 @@ void process_packet(int c_id, char* packet)
 
 		// 보고받은 상태 저장 후 다른 클라이언트에 브로드캐스트
 		clients[c_id].player_state = p->state;
+
+		int sroom;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			sroom = clients[c_id].room_id; 
+		}
+
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
 			if (cl._id == c_id) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_player_state_change_packet(c_id);
 			std::cout << "send [SC_PLAYER_STATE_CHANGE_PACKET] to " << cl._id << " state=" << (int)clients[c_id].player_state << "\n";
 		}
@@ -3388,18 +3412,13 @@ int main()
 
 	// ===== 룸 초기화 (룸 0 고정 생성) =====
 	// R4에서 매치메이커가 동적 생성/해산하도록 교체한다.
-	for (int i = 0; i < MAX_ROOMS; ++i) g_rooms[i].id = i;
-	{
-		Room& r = g_rooms[0];
-		r.generation = 1;
-		r.alive = true;
-		r.state = ROOM_WAITING;
-		r.game_over_sent = false;
-		r.participants.fill(-1);
+	for (int i = 0; i < MAX_ROOMS; ++i) {
+		g_rooms[i].id = i;
+		g_rooms[i].alive = false;
 	}
-	std::cout << "[ROOM] room 0 created (capacity " << ROOM_CAPACITY << ")\n";
 
-	init_room_npcs(g_rooms[0]);
+	std::cout << "[ROOM] room pool ready (max " << MAX_ROOMS
+		<< ", capacity " << ROOM_CAPACITY << ")\n";
 
 	HANDLE h_iocp;
 
