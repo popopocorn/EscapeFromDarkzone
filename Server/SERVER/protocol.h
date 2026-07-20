@@ -85,7 +85,8 @@ constexpr char SC_GRENADE_COUNT = 35;
 constexpr char SC_ESCAPE_PROGRESS = 36;
 
 constexpr char SC_ROUND_RESET = 37;			// 로비로 나갈 때 월드 초기화
-constexpr char CS_ROUND_JOIN = 38;			// 로비에서 라운드로 들어올 때 (클라에서 위치 변경 필요, 지금은 테스트)
+constexpr char CS_ROUND_JOIN = 38;			// 로비에서 라운드로 들어올 때
+constexpr char CS_ROUND_LEAVE = 39;			// 게임오버 후 로비로 나가기 (연결끊기 아님)
 
 constexpr char ESCAPE_PROG_START = 0;		// 탈출 진행 시작
 constexpr char ESCAPE_PROG_RESET = 1;		// 영역 내 피격으로 인한 타이머 리셋
@@ -330,6 +331,11 @@ struct SC_ROUND_START_PACKET {
 	float         x, y, z;			// 이번 라운드 내 스폰 위치
 };
 struct CS_ROUND_JOIN_PACKET {
+	unsigned char	size;
+	char			type;
+};
+
+struct CS_ROUND_LEAVE_PACKET {
 	unsigned char	size;
 	char			type;
 };
