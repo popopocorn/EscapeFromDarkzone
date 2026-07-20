@@ -351,7 +351,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* SkinnedShader)
 {
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::ENEMY_01_1,
 		pd3dDevice,
 		pd3dCommandList,
@@ -430,7 +430,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		pd3dGraphicsRootSignature,
 		"Model/SM_Gangster3_3.bin",
 		SkinnedShader
-	);*/
+	);
 
 	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::PLAYER_02, 

@@ -102,6 +102,9 @@ struct NpcInputEvent {
     enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN };
     Type type;
 
+    int      room_id = -1;      // 이벤트가 적용될 룸
+    uint32_t room_gen = 0;      // 룸의 generation과 일치하는지 확인 (옛날룸 이벤트로 현재룸 갱신하는 동작 방지)
+
     int      attacker_client_id;
     XMFLOAT3 ray_origin;
     XMFLOAT3 ray_direction;
