@@ -382,3 +382,12 @@ bool NetworkManager::SendRoundJoin()
 
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendRoundLeave()
+{
+	CS_ROUND_LEAVE_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_ROUND_LEAVE_PACKET);
+	pkt.type = CS_ROUND_LEAVE;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}

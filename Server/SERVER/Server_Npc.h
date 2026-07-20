@@ -99,7 +99,7 @@ inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 
 // NpcInputEvent
 struct NpcInputEvent {
-    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN };
+    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN, ROUND_LEAVE };
     Type type;
 
     int      room_id = -1;      // 이벤트가 적용될 룸

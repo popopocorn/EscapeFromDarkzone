@@ -34,4 +34,5 @@ public:
 	bool InventoryClick(char action, short slotidx);
 	bool LootPickup(short box_id, short slotidx);
 	bool RoundJoin();
+	bool RoundLeave();
 };

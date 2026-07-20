@@ -202,7 +202,7 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 
 		// 테스트 용도로 자동 재참가 기능 추가
 		// 나중에 다시 하기 버튼같은 걸 붙이면 좋을 듯. 
-		NetSession::Instance().RoundJoin();
+		//NetSession::Instance().RoundJoin();		// 주석처리함. 사망했을 때랑 동일하게 로비로 내보내고 재진입하도록 바꿀 것. 
 		break;
 	}
 	case SC_ADD_NPC:

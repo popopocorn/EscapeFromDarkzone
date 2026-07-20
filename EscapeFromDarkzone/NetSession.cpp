@@ -59,3 +59,8 @@ bool NetSession::RoundJoin()
 {
 	return NetworkManager::Instance().SendRoundJoin();
 }
+
+bool NetSession::RoundLeave() 
+{ 
+	return NetworkManager::Instance().SendRoundLeave(); 
+}

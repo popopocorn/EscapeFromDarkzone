@@ -1610,6 +1610,39 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		}
 		break;
 	}
+	case NpcInputEvent::ROUND_LEAVE:
+	{
+		int cid = e.new_client_id;
+
+		// 이 룸의 참가자인지 확인
+		int slot = -1;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			if (r.participants[k] == cid) { 
+				slot = k; 
+				break; 
+			}
+		}
+		if (slot < 0) break;
+
+		r.participants[slot] = -1;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			clients[cid]._state = ST_LOBBY;
+			clients[cid].room_id = -1;
+			clients[cid].room_slot = -1;
+			clients[cid].room_gen = 0;
+			clients[cid].in_round.store(false);
+		}
+		std::cout << "[ROUND] client " << cid << " left room " << r.id << " -> lobby\n";
+
+		// 남은 참가자에게 캐릭터 제거 통보
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int other = r.participants[k];
+			if (other < 0) continue;
+			clients[other].send_remove_player_packet(cid);
+		}
+		break;
+	}
 	case NpcInputEvent::GRENADE_EXPLODE:
 	{
 		const XMFLOAT3 C = e.explode_pos;
@@ -2550,9 +2583,18 @@ void process_packet(int c_id, char* packet)
 	case CS_ROUND_JOIN: {
 		std::cout << "CS_ROUND_JOIN from client " << c_id << "\n";
 
-		// 로비 클라의 매치메이킹 참가 요청 후 동작, NPC스레드 ready 리스트로 넘김
+		// 로비 클라의 매치메이킹 참가 요청 후 동작, NPC스레드로 넘김
 		NpcInputEvent ev{};
 		ev.type = NpcInputEvent::ROUND_JOIN;
+		ev.new_client_id = c_id;
+		TagEventRoom(ev, c_id);
+		g_npc_input_queue.Push(std::move(ev));
+		break;
+	}
+	case CS_ROUND_LEAVE: {
+		// 룸에서 제거 요청, NPC스레드로 넘김
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::ROUND_LEAVE;
 		ev.new_client_id = c_id;
 		TagEventRoom(ev, c_id);
 		g_npc_input_queue.Push(std::move(ev));
