@@ -164,7 +164,7 @@ CEnemyObject::CEnemyObject(
 	ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature,
 	CShader* pShader,
-	CLoadedModelInfo* pEnemyModel)
+	ModelInstance* pEnemyModel)
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
 	UNREFERENCED_PARAMETER(pShader);
@@ -180,18 +180,16 @@ CEnemyObject::CEnemyObject(
 		pEnemyModel->m_pAnimationSets = new CAnimationSets(0);
 	}
 
-	SetChild(pEnemyModel->m_pModelRootObject, true);
-
-	m_pRenderWeapon = new CGameObject();
+	m_pRenderWeapon = make_unique<CGameObject>();
 	m_pWeapon = nullptr;
 	m_pWeaponSocket = nullptr;
 	m_pWeaponMuzzleSocket = nullptr;
 
 	ClearOOBB(false);
 
-	if (pEnemyModel->m_pModelRootObject)
+	if (pEnemyModel->m_pRootObject)
 	{
-		pEnemyModel->m_pModelRootObject->ClearOOBB(true);
+		pEnemyModel->m_pRootObject->ClearOOBB(true);
 	}
 
 	BoundingOrientedBox enemyBox;
@@ -200,14 +198,14 @@ CEnemyObject::CEnemyObject(
 	enemyBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	SetOOBB(enemyBox);
-
+	
 	m_pSkinnedAnimationController = new CAnimationController(
 		pd3dDevice,
 		pd3dCommandList,
 		1,
 		pEnemyModel
 	);
-
+	SetChild(pEnemyModel->m_pRootObject.release(), true);
 	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
 	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
 	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
@@ -235,7 +233,7 @@ void CEnemyObject::SubmitWeaponToShader(CShader* shader)
 	if (!shader || !m_pRenderWeapon)
 		return;
 
-	shader->addObjects(m_pRenderWeapon);
+	shader->addObjects(m_pRenderWeapon.get());
 }
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
@@ -601,9 +599,9 @@ void CEnemyObject::SetEnemyAnimation(int nAnim, bool bLoop, bool bRestart)
 
 void CEnemyObject::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponPrototype = ResourceManager::Instance().GetModelPrototype(modelName);
+	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelInstance(modelName);
 
-	if (!pWeaponPrototype)
+	if (!pWeaponInstance)
 	{
 		wchar_t debugText[128];
 		swprintf_s(debugText, L"[Enemy] weapon prototype not found. ModelName = %d\n", static_cast<int>(modelName));
@@ -611,7 +609,6 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		return;
 	}
 
-	CGameObject* pWeaponInstance = CGameObject::CreateModelInstance(pWeaponPrototype);
 
 	if (!pWeaponInstance)
 	{
@@ -638,20 +635,16 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 
 	if (!m_pRenderWeapon)
 	{
-		m_pRenderWeapon = new CGameObject();
+		m_pRenderWeapon = make_unique<CGameObject>();
 	}
-
-	if (m_pRenderWeapon->m_pChild)
-	{
-		delete m_pRenderWeapon->m_pChild;
-		m_pRenderWeapon->m_pChild = nullptr;
-	}
-
-	m_pWeapon = pWeaponInstance;
 	m_pWeaponSocket = pRightHand;
 
-	m_pWeapon->m_pSibling = nullptr;
-	m_pRenderWeapon->m_pChild = m_pWeapon;
+	pWeaponInstance->m_pParent = m_pRenderWeapon.get();   
+	pWeaponInstance->m_pSibling.reset();                  
+
+	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
+	m_pWeapon = m_pRenderWeapon->m_pChild.get();
+
 
 	m_pRenderWeapon->SetOOBB(NULL);
 	m_pRenderWeapon->isColl = false;

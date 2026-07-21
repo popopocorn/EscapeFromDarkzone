@@ -33,7 +33,7 @@ class CShader;
 class ProjectileManager : public Singleton<ProjectileManager>{
 	friend class Singleton<ProjectileManager>;
 private:
-	vector<Projectile> bullets;
+	vector<unique_ptr<Projectile>> bullets;
 	//unordered_map<ProjectileType, CGameObject*>projectilePool;
 	int lastUse = 0;
 	const int poolSize = 200;

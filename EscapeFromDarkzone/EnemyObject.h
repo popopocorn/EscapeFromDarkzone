@@ -54,7 +54,7 @@ protected:
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 	CGameObject* m_pWeaponMuzzleSocket = nullptr;
-	CGameObject* m_pRenderWeapon = nullptr;
+	unique_ptr<CGameObject> m_pRenderWeapon = nullptr;
 
 public:
 	CEnemyObject(
@@ -62,7 +62,7 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* pShader = nullptr,
-		CLoadedModelInfo* pEnemyModelInstance = nullptr
+		ModelInstance* pEnemyModelInstance = nullptr
 	);
 	virtual ~CEnemyObject();
 	void SubmitWeaponToShader(CShader* shader);
@@ -109,7 +109,7 @@ public:
 	void EquipDefaultPistol();
 	ModelName GetWeaponModelNameByType(EnemyWeaponType eWeaponType) const;
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
-	CGameObject* GetRenderWeapon() const { return m_pRenderWeapon; }
+	CGameObject* GetRenderWeapon() const { return m_pRenderWeapon.get(); }
 
 	EnemyModelType m_eEnemyModelType = EnemyModelType::Enemy01;
 	EnemyWeaponType m_eWeaponType = EnemyWeaponType::Pistol;

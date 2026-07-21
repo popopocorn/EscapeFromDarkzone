@@ -15,31 +15,7 @@ static CGameObject* FindFirstFrameByNames(CGameObject* pRoot, const char* const*
 
 	return nullptr;
 }
-static void DeleteOtherPlayerObjectTree(CGameObject* pObject)
-{
-	if (!pObject)
-		return;
 
-	CGameObject* pChild = pObject->m_pChild;
-
-	while (pChild)
-	{
-		CGameObject* pNext = pChild->m_pSibling;
-
-		pChild->m_pSibling = nullptr;
-		pChild->m_pParent = nullptr;
-
-		DeleteOtherPlayerObjectTree(pChild);
-
-		pChild = pNext;
-	}
-
-	pObject->m_pChild = nullptr;
-	pObject->m_pSibling = nullptr;
-	pObject->m_pParent = nullptr;
-
-	delete pObject;
-}
 static ModelName GetOtherPlayerWeaponModelNameFromPacket(short weaponType)
 {
 	ItemType itemType = static_cast<ItemType>(weaponType);
@@ -119,7 +95,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
 	short a = (playerID % 2) + 1;
-	CLoadedModelInfo* pPlayerModel;
+	ModelInstance* pPlayerModel;
 	switch (a)
 	{
 	case 1:
@@ -139,22 +115,28 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		return;
 	}
 
-	if (!pPlayerModel->m_pModelRootObject)
+	if (!pPlayerModel->m_pRootObject)
 	{
 		delete pPlayerModel;
 		return;
 	}
 
-	SetChild(pPlayerModel->m_pModelRootObject, true);
+	
 
-	m_pRenderWeapon = new CGameObject();
+	m_pRenderWeapon = make_unique<CGameObject>();
 	m_pRenderWeapon->SetOOBB(NULL);
 	m_pRenderWeapon->isColl = false;
 
 	EquipDefaultPistol();
-
-	m_pSkinnedAnimationController = new CAnimationController(pd3dDevice, pd3dCommandList, 2, pPlayerModel);
-
+	
+	m_pSkinnedAnimationController = 
+		new CAnimationController(
+			pd3dDevice, 
+			pd3dCommandList, 
+			2, 
+			pPlayerModel
+		);
+	SetChild(pPlayerModel->m_pRootObject.release(), true);
 	if (m_pSkinnedAnimationController)
 	{
 		m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
@@ -175,7 +157,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
 		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
 	}
-
+	
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	delete pPlayerModel;
@@ -801,7 +783,7 @@ void OtherPlayer::EquipDefaultPistol()
 
 void OtherPlayer::EquipWeaponModel(ModelName modelName)
 {
-	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelPrototype(modelName);
+	CGameObject* pWeaponInstance = ResourceManager::Instance().GetModelInstance(modelName);
 
 	if (!pWeaponInstance)
 	{
@@ -820,32 +802,23 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 
 	if (!pRightHand)
 	{
-		DeleteOtherPlayerObjectTree(pWeaponInstance);
+		delete pWeaponInstance;
 		return;
 	}
 
 	if (!m_pRenderWeapon)
 	{
-		m_pRenderWeapon = new CGameObject();
+		m_pRenderWeapon = make_unique<CGameObject>();
 		m_pRenderWeapon->isColl = false;
 	}
-
-	if (m_pWeapon)
-	{
-		if (m_pRenderWeapon->m_pChild == m_pWeapon)
-		{
-			m_pRenderWeapon->m_pChild = nullptr;
-		}
-
-		DeleteOtherPlayerObjectTree(m_pWeapon);
-	}
-
-	m_pWeapon = pWeaponInstance;
 	m_pWeaponSocket = pRightHand;
 
-	m_pWeapon->m_pParent = m_pRenderWeapon;
-	m_pWeapon->m_pSibling = nullptr;
-	m_pRenderWeapon->m_pChild = m_pWeapon;
+	pWeaponInstance->m_pParent = m_pRenderWeapon.get();   
+	pWeaponInstance->m_pSibling.reset();                
+
+	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
+	m_pWeapon = m_pRenderWeapon->m_pChild.get();
+
 
 	XMFLOAT3 weaponPos;
 	XMFLOAT3 weaponRot;
@@ -886,5 +859,5 @@ void OtherPlayer::SubmitWeaponToShader(CShader* shader)
 	if (!shader || !m_pRenderWeapon)
 		return;
 
-	shader->addObjects(m_pRenderWeapon);
+	shader->addObjects(m_pRenderWeapon.get());
 }

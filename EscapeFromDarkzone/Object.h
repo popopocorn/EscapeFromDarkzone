@@ -94,7 +94,7 @@ public:
 #define MATERIAL_DETAIL_ALBEDO_MAP		0x20
 #define MATERIAL_DETAIL_NORMAL_MAP		0x40
 
-class CGameObject;
+class ModelResource;
 
 class CMaterial
 {
@@ -115,7 +115,6 @@ public:
 
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
 
-	virtual void ReleaseUploadBuffers();
 
 public:
 	UINT							m_nType = 0x00;
@@ -131,7 +130,7 @@ public:
 	_TCHAR							(*m_ppstrTextureNames)[260] = NULL;
 	CTexture						**m_ppTextures = NULL; //0:Albedo, 1:Specular, 2:Metallic, 3:Normal, 4:Emission, 5:DetailAlbedo, 6:DetailNormal
 
-	void LoadTextureFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, UINT nType, UINT nRootParameter, _TCHAR *pwstrTextureName, CTexture **ppTexture, CGameObject *pParent, FILE *pInFile, CShader *pShader);
+	void LoadTextureFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, UINT nType, UINT nRootParameter, _TCHAR *pwstrTextureName, CTexture **ppTexture, ModelResource* pParent, FILE *pInFile, CShader *pShader);
 
 public:
 	static CShader					*m_pStandardShader;
@@ -207,10 +206,8 @@ public:
 	int								m_nAnimationSets = 0;
 	//CAnimationSet					**m_pAnimationSets = NULL;		//벡터나 맵으로 변경해 여러 애니메이션
 	std::vector<CAnimationSet*>     m_vAnimationSets;
-
+	std::vector<string>				m_vBoneNames;
 	int								m_nBoneFrames = 0; 
-	CGameObject						**m_ppBoneFrameCaches = NULL; //[m_nBoneFrames]
-
 	bool							m_bOwnAnimationSets = true;
 };
 
@@ -252,13 +249,78 @@ public:
 	void HandleCallback();
 };
 
+class ModelResource {
+public:
+	char							m_pstrFrameName[260];
+
+	unique_ptr<CMesh>				m_pMesh;
+
+	int								m_nMaterials = 0;
+	vector<unique_ptr<CMaterial>>	m_ppMaterials;
+
+	XMFLOAT4X4						m_xmf4x4ToParent;
+
+
+	unique_ptr<ModelResource> m_pChild;
+	unique_ptr<ModelResource> m_pSibling;
+public:
+	ModelResource();
+	ModelResource(int nMaterials);
+	virtual ~ModelResource();
+	//virtual void init();
+
+public:
+	void SetMesh(CMesh* pMesh);
+	void SetShader(CShader* pShader);
+	void SetShader(int nMaterial, CShader* pShader);
+	void SetMaterial(int nMaterial, CMaterial* pMaterial);
+
+	void SetChild(ModelResource* pChild);
+
+	virtual void BuildMaterials(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) {}
+
+	
+	//virtual void OnPrepareRender() {}
+	//virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
+
+
+	virtual void ReleaseUploadBuffers();
+	
+	CMesh* GetMesh() const { return m_pMesh.get(); }
+
+	ModelResource* FindFrame(const char* pstrFrameName);
+
+	void DebugPrintMixamoFrameNames(int nDepth = 0);
+
+	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
+
+
+public:
+	void FindAndSetSkinnedMesh(CSkinnedMesh** ppSkinnedMeshes, int* pnSkinnedMesh);
+};
+
 class CLoadedModelInfo
 {
 public:
 	CLoadedModelInfo() { }
 	~CLoadedModelInfo();
 
-    CGameObject						*m_pModelRootObject = NULL;
+	unique_ptr<ModelResource>		m_pModelRootObject;
+
+	int 							m_nSkinnedMeshes = 0;
+	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
+
+	CAnimationSets*					m_pAnimationSets = NULL;
+
+};
+
+class ModelInstance
+{
+public:
+	ModelInstance() { }
+	~ModelInstance() {}
+
+	unique_ptr<CGameObject>			m_pRootObject;
 
 	int 							m_nSkinnedMeshes = 0;
 	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
@@ -276,7 +338,7 @@ struct SBoneBlendCache {
 class CAnimationController
 {
 public:
-	CAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, CLoadedModelInfo* pModel);
+	CAnimationController(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, int nAnimationTracks, ModelInstance* pModel);
 	~CAnimationController();
 
 	void BuildUpperBodyMask(CGameObject* pRootGameObject, const char* pstrUpperBodyRootFrameName);
@@ -314,8 +376,10 @@ public:
 
 	int m_nSkinnedMeshes = 0;
 	CSkinnedMesh** m_ppSkinnedMeshes = NULL;
+
 	ID3D12Resource** m_ppd3dcbSkinningBoneTransforms = NULL;
 	XMFLOAT4X4** m_ppcbxmf4x4MappedSkinningBoneTransforms = NULL;
+
 
 	CGameObject* m_pModelRootObject = NULL;
 
@@ -328,6 +392,9 @@ public:
 	float m_fBlendTime = 0.0f;
 	float m_fBlendDuration = 0.2f;
 	CGameObject*** m_pppSkinningBoneFrameCaches = NULL;
+	CGameObject** m_ppAnimationBoneFrameCaches = nullptr;
+
+	void BindBones(CGameObject* instanced);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -345,9 +412,11 @@ private:
 	bool							m_bCastShadow = true;
 	bool							m_bRenderEnabled = true;
 	std::vector<BoundingOrientedBox*> OOBBs;
+
+	ModelResource* m_pModelResource = nullptr;
 public:
 	CGameObject();
-	CGameObject(int nMaterials);
+
     virtual ~CGameObject();
 	virtual void init();
 	virtual void initWithObj(CGameObject* child) {};
@@ -357,10 +426,6 @@ public:
 
 	char							m_pstrFrameName[260];
 
-	CMesh							*m_pMesh = NULL;
-
-	int								m_nMaterials = 0;
-	CMaterial						**m_ppMaterials = NULL;
 
 	XMFLOAT4X4						m_xmf4x4ToParent;
 	XMFLOAT4X4						m_xmf4x4World;
@@ -368,21 +433,15 @@ public:
 
 	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	CGameObject 					*m_pParent = NULL;
-	CGameObject 					*m_pChild = NULL;
-	CGameObject 					*m_pSibling = NULL;
+	CGameObject*					m_pParent = NULL;
+	unique_ptr<CGameObject>			m_pChild;
+	unique_ptr<CGameObject>			m_pSibling;
 
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
-
-	void SetMesh(CMesh *pMesh);
-	void SetShader(CShader *pShader);
-	void SetShader(int nMaterial, CShader *pShader);
-	void SetMaterial(int nMaterial, CMaterial *pMaterial);
 
 	void SetChild(CGameObject *pChild, bool bReferenceUpdate=false);
 	void ReplaceChild(CGameObject *pChild);
 
-	virtual void BuildMaterials(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) { }
 
 	virtual void OnPrepareAnimate() { }
 	virtual void Animate(float fTimeElapsed);
@@ -399,7 +458,6 @@ public:
 	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList *pd3dCommandList, XMFLOAT4X4 *pxmf4x4World);
 	virtual void UpdateShaderVariable(ID3D12GraphicsCommandList *pd3dCommandList, CMaterial *pMaterial);
 
-	virtual void ReleaseUploadBuffers();
 
 	XMFLOAT3 GetPosition();
 	XMFLOAT3 GetLook();
@@ -426,17 +484,17 @@ public:
 	void Rotate(XMFLOAT4 *pxmf4Quaternion);
 	void SetRotate(float fPitch, float fYaw, float fRoll);
 
-	CMesh* GetMesh() const { return m_pMesh; }
-
-	CGameObject *GetParent() { return(m_pParent); }
+	CMesh* GetMesh() const { return m_pModelResource ? m_pModelResource->GetMesh():nullptr; }
+	CGameObject* GetParent() { return(m_pParent); }
+	
 	void UpdateTransform(XMFLOAT4X4 *pxmf4x4Parent=NULL);
 	CGameObject *FindFrame(const char *pstrFrameName);
 
 	void DebugPrintMixamoFrameNames(int nDepth = 0);
 
-	CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
+	//CTexture *FindReplicatedTexture(_TCHAR *pstrTextureName);
 
-	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
+	UINT GetMeshType() { return((GetMesh()) ? GetMesh()->GetType() : 0x00); }
 	void SetOOBB(std::vector<BoundingOrientedBox*>* container);
 	void SetOOBB(BoundingOrientedBox obb);
 	void ClearOOBB(bool bRecursive = false);
@@ -456,11 +514,11 @@ public:
 		m_bCastShadow = bCastShadow;
 		if (bRecursive)
 		{
-			CGameObject* pChild = m_pChild;
+			CGameObject* pChild = m_pChild.get();
 			while (pChild)
 			{
 				pChild->SetCastShadow(bCastShadow, true);
-				pChild = pChild->m_pSibling;
+				pChild = pChild->m_pSibling.get();
 			}
 		}
 	}
@@ -469,11 +527,11 @@ public:
 		m_bRenderEnabled = bRenderEnabled;
 		if (bRecursive)
 		{
-			CGameObject* pChild = m_pChild;
+			CGameObject* pChild = m_pChild.get();
 			while (pChild)
 			{
 				pChild->SetRenderEnabled(bRenderEnabled, true);
-				pChild = pChild->m_pSibling;
+				pChild = pChild->m_pSibling.get();
 			}
 		}
 	}
@@ -488,32 +546,31 @@ public:
 
 	//void SetRootMotion(bool bRootMotion) { if (m_pSkinnedAnimationController) m_pSkinnedAnimationController->SetRootMotion(bRootMotion); }
 
-	void LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, CGameObject *pParent, FILE *pInFile, CShader *pShader);
+	/*void LoadMaterialsFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, CGameObject *pParent, FILE *pInFile, CShader *pShader);
 
 	static void LoadAnimationFromFile(FILE *pInFile, CLoadedModelInfo *pLoadedModel);
 	static CGameObject *LoadFrameHierarchyFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, CGameObject *pParent, FILE *pInFile, CShader *pShader, int *pnSkinnedMeshes, const char* pstrFileName);
 	static CGameObject* LoadGeometryModelByName(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, CGameObject* pParent, const char* name, CShader* pShader, int* pnSkinnedMeshes);
-	static CLoadedModelInfo *LoadGeometryAndAnimationFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, const char *pstrFileName, CShader *pShader);
+	static CLoadedModelInfo *LoadGeometryAndAnimationFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature, const char *pstrFileName, CShader *pShader);*/
 
 	static void PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent);
 
 public:
 	//모델 리소스 관리 함수
-	void ClearModelResources();
-	void SetModel(CGameObject* pModelPrototype);
-	static CGameObject* CreateModelInstance(CGameObject* pModelPrototype);
+	void SetModel(ModelResource* pModelPrototype);
+	static CGameObject* CreateModelInstance(ModelResource* pModelPrototype);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-class CSkyBox : public CGameObject
-{
-public:
-	CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
-	virtual ~CSkyBox();
-
-	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int nPipelineState, CCamera *pCamera = NULL);
-};
+//class CSkyBox : public CGameObject
+//{
+//public:
+//	CSkyBox(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
+//	virtual ~CSkyBox();
+//
+//	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, bool batch, int nPipelineState, CCamera *pCamera = NULL);
+//};
 
 class CRootMotionCallbackHandler : public CAnimationCallbackHandler
 {

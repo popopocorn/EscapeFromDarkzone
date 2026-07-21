@@ -138,18 +138,18 @@ void EffectManager::Initialize(
 	m_pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	m_pLaserShader->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 
-	{
-		CGameObject* pLaserObject = new CGameObject();
-		pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
-		pLaserObject->SetShader(m_pLaserShader);
+	//{
+	//	CGameObject* pLaserObject = new CGameObject();
+	//	pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
+	//	//pLaserObject->SetShader(m_pLaserShader);
 
-		m_pLaserShader->addObjects(pLaserObject);
+	//	m_pLaserShader->addObjects(pLaserObject);
 
-		XMStoreFloat4x4(&pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
-		pLaserObject->UpdateTransform(NULL);
+	//	XMStoreFloat4x4(&pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
+	//	pLaserObject->UpdateTransform(NULL);
 
-		m_LaserObjects.emplace(0, pLaserObject);
-	}
+	//	m_LaserObjects.emplace(0, pLaserObject);
+	//}
 }
 
 void EffectManager::Release()

@@ -3,7 +3,7 @@
 #include "Effect.h"
 #include "EffectShader.h"
 
-CEffect::CEffect(EFFECT_TYPE type, float lifeTime) : CGameObject(1)
+CEffect::CEffect(EFFECT_TYPE type, float lifeTime)
 {
     m_eEffectType = type;
     m_fLifeTime = lifeTime;

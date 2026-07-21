@@ -432,7 +432,7 @@ void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CStandardObjectsShader::ReleaseUploadBuffers()
 {
-	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+	//for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
 void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
@@ -577,7 +577,7 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CSkinnedAnimationObjectsShader::ReleaseUploadBuffers()
 {
-	for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+	//for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
 }
 
 D3D12_DEPTH_STENCIL_DESC CSkinnedAnimationObjectsShader::CreateDepthStencilState()
@@ -804,7 +804,7 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
 	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
-
+	
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
@@ -990,12 +990,12 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 
 	if (pGameObject->m_pChild)
 	{
-		AddObject(pGameObject->m_pChild);
+		AddObject(pGameObject->m_pChild.get());
 	}
 
 	if (pGameObject->m_pSibling)
 	{
-		AddObject(pGameObject->m_pSibling);
+		AddObject(pGameObject->m_pSibling.get());
 	}
 }
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)

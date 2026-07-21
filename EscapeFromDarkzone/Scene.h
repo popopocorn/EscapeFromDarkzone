@@ -98,7 +98,7 @@ public:
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
 	void AddObj(CGameObject* obj) { GameObjects.push_back(unique_ptr<CGameObject>(obj)); }
 	virtual void ReleaseUploadBuffers() {
-		if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
+		//if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
 		for (int i = 0; i < m_ppShaders.size(); i++)
 		{
@@ -128,7 +128,7 @@ public:
 	ShaderManager*						shadermanager = nullptr;
 	vector<CShader*>					m_ppShaders;
 
-	unique_ptr<CSkyBox>								m_pSkyBox;
+	//unique_ptr<CSkyBox>								m_pSkyBox;
 
 	vector<LIGHT>									m_pLights;
 	int									m_nLights = 0;

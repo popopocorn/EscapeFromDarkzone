@@ -551,7 +551,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
-	//ResourceManager::Instance().ReleaseResources();
+	ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 
@@ -645,7 +645,7 @@ void CGameFramework::BuildObjects()
 		root->GetRoot(),
 		shadermanager->GetShader(ShaderType::PLAYER),
 		ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_01),
-		ResourceManager::Instance().GetModelPrototype(ModelName::RIFLE)
+		ResourceManager::Instance().GetModelInstance(ModelName::RIFLE)
 	);
 	pPlayer->frame = this;
 	pPlayer->SetPosition(XMFLOAT3(0, 0.1, 0));

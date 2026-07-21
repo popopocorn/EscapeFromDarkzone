@@ -488,7 +488,7 @@ CScene::CScene(CGameFramework* game)
 	m_pd3dcbLights = nullptr;
 	m_pcbMappedLights = nullptr;
 
-	m_pSkyBox = nullptr;
+	//m_pSkyBox = nullptr;
 
 	UIShader = make_unique<UIObjectShader>();
 
@@ -1085,11 +1085,11 @@ void MainScene::ThrowGrenade()
 
 	if (!m_pGrenadeDebugObject)
 	{
-		CGameObject* pGrenadePrototype = ResourceManager::Instance().GetModelPrototype(ModelName::GRENADE);
+		CGameObject* pGrenadePrototype = ResourceManager::Instance().GetModelInstance(ModelName::GRENADE);
 
 		if (pGrenadePrototype)
 		{
-			m_pGrenadeDebugObject = CGameObject::CreateModelInstance(pGrenadePrototype);
+			m_pGrenadeDebugObject = pGrenadePrototype;
 			m_pGrenadeDebugObject->SetOOBB(NULL);
 			m_pGrenadeDebugObject->isColl = false;
 			m_pGrenadeDebugObject->SetPosition(m_xmf3GrenadePosition);
@@ -1725,7 +1725,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 {
 	BuildDefaultLightsAndMaterials();
 	frame->mouseMove = false;
-	m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
+	//m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
@@ -1750,7 +1750,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	{
 
 		CGameObject* map = new CGameObject();
-		map->SetChild(ResourceManager::Instance().GetModelPrototype(name));
+		map->SetChild(ResourceManager::Instance().GetModelInstance(name));
 		map->SetPosition(-150, 0.1f, -150);
 		map->SetOOBB(NULL);
 		m_vVisionMapChunks.push_back(map);
@@ -1769,26 +1769,20 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		ViewObject* viewobj = new ViewObject();
 		viewobj->SetPosition(0.0f, 0.03f, 0.0f);
 
-		auto pCircleObj = std::make_unique<CGameObject>();
+		auto pCircleObj = ResourceManager::Instance().GetModelInstance(ModelName::VIEW_CIRCLE);
 		strcpy_s(pCircleObj->m_pstrFrameName, 64, "ViewCircle");
-		pCircleObj->SetMesh(new CViewCircleMesh(pd3dDevice, pd3dCommandList, 3.0f, 72));
-		pCircleObj->SetShader(view);
 		pCircleObj->SetPosition(0.0f, 0.7f, 0.0f);
 
-		auto pConeObj = std::make_unique<CGameObject>();
+		auto pConeObj = ResourceManager::Instance().GetModelInstance(ModelName::VIEW_CONE);
 		strcpy_s(pConeObj->m_pstrFrameName, 64, "ViewCone");
-		pConeObj->SetMesh(new CViewConeMesh(pd3dDevice, pd3dCommandList, 20.0f, 75.0f, 72));
-		pConeObj->SetShader(view);
 		pConeObj->SetPosition(0.0f, 0.7f, 0.0f);
 
-		viewobj->SetCircleObject(pCircleObj.get());
-		viewobj->SetConeObject(pConeObj.get());
+		viewobj->SetCircleObject(pCircleObj);
+		viewobj->SetConeObject(pConeObj);
 
-		viewobj->SetChild(pCircleObj.get());
-		viewobj->SetChild(pConeObj.get());
+		viewobj->SetChild(pCircleObj);
+		viewobj->SetChild(pConeObj);
 
-		pCircleObj.release();
-		pConeObj.release();
 		GameObjects.push_back(unique_ptr<CGameObject>(viewobj));
 		view->addObjects(viewobj);
 	}
@@ -1817,17 +1811,17 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
-	//적 오브젝트 - 네트워크가 안 될 때에만
+	////적 오브젝트 - 네트워크가 안 될 때에만
 	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_2));
-	/*pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
-	pEnemy->ApplyDefaultWeaponByEnemyModelType();
-	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->setNav(AStarNav.get());
-	pEnemy->SubmitWeaponToShader(stdshader);
-	GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
-	pSkinnedShader->addObjects(pEnemy);*/
+	//pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+	//pEnemy->ApplyDefaultWeaponByEnemyModelType();
+	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	//pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	//pEnemy->setNav(AStarNav.get());
+	//pEnemy->SubmitWeaponToShader(stdshader);
+	//GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
+	//pSkinnedShader->addObjects(pEnemy);
 
 
 
@@ -2531,31 +2525,9 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		return;
 	}
 
-	if (m_pSkyBox) m_pSkyBox->Render(pd3dCommandList, false, nPipelineState, pCamera);
-
-	if (m_ppShaders.size() > SHADERIDX::MAP && m_ppShaders[SHADERIDX::MAP])
-	{
-		pd3dCommandList->OMSetStencilRef(0xff);
-		m_ppShaders[SHADERIDX::MAP]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-	}
-
-	if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
-	{
-		pd3dCommandList->OMSetStencilRef(0xff);
-		m_ppShaders[SHADERIDX::VIEW]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-	}
-
-	if (m_ppShaders.size() > SHADERIDX::ENEMY && m_ppShaders[SHADERIDX::ENEMY])
-	{
-		pd3dCommandList->OMSetStencilRef(0xff);
-		m_ppShaders[SHADERIDX::ENEMY]->Render(pd3dCommandList, pCamera, true, nPipelineState);
-	}
-
+	
 	for (int i = 0; i < m_ppShaders.size(); i++)
 	{
-		if (i == SHADERIDX::MAP) continue;
-		if (i == SHADERIDX::VIEW) continue;
-		if (i == SHADERIDX::ENEMY) continue;
 
 		if (m_ppShaders[i])
 		{
@@ -2620,7 +2592,7 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamer
 
 void MainScene::ReleaseUploadBuffers()
 {
-	if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
+	//if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
 	for (int i = 0; i < m_ppShaders.size(); i++)
 	{

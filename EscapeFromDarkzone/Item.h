@@ -48,7 +48,7 @@ public:
 	//모델 원본 관련 함수
 	void SetModelPrototype(CGameObject* pPrototype) { model = pPrototype; }
 	CGameObject* GetModelPrototype() const { return model; }
-	CGameObject* CreateModelInstance() const;		//인스턴스 생성
+	//CGameObject* CreateModelInstance() const;		//인스턴스 생성
 
 	ItemType GetType() const { return type; }
 	ItemID GetID()const { return id; }

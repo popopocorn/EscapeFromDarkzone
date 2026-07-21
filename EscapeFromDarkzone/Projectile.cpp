@@ -101,29 +101,20 @@ void ProjectileManager::Init(CShader* s)
 	lastUse = 0;
 	shader = s;
 
-	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
-
 	for (int i = 0; i < poolSize; ++i)
 	{
-		if (pBulletPrototype)
-		{
-			CGameObject* pBulletInstance = CGameObject::CreateModelInstance(pBulletPrototype);
-
-			if (pBulletInstance)
-			{
-				bullets[i].SetChild(pBulletInstance);
-			}
-		}
-
-		bullets[i].Deactivate();
+		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelInstance(ModelName::BULLET);
+		bullets[i] = make_unique<Projectile>();
+		bullets[i]->SetChild(pBulletInstance);
 	}
+
 }
 
 void ProjectileManager::ResetForNewRound()
 {
 	for (auto& bullet : bullets)
 	{
-		bullet.Deactivate();
+		bullet->Deactivate();
 	}
 
 	lastUse = 0;
@@ -145,9 +136,9 @@ void ProjectileManager::SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT
 	{
 		int idx = (lastUse + i) % bullets.size();
 
-		if (!bullets[idx].IsActive())
+		if (!bullets[idx]->IsActive())
 		{
-			bullets[idx].Activate(s, dir, 100.0f, dist, info);
+			bullets[idx]->Activate(s, dir, 100.0f, dist, info);
 			lastUse = (idx + 1) % bullets.size();
 			break;
 		}
@@ -158,9 +149,9 @@ void ProjectileManager::Update(float fTimeElapsed)
 {
 	for (auto& b : bullets)
 	{
-		if (b.IsActive())
+		if (b->IsActive())
 		{
-			b.Animate(fTimeElapsed);
+			b->Animate(fTimeElapsed);
 		}
 	}
 }
@@ -174,9 +165,9 @@ void ProjectileManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCame
 
 	for (auto& bullet : bullets)
 	{
-		if (bullet.IsActive())
+		if (bullet->IsActive())
 		{
-			bullet.Render(pd3dCommandList, batch, 0, pCamera);
+			bullet->Render(pd3dCommandList, batch, 0, pCamera);
 		}
 	}
 }

@@ -40,8 +40,8 @@ class DecalManager : public Singleton<DecalManager>
 	friend class Singleton<DecalManager>;
 
 private:
-	vector<Decal> bulletDecals;
-	vector<Decal> bloodDecals;
+	vector<unique_ptr<Decal>> bulletDecals;
+	vector<unique_ptr<Decal>> bloodDecals;
 
 	int lastBulletUse = 0;
 	int lastBloodUse = 0;

@@ -265,37 +265,36 @@ void DecalManager::Init(CShader* s)
 
 	shader = s;
 
-	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET_DECAL);
-	CGameObject* pBloodPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BLOOD_DECAL);
-
 	for (int i = 0; i < bulletPoolSize; ++i)
 	{
+		CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelInstance(ModelName::BULLET_DECAL);
+
 		if (pBulletPrototype)
 		{
-			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBulletPrototype);
+			bulletDecals[i] = make_unique<Decal>();
+			bulletDecals[i]->SetChild(pBulletPrototype);
+			bulletDecals[i]->SetOOBB(NULL);
+			bulletDecals[i]->isColl = false;
+			bulletDecals[i]->Deactivate();
 
-			if (pDecalInstance)
-			{
-				bulletDecals[i].SetChild(pDecalInstance);
-			}
 		}
-
-		bulletDecals[i].Deactivate();
 	}
 
 	for (int i = 0; i < bloodPoolSize; ++i)
 	{
+
+		CGameObject* pBloodPrototype = ResourceManager::Instance().GetModelInstance(ModelName::BLOOD_DECAL);
+
 		if (pBloodPrototype)
 		{
-			CGameObject* pDecalInstance = CGameObject::CreateModelInstance(pBloodPrototype);
+			bloodDecals[i] = make_unique<Decal>();
+			bloodDecals[i]->SetChild(pBloodPrototype);
+			bloodDecals[i]->SetOOBB(NULL);
+			bloodDecals[i]->isColl = false;
+			bloodDecals[i]->Deactivate();
 
-			if (pDecalInstance)
-			{
-				bloodDecals[i].SetChild(pDecalInstance);
-			}
 		}
 
-		bloodDecals[i].Deactivate();
 	}
 }
 
@@ -303,12 +302,12 @@ void DecalManager::ResetForNewRound()
 {
 	for (auto& decal : bulletDecals)
 	{
-		decal.Deactivate();
+		decal->Deactivate();
 	}
 
 	for (auto& decal : bloodDecals)
 	{
-		decal.Deactivate();
+		decal->Deactivate();
 	}
 
 	lastBulletUse = 0;
@@ -326,9 +325,9 @@ void DecalManager::SpawnBulletDecal(XMFLOAT3 pos, XMFLOAT3 normal)
 	{
 		int idx = (lastBulletUse + i) % bulletDecals.size();
 
-		if (!bulletDecals[idx].IsActive())
+		if (!bulletDecals[idx]->IsActive())
 		{
-			bulletDecals[idx].Activate(DecalType::BULLET, pos, normal, DEFAULT_BULLET_DECAL_SIZE, DEFAULT_BULLET_DECAL_LIFETIME);
+			bulletDecals[idx]->Activate(DecalType::BULLET, pos, normal, DEFAULT_BULLET_DECAL_SIZE, DEFAULT_BULLET_DECAL_LIFETIME);
 			lastBulletUse = (idx + 1) % bulletDecals.size();
 			return;
 		}
@@ -360,9 +359,9 @@ void DecalManager::SpawnBloodDecal(XMFLOAT3 pos, XMFLOAT3 normal)
 	{
 		int idx = (lastBloodUse + i) % bloodDecals.size();
 
-		if (!bloodDecals[idx].IsActive())
+		if (!bloodDecals[idx]->IsActive())
 		{
-			bloodDecals[idx].Activate(DecalType::BLOOD, pos, normal, DEFAULT_BLOOD_DECAL_SIZE, DEFAULT_BLOOD_DECAL_LIFETIME);
+			bloodDecals[idx]->Activate(DecalType::BLOOD, pos, normal, DEFAULT_BLOOD_DECAL_SIZE, DEFAULT_BLOOD_DECAL_LIFETIME);
 			lastBloodUse = (idx + 1) % bloodDecals.size();
 			return;
 		}
@@ -384,17 +383,17 @@ void DecalManager::Update(float fTimeElapsed)
 {
 	for (auto& decal : bulletDecals)
 	{
-		if (decal.IsActive())
+		if (decal->IsActive())
 		{
-			decal.Animate(fTimeElapsed);
+			decal->Animate(fTimeElapsed);
 		}
 	}
 
 	for (auto& decal : bloodDecals)
 	{
-		if (decal.IsActive())
+		if (decal->IsActive())
 		{
-			decal.Animate(fTimeElapsed);
+			decal->Animate(fTimeElapsed);
 		}
 	}
 }
@@ -408,17 +407,17 @@ void DecalManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* p
 
 	for (auto& decal : bulletDecals)
 	{
-		if (decal.IsActive())
+		if (decal->IsActive())
 		{
-			decal.Render(pd3dCommandList, batch, 0, pCamera);
+			decal->Render(pd3dCommandList, batch, 0, pCamera);
 		}
 	}
 
 	for (auto& decal : bloodDecals)
 	{
-		if (decal.IsActive())
+		if (decal->IsActive())
 		{
-			decal.Render(pd3dCommandList, batch, 0, pCamera);
+			decal->Render(pd3dCommandList, batch, 0, pCamera);
 		}
 	}
 }
