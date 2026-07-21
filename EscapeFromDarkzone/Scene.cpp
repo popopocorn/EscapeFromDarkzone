@@ -1811,17 +1811,17 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
-	//적 오브젝트 - 네트워크가 안 될 때에만
-	CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_2));
-	pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
-	pEnemy->ApplyDefaultWeaponByEnemyModelType();
-	pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	pEnemy->setNav(AStarNav.get());
-	pEnemy->SubmitWeaponToShader(stdshader);
-	GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
-	pSkinnedShader->addObjects(pEnemy);
+	////적 오브젝트 - 네트워크가 안 될 때에만
+	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_2));
+	//pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+	//pEnemy->ApplyDefaultWeaponByEnemyModelType();
+	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
+	//pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+	//pEnemy->setNav(AStarNav.get());
+	//pEnemy->SubmitWeaponToShader(stdshader);
+	//GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
+	//pSkinnedShader->addObjects(pEnemy);
 
 
 

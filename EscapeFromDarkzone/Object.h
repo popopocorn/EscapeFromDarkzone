@@ -115,7 +115,6 @@ public:
 
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList);
 
-	virtual void ReleaseUploadBuffers();
 
 public:
 	UINT							m_nType = 0x00;
@@ -284,8 +283,6 @@ public:
 	//virtual void OnPrepareRender() {}
 	//virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
 
-	//virtual void OnLateUpdate() {}
-
 
 	virtual void ReleaseUploadBuffers();
 	
@@ -294,8 +291,6 @@ public:
 	ModelResource* FindFrame(const char* pstrFrameName);
 
 	void DebugPrintMixamoFrameNames(int nDepth = 0);
-
-	CTexture* FindReplicatedTexture(_TCHAR* pstrTextureName);
 
 	UINT GetMeshType() { return((m_pMesh) ? m_pMesh->GetType() : 0x00); }
 
@@ -325,7 +320,7 @@ public:
 	ModelInstance() { }
 	~ModelInstance() {}
 
-    CGameObject						*m_pRootObject = NULL;
+	unique_ptr<CGameObject>			m_pRootObject;
 
 	int 							m_nSkinnedMeshes = 0;
 	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
@@ -439,8 +434,8 @@ public:
 	XMFLOAT3 m_xmf3PrevPos = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	CGameObject*					m_pParent = NULL;
-	CGameObject*					m_pChild = NULL;
-	CGameObject*					m_pSibling = NULL;
+	unique_ptr<CGameObject>			m_pChild;
+	unique_ptr<CGameObject>			m_pSibling;
 
 	CAnimationController*			m_pSkinnedAnimationController = NULL;
 
@@ -519,11 +514,11 @@ public:
 		m_bCastShadow = bCastShadow;
 		if (bRecursive)
 		{
-			CGameObject* pChild = m_pChild;
+			CGameObject* pChild = m_pChild.get();
 			while (pChild)
 			{
 				pChild->SetCastShadow(bCastShadow, true);
-				pChild = pChild->m_pSibling;
+				pChild = pChild->m_pSibling.get();
 			}
 		}
 	}
@@ -532,11 +527,11 @@ public:
 		m_bRenderEnabled = bRenderEnabled;
 		if (bRecursive)
 		{
-			CGameObject* pChild = m_pChild;
+			CGameObject* pChild = m_pChild.get();
 			while (pChild)
 			{
 				pChild->SetRenderEnabled(bRenderEnabled, true);
-				pChild = pChild->m_pSibling;
+				pChild = pChild->m_pSibling.get();
 			}
 		}
 	}

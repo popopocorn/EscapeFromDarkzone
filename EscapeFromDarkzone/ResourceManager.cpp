@@ -803,7 +803,7 @@ ModelInstance* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 
 	ModelInstance* pInstanceInfo = new ModelInstance();
 
-	pInstanceInfo->m_pRootObject = pRootInstance;
+	pInstanceInfo->m_pRootObject = unique_ptr<CGameObject>(pRootInstance);
 	pInstanceInfo->m_nSkinnedMeshes = pPrototypeInfo->m_nSkinnedMeshes;
 
 	pInstanceInfo->m_pAnimationSets = pPrototypeInfo->m_pAnimationSets;

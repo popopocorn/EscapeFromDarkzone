@@ -990,12 +990,12 @@ void CBoundingBoxShader::AddObject(CGameObject* pGameObject)
 
 	if (pGameObject->m_pChild)
 	{
-		AddObject(pGameObject->m_pChild);
+		AddObject(pGameObject->m_pChild.get());
 	}
 
 	if (pGameObject->m_pSibling)
 	{
-		AddObject(pGameObject->m_pSibling);
+		AddObject(pGameObject->m_pSibling.get());
 	}
 }
 void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState)

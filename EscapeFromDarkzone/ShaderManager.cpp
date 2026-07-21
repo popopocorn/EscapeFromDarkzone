@@ -20,6 +20,8 @@ void ShaderManager::BuildShaders(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 
 	Shaders[ShaderType::UI] = make_unique<UIObjectShader>();
 	Shaders[ShaderType::UI]->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+	
+	
 	PlayerShader* pshader = new PlayerShader();
 	pshader->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	pshader->CreateShadowShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);

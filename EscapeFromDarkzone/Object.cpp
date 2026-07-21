@@ -215,14 +215,6 @@ void CMaterial::SetTexture(CTexture *pTexture, UINT nTexture)
 	m_ppTextures[nTexture] = pTexture; 
 }
 
-void CMaterial::ReleaseUploadBuffers()
-{
-	for (int i = 0; i < m_nTextures; i++)
-	{
-		if (m_ppTextures[i]) m_ppTextures[i]->ReleaseUploadBuffers();
-	}
-}
-
 CShader *CMaterial::m_pSkinnedAnimationShader = NULL;
 CShader *CMaterial::m_pStandardShader = NULL;
 
@@ -577,7 +569,7 @@ CAnimationController::CAnimationController(ID3D12Device* pd3dDevice, ID3D12Graph
 	}
 
 	m_pAnimationSets = pModel->m_pAnimationSets;
-	m_pModelRootObject = pModel->m_pRootObject;
+	m_pModelRootObject = pModel->m_pRootObject.get();
 	m_nSkinnedMeshes = pModel->m_nSkinnedMeshes;
 
 	if (!m_pModelRootObject)
@@ -661,7 +653,7 @@ CAnimationController::CAnimationController(ID3D12Device* pd3dDevice, ID3D12Graph
 	m_bIsBlending = false;
 	m_fBlendTime = 0.0f;
 	m_fBlendDuration = 0.2f;
-	BindBones(pModel->m_pRootObject);
+	BindBones(pModel->m_pRootObject.get());
 }
 
 CAnimationController::~CAnimationController()
@@ -1114,28 +1106,6 @@ void ModelResource::DebugPrintMixamoFrameNames(int nDepth)
 	if (m_pSibling) m_pSibling->DebugPrintMixamoFrameNames(nDepth);
 }
 
-CTexture* ModelResource::FindReplicatedTexture(_TCHAR* pstrTextureName)
-{
-	for (int i = 0; i < m_nMaterials; i++)
-	{
-		if (m_ppMaterials[i])
-		{
-			for (int j = 0; j < m_ppMaterials[i]->m_nTextures; j++)
-			{
-				if (m_ppMaterials[i]->m_ppTextures[j])
-				{
-					if (!_tcsncmp(m_ppMaterials[i]->m_ppstrTextureNames[j], pstrTextureName, max(_tcslen(m_ppMaterials[i]->m_ppstrTextureNames[j]), _tcslen(pstrTextureName)))) return(m_ppMaterials[i]->m_ppTextures[j]);
-				}
-			}
-		}
-	}
-	CTexture *pTexture = NULL;
-	if (m_pSibling) if (pTexture = m_pSibling->FindReplicatedTexture(pstrTextureName)) return(pTexture);
-	if (m_pChild) if (pTexture = m_pChild->FindReplicatedTexture(pstrTextureName)) return(pTexture);
-		
-	return(NULL);
-}
-
 void ModelResource::FindAndSetSkinnedMesh(CSkinnedMesh** ppSkinnedMeshes, int* pnSkinnedMesh)
 {
 	if (m_pMesh && (m_pMesh->GetType() & VERTEXT_BONE_INDEX_WEIGHT)) ppSkinnedMeshes[(*pnSkinnedMesh)++] = (CSkinnedMesh*)m_pMesh.get();
@@ -1184,19 +1154,20 @@ void CGameObject::SetChild(CGameObject *pChild, bool bReferenceUpdate)
 	}
 	if (m_pChild)
 	{
-		if (pChild) pChild->m_pSibling = m_pChild->m_pSibling;
-		m_pChild->m_pSibling = pChild;
+		if (pChild) pChild->m_pSibling = move(m_pChild->m_pSibling);
+		m_pChild->m_pSibling = unique_ptr<CGameObject>(pChild);
 	}
 	else
 	{
-		m_pChild = pChild;
+		m_pChild = unique_ptr<CGameObject>(pChild);
 	}
 }
 
 void CGameObject::ReplaceChild(CGameObject* pChild)
 {
 	if (not pChild)return;
-	m_pChild = pChild;
+	m_pChild.reset();
+	m_pChild = unique_ptr<CGameObject>(pChild);
 }
 
 
@@ -1777,8 +1748,8 @@ void CGameObject::PrintFrameInfo(CGameObject *pGameObject, CGameObject *pParent)
 	_stprintf_s(pstrDebug, 256, _T("(Frame: %p) (Parent: %p)\n"), pGameObject, pParent);
 	OutputDebugString(pstrDebug);
 
-	if (pGameObject->m_pSibling) CGameObject::PrintFrameInfo(pGameObject->m_pSibling, pParent);
-	if (pGameObject->m_pChild) CGameObject::PrintFrameInfo(pGameObject->m_pChild, pGameObject);
+	if (pGameObject->m_pSibling) CGameObject::PrintFrameInfo(pGameObject->m_pSibling.get(), pParent);
+	if (pGameObject->m_pChild) CGameObject::PrintFrameInfo(pGameObject->m_pChild.get(), pGameObject);
 }
 
 //void CGameObject::LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel)

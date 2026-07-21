@@ -264,6 +264,10 @@ void CPlayer::Update(float fTimeElapsed)
 
 		m_bWasMoving = bHasInput;
 	}
+	if (m_pWeaponSocket)
+	{
+		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	}
 }
 
 CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
@@ -329,6 +333,10 @@ void CPlayer::OnPrepareRender()
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	CGameObject::Render(pd3dCommandList, false, nPipelineState, pCamera);
+	if (m_pWeapon)
+	{
+		m_pWeapon->Render(pd3dCommandList, false, nPipelineState, pCamera);
+	}
 }
 
 void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
@@ -634,9 +642,9 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	m_pWeapon = pWeapon;
 	m_pWeaponSocket = pWeaponSocket;
 
-	m_pWeapon->m_pParent = m_pWeaponSocket;
-	m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
-	m_pWeaponSocket->m_pChild = m_pWeapon;
+	//m_pWeapon->m_pParent = m_pWeaponSocket;
+	//m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
+	//m_pWeaponSocket->m_pChild = m_pWeapon;
 
 	//XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, XMMatrixIdentity());
 	static std::unordered_map<CGameObject*, XMFLOAT4X4> s_originalTransformMap;
@@ -939,72 +947,9 @@ void CPlayer::EndGrenadeWeaponPose()
 	m_bWeaponGrenadeStartCaptured = false;
 }
 
-static void DeleteGameObjectTree(CGameObject* pObject)
-{
-	if (!pObject) return;
-
-	CGameObject* pChild = pObject->m_pChild;
-
-	while (pChild)
-	{
-		CGameObject* pNext = pChild->m_pSibling;
-
-		pChild->m_pParent = nullptr;
-		pChild->m_pSibling = nullptr;
-
-		DeleteGameObjectTree(pChild);
-
-		pChild = pNext;
-	}
-
-	pObject->m_pChild = nullptr;
-	pObject->m_pSibling = nullptr;
-	pObject->m_pParent = nullptr;
-
-	delete pObject;
-}
 
 void CPlayer::DetachCurrentWeapon()
 {
-	if (!m_pWeapon)
-	{
-		m_pWeaponSocket = nullptr;
-		m_pLeftHandGrip = nullptr;
-		m_pWeaponMuzzleSocket = nullptr;
-		m_bWeaponBaseLocalSaved = false;
-		m_bWeaponGrenadeStartCaptured = false;
-		m_eWeaponPose = WEAPON_POSE::IDLE;
-		return;
-	}
-
-	if (m_pWeaponSocket)
-	{
-		CGameObject* pPrev = nullptr;
-		CGameObject* pCur = m_pWeaponSocket->m_pChild;
-
-		while (pCur)
-		{
-			if (pCur == m_pWeapon)
-			{
-				if (pPrev)
-				{
-					pPrev->m_pSibling = pCur->m_pSibling;
-				}
-				else
-				{
-					m_pWeaponSocket->m_pChild = pCur->m_pSibling;
-				}
-
-				pCur->m_pSibling = nullptr;
-				pCur->m_pParent = nullptr;
-				break;
-			}
-
-			pPrev = pCur;
-			pCur = pCur->m_pSibling;
-		}
-	}
-
 	m_pWeapon = nullptr;
 	m_pWeaponSocket = nullptr;
 	m_pLeftHandGrip = nullptr;
@@ -1785,8 +1730,15 @@ CTerrainPlayer::CTerrainPlayer(
 	{
 		pPlayerModel->m_pAnimationSets = new CAnimationSets(0);
 	}
-
-	SetChild(pPlayerModel->m_pRootObject, true);
+	m_pSkinnedAnimationController = new CPlayerAnimationController(
+		pd3dDevice,
+		pd3dCommandList,
+		2,
+		pPlayerModel,
+		this
+	);
+	SetChild(pPlayerModel->m_pRootObject.release(), true);
+	
 
 	BoundingOrientedBox playerBox;
 	playerBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -1819,14 +1771,7 @@ CTerrainPlayer::CTerrainPlayer(
 
 
 	InitializeLeftHandIK();
-
-	m_pSkinnedAnimationController = new CPlayerAnimationController(
-		pd3dDevice,
-		pd3dCommandList,
-		2,
-		pPlayerModel,
-		this
-	);
+	
 
 	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
 	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
@@ -1845,7 +1790,7 @@ CTerrainPlayer::CTerrainPlayer(
 
 	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
 	m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
-
+	
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 }
