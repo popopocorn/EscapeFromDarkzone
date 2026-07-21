@@ -187,6 +187,10 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	case SC_GAME_OVER:
 	{
 		// 라운드 제한 시간 초과 (추후 패킷 확장 필요시 확장해서 사용할 것)
+		if (gf.m_pPlayer)
+		{
+			gf.m_pPlayer->SetHP(0);
+		}
 		OutputDebugString(L"[ROUND] SC_GAME_OVER received\n");
 		break;
 	}

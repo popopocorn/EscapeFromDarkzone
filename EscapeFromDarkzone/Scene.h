@@ -88,7 +88,7 @@ public:
 
 	virtual void BuildDefaultLightsAndMaterials();
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) {};
-	void ReleaseObjects() {};
+	virtual void ReleaseObjects() {};
 
 	void SetRoot(ID3D12RootSignature* root) { m_pd3dGraphicsRootSignature = root; }
 
@@ -140,7 +140,16 @@ public:
 	
 
 	unique_ptr<UIObjectShader>			UIShader;
-private:
+
+	HUDManager* GetUIManager()
+	{
+		return uiManager.get();
+	}
+
+	const HUDManager* GetUIManager() const
+	{
+		return uiManager.get();
+	}
 	
 public:
 	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }

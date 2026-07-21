@@ -158,11 +158,13 @@
     <ClInclude Include="EffectShader.h" />
     <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
+    <ClInclude Include="FontResource.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemDef.h" />
+    <ClInclude Include="ItemTextData.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="NetEntityManager.h" />
     <ClInclude Include="NetSession.h" />
@@ -184,8 +186,10 @@
     <ClInclude Include="SoundManager.h" />
     <ClInclude Include="State.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="TextRenderer.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="UI.h" />
+    <ClInclude Include="UIText.h" />
     <ClInclude Include="WICTextureLoader12.h" />
   </ItemGroup>
   <ItemGroup>
@@ -200,10 +204,12 @@
     <ClCompile Include="EffectShader.cpp" />
     <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
+    <ClCompile Include="FontResource.cpp" />
     <ClCompile Include="GameFramework.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="InventoryManager.cpp" />
     <ClCompile Include="Item.cpp" />
+    <ClCompile Include="ItemTextData.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="NetEntityManager.cpp" />
     <ClCompile Include="NetSession.cpp" />
@@ -222,8 +228,10 @@
     <ClCompile Include="SoundManager.cpp" />
     <ClCompile Include="State.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="TextRenderer.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="UI.cpp" />
+    <ClCompile Include="UIText.cpp" />
     <ClCompile Include="WICTextureLoader12.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -261,6 +269,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </None>
     <None Include="Effect.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </None>
+    <None Include="Text.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </None>

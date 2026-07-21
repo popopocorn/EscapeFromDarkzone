@@ -100,6 +100,10 @@
     <ClCompile Include="NetSession.cpp" />
     <ClCompile Include="NetPacketDispatcher.cpp" />
     <ClCompile Include="Decal.cpp" />
+    <ClCompile Include="FontResource.cpp" />
+    <ClCompile Include="UIText.cpp" />
+    <ClCompile Include="TextRenderer.cpp" />
+    <ClCompile Include="ItemTextData.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -211,6 +215,10 @@
     <ClInclude Include="NetSession.h" />
     <ClInclude Include="NetPacketDispatcher.h" />
     <ClInclude Include="Decal.h" />
+    <ClInclude Include="FontResource.h" />
+    <ClInclude Include="UIText.h" />
+    <ClInclude Include="TextRenderer.h" />
+    <ClInclude Include="ItemTextData.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">
@@ -223,6 +231,7 @@
   <ItemGroup>
     <None Include="Debug.hlsli" />
     <None Include="Effect.hlsli" />
+    <None Include="Text.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="소스파일">

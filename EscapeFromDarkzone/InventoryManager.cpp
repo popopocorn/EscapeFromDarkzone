@@ -6,7 +6,7 @@
 #include "Object.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
-
+#include "TextRenderer.h"
 
 InventoryManager::~InventoryManager()
 {
@@ -199,6 +199,29 @@ void InventoryManager::SubmitToShader(UIObjectShader* shader)
 
 	if (m_pCraftInventory)
 		m_pCraftInventory->SubmitToShader(shader);
+}
+
+void InventoryManager::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+
+	if (pPlayerInventory)
+	{
+		pPlayerInventory->SubmitText(renderer);
+	}
+
+	if (m_pLootInventory)
+	{
+		m_pLootInventory->SubmitText(renderer);
+	}
+
+	if (m_pCraftInventory)
+	{
+		m_pCraftInventory->SubmitText(renderer);
+	}
 }
 
 bool InventoryManager::ProcessClick(POINT mouse)
