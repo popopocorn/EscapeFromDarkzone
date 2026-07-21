@@ -101,8 +101,6 @@ void ProjectileManager::Init(CShader* s)
 	lastUse = 0;
 	shader = s;
 
-	CGameObject* pBulletPrototype = ResourceManager::Instance().GetModelPrototype(ModelName::BULLET);
-
 	for (int i = 0; i < poolSize; ++i)
 	{
 		CGameObject* pBulletInstance = ResourceManager::Instance().GetModelInstance(ModelName::BULLET);
@@ -116,7 +114,7 @@ void ProjectileManager::ResetForNewRound()
 {
 	for (auto& bullet : bullets)
 	{
-		bullet.Deactivate();
+		bullet->Deactivate();
 	}
 
 	lastUse = 0;
@@ -167,9 +165,9 @@ void ProjectileManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCame
 
 	for (auto& bullet : bullets)
 	{
-		if (b->IsActive())
+		if (bullet->IsActive())
 		{
-			b->Render(pd3dCommandList, batch, 0, pCamera);
+			bullet->Render(pd3dCommandList, batch, 0, pCamera);
 		}
 	}
 }

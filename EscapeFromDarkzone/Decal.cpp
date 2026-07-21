@@ -302,12 +302,12 @@ void DecalManager::ResetForNewRound()
 {
 	for (auto& decal : bulletDecals)
 	{
-		decal.Deactivate();
+		decal->Deactivate();
 	}
 
 	for (auto& decal : bloodDecals)
 	{
-		decal.Deactivate();
+		decal->Deactivate();
 	}
 
 	lastBulletUse = 0;
