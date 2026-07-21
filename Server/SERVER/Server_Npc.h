@@ -10,6 +10,8 @@
 
 using namespace DirectX;
 
+constexpr int MAX_NPC_PER_ROOM = 66;
+
 struct SERVER_NPC {
     short    id;                 // NPC ID
     char     kind;               // NPC 단계(tier): 1=PISTOL, 2=SMG, 3=RIFLE
@@ -63,10 +65,6 @@ struct SERVER_NPC {
     std::chrono::steady_clock::time_point   death_time;     // lifetime 기준
 };
 
-extern std::array<SERVER_NPC, MAX_NPC> g_npcs;
-
-void init_npcs();
-
 // NPC 단계(tier) 상수
 constexpr char NPC_TIER_1 = 1;   // PISTOL
 constexpr char NPC_TIER_2 = 2;   // SMG
@@ -101,8 +99,11 @@ inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 
 // NpcInputEvent
 struct NpcInputEvent {
-    enum Type { HIT, NEW_CLIENT_JOINED, GRENADE_EXPLODE };
+    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN, ROUND_LEAVE };
     Type type;
+
+    int      room_id = -1;      // 이벤트가 적용될 룸
+    uint32_t room_gen = 0;      // 룸의 generation과 일치하는지 확인 (옛날룸 이벤트로 현재룸 갱신하는 동작 방지)
 
     int      attacker_client_id;
     XMFLOAT3 ray_origin;

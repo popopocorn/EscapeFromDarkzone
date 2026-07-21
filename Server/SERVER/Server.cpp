@@ -21,6 +21,7 @@
 
 #include "Server_Collision.h"
 #include "Server_Npc.h"
+#include "Server_Room.h"
 #include "Server_AI.h"
 #include "Server_Effect.h"
 #include "Server_Weapon.h"
@@ -81,13 +82,11 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 constexpr int ROUND_MIN_PLAYERS = 1;			// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
-std::atomic<int> g_round_state{ ROUND_WAITING };
-std::chrono::steady_clock::time_point g_round_start_time;
 
 // 라운드 제한 시간
-constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;		// 1분
+constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
+//constexpr float ROUND_TIME_LIMIT_SEC = 180.0f;		// 3분
 //constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
-std::atomic<bool> g_game_over_sent{ false };
 // =======================
 
 
@@ -296,7 +295,7 @@ public:
 	}
 };
 
-enum S_STATE { ST_FREE, ST_ALLOC, ST_INGAME };
+enum S_STATE { ST_FREE, ST_ALLOC, ST_LOBBY, ST_INGAME };
 class SESSION {
 	OVER_EXP _recv_over;
 
@@ -328,12 +327,23 @@ public:
 	bool in_escape_zone = false;
 	bool escaped = false;
 	bool dead = false;
+	bool loot_dropped = false;
+
+	// 개별 룸 바인딩
+	int      room_id = -1;		// -1 : 룸 미소속
+	short    room_slot = -1;	// 각 룸의 로컬 인덱스
+	uint32_t room_gen = 0;		// 룸 세대값 (재사용 방지)
+
+	std::atomic<bool> in_round{ false };	// 라운드 진행 중 여부
+
 	std::chrono::steady_clock::time_point last_hit_time;
 
-	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
+	std::vector<XMFLOAT3> _collNormals;		// 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
 	std::chrono::steady_clock::time_point _last_move_recv_time;
+
+	std::atomic<bool> godmode{ false };		// 디버그용 무적 모드
 
 public:
 	SESSION()
@@ -363,6 +373,7 @@ public:
 		in_escape_zone = false;
 		escaped = false;
 		dead = false;
+		loot_dropped = false;
 	}
 
 	~SESSION() {}
@@ -459,6 +470,251 @@ public:
 };
 
 std::array<SESSION, MAX_USER> clients;
+std::array<Room, MAX_ROOMS>   g_rooms;
+
+void disconnect(int c_id); 
+
+static void init_room_npcs(Room& r)
+{
+	for (short i = 0; i < MAX_NPC_PER_ROOM; ++i) {
+		SERVER_NPC& npc = r.npcs[i];
+
+		npc.id = i;
+		npc.kind = NPC_TIER_1;
+		npc.outfit = 0;
+		npc.alive = false;
+		npc.state = NPC_STATE_IDLE;
+
+		npc.position = { 0.0f, 0.0f, 0.0f };
+		npc.spawn_position = { 0.0f, 0.0f, 0.0f };
+		npc.yaw = 0.0f;
+
+		npc.hp = 0;
+		npc.max_hp = 0;
+
+		npc.path_update_timer = 0.0f;
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+		npc.die_timer = 0.0f;
+
+		npc.coll_normals.clear();
+
+		npc.think_timer = 0.0f;
+
+		npc.lose_sight_timer = 0.0f;
+		npc.has_last_seen_player = false;
+		npc.last_seen_player_pos = { 0.0f, 0.0f, 0.0f };
+
+		npc.return_ignore_timer = 0.0f;
+
+		npc.aim_timer = 0.0f;
+		npc.attack_cooldown = 0.0f;
+
+		npc.burst_shots_left = 0;
+		npc.burst_serial = 0;
+		npc.burst_shot_timer = 0.0f;
+		npc.burst_rest_timer = 0.0f;
+
+		npc.strafe_timer = 0.0f;
+		npc.strafe_sign = 1.0f;
+
+		npc.current_ammo = 0;
+		npc.reloading = false;
+		npc.reload_timer = 0.0f;
+
+		npc.weapon_type = static_cast<short>(WeaponType::PISTOL);
+		npc.weapon_grade = static_cast<short>(WeaponGrade::BASIC);
+
+		npc._inventory.fill(ItemSlot{});
+		npc.loot_active = false;
+		npc.death_time = {};
+	}
+}
+
+static bool BindClientToRoom(Room& r, int c_id)
+{
+	if (!r.alive) return false;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		if (r.participants[k] != -1) continue;
+
+		r.participants[k] = c_id;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			clients[c_id].room_id = r.id;
+			clients[c_id].room_slot = static_cast<short>(k);
+			clients[c_id].room_gen = r.generation;
+		}
+		std::cout << "[ROOM] bind client " << c_id
+			<< " -> room " << r.id << " slot " << k << "\n";
+		return true;
+	}
+	return false;
+}
+
+static void ReconcileRoomParticipants(Room& r)
+{
+	if (!r.alive) return;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int pid = r.participants[k];
+		if (pid < 0) continue;
+
+		bool stale = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[pid]._s_lock);
+			if (clients[pid]._state != ST_INGAME)       stale = true;
+			else if (clients[pid].room_id != r.id)      stale = true;
+			else if (clients[pid].room_gen != r.generation) stale = true;
+		}
+
+		if (stale) {
+			r.participants[k] = -1;
+			std::cout << "[ROOM] unbind client " << pid
+				<< " from room " << r.id << " slot " << k << "\n";
+		}
+	}
+}
+
+// 룸 참가 대기열
+std::vector<int> g_ready_players;
+
+static void spawn_room_npcs(Room& r);
+
+static void start_new_round(Room& r)
+{
+	std::cout << "[ROUND] starting new round in room " << r.id << "\n";
+
+	int bound = 0;
+
+	for (size_t idx = 0; idx < g_ready_players.size() && bound < ROOM_CAPACITY; ) {
+		int cid = g_ready_players[idx];
+
+		bool lobby = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			lobby = (clients[cid]._state == ST_LOBBY);
+		}
+		if (!lobby) { 
+			g_ready_players.erase(g_ready_players.begin() + idx); 
+			continue; 
+		}
+		if (!BindClientToRoom(r, cid)) break;   // 정원 초과 (비정상)
+
+		// 초기화
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			short slot = clients[cid].room_slot;
+			const PlayerSpawnPos& sp = PLAYER_SPAWN_POS[slot % PLAYER_SPAWN_COUNT];
+			clients[cid].x = sp.x;
+			clients[cid].z = sp.z;
+			clients[cid].y = 0.1f;
+			clients[cid]._state = ST_INGAME;
+			clients[cid].escaped = false;
+			clients[cid].in_escape_zone = false;
+			clients[cid].dead = false;
+			clients[cid].loot_dropped = false;
+			clients[cid].hp = clients[cid].max_hp;
+			clients[cid].in_round.store(true);
+			clients[cid].init_combat_resources();
+
+			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
+			clients[cid]._inventory.fill(ItemSlot{});
+			clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+			clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+			clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+			clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
+		}
+
+		g_ready_players.erase(g_ready_players.begin() + idx);
+		++bound;
+	}
+
+	if (bound == 0) return;
+
+	// 월드 리셋
+	spawn_room_npcs(r);
+
+	r.state = ROOM_IN_PROGRESS;
+	r.start_time = std::chrono::steady_clock::now();
+	r.game_over_sent = false;
+	std::cout << "[ROUND] start (players=" << bound << ")\n";
+
+	// 플레이어 브로드캐스트
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int cid = r.participants[k];
+		if (cid < 0) continue;
+
+		SC_ROUND_START_PACKET rp;
+		rp.size = sizeof(rp);
+		rp.type = SC_ROUND_START;
+		rp.x = clients[cid].x;
+		rp.y = clients[cid].y;
+		rp.z = clients[cid].z;
+		clients[cid].do_send(&rp);
+
+		clients[cid].send_ammo_state(cid);
+		clients[cid].send_grenade_count(cid);
+
+		for (int s = 0; s < INVENTORY_SIZE; ++s) {
+			clients[cid].send_inventory_update_packet(s);
+		}
+
+		// 다른 플레이어 추가(무기포함)
+		for (int j = 0; j < ROOM_CAPACITY; ++j) {
+			int other = r.participants[j];
+			if (other < 0 || other == cid) continue;
+			clients[cid].send_add_player_packet(other);
+			clients[cid].send_change_weapon_packet(other);
+		}
+
+		// NPC 추가
+		for (const auto& npc : r.npcs) {
+			if (!npc.alive) continue;
+			clients[cid].send_add_npc_packet(
+				npc.id, npc.kind, npc.outfit,
+				npc.position.x, npc.position.y, npc.position.z,
+				npc.yaw, npc.hp);
+		}
+	}
+}
+
+static void end_round(Room& r, const char* reason)
+{
+	std::cout << "[ROUND] end (reason=" << reason << ")\n";
+
+	SC_GAME_OVER_PACKET gp;
+	gp.size = sizeof(gp);
+	gp.type = SC_GAME_OVER;
+	SC_ROUND_RESET_PACKET rp;
+	rp.size = sizeof(rp);
+	rp.type = SC_ROUND_RESET;
+
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int cid = r.participants[k];
+		if (cid < 0) continue;
+		clients[cid].do_send(&gp);
+		clients[cid].do_send(&rp);
+	}
+
+	// 참가자 로비 복귀 + 룸 바인딩 해제
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int cid = r.participants[k];
+		if (cid < 0) continue;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			if (clients[cid]._state == ST_INGAME) clients[cid]._state = ST_LOBBY;
+			clients[cid].room_id = -1;
+			clients[cid].room_slot = -1;
+			clients[cid].room_gen = 0;
+		}
+		clients[cid].in_round.store(false);
+
+		r.participants[k] = -1;
+	}
+
+	r.alive = false;
+}
 
 AstarNavigation g_astar;
 SOCKET g_s_socket, g_c_socket;
@@ -546,10 +802,17 @@ void SESSION::send_grenade_count(int c_id) {
 
 static void BroadcastPlayerState(int c_id)
 {
+	int sroom;
+	{ 
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+		sroom = clients[c_id].room_id; 
+	}
+
 	for (auto& cl : clients) {
 		{
 			std::lock_guard<std::mutex> ll(cl._s_lock);
 			if (ST_INGAME != cl._state) continue;
+			if (cl.room_id != sroom) continue;
 		}
 		cl.send_player_state_change_packet(c_id);
 	}
@@ -698,41 +961,46 @@ int get_new_client_id()
 	return -1;
 }
 
-struct PlayerSnapshot {
-	bool  in_game;
-	float x, y, z;
-	float yaw;
-	short hp;
-
-	bool targetable;
-};
-
-static void SnapshotPlayers(std::array<PlayerSnapshot, MAX_USER>& out)
+static void SnapshotPlayers(Room& r)
 {
-	for (int i = 0; i < MAX_USER; ++i) {
-		std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-		if (clients[i]._state == ST_INGAME) {
-			out[i].in_game = true;
-			out[i].targetable = (!clients[i].dead && !clients[i].escaped);
-			out[i].x = clients[i].x;
-			out[i].y = clients[i].y;
-			out[i].z = clients[i].z;
-			out[i].yaw = clients[i].yaw;
-			out[i].hp = clients[i].hp;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int pid = r.participants[k];
+		PlayerSnapshot& out = r.player_snapshot[k];
+
+		if (pid < 0) {
+			out.in_game = false;
+			out.targetable = false;
+			out.client_id = -1;
+			continue;
+		}
+
+		std::lock_guard<std::mutex> lk(clients[pid]._s_lock);
+		if (clients[pid]._state == ST_INGAME) {
+			out.in_game = true;
+			out.client_id = pid;				// 전역 clients[] id
+			out.targetable = (!clients[pid].dead && !clients[pid].escaped);
+			out.x = clients[pid].x;
+			out.y = clients[pid].y;
+			out.z = clients[pid].z;
+			out.yaw = clients[pid].yaw;
+			out.hp = clients[pid].hp;
 		}
 		else {
-			out[i].in_game = false;
-			out[i].targetable = false;
+			out.in_game = false;
+			out.targetable = false;
+			out.client_id = -1;
 		}
 	}
 }
 
-static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapshot, MAX_USER>& snapshot, float& out_dist_sq)
+static int FindNearestPlayer(const Room& r, const XMFLOAT3& pos, float& out_dist_sq)
 {
+	const auto& snapshot = r.player_snapshot;
+
 	int   best_id = -1;
 	float best_sq = 0.0f;
 
-	for (int i = 0; i < MAX_USER; ++i) {
+	for (int i = 0; i < ROOM_CAPACITY; ++i) {
 		if (!snapshot[i].targetable) continue;
 
 		float dx = snapshot[i].x - pos.x;
@@ -749,7 +1017,7 @@ static int FindNearestPlayer(const XMFLOAT3& pos, const std::array<PlayerSnapsho
 	if (best_id >= 0) {
 		out_dist_sq = best_sq;
 	}
-	return best_id;
+	return best_id;		// 룸 로컬 인덱스 (0~7), 없으면 -1
 }
 
 static void StartNpcBurst(SERVER_NPC& npc)
@@ -797,8 +1065,7 @@ static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 	return false;
 }
 
-static void BroadcastAttachedEffectNoSnapshot(
-	EffectID id, EffectEntityKind kind, short entity_id)
+static void BroadcastAttachedEffectNoSnapshot(int room_id, EffectID id, EffectEntityKind kind, short entity_id)
 {
 	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
 	ep.size = sizeof(ep);
@@ -811,6 +1078,7 @@ static void BroadcastAttachedEffectNoSnapshot(
 		{
 			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 			if (clients[i]._state != ST_INGAME) continue;
+			if (clients[i].room_id != room_id) continue;
 		}
 		clients[i].do_send(&ep);
 	}
@@ -818,6 +1086,7 @@ static void BroadcastAttachedEffectNoSnapshot(
 
 // 스냅샷 없이 (IOCP 워커 경로: PvP)
 static void BroadcastFireTracerNoSnapshot(
+	int room_id, 
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
 	const XMFLOAT3& normal)
@@ -838,14 +1107,13 @@ static void BroadcastFireTracerNoSnapshot(
 		{
 			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 			if (clients[i]._state != ST_INGAME) continue;
+			if (clients[i].room_id != room_id) continue;
 		}
 		clients[i].do_send(&tp);
 	}
 }
 
-static void BroadcastAttachedEffect(
-	EffectID id, EffectEntityKind kind, short entity_id,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastAttachedEffect(const Room& r, EffectID id, EffectEntityKind kind, short entity_id)
 {
 	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
 	ep.size = sizeof(ep);
@@ -854,18 +1122,19 @@ static void BroadcastAttachedEffect(
 	ep.entity_kind = static_cast<unsigned char>(kind);
 	ep.entity_id = entity_id;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&ep);
 	}
 }
 
 // 스냅샷 기반 (NPC 스레드 경로: PvE, NPC-->플레이어)
 static void BroadcastFireTracer(
+	const Room& r, 
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
-	const XMFLOAT3& normal,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+	const XMFLOAT3& normal)
 {
 	SC_FIRE_TRACER_PACKET tp;
 	tp.size = sizeof(tp);
@@ -878,16 +1147,15 @@ static void BroadcastFireTracer(
 	tp.distance = distance;
 	tp.nx = normal.x; tp.ny = normal.y; tp.nz = normal.z;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (shooter_id == i) continue;             // 발사자 본인 제외
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
+		if (shooter_id == i) continue;				// 발사자 본인 제외
 		clients[i].do_send(&tp);
 	}
 }
 
-static void BroadcastWorldEffect(
-	EffectID id, const XMFLOAT3& pos, const XMFLOAT3& dir,
-	const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastWorldEffect(const Room& r, EffectID id, const XMFLOAT3& pos, const XMFLOAT3& dir)
 {
 	SC_PLAY_EFFECT_WORLD_PACKET ep;
 	ep.size = sizeof(ep);
@@ -896,21 +1164,24 @@ static void BroadcastWorldEffect(
 	ep.x = pos.x; ep.y = pos.y; ep.z = pos.z;
 	ep.dx = dir.x; ep.dy = dir.y; ep.dz = dir.z;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&ep);
 	}
 }
 
-static void ChangeNpcState(SERVER_NPC&, char, const std::array<PlayerSnapshot, MAX_USER>&);
+static void ChangeNpcState(const Room&, SERVER_NPC&, char);
 
-static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void NpcFireAtPlayer(const Room& r, SERVER_NPC& npc, int target_id)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (npc.reloading) return;
 	if (NPC_STATE_DIE == npc.state) return;
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RELOAD);
 		return;
 	}
 
@@ -975,24 +1246,28 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 		normal = GetOOBBHitNormal(pbox2, hitPosC);
 
 		short dmg = ComputeDamage(spec, hit_dist);
+		int  target_cid = player_snapshot[target_id].client_id;
 		short new_hp = 0;
 		bool reset_prog = false;
 		bool  just_died = false;
 		{
-			std::lock_guard<std::mutex> lk(clients[target_id]._s_lock);
-			if (clients[target_id]._state == ST_INGAME) {
-				clients[target_id].hp -= dmg;
-				if (clients[target_id].hp < 0) clients[target_id].hp = 0;
-				new_hp = clients[target_id].hp;
+			std::lock_guard<std::mutex> lk(clients[target_cid]._s_lock);
+			if (clients[target_cid]._state == ST_INGAME) {
 
-				if (new_hp <= 0 && !clients[target_id].dead) {
-					clients[target_id].dead = true;
-					clients[target_id].player_state = PLAYER_STATE_DIE;
+				if (clients[target_cid].godmode.load()) dmg = 0;		// 무적 모드 (디버그용)
+
+				clients[target_cid].hp -= dmg;
+				if (clients[target_cid].hp < 0) clients[target_cid].hp = 0;
+				new_hp = clients[target_cid].hp;
+
+				if (new_hp <= 0 && !clients[target_cid].dead) {
+					clients[target_cid].dead = true;
+					clients[target_cid].player_state = PLAYER_STATE_DIE;
 					just_died = true;
 				}
 
-				if (clients[target_id].in_escape_zone) {
-					clients[target_id].last_hit_time = std::chrono::steady_clock::now();
+				if (clients[target_cid].in_escape_zone) {
+					clients[target_cid].last_hit_time = std::chrono::steady_clock::now();
 					reset_prog = true;
 				}
 			}
@@ -1002,23 +1277,23 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 			pp.size = sizeof(pp);
 			pp.type = SC_ESCAPE_PROGRESS;
 			pp.event = ESCAPE_PROG_RESET;
-			clients[target_id].do_send(&pp);
+			clients[target_cid].do_send(&pp);
 		}
 
-		std::cout << "[NPC " << npc.id << "] HIT player " << target_id
+		std::cout << "[NPC " << npc.id << "] HIT player " << target_cid
 			<< " (hp=" << new_hp << ")\n";
 		if (just_died) {
-			std::cout << "[NPC " << npc.id << "] player " << target_id << " DIED\n";
+			std::cout << "[NPC " << npc.id << "] player " << target_cid << " DIED\n";
 		}
 
 		SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
 		hp_pkt.size = sizeof(hp_pkt);
 		hp_pkt.type = SC_PLAYER_HP_UPDATE;
-		hp_pkt.id = (short)target_id;
+		hp_pkt.id = (short)target_cid;
 		hp_pkt.hp = new_hp;
-		clients[target_id].do_send(&hp_pkt);
+		clients[target_cid].do_send(&hp_pkt);
 		if (just_died) {
-			BroadcastPlayerState(target_id);
+			BroadcastPlayerState(target_cid);
 			npc.has_last_seen_player = false;
 			npc.lose_sight_timer = 0.0f;
 		}
@@ -1033,17 +1308,14 @@ static void NpcFireAtPlayer(SERVER_NPC& npc, int target_id, const std::array<Pla
 	}
 
 	// 발사 이펙트: 머즐 플래시
-	BroadcastAttachedEffect(EffectID::SPARK, EffectEntityKind::NPC, npc.id, player_snapshot);
+	BroadcastAttachedEffect(r, EffectID::SPARK, EffectEntityKind::NPC, npc.id);
 
 	// 트레이서 (발사자가 NPC이므로 shooter_id = -1, 전원 수신)
-	BroadcastFireTracer(
-		-1, origin, dir,
-		(short)npc.weapon_type, hit_kind, trace_dist, normal,
-		player_snapshot);
+	BroadcastFireTracer(r, -1, origin, dir,(short)npc.weapon_type, hit_kind, trace_dist, normal);
 
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RELOAD);
 	}
 }
 
@@ -1074,7 +1346,7 @@ static XMFLOAT3 ComputeNpcCombatMoveDir(const SERVER_NPC& npc, const XMFLOAT3& p
 	return move_dir;
 }
 
-static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void ChangeNpcState(const Room& r, SERVER_NPC& npc, char new_state)
 {
 	if (npc.state == new_state) return;
 
@@ -1101,8 +1373,9 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 	p.npc_id = npc.id;
 	p.state = new_state;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&p);
 	}
 
@@ -1122,8 +1395,9 @@ static void ChangeNpcState(SERVER_NPC& npc, char new_state, const std::array<Pla
 			box.items[i] = npc._inventory[i].item;
 			box.counts[i] = npc._inventory[i].count;
 		}
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
 			clients[i].do_send(&box);
 		}
 	}
@@ -1204,8 +1478,10 @@ static void ApplyNpcSlide(SERVER_NPC& npc, XMFLOAT3& move_dir)
 
 static void EnterNpcAttack(SERVER_NPC&);
 
-static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void ApplyDamage(const Room& r, SERVER_NPC& npc, short damage, int attacker_client_id)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (NPC_STATE_DIE == npc.state) return;
 
 	npc.hp -= damage;
@@ -1217,39 +1493,44 @@ static void ApplyDamage(SERVER_NPC& npc, short damage, int attacker_client_id, c
 		p.npc_id = npc.id;
 		p.hp = npc.hp;
 
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
 			clients[i].do_send(&p);
 		}
 	}
 
 	if (npc.hp <= 0) {
-		ChangeNpcState(npc, NPC_STATE_DIE, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_DIE);
 	}
 
 	if (NPC_STATE_IDLE == npc.state) {
-		if (attacker_client_id < 0 || attacker_client_id >= MAX_USER) return;
-		if (!player_snapshot[attacker_client_id].targetable) return;
+		int aslot = -1;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			if (player_snapshot[k].client_id == attacker_client_id) { aslot = k; break; }
+			// 전역 id attacker_client_id -> 룸 로컬 인덱스 k로 변환
+		}
+		if (aslot < 0 || !player_snapshot[aslot].targetable) return;
 
 		XMFLOAT3 attacker_pos = {
-			player_snapshot[attacker_client_id].x,
-			player_snapshot[attacker_client_id].y,
-			player_snapshot[attacker_client_id].z
+			player_snapshot[aslot].x,
+			player_snapshot[aslot].y,
+			player_snapshot[aslot].z
 		};
 
 		RefreshLastSeenPlayer(npc, attacker_pos);
 
 		if (CanShootPlayer(npc, attacker_pos)) {
 			EnterNpcAttack(npc);
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_ATTACK);
 		}
 		else {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_RUN);
 		}
 	}
 }
 
-static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 {
 	switch (e.type) {
 	case NpcInputEvent::HIT:
@@ -1264,7 +1545,7 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 
 		short best_id = -1;
 		float best_t = max_range;
-		for (auto& npc : g_npcs) {
+		for (auto& npc : r.npcs) {
 			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
 			BoundingOrientedBox oobb = MakeNpcOOBB(npc.position, npc.yaw);
 			float t;
@@ -1288,11 +1569,11 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 			trace_dist = best_t;
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
 			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
-			BoundingOrientedBox nbox = MakeNpcOOBB(g_npcs[best_id].position, g_npcs[best_id].yaw);
+			BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
 			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
 			if (dmg > 0) {
-				ApplyDamage(g_npcs[best_id], dmg, e.attacker_client_id, player_snapshot);
+				ApplyDamage(r, r.npcs[best_id], dmg, e.attacker_client_id);
 			}
 		}
 		else if (wall_t < std::numeric_limits<float>::max()) {
@@ -1307,36 +1588,64 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		XMFLOAT3 o3, d3;
 		XMStoreFloat3(&o3, origin);
 		XMStoreFloat3(&d3, dir);
-		BroadcastFireTracer(
+		BroadcastFireTracer(r, 
 			(short)e.attacker_client_id, o3, d3,
-			(short)e.weapon_type, hit_kind, trace_dist, normal,
-			player_snapshot);
+			(short)e.weapon_type, hit_kind, trace_dist, normal);
 	}
 
 	break;
-	case NpcInputEvent::NEW_CLIENT_JOINED:
+	case NpcInputEvent::ROUND_JOIN:
 	{
-		std::cout << "[NPC] NEW_CLIENT_JOINED received, client "
-			<< e.new_client_id << "\n";
+		int cid = e.new_client_id;
 
-		// 새 클라가 정말 ST_INGAME인지 확인 (미세한 disconnect 타이밍 가드)
+		// ST_LOBBY인 클라만 대기열 등록
+		bool lobby = false;
 		{
-			std::lock_guard<std::mutex> lk(clients[e.new_client_id]._s_lock);
-			if (clients[e.new_client_id]._state != ST_INGAME) {
-				break;
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			lobby = (clients[cid]._state == ST_LOBBY);
+		}
+		if (!lobby) break;
+
+		// 중복 방지
+		bool exists = false;
+		for (int r_cid : g_ready_players) { if (r_cid == cid) { exists = true; break; } }
+		if (!exists) {
+			g_ready_players.push_back(cid);
+			std::cout << "[ROUND] client " << cid << " ready (" << g_ready_players.size() << ")\n";
+		}
+		break;
+	}
+	case NpcInputEvent::ROUND_LEAVE:
+	{
+		int cid = e.new_client_id;
+
+		// 이 룸의 참가자인지 확인
+		int slot = -1;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			if (r.participants[k] == cid) { 
+				slot = k; 
+				break; 
 			}
 		}
+		if (slot < 0) break;
 
-		// 살아있는 모든 NPC를 그 클라에 SC_ADD_NPC 송신
-		for (const auto& npc : g_npcs) {
-			if (!npc.alive) continue;
-			clients[e.new_client_id].send_add_npc_packet(
-				npc.id, npc.kind, npc.outfit,
-				npc.position.x, npc.position.y, npc.position.z,
-				npc.yaw, npc.hp
-			);
+		r.participants[slot] = -1;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			clients[cid]._state = ST_LOBBY;
+			clients[cid].room_id = -1;
+			clients[cid].room_slot = -1;
+			clients[cid].room_gen = 0;
+			clients[cid].in_round.store(false);
 		}
+		std::cout << "[ROUND] client " << cid << " left room " << r.id << " -> lobby\n";
 
+		// 남은 참가자에게 캐릭터 제거 통보
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int other = r.participants[k];
+			if (other < 0) continue;
+			clients[other].send_remove_player_packet(cid);
+		}
 		break;
 	}
 	case NpcInputEvent::GRENADE_EXPLODE:
@@ -1345,7 +1654,10 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		GrenadeSpec g = GetGrenadeSpec();
 
 		// ---- 플레이어 피해 ----
-		for (int i = 0; i < MAX_USER; ++i) {
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
+
 			short new_hp = 0;
 			bool  hit = false;
 			bool  just_died = false;
@@ -1359,6 +1671,8 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 				float dist = DistanceXZ(ppos, C);   // XZ 거리
 				short dmg = ComputeGrenadeDamage(g, dist);
 				if (dmg <= 0) continue;
+
+				if (clients[i].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
 				clients[i].hp -= dmg;
 				if (clients[i].hp < 0) clients[i].hp = 0;
@@ -1396,18 +1710,18 @@ static void HandleNpcEvent(const NpcInputEvent& e, const std::array<PlayerSnapsh
 		}
 
 		// ---- NPC 피해 ----
-		for (auto& npc : g_npcs) {
+		for (auto& npc : r.npcs) {
 			if (false == npc.alive || NPC_STATE_DIE == npc.state) continue;
 			float dist = DistanceXZ(npc.position, C);
 			short dmg = ComputeGrenadeDamage(g, dist);
 			if (dmg <= 0) continue;
-			ApplyDamage(npc, dmg, e.attacker_client_id, player_snapshot);
+			ApplyDamage(r, npc, dmg, e.attacker_client_id);
 		}
 
 		// ---- 폭발 이펙트 전체 브로드캐스트 ----
 		// dir은 클라가 GRENADE_EXPLOSION이면 위로 강제하므로 형식상 값.
 		XMFLOAT3 dir = { 0.0f, 1.0f, 0.0f };
-		BroadcastWorldEffect(EffectID::GRENADE_EXPLOSION, C, dir, player_snapshot);
+		BroadcastWorldEffect(r, EffectID::GRENADE_EXPLOSION, C, dir);
 
 		std::cout << "[Grenade] explode at (" << C.x << "," << C.z
 			<< ") by client " << e.attacker_client_id << "\n";
@@ -1428,8 +1742,10 @@ static void EnterNpcAttack(SERVER_NPC& npc)
 	npc.strafe_sign *= -1.0f;
 }
 
-static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcIdle(const Room& r, SERVER_NPC& npc, float dt)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	if (npc.return_ignore_timer > 0.0f) {
 		npc.return_ignore_timer -= dt;
 		return;
@@ -1441,7 +1757,7 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 	npc.think_timer = 0.0f;
 
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(r, npc.position, dist_sq);
 	if (player_id < 0) return;  // 게임 중인 플레이어 없음
 
 	XMFLOAT3 player_pos = {
@@ -1456,22 +1772,24 @@ static void UpdateNpcIdle(SERVER_NPC& npc, float dt, const std::array<PlayerSnap
 
 	if (CanShootPlayer(npc, player_pos)) {
 		EnterNpcAttack(npc);
-		ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_ATTACK);
 		return;
 	}
 
-	ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+	ChangeNpcState(r, npc, NPC_STATE_RUN);
 }
 
-static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcRun(const Room& r, SERVER_NPC& npc, float dt)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 1. 가장 가까운 플레이어 검색
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(r, npc.position, dist_sq);
 	if (player_id < 0) {
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RETURN);
 		return;
 	}
 
@@ -1483,7 +1801,7 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	};
 
 	if (IsOutsideLeashRange(npc)) {
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RETURN);
 		return;
 	}
 
@@ -1502,12 +1820,12 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 		// (Phase D: CanShootPlayer → ATTACK. 지금은 사격 거리 안이면 IDLE)
 		if (CanShootPlayer(npc, player_pos)) {
 			EnterNpcAttack(npc);
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_ATTACK);
 			return;
 		}
 
 		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
-			ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_RETURN);
 			return;
 		}
 	}
@@ -1597,15 +1915,17 @@ static void UpdateNpcRun(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	ResolveNpcCollision(npc, npc.yaw);
 }
 
-static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcReturn(const Room& r, SERVER_NPC& npc, float dt)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 복귀 중에도 플레이어가 시야+사거리 안으로 다시 들어오면 즉시 재교전
 	npc.think_timer += dt;
 	if (npc.think_timer >= NPC_THINK_INTERVAL) {
 		npc.think_timer = 0.0f;
 
 		float dist_sq;
-		int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+		int player_id = FindNearestPlayer(r, npc.position, dist_sq);
 		if (player_id >= 0) {
 			XMFLOAT3 player_pos = {
 				player_snapshot[player_id].x,
@@ -1614,7 +1934,7 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 			};
 			if (CanDetectPlayer(npc, player_pos)) {
 				RefreshLastSeenPlayer(npc, player_pos);
-				ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+				ChangeNpcState(r, npc, NPC_STATE_RUN);
 				return;
 			}
 		}
@@ -1627,7 +1947,7 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
 		npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
-		ChangeNpcState(npc, NPC_STATE_IDLE, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_IDLE);
 		return;
 	}
 
@@ -1679,20 +1999,22 @@ static void UpdateNpcReturn(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	ResolveNpcCollision(npc, npc.yaw);
 }
 
-static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcAttack(const Room& r, SERVER_NPC& npc, float dt)
 {
+	const auto& player_snapshot = r.player_snapshot;
+
 	// 1. Leash 밖이면 Return
 	if (IsOutsideLeashRange(npc)) {
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RETURN);
 		return;
 	}
 
 	float dist_sq;
-	int player_id = FindNearestPlayer(npc.position, player_snapshot, dist_sq);
+	int player_id = FindNearestPlayer(r, npc.position, dist_sq);
 	if (player_id < 0) {
 		npc.has_last_seen_player = false;
 		npc.lose_sight_timer = 0.0f;
-		ChangeNpcState(npc, NPC_STATE_RETURN, player_snapshot);
+		ChangeNpcState(r, npc, NPC_STATE_RETURN);
 		return;
 	}
 	XMFLOAT3 player_pos = {
@@ -1713,7 +2035,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		}
 		if (justFinished) {
 			// 재장전 종료 -> ATTACK 복귀 통지
-			ChangeNpcState(npc, NPC_STATE_ATTACK, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_ATTACK);
 		}
 		return;  // 이동 없음
 	}
@@ -1737,11 +2059,11 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 		npc.think_timer = 0.0f;
 
 		if (IsPlayerOutOfAttackRange(npc, player_pos)) {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_RUN);
 			return;
 		}
 		if (!can_detect && !HasRecentLastSeenPlayer(npc)) {
-			ChangeNpcState(npc, NPC_STATE_RUN, player_snapshot);
+			ChangeNpcState(r, npc, NPC_STATE_RUN);
 			return;
 		}
 	}
@@ -1749,7 +2071,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	// 5. 탄약 0이면 재장전
 	if (npc.current_ammo <= 0) {
 		StartNpcReload(npc);
-		ChangeNpcState(npc, NPC_STATE_RELOAD, player_snapshot);   // 클라에 재장전 시작 통지
+		ChangeNpcState(r, npc, NPC_STATE_RELOAD);   // 클라에 재장전 시작 통지
 		return;
 	}
 
@@ -1803,7 +2125,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 
 	npc.burst_shot_timer -= dt;
 	if (npc.burst_shot_timer <= 0.0f) {
-		NpcFireAtPlayer(npc, player_id, player_snapshot);
+		NpcFireAtPlayer(r, npc, player_id);
 		npc.burst_shots_left--;
 		npc.burst_shot_timer = NPC_BURST_SHOT_INTERVAL;
 
@@ -1815,7 +2137,7 @@ static void UpdateNpcAttack(SERVER_NPC& npc, float dt, const std::array<PlayerSn
 	}
 }
 
-static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpcDie(const Room& r, SERVER_NPC& npc, float dt)
 {
 	npc.die_timer += dt;
 	if (npc.die_timer < NPC_DIE_DURATION) return;
@@ -1829,8 +2151,9 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	p.type = SC_REMOVE_NPC;
 	p.npc_id = npc.id;
 
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (!player_snapshot[i].in_game) continue;
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
 		clients[i].do_send(&p);
 	}
 
@@ -1842,41 +2165,38 @@ static void UpdateNpcDie(SERVER_NPC& npc, float dt, const std::array<PlayerSnaps
 	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
 }
 
-static void UpdateNpc(SERVER_NPC& npc, float dt, const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void UpdateNpc(const Room& r, SERVER_NPC& npc, float dt)
 {
 	switch (npc.state) {
 	case NPC_STATE_IDLE:
-		UpdateNpcIdle(npc, dt, player_snapshot);
+		UpdateNpcIdle(r, npc, dt);
 		break;
 	case NPC_STATE_RUN:
-		UpdateNpcRun(npc, dt, player_snapshot);
+		UpdateNpcRun(r, npc, dt);
 		break;
 	case NPC_STATE_RETURN:
-		UpdateNpcReturn(npc, dt, player_snapshot);
+		UpdateNpcReturn(r, npc, dt);
 		break;
 	case NPC_STATE_ATTACK:
 	case NPC_STATE_RELOAD:	// ATTACK 핸들러가 같이 처리
-		UpdateNpcAttack(npc, dt, player_snapshot);
+		UpdateNpcAttack(r, npc, dt);
 		break;
 	case NPC_STATE_DIE:
-		UpdateNpcDie(npc, dt, player_snapshot);
+		UpdateNpcDie(r, npc, dt);
 		break;
 	}
 }
 
-static void BroadcastNpcPositions(const std::array<PlayerSnapshot, MAX_USER>& player_snapshot)
+static void BroadcastNpcPositions(Room& r)
 {
-	for (const auto& npc : g_npcs) {
+	for (const auto& npc : r.npcs) {
 		if (!npc.alive) continue;
 
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (!player_snapshot[i].in_game) continue;
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
 
-			clients[i].send_move_npc_packet(
-				npc.id,
-				npc.position.x, npc.position.y, npc.position.z,
-				npc.yaw
-			);
+			clients[i].send_move_npc_packet(npc.id, npc.position.x, npc.position.y, npc.position.z, npc.yaw);
 		}
 	}
 }
@@ -1915,6 +2235,49 @@ static bool HasEscapeItem(const std::array<ItemSlot, INVENTORY_SIZE>& inv)
 	return false;
 }
 
+static void DropPlayerLootBox(Room& r, int victim_id)
+{
+	// 사망자 인벤토리 따 오고 인벤 비움
+	std::array<ItemSlot, INVENTORY_SIZE> inv;
+	float px, py, pz;
+	{
+		std::lock_guard<std::mutex> lk(clients[victim_id]._s_lock);
+		inv = clients[victim_id]._inventory;
+		px = clients[victim_id].x; py = clients[victim_id].y; pz = clients[victim_id].z;
+		clients[victim_id]._inventory.fill(ItemSlot{});
+	}
+
+	// npcs 상위 절반부터 빈 슬롯 검색
+	int slot = -1;
+	for (int i = MAX_NPC_PER_ROOM / 2; i < MAX_NPC_PER_ROOM; ++i) {
+		if (!r.npcs[i].alive && !r.npcs[i].loot_active) { slot = i; break; }
+	}
+	if (slot < 0) { std::cout << "[LOOT] no free slot for player box\n"; return; }
+
+	SERVER_NPC& box = r.npcs[slot];
+	box._inventory = inv;
+	box.position = { px, py, pz };
+	box.loot_active = true;
+	box.death_time = std::chrono::steady_clock::now();
+
+	// SC_ADD_LOOT_BOX 브로드캐스트 (NPC 박스와 동일)
+	SC_ADD_LOOT_BOX_PACKET pkt;
+	pkt.size = sizeof(pkt);
+	pkt.type = SC_ADD_LOOT_BOX;
+	pkt.npc_id = box.id;
+	pkt.x = px; pkt.y = py; pkt.z = pz;
+	for (int i = 0; i < INVENTORY_SIZE; ++i) {
+		pkt.items[i] = box._inventory[i].item;
+		pkt.counts[i] = box._inventory[i].count;
+	}
+	for (int k = 0; k < ROOM_CAPACITY; ++k) {
+		int i = r.participants[k];
+		if (i < 0) continue;
+		clients[i].do_send(&pkt);
+	}
+	std::cout << "[LOOT] player " << victim_id << " dropped box at slot " << slot << "\n";
+}
+
 static void npc_thread()
 {
 	using clock = std::chrono::steady_clock;
@@ -1926,7 +2289,6 @@ static void npc_thread()
 
 	std::vector<NpcInputEvent>            events;
 	events.reserve(32);
-	std::array<PlayerSnapshot, MAX_USER>  player_snapshot;
 
 	auto next = clock::now();
 	int  tick_count = 0;
@@ -1941,175 +2303,251 @@ static void npc_thread()
 		}
 		*/
 
-		// 워커가 보낸 입력 처리
+		for (int s = 0; s < MAX_ROOMS; ++s) {
+			if (!g_rooms[s].alive) continue;
+			ReconcileRoomParticipants(g_rooms[s]);
+		}
+
 		g_npc_input_queue.DrainTo(events);
 		for (auto& e : events) {
-			HandleNpcEvent(e, player_snapshot);
+			if (e.type == NpcInputEvent::ROUND_JOIN) {
+				HandleNpcEvent(g_rooms[0], e);   // 로비 이벤트 (r 미사용)
+				continue;
+			}
+			if (e.room_id < 0 || e.room_id >= MAX_ROOMS) continue;
+			Room& r = g_rooms[e.room_id];
+			if (!r.alive || r.generation != e.room_gen) continue;
+			HandleNpcEvent(r, e);
 		}
 
-		// 플레이어 위치 스냅샷
-		SnapshotPlayers(player_snapshot);
+		// ===== 매치메이킹 =====
+		if (static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
+			// 빈 룸 슬롯 탐색
+			int slot = -1;
+			for (int s = 0; s < MAX_ROOMS; ++s) {
+				if (!g_rooms[s].alive) { slot = s; break; }
+			}
+			if (slot >= 0) {
+				Room& r = g_rooms[slot];
+				r.generation++;               // 슬롯 재사용마다 +1
+				r.alive = true;
+				r.state = ROOM_WAITING;
+				r.game_over_sent = false;
+				r.participants.fill(-1);
 
-		// 각 살아있는 NPC 갱신
-		for (auto& npc : g_npcs) {
-			if (!npc.alive) continue;
-			UpdateNpc(npc, DT, player_snapshot);
-		}
+				start_new_round(r);
 
-		// 플레이어 재장전 타이머 갱신
-		for (int i = 0; i < MAX_USER; ++i) {
-			bool completed = false;
-			{
-				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-				if (clients[i]._state != ST_INGAME) continue;
-				if (!clients[i].reloading) continue;
-				clients[i].reload_timer -= DT;
-				if (clients[i].reload_timer <= 0.0f) {
-					short w = clients[i].reload_weapon;
-					if (w >= 0 && w < 4)
-						clients[i].ammo[w] = LookupWeaponSpec(static_cast<WeaponType>(w), WeaponGrade::GRADE_1).magazineSize;
-					clients[i].reloading = false;
-					clients[i].reload_timer = 0.0f;
-					clients[i].reload_weapon = -1;
-					completed = true;
+				// 0명이면 룸 회수
+				if (r.state != ROOM_IN_PROGRESS) {
+					r.alive = false;
 				}
 			}
-			if (completed) clients[i].send_ammo_state(i);	// 락 해제 후 송신
 		}
+
+		// 이번 틱 위치 브로드캐스트 여부
+		++tick_count;
+		//bool do_broadcast = (tick_count >= BROADCAST_EVERY);
+		//if (do_broadcast) tick_count = 0;
 
 		const auto now = std::chrono::steady_clock::now();
-		for (auto& npc : g_npcs) {
-			if (false == npc.loot_active) continue;
 
-			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
-			if (elapsed < 30) continue;
+		// ===== 전 룸 틱 처리 =====
+		for (int s = 0; s < MAX_ROOMS; ++s) {
+			Room& r = g_rooms[s];
+			if (!r.alive) continue;
 
-			// 만료 — 비활성화 + 브로드캐스트
-			npc.loot_active = false;
+			// 플레이어 위치 스냅샷
+			SnapshotPlayers(r);
 
-			SC_DEACTIVATE_LOOT_BOX_PACKET dp;
-			dp.size = sizeof(dp);
-			dp.type = SC_DEACTIVATE_LOOT_BOX;
-			dp.npc_id = npc.id;
-
-			for (auto& pl : clients) {
-				{
-					std::lock_guard<std::mutex> ll(pl._s_lock);
-					if (ST_INGAME != pl._state) continue;
+			// NPC 갱신 (라운드 진행 중에만)
+			if (r.state == ROOM_IN_PROGRESS) {
+				for (auto& npc : r.npcs) {
+					if (!npc.alive) continue;
+					UpdateNpc(r, npc, DT);
 				}
-				pl.do_send(&dp);
 			}
 
-			std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
-		}
+			// 사망 플레이어 루트박스 드롭
+			for (int k = 0; k < ROOM_CAPACITY; ++k) {
+				int i = r.participants[k];
+				if (i < 0) continue;
+				bool need_drop = false;
+				{
+					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+					if (clients[i]._state == ST_INGAME &&
+						clients[i].dead && !clients[i].loot_dropped) {
+						clients[i].loot_dropped = true;
+						need_drop = true;
+					}
+				}
+				if (need_drop) DropPlayerLootBox(r, i);
+			}
 
-		// ===== 탈출 판정 =====
-		if (g_round_state.load() == ROUND_IN_PROGRESS)
-		{
-			const auto tnow = std::chrono::steady_clock::now();
-			for (int i = 0; i < MAX_USER; ++i) {
-				float px = 0.0f, pz = 0.0f;
+			// 플레이어 재장전 타이머
+			for (int k = 0; k < ROOM_CAPACITY; ++k) {
+				int i = r.participants[k];
+				if (i < 0) continue;
+				bool completed = false;
 				{
 					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 					if (clients[i]._state != ST_INGAME) continue;
-					if (clients[i].escaped || clients[i].dead) continue;
-					px = clients[i].x; pz = clients[i].z;
-				}
-
-				// 영역 판정 (XZ, OR)
-				bool now_in_zone = false;
-				for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
-					const auto& ez = ESCAPE_ZONES[z];
-					if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
-						now_in_zone = true; 
-						break;
+					if (!clients[i].reloading) continue;
+					clients[i].reload_timer -= DT;
+					if (clients[i].reload_timer <= 0.0f) {
+						short w = clients[i].reload_weapon;
+						if (w >= 0 && w < 4)
+							clients[i].ammo[w] = LookupWeaponSpec(static_cast<WeaponType>(w), WeaponGrade::GRADE_1).magazineSize;
+						clients[i].reloading = false;
+						clients[i].reload_timer = 0.0f;
+						clients[i].reload_weapon = -1;
+						completed = true;
 					}
 				}
+				if (completed) clients[i].send_ammo_state(i);
+			}
 
-				char  prog_event = -1;
-				bool  success = false;
-				float escape_sec = 0.0f;
-				{
-					std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-					if (clients[i].escaped || clients[i].dead) continue;
+			// 루팅박스 
+			for (auto& npc : r.npcs) {
+				if (false == npc.loot_active) continue;
+				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
+				if (elapsed < 30) continue;
+				npc.loot_active = false;
 
-					if (now_in_zone) {
-						if (!clients[i].in_escape_zone) {
-							if (HasEscapeItem(clients[i]._inventory)) {
-								clients[i].in_escape_zone = true;
-								std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
-								clients[i].last_hit_time = tnow;       // 진행 시작
-								prog_event = ESCAPE_PROG_START;
+				SC_DEACTIVATE_LOOT_BOX_PACKET dp;
+				dp.size = sizeof(dp);
+				dp.type = SC_DEACTIVATE_LOOT_BOX;
+				dp.npc_id = npc.id;
+
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int i = r.participants[k];
+					if (i < 0) continue;
+					clients[i].do_send(&dp);
+				}
+				std::cout << "[LOOT_BOX " << npc.id << "] deactivated (lifetime expired)\n";
+			}
+
+			// ===== 탈출 판정 (룸 참가자만) =====
+			if (r.state == ROOM_IN_PROGRESS)
+			{
+				const auto tnow = now;
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int i = r.participants[k];
+					if (i < 0) continue;
+
+					float px = 0.0f, pz = 0.0f;
+					{
+						std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+						if (clients[i]._state != ST_INGAME) continue;
+						if (clients[i].escaped || clients[i].dead) continue;
+						px = clients[i].x; pz = clients[i].z;
+					}
+
+					bool now_in_zone = false;
+					for (int z = 0; z < ESCAPE_ZONE_COUNT; ++z) {
+						const auto& ez = ESCAPE_ZONES[z];
+						if (px >= ez.minX && px <= ez.maxX && pz >= ez.minZ && pz <= ez.maxZ) {
+							now_in_zone = true;
+							break;
+						}
+					}
+
+					char  prog_event = -1;
+					bool  success = false;
+					float escape_sec = 0.0f;
+					{
+						std::lock_guard<std::mutex> lk(clients[i]._s_lock);
+						if (clients[i].escaped || clients[i].dead) continue;
+
+						if (now_in_zone) {
+							if (!clients[i].in_escape_zone) {
+								if (HasEscapeItem(clients[i]._inventory)) {
+									clients[i].in_escape_zone = true;
+									std::cout << "[ESCAPE] client " << i << " enter escape zone " << "\n";
+									clients[i].last_hit_time = tnow;
+									prog_event = ESCAPE_PROG_START;
+								}
+							}
+							if (clients[i].in_escape_zone &&
+								std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
+								clients[i].escaped = true;
+								success = true;
+								escape_sec = std::chrono::duration<float>(tnow - r.start_time).count();
 							}
 						}
-						if (clients[i].in_escape_zone && 
-							std::chrono::duration<float>(tnow - clients[i].last_hit_time).count() >= ESCAPE_HOLD_SEC) {
-							clients[i].escaped = true;
-							success = true;
-							escape_sec = std::chrono::duration<float>(tnow - g_round_start_time).count();
+						else if (true == clients[i].in_escape_zone && !now_in_zone) {
+							clients[i].in_escape_zone = false;
+							std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
+							prog_event = ESCAPE_PROG_CANCEL;
 						}
 					}
-					else if (true == clients[i].in_escape_zone && !now_in_zone) {
-						clients[i].in_escape_zone = false;          // 이탈 --> 리셋
-						std::cout << "[ESCAPE] client " << i << " leave escape zone " << "\n";
-						prog_event = ESCAPE_PROG_CANCEL;
+
+					if (prog_event >= 0) {
+						SC_ESCAPE_PROGRESS_PACKET pp;
+						pp.size = sizeof(pp);
+						pp.type = SC_ESCAPE_PROGRESS;
+						pp.event = prog_event;
+						clients[i].do_send(&pp);
 					}
-				}
 
-				if (prog_event >= 0) {                              // ← 추가: 락 밖 송신
-					SC_ESCAPE_PROGRESS_PACKET pp;
-					pp.size = sizeof(pp);
-					pp.type = SC_ESCAPE_PROGRESS;
-					pp.event = prog_event;
-					clients[i].do_send(&pp);
-				}
-
-				if (success) {
-					SC_ESCAPE_SUCCESS_PACKET ep;
-					ep.size = sizeof(ep);
-					ep.type = SC_ESCAPE_SUCCESS;
-					ep.escape_time_sec = escape_sec;
-					clients[i].do_send(&ep);
-					std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
-				}
-			}
-		}
-		// =====================
-
-		// ===== 게임 오버(시간 초과) 판정 =====
-		if (g_round_state.load() == ROUND_IN_PROGRESS && !g_game_over_sent.load())
-		{
-			const auto  tnow = std::chrono::steady_clock::now();
-			const float elapsed = std::chrono::duration<float>(tnow - g_round_start_time).count();
-			if (elapsed >= ROUND_TIME_LIMIT_SEC) {
-				bool expected = false;
-				// CAS 성공 시 1회 전송 (라운드당 1번)
-				if (g_game_over_sent.compare_exchange_strong(expected, true)) {
-					std::cout << "[ROUND] time over -> GAME OVER (elapsed=" << elapsed << "s)\n";
-					SC_GAME_OVER_PACKET gp;
-					gp.size = sizeof(gp);
-					gp.type = SC_GAME_OVER;
-					for (auto& pl : clients) {
-						{
-							std::lock_guard<std::mutex> ll(pl._s_lock);
-							if (ST_INGAME != pl._state) continue;
-						}
-						pl.do_send(&gp);
+					if (success) {
+						SC_ESCAPE_SUCCESS_PACKET ep;
+						ep.size = sizeof(ep);
+						ep.type = SC_ESCAPE_SUCCESS;
+						ep.escape_time_sec = escape_sec;
+						clients[i].do_send(&ep);
+						std::cout << "[ESCAPE] client " << i << " escaped (t=" << escape_sec << "s)\n";
 					}
 				}
 			}
-		}
-		// =====================================
 
-		// 5Hz 위치 브로드캐스트 (6틱마다) --> (3틱마다로 변경)
-		++tick_count;
-		if (tick_count >= BROADCAST_EVERY) {
-			tick_count = 0;
-			BroadcastNpcPositions(player_snapshot);
+			// ===== 라운드 종료 (4종) 판정 =====
+			if (r.state == ROOM_IN_PROGRESS)
+			{
+				int total = 0;		// ST_INGAME 참가자 수
+				int active = 0;		// 아직 탈출, 사망 안 한 플레이어
+				int dead = 0;
+				for (int k = 0; k < ROOM_CAPACITY; ++k) {
+					int cid = r.participants[k];
+					if (cid < 0) continue;
+					std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+					if (clients[cid]._state != ST_INGAME) continue;
+					++total;
+					if (clients[cid].dead) ++dead;
+					if (!clients[cid].escaped && !clients[cid].dead) ++active;
+				}
+
+				const char* reason = nullptr;
+				if (total == 0) {
+					reason = "no participants";									// case 4 - 참가자 0명
+				}
+				else if (active == 0) {
+					if (dead >= total) reason = "all dead";						// case 2 - 전원 사망
+					else reason = "all escaped/dead";							// case 1 - 전원 탈출(or 혼합)
+				}
+				else {
+					const float elapsed = std::chrono::duration<float>(
+						now - r.start_time).count();
+					if (elapsed >= ROUND_TIME_LIMIT_SEC) reason = "time over";  // case 3 - 시간 초과
+				}
+
+				if (reason) end_round(r, reason);
+			}
+
+			// 위치 브로드캐스트
+			//if (do_broadcast) BroadcastNpcPositions(r);
+			if ((tick_count + r.id) % BROADCAST_EVERY == 0) BroadcastNpcPositions(r);
+
 		}
 
 		std::this_thread::sleep_until(next);
 	}
+}
+
+static void TagEventRoom(NpcInputEvent& ev, int c_id)
+{
+	std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+	ev.room_id = clients[c_id].room_id;
+	ev.room_gen = clients[c_id].room_gen;
 }
 
 void process_packet(int c_id, char* packet)
@@ -2121,86 +2559,13 @@ void process_packet(int c_id, char* packet)
 
 		std::cout << "LOGIN " << clients[c_id]._name << ", ID " << clients[c_id]._id << "\n";
 
-		// 접속 id 기반 시작 위치
-		{
-			const PlayerSpawnPos& sp = PLAYER_SPAWN_POS[c_id % PLAYER_SPAWN_COUNT];
-			clients[c_id].x = sp.x;
-			clients[c_id].z = sp.z;
-			clients[c_id].y = 0.1f;   // 기본 높이
-		}
-
 		clients[c_id].send_login_info_packet();
 		{
 			std::lock_guard<std::mutex> ll{ clients[c_id]._s_lock };
-			clients[c_id]._state = ST_INGAME;
+			clients[c_id]._state = ST_LOBBY;
 
-			clients[c_id].escaped = false;            // 탈출 상태 초기화
+			clients[c_id].escaped = false;
 			clients[c_id].in_escape_zone = false;
-		}
-
-		// ===== 라운드 시작 판정 =====
-		if (g_round_state.load() == ROUND_WAITING) {
-			// ST_INGAME 인원 카운트
-			int ingame = 0;
-			for (auto& pl : clients) {
-				std::lock_guard<std::mutex> ll(pl._s_lock);
-				if (pl._state == ST_INGAME) ++ingame;
-			}
-
-			if (ingame >= ROUND_MIN_PLAYERS) {
-				int expected = ROUND_WAITING;
-				// CAS 성공자 단 하나만 전환, 브로드캐스트
-				if (g_round_state.compare_exchange_strong(expected, ROUND_IN_PROGRESS)) {
-					g_round_start_time = std::chrono::steady_clock::now();
-					std::cout << "[ROUND] start (players=" << ingame << ")\n";
-
-					SC_ROUND_START_PACKET rp;
-					rp.size = sizeof(rp);
-					rp.type = SC_ROUND_START;
-					for (auto& pl : clients) {
-						{
-							std::lock_guard<std::mutex> ll(pl._s_lock);
-							if (ST_INGAME != pl._state) continue;
-						}
-						pl.do_send(&rp);
-					}
-
-					for (auto& pl : clients) {
-						{
-							std::lock_guard<std::mutex> ll(pl._s_lock);
-							if (ST_INGAME != pl._state) continue;
-							pl.init_combat_resources();				// 락 안에서 충전
-						}
-						pl.do_send(&rp);
-						pl.send_ammo_state(pl._id);					// 총알 push
-						pl.send_grenade_count(pl._id);				// 수류탄 push
-					}
-				}
-			}
-		}
-
-		for (auto& pl : clients) {
-			{
-				std::lock_guard<std::mutex> ll(pl._s_lock);
-				if (ST_INGAME != pl._state) continue;
-			}
-			if (pl._id == c_id) continue;
-			pl.send_add_player_packet(c_id);
-			printf("ADD_PLAYER: %d, SEND TO %d\n", c_id, pl._id);
-			clients[c_id].send_add_player_packet(pl._id);
-			printf("ADD_PLAYER: %d, SEND TO %d\n", pl._id, c_id);
-
-			pl.send_change_weapon_packet(c_id);
-			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, pl._id);
-			clients[c_id].send_change_weapon_packet(pl._id);
-			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", pl._id, c_id);
-		}
-
-		{
-			NpcInputEvent ev{};
-			ev.type = NpcInputEvent::NEW_CLIENT_JOINED;
-			ev.new_client_id = c_id;
-			g_npc_input_queue.Push(std::move(ev));
 		}
 
 		// 동기화 검증용 테스트 아이템 (05.15)
@@ -2222,13 +2587,37 @@ void process_packet(int c_id, char* packet)
 
 		break;
 	}
+	case CS_ROUND_JOIN: {
+		std::cout << "CS_ROUND_JOIN from client " << c_id << "\n";
+
+		// 로비 클라의 매치메이킹 참가 요청 후 동작, NPC스레드로 넘김
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::ROUND_JOIN;
+		ev.new_client_id = c_id;
+		TagEventRoom(ev, c_id);
+		g_npc_input_queue.Push(std::move(ev));
+		break;
+	}
+	case CS_ROUND_LEAVE: {
+		// 룸에서 제거 요청, NPC스레드로 넘김
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::ROUND_LEAVE;
+		ev.new_client_id = c_id;
+		TagEventRoom(ev, c_id);
+		g_npc_input_queue.Push(std::move(ev));
+		break;
+	}
 	case CS_MOVE: {
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
+
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -2276,6 +2665,7 @@ void process_packet(int c_id, char* packet)
 		if (dirX == 0.0f && dirZ == 0.0f) {
 			for (auto& cl : clients) {
 				if (cl._state != ST_INGAME) continue;
+				if (cl.room_id != sroom) continue;
 				cl.send_move_packet(c_id);
 			}
 			break;
@@ -2309,6 +2699,7 @@ void process_packet(int c_id, char* packet)
 		// 계산된 좌표 전체 중계
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_move_packet(c_id);
 			/*printf("[MOVE] id:%d inputs:0x%02X yaw:%.1f dt:%.4f -> (%.2f, %.2f, %.2f) SEND TO %d\n",
 				c_id, (unsigned char)p->inputs, p->yaw, fDeltaTime,
@@ -2318,10 +2709,13 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CHANGE_WEAPON: {
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_CHANGE_WEAPON_PACKET* p = reinterpret_cast<CS_CHANGE_WEAPON_PACKET*>(packet);
@@ -2330,6 +2724,7 @@ void process_packet(int c_id, char* packet)
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
 			if (cl._id == c_id) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_change_weapon_packet(c_id);
 			printf("WEAPON CHANGE(UPDATE): %d, SEND TO %d\n", c_id, cl._id);
 		}
@@ -2362,7 +2757,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_CRAFT_REQUEST: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2426,7 +2821,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_NPC: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2470,16 +2865,22 @@ void process_packet(int c_id, char* packet)
 			break;										// 데미지, 이펙트 등 전부 안 보냄
 		}
 
+		TagEventRoom(ev, c_id);
 		g_npc_input_queue.Push(std::move(ev));
 
 		break;
 	}
 	case CS_HIT_PLAYER: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
+
+		int sroom;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+
+			if (clients[c_id].dead)
+				break;
+
+			sroom = clients[c_id].room_id;
 		}
 
 		CS_HIT_PLAYER_PACKET* p =
@@ -2541,6 +2942,7 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
 				if (clients[i]._state != ST_INGAME) continue;
+				if (clients[i].room_id != sroom) continue;
 				if (clients[i].hp <= 0) continue;     // 이미 사망
 				tpos = { clients[i].x, clients[i].y, clients[i].z };
 				tyaw = clients[i].yaw;
@@ -2578,6 +2980,9 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
+
+					if (clients[best_id].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
+
 					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) {
 						clients[best_id].hp = 0;
@@ -2628,11 +3033,10 @@ void process_packet(int c_id, char* packet)
 		}
 
 		// 머즐 플래시 전체 브로드캐스트
-		BroadcastAttachedEffectNoSnapshot(
-			EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
+		BroadcastAttachedEffectNoSnapshot(sroom, EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
 
 		BroadcastFireTracerNoSnapshot(
-			(short)c_id,
+			sroom, (short)c_id,
 			{ p->ray_ox, p->ray_oy, p->ray_oz },
 			{ p->ray_dx, p->ray_dy, p->ray_dz },
 			p->weapon_type, hit_kind, trace_dist, normal);
@@ -2640,7 +3044,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_LOOT_PICKUP: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2650,8 +3054,15 @@ void process_packet(int c_id, char* packet)
 		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
 
 		// 박스 유효성
-		if (p->box_id < 0 || p->box_id >= MAX_NPC) break;
-		SERVER_NPC& box = g_npcs[p->box_id];
+		int rid = -1;
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			rid = clients[c_id].room_id;
+		}
+		if (rid < 0 || rid >= MAX_ROOMS || !g_rooms[rid].alive) break;
+
+		if (p->box_id < 0 || p->box_id >= MAX_NPC_PER_ROOM) break;
+		SERVER_NPC& box = g_rooms[rid].npcs[p->box_id];
 		if (!box.loot_active) break;
 
 		// 슬롯 범위
@@ -2693,6 +3104,7 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> ll(pl._s_lock);
 				if (ST_INGAME != pl._state) continue;
+				if (pl.room_id != rid) continue;
 			}
 			pl.do_send(&bp);
 		}
@@ -2707,7 +3119,7 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_GRENADE_EXPLODE: {
-		if (g_round_state.load() != ROUND_IN_PROGRESS) break;
+		if (false == clients[c_id].in_round.load()) break;
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
@@ -2732,6 +3144,8 @@ void process_packet(int c_id, char* packet)
 		ev.type = NpcInputEvent::GRENADE_EXPLODE;
 		ev.attacker_client_id = c_id;
 		ev.explode_pos = { p->x, p->y, p->z };
+
+		TagEventRoom(ev, c_id);
 		g_npc_input_queue.Push(std::move(ev));
 
 		break;
@@ -2744,9 +3158,17 @@ void process_packet(int c_id, char* packet)
 
 		// 보고받은 상태 저장 후 다른 클라이언트에 브로드캐스트
 		clients[c_id].player_state = p->state;
+
+		int sroom;
+		{ 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+			sroom = clients[c_id].room_id; 
+		}
+
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
 			if (cl._id == c_id) continue;
+			if (cl.room_id != sroom) continue;
 			cl.send_player_state_change_packet(c_id);
 			std::cout << "send [SC_PLAYER_STATE_CHANGE_PACKET] to " << cl._id << " state=" << (int)clients[c_id].player_state << "\n";
 		}
@@ -2771,12 +3193,21 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].reload_timer = LookupWeaponSpec(static_cast<WeaponType>(wtype), WeaponGrade::GRADE_1).reloadTime;
 		break;
 	}
+	case CS_TOGGLE_GODMODE: {
+		// C2S 무적 모드 토글 (디버그용)
+		bool now = !clients[c_id].godmode.load();
+		clients[c_id].godmode.store(now);
+		std::cout << "[DEBUG] client " << c_id << " godmode " << (now ? "ON" : "OFF") << "\n";
+		break;
+	}
 	}
 }
 
 void disconnect(int c_id)
 {
 	SOCKET old_socket = INVALID_SOCKET;
+
+	int leaving_room = -1;
 	{
 		std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 		if (clients[c_id]._state == ST_FREE) return;	// 이중 호출 방지
@@ -2785,6 +3216,18 @@ void disconnect(int c_id)
 		clients[c_id]._socket = INVALID_SOCKET;			// 슬롯 무효화
 
 		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
+		clients[c_id].loot_dropped = false;
+
+		// 룸 바인딩 해제 표시. 
+		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.
+		leaving_room = clients[c_id].room_id;			// 캡처
+		clients[c_id].room_id = -1;
+		clients[c_id].room_slot = -1;
+		clients[c_id].room_gen = 0;
+		clients[c_id].in_round.store(false);
+
+		clients[c_id].godmode.store(false);				// 디버그용 무적 모드 초기화
+
 	}
 	closesocket(old_socket);
 
@@ -2794,6 +3237,7 @@ void disconnect(int c_id)
 		{
 			std::lock_guard<std::mutex> ll(pl._s_lock);
 			if (ST_INGAME != pl._state) continue;
+			if (pl.room_id != leaving_room) continue;
 		}
 		if (pl._id == c_id) continue;
 		pl.send_remove_player_packet(c_id);
@@ -2827,16 +3271,6 @@ void worker_thread(HANDLE h_iocp)
 
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
-			// 라운드 중 접속 차단
-			if (g_round_state.load() == ROUND_IN_PROGRESS) { 
-				closesocket(g_c_socket); 
-				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED); 
-				ZeroMemory(&g_a_over._over, sizeof(g_a_over._over)); 
-				int addr_size = sizeof(SOCKADDR_IN); 
-				AcceptEx(g_s_socket, g_c_socket, g_a_over._buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over); 
-				break; 
-			}
-
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				//{
@@ -2859,6 +3293,8 @@ void worker_thread(HANDLE h_iocp)
 					h_iocp, client_id, 0);
 				clients[client_id].do_recv();
 				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+
+				clients[client_id].godmode.store(false);		// 디버그용 무적 모드 (접속 시 초기화)
 			}
 			else {
 				std::cout << "Max user exceeded.\n";
@@ -2970,6 +3406,42 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 		}
 	}
 }
+
+static void spawn_room_npcs(Room& r)
+{
+	init_room_npcs(r);   // 전체 66개 리셋 (루팅박스 초기화 포함)
+
+	struct NpcSpawnDef { float x, z; char tier; char outfit; };
+	static const NpcSpawnDef main_npc_def[] = {
+		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
+		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
+		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
+		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
+		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
+		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
+		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
+		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
+		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
+		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
+		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
+	};
+	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
+
+	for (int i = 0; i < npc_count; ++i)
+	{
+		SERVER_NPC& npc = r.npcs[i];
+		npc.alive = true;
+		npc.outfit = main_npc_def[i].outfit;
+		ApplyNpcTier(npc, main_npc_def[i].tier);
+		npc.state = NPC_STATE_IDLE;
+		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
+		npc.spawn_position = npc.position;
+		npc.yaw = 0.0f;
+		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;
+		GenerateNpcLoot(npc);
+	}
+}
+
 int main()
 {
 	if (!load_mapOOBB_from_CSV("map_oobb.csv")) {
@@ -3004,98 +3476,15 @@ int main()
 	g_astar.LoadNavMeshFromFile("Model/NavMeshData.bin");
 	std::cout << "NavMesh loaded from Model / NavMeshData.bin\n";
 
-	init_npcs();
-
-	// NPC 배치: 위치(x,z) + 단계(tier) + 외형(outfit). y는 0.0f 고정.
-	// 1·2단계: 10그룹 x 3마리(a,b=1단계, c=2단계). 3단계: A,B,C.
-	struct NpcSpawnDef { float x, z; char tier; char outfit; };
-	NpcSpawnDef main_npc_def[] = {
-		// 그룹01 (outfit a0 b1 c0)
-		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
-		// 그룹02 (outfit a1 b2 c1)
-		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
-		// 그룹03 (outfit a0 b2 c2)
-		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
-		// 그룹04 (outfit a0 b1 c0)
-		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
-		// 그룹05 (outfit a1 b2 c1)
-		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
-		// 그룹06 (outfit a0 b2 c2)
-		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
-		// 그룹07 (outfit a0 b1 c0)
-		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
-		// 그룹08 (outfit a1 b2 c1)
-		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
-		// 그룹09 (outfit a0 b2 c2)
-		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
-		// 그룹10 (outfit a0 b1 c0)
-		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
-		// 3단계 A,B,C (outfit 0,1,2)
-		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
-	};
-	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
-
-	for (int i = 0; i < npc_count; ++i)
-	{
-		// NPC 1개 — id 0, (7, 0, -14) 위치
-		SERVER_NPC& npc = g_npcs[i];
-		npc.alive = true;
-		npc.outfit = main_npc_def[i].outfit;
-		ApplyNpcTier(npc, main_npc_def[i].tier);   // kind/weapon/hp/max_hp 설정
-		npc.state = NPC_STATE_IDLE;
-		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
-		npc.spawn_position = npc.position;
-		npc.yaw = 0.0f;
-		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;   // 스폰 시 탄창 채움
-		// path_update_timer, waypoints, way_idx, die_timer는 init_npcs()에서 이미 0/빈 상태
-
-		// NPC 인벤토리 초기화 하드코딩
-		/*npc._inventory[0] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 2 };
-		npc._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 1 };*/
-		GenerateNpcLoot(npc);
-
-		std::cout << "NPC[" << npc.id << "] spawned with inventory: "
-			<< "slot0=" << static_cast<int>(npc._inventory[0].item)
-			<< "x" << npc._inventory[0].count
-			<< ", slot1=" << static_cast<int>(npc._inventory[1].item)
-			<< "x" << npc._inventory[1].count << "\n";
+	// ===== 룸 초기화 (룸 0 고정 생성) =====
+	// R4에서 매치메이커가 동적 생성/해산하도록 교체한다.
+	for (int i = 0; i < MAX_ROOMS; ++i) {
+		g_rooms[i].id = i;
+		g_rooms[i].alive = false;
 	}
 
-	/*
-		// 케이스 A: 가까운 두 점 — waypoint 1~2개 기대
-		{
-			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
-			XMFLOAT3 end = { 5.0f, 0.0f, -5.0f };
-			auto path = g_astar.FindPath(start, end);
-			std::cout << "[AI Test A] (0,0,0)->(5,0,-5): " << path.size() << " waypoints\n";
-			for (size_t i = 0; i < path.size(); ++i) {
-				std::cout << "    [" << i << "] (" << path[i].x << ", "
-					<< path[i].y << ", " << path[i].z << ")\n";
-			}
-		}
-
-		// 케이스 B: 떨어진 두 점 — 여러 waypoint 기대
-		{
-			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
-			XMFLOAT3 end = { 7.0f, 0.0f, -14.0f };
-			auto path = g_astar.FindPath(start, end);
-			std::cout << "[AI Test B] (0,0,0)->(7,0,-14): " << path.size() << " waypoints\n";
-			for (size_t i = 0; i < path.size(); ++i) {
-				std::cout << "    [" << i << "] (" << path[i].x << ", "
-					<< path[i].y << ", " << path[i].z << ")\n";
-			}
-		}
-
-		// 케이스 C: 의도적 실패 — 맵 밖. "[AI] FindPath failed" 로그가 떠야 정상.
-		{
-			XMFLOAT3 start = { 0.0f, 0.0f, 0.0f };
-			XMFLOAT3 end = { 10000.0f, 0.0f, 10000.0f };
-			auto path = g_astar.FindPath(start, end);
-			std::cout << "[AI Test C] (0,0,0)->(10000,0,10000): " << path.size()
-				<< " waypoints (expected 0 + failure log)\n";
-		}
-	}
-	*/
+	std::cout << "[ROOM] room pool ready (max " << MAX_ROOMS
+		<< ", capacity " << ROOM_CAPACITY << ")\n";
 
 	HANDLE h_iocp;
 

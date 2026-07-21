@@ -82,11 +82,28 @@ void NetEntityManager::RemoveNpc(short id)
 // ─────────────────────────────────────────────────────────────
 void NetEntityManager::OnLoginInfo(const SC_LOGIN_INFO_PACKET* p)
 {
+	//if (m_pPlayer) {
+	//	m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
+	//	m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
+	//}
+	m_myId = p->id;
+}
+
+void NetEntityManager::OnRoundStart(const SC_ROUND_START_PACKET* p)
+{
 	if (m_pPlayer) {
 		m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
 		m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
 	}
-	m_myId = p->id;
+}
+
+void NetEntityManager::OnRoundReset()
+{
+	// 네트워크 엔티티 슬롯 정리 (타플레이어 16 + NPC)
+	for (auto& s : m_otherPlayers) { s.id = -1; s.pPlayer = nullptr; }
+	for (auto& s : m_npcs) { s.id = -1; s.pNpc = nullptr; }
+
+	// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함. 
 }
 
 void NetEntityManager::OnAddPlayer(const SC_ADD_PLAYER_PACKET* p)

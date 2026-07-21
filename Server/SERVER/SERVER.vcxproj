@@ -137,6 +137,7 @@
     <ClInclude Include="Server_Collision.h" />
     <ClInclude Include="Server_Effect.h" />
     <ClInclude Include="Server_Npc.h" />
+    <ClInclude Include="Server_Room.h" />
     <ClInclude Include="Server_Weapon.h" />
   </ItemGroup>
   <ItemGroup>

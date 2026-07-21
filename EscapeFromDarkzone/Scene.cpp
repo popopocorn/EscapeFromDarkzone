@@ -1889,9 +1889,16 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
-	if (!NetworkManager::Instance().Init("Player"))
+	if (!NetworkManager::Instance().IsConnected())
 	{
-		OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+		if (!NetworkManager::Instance().Init("Player"))
+		{
+			OutputDebugString(L"DEBUG: Server Connect Fail.\n");
+		}
+	}
+	else 
+	{
+		NetSession::Instance().RoundJoin();
 	}
 
 	if (!NetworkManager::Instance().IsConnected())
@@ -2903,6 +2910,10 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 	lobbybutton->setAABB();
 	lobbybutton->SetFunc([this]() {
+		if (NetworkManager::Instance().IsConnected())
+		{
+			NetSession::Instance().RoundJoin();
+		}
 		this->frame->nextScene = new MainScene(frame);
 		});
 
@@ -2996,6 +3007,10 @@ void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	lobbybutton->setAABB();
 	lobbybutton->SetFunc([this]() {
+		if (NetworkManager::Instance().IsConnected())
+		{
+			NetSession::Instance().RoundLeave();
+		}
 		this->frame->nextScene = new LobbyScene(frame);
 		});
 
