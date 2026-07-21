@@ -254,7 +254,7 @@ class ModelResource {
 public:
 	char							m_pstrFrameName[260];
 
-	unique_ptr<CMesh>				m_pMesh = NULL;
+	unique_ptr<CMesh>				m_pMesh;
 
 	int								m_nMaterials = 0;
 	vector<unique_ptr<CMaterial>>	m_ppMaterials;
@@ -262,8 +262,8 @@ public:
 	XMFLOAT4X4						m_xmf4x4ToParent;
 
 
-	ModelResource* m_pChild = NULL;
-	ModelResource* m_pSibling = NULL;
+	unique_ptr<ModelResource> m_pChild;
+	unique_ptr<ModelResource> m_pSibling;
 public:
 	ModelResource();
 	ModelResource(int nMaterials);
@@ -310,12 +310,12 @@ public:
 	CLoadedModelInfo() { }
 	~CLoadedModelInfo();
 
-    ModelResource					*m_pModelRootObject = NULL;
+	unique_ptr<ModelResource>		m_pModelRootObject;
 
 	int 							m_nSkinnedMeshes = 0;
 	CSkinnedMesh					**m_ppSkinnedMeshes = NULL; //[SkinnedMeshes], Skinned Mesh Cache
 
-	CAnimationSets					*m_pAnimationSets = NULL;
+	CAnimationSets*					m_pAnimationSets = NULL;
 
 };
 

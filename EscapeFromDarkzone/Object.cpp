@@ -197,7 +197,6 @@ CMaterial::~CMaterial()
 
 	if (m_nTextures > 0)
 	{
-		//for (int i = 0; i < m_nTextures; i++) if (m_ppTextures[i]) m_ppTextures[i]->Release();
 		delete[] m_ppTextures;
 
 		if (m_ppstrTextureNames) delete[] m_ppstrTextureNames;
@@ -314,8 +313,21 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 		_stprintf_s(pstrDebug, 256, _T("Texture Name: %d %c %s\n"), (pstrTextureName[0] == '@') ? nRepeatedTextures++ : nTextures++, (pstrTextureName[0] == '@') ? '@' : ' ', pwstrTextureName);
 		OutputDebugString(pstrDebug);
 #endif
-		if (!bDuplicated)
+		* ppTexture = ResourceManager::Instance().GetTexture(pstrFilePath);
+		if (*ppTexture == nullptr)
 		{
+			*ppTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
+			(*ppTexture)->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pwstrTextureName, RESOURCE_TEXTURE2D, 0);
+			if ((*ppTexture)->GetResource(0)) {
+				ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, *ppTexture, 0, nRootParameter);
+				ResourceManager::Instance().SaveTexture(pstrFilePath, *ppTexture);
+			}
+		}
+
+		/*if (!bDuplicated)
+		{
+			
+			if(*ppTexture)
 			*ppTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
 			(*ppTexture)->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, pwstrTextureName, RESOURCE_TEXTURE2D, 0);
 
@@ -342,7 +354,7 @@ void CMaterial::LoadTextureFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 					ResourceManager::Instance().SaveTexture(pstrFilePath, *ppTexture);
 				}
 			}
-		}
+		}*/
 	}
 }
 
@@ -1051,24 +1063,18 @@ void ModelResource::SetChild(ModelResource* pChild)
 
 	if (m_pChild)
 	{
-		if (pChild) pChild->m_pSibling = m_pChild->m_pSibling;
-		m_pChild->m_pSibling = pChild;
+		if (pChild) pChild->m_pSibling = std::move(m_pChild->m_pSibling);
+		m_pChild->m_pSibling = unique_ptr<ModelResource>(pChild);
 	}
 	else
 	{
-		m_pChild = pChild;
+		m_pChild = unique_ptr<ModelResource>(pChild);;
 	}
 }
 
 void ModelResource::ReleaseUploadBuffers()
 {
 	if (m_pMesh) m_pMesh->ReleaseUploadBuffers();
-
-	for (int i = 0; i < m_nMaterials; i++)
-	{
-		if (m_ppMaterials[i]) m_ppMaterials[i]->ReleaseUploadBuffers();
-	}
-
 	if (m_pSibling) m_pSibling->ReleaseUploadBuffers();
 	if (m_pChild) m_pChild->ReleaseUploadBuffers();
 }
@@ -1926,7 +1932,7 @@ static CGameObject* CloneModelHierarchyShared(ModelResource* pSrc)
 	}
 	pDst->m_xmf4x4ToParent = pSrc->m_xmf4x4ToParent;
 
-	for (ModelResource* pChildRes = pSrc->m_pChild; pChildRes; pChildRes = pChildRes->m_pSibling)
+	for (ModelResource* pChildRes = pSrc->m_pChild.get(); pChildRes; pChildRes = pChildRes->m_pSibling.get())
 	{
 		CGameObject* pChildDst = CloneModelHierarchyShared(pChildRes);
 		if (pChildDst)

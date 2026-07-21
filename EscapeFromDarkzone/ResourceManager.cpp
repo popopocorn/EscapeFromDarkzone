@@ -165,7 +165,10 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
 	}
-
+	for (auto& obj : textureMap)
+	{
+		obj.second->ReleaseUploadBuffers();
+	}
 	for (auto& obj : m_ModelPrototypes)
 	{
 		obj.second->ReleaseUploadBuffers();
@@ -179,13 +182,14 @@ void ResourceManager::ReleaseUploadBuffers()
 void ResourceManager::ReleaseResources()
 {
 	m_ModelPrototypes.clear();
-	ReleaseSkinnedModelPrototypes();
 
-	if (m_pd3dCbvSrvDescriptorHeap)
-	{
-		m_pd3dCbvSrvDescriptorHeap->Release();
-		m_pd3dCbvSrvDescriptorHeap = nullptr;
-	}
+	m_SkinnedModelPrototypes.clear();
+
+	m_AnimationSetOwners.clear();
+
+	m_UIPrototypes.clear();
+
+	textureMap.clear();
 }
 
 bool ResourceManager::LoadAndRegisterModelPrototype(
@@ -260,6 +264,7 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	{
 		pLoadedModel->m_pAnimationSets = new CAnimationSets(0);
 	}
+	m_AnimationSetOwners.emplace(key, unique_ptr<CAnimationSets>(pLoadedModel->m_pAnimationSets));
 
 	m_SkinnedModelPrototypes.emplace(key, pLoadedModel);
 	return true;
@@ -282,11 +287,7 @@ bool ResourceManager::ShareSkinnedAnimationSets(ModelName targetKey, ModelName s
 	if (!pSourceInfo) return false;
 	if (!pSourceInfo->m_pAnimationSets) return false;
 
-	if (pTargetInfo->m_pAnimationSets && pTargetInfo->m_pAnimationSets != pSourceInfo->m_pAnimationSets)
-	{
-		delete pTargetInfo->m_pAnimationSets;
-		pTargetInfo->m_pAnimationSets = nullptr;
-	}
+	m_AnimationSetOwners.erase(targetKey);
 
 	pTargetInfo->m_pAnimationSets = pSourceInfo->m_pAnimationSets;
 
@@ -795,7 +796,7 @@ ModelInstance* ResourceManager::CreateSkinnedModelInstance(ModelName key)
 	if (!pPrototypeInfo->m_pModelRootObject) return nullptr;
 	if (!pPrototypeInfo->m_pAnimationSets) return nullptr;
 
-	CGameObject* pRootInstance = CGameObject::CreateModelInstance(pPrototypeInfo->m_pModelRootObject);
+	CGameObject* pRootInstance = CGameObject::CreateModelInstance(pPrototypeInfo->m_pModelRootObject.get());
 
 	if (!pRootInstance)
 		return nullptr;
@@ -851,13 +852,13 @@ UIMesh* ResourceManager::GetUIMesh(UIName name)
 
 void ResourceManager::SaveTexture(string name, CTexture* tex)
 {
-	textureMap[name] = tex;
+	textureMap[name] = unique_ptr<CTexture>(tex);
 }
 
 CTexture* ResourceManager::GetTexture(string name)
 {
 	auto it = textureMap.find(name);
-	if (it != textureMap.end())return it->second;
+	if (it != textureMap.end())return it->second.get();
 	return nullptr;
 }
 
@@ -1162,7 +1163,7 @@ CLoadedModelInfo* ResourceManager::LoadGeometryAndAnimationFromFile(ID3D12Device
 		{
 			if (!strcmp(pstrToken, "<Hierarchy>:"))
 			{
-				pLoadedModel->m_pModelRootObject = LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, NULL, pInFile, pShader, &pLoadedModel->m_nSkinnedMeshes, pstrFileName);
+				pLoadedModel->m_pModelRootObject = unique_ptr<ModelResource>(LoadFrameHierarchyFromFile(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature, NULL, pInFile, pShader, &pLoadedModel->m_nSkinnedMeshes, pstrFileName));
 				::ReadStringFromFile(pInFile, pstrToken, _countof(pstrToken)); //"</Hierarchy>"
 			}
 			else if (!strcmp(pstrToken, "<Animation>:"))
@@ -1192,23 +1193,4 @@ CLoadedModelInfo* ResourceManager::LoadGeometryAndAnimationFromFile(ID3D12Device
 #endif
 
 	return(pLoadedModel);
-}
-
-void ResourceManager::ReleaseSkinnedModelPrototypes()
-{
-	for (auto& pair : m_SkinnedModelPrototypes)
-	{
-		CLoadedModelInfo* pInfo = pair.second.get();
-		if (!pInfo) continue;
-
-		if (pInfo->m_pAnimationSets)
-		{
-			//pInfo->m_pAnimationSets->ReleaseUploadBuffers();
-			pInfo->m_pAnimationSets = nullptr;
-		}
-
-		delete pInfo;
-	}
-
-	m_SkinnedModelPrototypes.clear();
 }

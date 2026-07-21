@@ -525,7 +525,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
-	//ResourceManager::Instance().ReleaseResources();
+	ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
 

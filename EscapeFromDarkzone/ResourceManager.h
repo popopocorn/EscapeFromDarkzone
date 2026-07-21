@@ -281,11 +281,14 @@ private:
 	// 애니메이션 있는 모델 원본
 	unordered_map<ModelName, unique_ptr<CLoadedModelInfo>> m_SkinnedModelPrototypes;
 
+	// 애니메이션 원본
+	unordered_map<ModelName, unique_ptr<CAnimationSets>> m_AnimationSetOwners;
+
 	// UI 원본
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
-	//texture map
-	unordered_map<string, CTexture*> textureMap;
+	//텍스쳐 원본
+	unordered_map<string, unique_ptr<CTexture>> textureMap;
 
 private:
 	ResourceManager() = default;
@@ -314,7 +317,6 @@ private:
 	void LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path);
 
 	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
-	void ReleaseSkinnedModelPrototypes();
 
 public:
 	static ResourceManager& Instance()
