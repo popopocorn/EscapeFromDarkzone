@@ -338,10 +338,12 @@ public:
 
 	std::chrono::steady_clock::time_point last_hit_time;
 
-	std::vector<XMFLOAT3> _collNormals; // 서버 측 충돌 계산 결과 저장용
+	std::vector<XMFLOAT3> _collNormals;		// 서버 측 충돌 계산 결과 저장용
 
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
 	std::chrono::steady_clock::time_point _last_move_recv_time;
+
+	std::atomic<bool> godmode{ false };		// 디버그용 무적 모드
 
 public:
 	SESSION()
@@ -1251,6 +1253,9 @@ static void NpcFireAtPlayer(const Room& r, SERVER_NPC& npc, int target_id)
 		{
 			std::lock_guard<std::mutex> lk(clients[target_cid]._s_lock);
 			if (clients[target_cid]._state == ST_INGAME) {
+
+				if (clients[target_cid].godmode.load()) dmg = 0;		// 무적 모드 (디버그용)
+
 				clients[target_cid].hp -= dmg;
 				if (clients[target_cid].hp < 0) clients[target_cid].hp = 0;
 				new_hp = clients[target_cid].hp;
@@ -1666,6 +1671,8 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 				float dist = DistanceXZ(ppos, C);   // XZ 거리
 				short dmg = ComputeGrenadeDamage(g, dist);
 				if (dmg <= 0) continue;
+
+				if (clients[i].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
 				clients[i].hp -= dmg;
 				if (clients[i].hp < 0) clients[i].hp = 0;
@@ -2973,6 +2980,9 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
+
+					if (clients[best_id].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
+
 					clients[best_id].hp -= dmg;
 					if (clients[best_id].hp < 0) {
 						clients[best_id].hp = 0;
@@ -3183,6 +3193,13 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].reload_timer = LookupWeaponSpec(static_cast<WeaponType>(wtype), WeaponGrade::GRADE_1).reloadTime;
 		break;
 	}
+	case CS_TOGGLE_GODMODE: {
+		// C2S 무적 모드 토글 (디버그용)
+		bool now = !clients[c_id].godmode.load();
+		clients[c_id].godmode.store(now);
+		std::cout << "[DEBUG] client " << c_id << " godmode " << (now ? "ON" : "OFF") << "\n";
+		break;
+	}
 	}
 }
 
@@ -3208,6 +3225,9 @@ void disconnect(int c_id)
 		clients[c_id].room_slot = -1;
 		clients[c_id].room_gen = 0;
 		clients[c_id].in_round.store(false);
+
+		clients[c_id].godmode.store(false);				// 디버그용 무적 모드 초기화
+
 	}
 	closesocket(old_socket);
 
@@ -3273,6 +3293,8 @@ void worker_thread(HANDLE h_iocp)
 					h_iocp, client_id, 0);
 				clients[client_id].do_recv();
 				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+
+				clients[client_id].godmode.store(false);		// 디버그용 무적 모드 (접속 시 초기화)
 			}
 			else {
 				std::cout << "Max user exceeded.\n";
