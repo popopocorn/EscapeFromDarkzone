@@ -12,6 +12,7 @@
 #include "ResourceManager.h"
 #include "ShaderManager.h"
 #include "SoundManager.h"
+#include "TextRenderer.h"
 #include "GameFramework.h"
 #include"Scene.h"
 
@@ -114,9 +115,11 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	InputManager::Instance().init(hMainWnd);
 	SoundManager::Instance()->Init();
+
 	CreateDirect3DDevice();
+
 	root = make_unique<RootSignature>(m_pd3dDevice);
-	
+
 	CreateCommandQueueAndList();
 	CreateRtvAndDsvDescriptorHeaps();
 	CreateSwapChain();
@@ -124,21 +127,35 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 	CoInitialize(NULL);
 
-
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
 
 	shadermanager = make_unique<ShaderManager>();
+
 	SoundManager::Instance()->BuildSound();
-	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(m_pd3dDevice, 0, 480);
+
+	ResourceManager::Instance().CreateCbvSrvDescriptorHeaps(
+		m_pd3dDevice,
+		0,
+		512
+	);
 
 	BuildObjects();
 
-	ResourceManager::Instance().CreateshadowResourceViews(m_pd3dDevice, shadowmap.get(), 0, 0);
-	
+	ResourceManager::Instance().CreateshadowResourceViews(
+		m_pd3dDevice,
+		shadowmap.get(),
+		0,
+		0
+	);
+
 	observer = make_unique<CCamera>();
 	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
-	observer->GenerateViewMatrix(XMFLOAT3(0.0f, 100.0f, 0.0f), XMFLOAT3(0, -1, 0), XMFLOAT3(0, 0, 1));
+	observer->GenerateViewMatrix(
+		XMFLOAT3(0.0f, 100.0f, 0.0f),
+		XMFLOAT3(0.0f, -1.0f, 0.0f),
+		XMFLOAT3(0.0f, 0.0f, 1.0f)
+	);
 	observer->GenerateProjectionMatrix(m_pPlayer->GetCamera()->GetProjectionMatrix());
 	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
 	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
@@ -149,7 +166,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	//	OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 	//}
 
-	return(true);
+	return true;
 }
 
 void CGameFramework::CreateSwapChain()
@@ -475,6 +492,10 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 				m_pCamera = m_pPlayer->GetCamera();
 			}
 			break;
+		//갓 모드
+		case 'K':
+			
+			break;
 
 		default:
 			break;
@@ -569,17 +590,28 @@ void CGameFramework::OnDestroy()
 void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
-	shadermanager->BuildShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
+
+	shadermanager->BuildShaders(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot()
+	);
 
 	//m_pScene.push_back(make_unique<LobbyScene>(this));
 	m_pScene.push_back(make_unique<MainScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
-	CMaterial::PrepareShaders(m_pd3dDevice, m_pd3dCommandList, root->GetRoot());
-	
+
+	CMaterial::PrepareShaders(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot()
+	);
+
 	ResourceManager::Instance().BuildUIMesh(
-		m_pd3dDevice, 
-		m_pd3dCommandList, 
-		root->GetRoot());
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot()
+	);
 
 	ResourceManager::Instance().BuildPlayerModelPrototypes(
 		m_pd3dDevice,
@@ -625,28 +657,157 @@ void CGameFramework::BuildObjects()
 
 	m_pCamera = m_pPlayer->GetCamera();
 
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->SetCamera(m_pCamera);
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		m_pScene.back()->SetCamera(m_pCamera);
+	}
 
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		m_pScene.back()->BuildObjects(
+			m_pd3dDevice,
+			m_pd3dCommandList
+		);
+	}
 
+	bool bFontLoaded = ResourceManager::Instance().BuildFontResource(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		L"Model/Fonts/KoreanFontAtlas_4096.png",
+		L"Model/Fonts/KoreanFontAtlas_4096.json"
+	);
+
+	if (!bFontLoaded)
+	{
+		OutputDebugStringW(L"[GameFramework] Korean font resource build failed.\n");
+	}
+	else
+	{
+		BuildTextSystem();
+	}
 
 	m_pd3dCommandList->Close();
-	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
-	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
+
+	ID3D12CommandList* ppd3dCommandLists[] =
+	{
+		m_pd3dCommandList
+	};
+
+	m_pd3dCommandQueue->ExecuteCommandLists(
+		1,
+		ppd3dCommandLists
+	);
 
 	WaitForGpuComplete();
+
 	ResourceManager::Instance().ReleaseUploadBuffers();
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseUploadBuffers();//포인팅 구조 변경 이후 사용X
+
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		m_pScene.back()->ReleaseUploadBuffers(); //포인팅 구조 변경 이후 사용X
+	}
+
 	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	// 06.07 추가
 	m_pNetEntityMgr = std::make_unique<NetEntityManager>();
-	m_pNetEntityMgr->Init(m_pd3dDevice, m_pd3dCommandList, root->GetRoot(),
-		shadermanager.get(), m_pPlayer);
+	m_pNetEntityMgr->Init(
+		m_pd3dDevice,
+		m_pd3dCommandList,
+		root->GetRoot(),
+		shadermanager.get(),
+		m_pPlayer
+	);
 	m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());
 
 	m_GameTimer.Reset();
 }
+
+void CGameFramework::BuildTextSystem()
+{
+	FontResource* pFontResource = ResourceManager::Instance().GetFontResource();
+
+	if (!pFontResource)
+	{
+		OutputDebugStringW(L"[GameFramework] Text system build failed. Font resource is null.\n");
+		return;
+	}
+
+	if (!pFontResource->IsLoaded())
+	{
+		OutputDebugStringW(L"[GameFramework] Text system build failed. Font resource is not loaded.\n");
+		return;
+	}
+
+	ID3D12DescriptorHeap* pDescriptorHeap = ResourceManager::Instance().GetDescriptorHeap();
+
+	if (!pDescriptorHeap)
+	{
+		OutputDebugStringW(L"[GameFramework] Text system build failed. Descriptor heap is null.\n");
+		return;
+	}
+
+	m_pTextRenderer = std::make_unique<TextRenderer>();
+
+	bool bInitialized = m_pTextRenderer->Initialize(
+		m_pd3dDevice,
+		root->GetRoot(),
+		pDescriptorHeap,
+		pFontResource,
+		static_cast<UINT>(m_nWndClientWidth),
+		static_cast<UINT>(m_nWndClientHeight),
+		L"Text.hlsli",
+		4096
+	);
+
+	if (!bInitialized)
+	{
+		OutputDebugStringW(L"[GameFramework] TextRenderer initialization failed.\n");
+		m_pTextRenderer.reset();
+		return;
+	}
+
+	OutputDebugStringW(L"[GameFramework] Text system build complete.\n");
+}
+
+void CGameFramework::RenderTextSystem()
+{
+	if (!m_pTextRenderer)
+		return;
+
+	if (!m_pTextRenderer->IsInitialized())
+		return;
+
+	m_pTextRenderer->BeginFrame();
+
+	if (!m_pScene.empty() && m_pScene.back())
+	{
+		HUDManager* pUIManager =
+			m_pScene.back()->GetUIManager();
+
+		if (pUIManager)
+		{
+			pUIManager->SubmitText(
+				m_pTextRenderer.get()
+			);
+		}
+
+		InventoryManager* pInventoryManager =
+			m_pScene.back()->GetInventoryManager();
+
+		if (pInventoryManager)
+		{
+			pInventoryManager->SubmitText(
+				m_pTextRenderer.get()
+			);
+		}
+	}
+
+	m_pTextRenderer->Render(
+		m_pd3dCommandList
+	);
+}
+
 void CGameFramework::ReleaseObjects()
 {
 	
@@ -903,7 +1064,7 @@ void CGameFramework::FrameAdvance()
 
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
 
-
+	RenderTextSystem();
 	//compute pipline
 	
 

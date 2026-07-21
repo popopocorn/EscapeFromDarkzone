@@ -1,5 +1,6 @@
 #pragma once
 #include "UI.h"
+#include "FontResource.h"
 
 enum class ModelName
 {
@@ -287,6 +288,12 @@ private:
 	// UI 원본
 	unordered_map<UIName, unique_ptr<UIMesh>> m_UIPrototypes;
 
+	// 기본 한글 폰트
+	unique_ptr<FontResource> m_pFontResource;
+
+	// SRV 힙에서 사용할 수 있는 전체 SRV 개수
+	UINT m_nSrvDescriptorCapacity = 0;
+
 	//텍스쳐 원본
 	unordered_map<string, unique_ptr<CTexture>> textureMap;
 
@@ -317,6 +324,11 @@ private:
 	void LoadUIMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, UIName name, const wchar_t* path);
 
 	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
+
+	bool AllocateNextSrvDescriptor(
+		D3D12_CPU_DESCRIPTOR_HANDLE& d3dCpuDescriptorHandle,
+		D3D12_GPU_DESCRIPTOR_HANDLE& d3dGpuDescriptorHandle
+	);
 
 public:
 	static ResourceManager& Instance()
@@ -401,6 +413,16 @@ public:
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature
 	);
+
+	bool BuildFontResource(
+		ID3D12Device* pd3dDevice,
+		ID3D12GraphicsCommandList* pd3dCommandList,
+		const wchar_t* pAtlasFilePath,
+		const wchar_t* pMetadataFilePath
+	);
+
+	FontResource* GetFontResource() { return m_pFontResource.get(); }
+	const FontResource* GetFontResource() const { return m_pFontResource.get(); }
 
 	// 정적 모델 원본 가져오기
 	CGameObject* GetModelInstance(ModelName key) const;

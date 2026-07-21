@@ -123,11 +123,15 @@ public:
 	ArmorItem(ItemType t, ItemID i) : Item(t, i) {};
 };
 
-struct Equip {
+struct Equip
+{
 	Equip();
+
+	void ResetForNewRound();
+
 	ArmorItem helmet;
 	ArmorItem body;
 	ArmorItem shoes;
-	Plate     plate;
+	Plate plate;
 };
 

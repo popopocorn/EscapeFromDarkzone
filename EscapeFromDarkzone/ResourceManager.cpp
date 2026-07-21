@@ -3,6 +3,7 @@
 #include "ShadowMap.h"
 #include "UI.h"
 #include "ResourceManager.h"
+#include "FontResource.h"
 
 
 void ResourceManager::CreateCbvSrvDescriptorHeaps(
@@ -10,17 +11,45 @@ void ResourceManager::CreateCbvSrvDescriptorHeaps(
 	int nConstantBufferViews,
 	int nShaderResourceViews)
 {
+	if (!pd3dDevice)
+	{
+		OutputDebugStringW(L"[ResourceManager] Descriptor heap creation failed. Device is null.\n");
+		return;
+	}
+
+	if (nConstantBufferViews < 0 || nShaderResourceViews <= 0)
+	{
+		OutputDebugStringW(L"[ResourceManager] Descriptor heap creation failed. Invalid descriptor count.\n");
+		return;
+	}
+
+	if (m_pd3dCbvSrvDescriptorHeap)
+	{
+		m_pd3dCbvSrvDescriptorHeap->Release();
+		m_pd3dCbvSrvDescriptorHeap = nullptr;
+	}
+
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc{};
-	d3dDescriptorHeapDesc.NumDescriptors = nConstantBufferViews + nShaderResourceViews;
+	d3dDescriptorHeapDesc.NumDescriptors = static_cast<UINT>(nConstantBufferViews + nShaderResourceViews);
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	d3dDescriptorHeapDesc.NodeMask = 0;
 
-	pd3dDevice->CreateDescriptorHeap(
+	HRESULT hResult = pd3dDevice->CreateDescriptorHeap(
 		&d3dDescriptorHeapDesc,
 		__uuidof(ID3D12DescriptorHeap),
-		(void**)&m_pd3dCbvSrvDescriptorHeap
+		reinterpret_cast<void**>(&m_pd3dCbvSrvDescriptorHeap)
 	);
+
+	if (FAILED(hResult) || !m_pd3dCbvSrvDescriptorHeap)
+	{
+		wchar_t debugText[256];
+		swprintf_s(debugText, L"[ResourceManager] Descriptor heap creation failed. HRESULT=0x%08X\n", static_cast<unsigned int>(hResult));
+		OutputDebugStringW(debugText);
+
+		m_nSrvDescriptorCapacity = 0;
+		return;
+	}
 
 	m_d3dCbvCPUDescriptorNextHandle =
 		m_d3dCbvCPUDescriptorStartHandle =
@@ -39,6 +68,79 @@ void ResourceManager::CreateCbvSrvDescriptorHeaps(
 		m_d3dSrvGPUDescriptorStartHandle.ptr =
 		m_d3dCbvGPUDescriptorStartHandle.ptr +
 		(::gnCbvSrvDescriptorIncrementSize * nConstantBufferViews);
+
+	m_nSrvDescriptorCapacity = static_cast<UINT>(nShaderResourceViews);
+
+	wchar_t debugText[256];
+	swprintf_s(debugText, L"[ResourceManager] Descriptor heap created. CBV=%d, SRV=%d\n", nConstantBufferViews, nShaderResourceViews);
+	OutputDebugStringW(debugText);
+}
+
+bool ResourceManager::AllocateNextSrvDescriptor(
+	D3D12_CPU_DESCRIPTOR_HANDLE& d3dCpuDescriptorHandle,
+	D3D12_GPU_DESCRIPTOR_HANDLE& d3dGpuDescriptorHandle)
+{
+	d3dCpuDescriptorHandle.ptr = 0;
+	d3dGpuDescriptorHandle.ptr = 0;
+
+	if (!m_pd3dCbvSrvDescriptorHeap)
+	{
+		OutputDebugStringW(L"[ResourceManager] SRV allocation failed. Descriptor heap is null.\n");
+		return false;
+	}
+
+	if (::gnCbvSrvDescriptorIncrementSize == 0)
+	{
+		OutputDebugStringW(L"[ResourceManager] SRV allocation failed. Descriptor increment size is zero.\n");
+		return false;
+	}
+
+	if (m_nSrvDescriptorCapacity == 0)
+	{
+		OutputDebugStringW(L"[ResourceManager] SRV allocation failed. SRV capacity is zero.\n");
+		return false;
+	}
+
+	if (m_d3dSrvCPUDescriptorNextHandle.ptr < m_d3dSrvCPUDescriptorStartHandle.ptr)
+	{
+		OutputDebugStringW(L"[ResourceManager] SRV allocation failed. Invalid CPU descriptor position.\n");
+		return false;
+	}
+
+	SIZE_T descriptorByteOffset =
+		m_d3dSrvCPUDescriptorNextHandle.ptr -
+		m_d3dSrvCPUDescriptorStartHandle.ptr;
+
+	if ((descriptorByteOffset % ::gnCbvSrvDescriptorIncrementSize) != 0)
+	{
+		OutputDebugStringW(L"[ResourceManager] SRV allocation failed. CPU descriptor handle is not aligned.\n");
+		return false;
+	}
+
+	UINT descriptorIndex = static_cast<UINT>(
+		descriptorByteOffset /
+		::gnCbvSrvDescriptorIncrementSize
+		);
+
+	if (descriptorIndex >= m_nSrvDescriptorCapacity)
+	{
+		wchar_t debugText[256];
+		swprintf_s(debugText, L"[ResourceManager] SRV heap overflow. Index=%u, Capacity=%u\n", descriptorIndex, m_nSrvDescriptorCapacity);
+		OutputDebugStringW(debugText);
+		return false;
+	}
+
+	d3dCpuDescriptorHandle = m_d3dSrvCPUDescriptorNextHandle;
+	d3dGpuDescriptorHandle = m_d3dSrvGPUDescriptorNextHandle;
+
+	m_d3dSrvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+	m_d3dSrvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
+
+	wchar_t debugText[128];
+	swprintf_s(debugText, L"[ResourceManager] SRV allocated. Index=%u\n", descriptorIndex);
+	OutputDebugStringW(debugText);
+
+	return true;
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE ResourceManager::CreateConstantBufferViews(
@@ -171,11 +273,23 @@ void ResourceManager::ReleaseUploadBuffers()
 	}
 	for (auto& obj : m_ModelPrototypes)
 	{
-		obj.second->ReleaseUploadBuffers();
+		if (obj.second)
+		{
+			obj.second->ReleaseUploadBuffers();
+		}
 	}
+
 	for (auto& obj : m_UIPrototypes)
 	{
-		obj.second->ReleaseUploadBuffers();
+		if (obj.second)
+		{
+			obj.second->ReleaseUploadBuffers();
+		}
+	}
+
+	if (m_pFontResource)
+	{
+		m_pFontResource->ReleaseUploadBuffer();
 	}
 }
 
@@ -389,7 +503,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	LoadAndRegisterSkinnedModelPrototype(
+	/*LoadAndRegisterSkinnedModelPrototype(
 		ModelName::PLAYER_02, 
 		pd3dDevice, 
 		pd3dCommandList, 
@@ -404,7 +518,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Soldier_03_Complete_Reduced_green.bin", SkinnedShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
-	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);*/
 }
 
 void ResourceManager::BuildModelPrototypes(
@@ -547,14 +661,14 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::LOBBY_START_BUTTON,
-		L"UI/Start_BTN.dds"
+		L"UI/Start.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::TABLE_VERTICAL,
-		L"UI/Table_02.dds"
+		L"UI/Table.dds"
 	);
 
 	LoadUIMesh(
@@ -582,105 +696,105 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_FIBER,
-		L"UI/yarn.dds"
+		L"UI/Fiber.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_NEEDLE,
-		L"UI/needle.dds"
+		L"UI/Needle.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_METAL,
-		L"UI/metalbar.dds"
+		L"UI/MetalBar.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_01,
-		L"UI/Icon_Helmet_01.dds"
+		L"UI/Helmet01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_02,
-		L"UI/Icon_Helmet_02.dds"
+		L"UI/Helmet02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_03,
-		L"UI/Icon_Helmet_03.dds"
+		L"UI/Helmet03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_HELMET_04,
-		L"UI/Icon_Helmet_04.dds"
+		L"UI/Helmet04.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_01,
-		L"UI/Icon_Body_01.dds"
+		L"UI/Body01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_02,
-		L"UI/Icon_Body_02.dds"
+		L"UI/Body02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_03,
-		L"UI/Icon_Body_03.dds"
+		L"UI/Body03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_BODY_04,
-		L"UI/Icon_Body_04.dds"
+		L"UI/Body04.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_01,
-		L"UI/Icon_Shoes_01.dds"
+		L"UI/Shoes01.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_02,
-		L"UI/Icon_Shoes_02.dds"
+		L"UI/Shoes02.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_03,
-		L"UI/Icon_Shoes_03.dds"
+		L"UI/Shoes03.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::ICON_SHOES_04,
-		L"UI/Icon_Shoes_04.dds"
+		L"UI/Shoes04.dds"
 	);
 
 	//status
@@ -688,14 +802,14 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_BAR,
-		L"UI/Health_Bar_Table.dds"
+		L"UI/HealthBar.dds"
 	);
 
 	LoadUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::STATUS_HEALTH_DOT,
-		L"UI/Health_Dot.dds"
+		L"UI/HealthDot.dds"
 	);
 	LoadUIMesh(
 		pd3dDevice,
@@ -743,7 +857,7 @@ void ResourceManager::BuildUIMesh(
 		pd3dDevice,
 		pd3dCommandList,
 		UIName::UI_WAIT,
-		L"UI/wait.dds"
+		L"UI/Waiting.dds"
 	);
 
 	LoadUIMesh(
@@ -774,6 +888,80 @@ void ResourceManager::BuildUIMesh(
 		L"UI/key.dds"
 	);
 
+}
+
+bool ResourceManager::BuildFontResource(
+	ID3D12Device* pd3dDevice,
+	ID3D12GraphicsCommandList* pd3dCommandList,
+	const wchar_t* pAtlasFilePath,
+	const wchar_t* pMetadataFilePath)
+{
+	if (!pd3dDevice || !pd3dCommandList)
+	{
+		OutputDebugStringW(L"[ResourceManager] Font build failed. Device or command list is null.\n");
+		return false;
+	}
+
+	if (!pAtlasFilePath || !pMetadataFilePath)
+	{
+		OutputDebugStringW(L"[ResourceManager] Font build failed. File path is null.\n");
+		return false;
+	}
+
+	if (m_pFontResource && m_pFontResource->IsLoaded())
+	{
+		OutputDebugStringW(L"[ResourceManager] Font resource is already loaded.\n");
+		return true;
+	}
+
+	auto pNewFontResource = make_unique<FontResource>();
+
+	if (!pNewFontResource->Load(
+		pd3dDevice,
+		pd3dCommandList,
+		pAtlasFilePath,
+		pMetadataFilePath))
+	{
+		OutputDebugStringW(L"[ResourceManager] Font resource load failed.\n");
+		return false;
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dCpuDescriptorHandle{};
+	D3D12_GPU_DESCRIPTOR_HANDLE d3dGpuDescriptorHandle{};
+
+	if (!AllocateNextSrvDescriptor(
+		d3dCpuDescriptorHandle,
+		d3dGpuDescriptorHandle))
+	{
+		OutputDebugStringW(L"[ResourceManager] Font SRV descriptor allocation failed.\n");
+		return false;
+	}
+
+	if (!pNewFontResource->CreateShaderResourceView(
+		pd3dDevice,
+		d3dCpuDescriptorHandle,
+		d3dGpuDescriptorHandle))
+	{
+		m_d3dSrvCPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
+		m_d3dSrvGPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
+
+		OutputDebugStringW(L"[ResourceManager] Font SRV creation failed.\n");
+		return false;
+	}
+
+	m_pFontResource = move(pNewFontResource);
+
+	wchar_t debugText[256];
+	swprintf_s(
+		debugText,
+		L"[ResourceManager] Font resource ready. Glyphs=%zu, Atlas=%dx%d\n",
+		m_pFontResource->GetGlyphCount(),
+		m_pFontResource->GetAtlasWidth(),
+		m_pFontResource->GetAtlasHeight()
+	);
+	OutputDebugStringW(debugText);
+
+	return true;
 }
 
 CGameObject* ResourceManager::GetModelInstance(ModelName key) const

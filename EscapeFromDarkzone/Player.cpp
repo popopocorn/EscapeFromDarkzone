@@ -339,11 +339,11 @@ void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineSt
 	}
 }
 
-void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
+void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state, bool bForce)
 {
 	if (!new_state) return;
 
-	if (state && typeid(*state) == typeid(*new_state))
+	if (!bForce && state && typeid(*state) == typeid(*new_state))
 		return;
 
 	if (state)
@@ -355,19 +355,16 @@ void CPlayer::ChangeState(std::unique_ptr<State<CPlayer>> new_state)
 	if (NetworkManager::Instance().IsConnected())
 	{
 		char reportState = -1;
-		if (typeid(*state) == typeid(PlayerIdle))    reportState = PLAYER_STATE_IDLE;
-		else if (typeid(*state) == typeid(PlayerRun))     reportState = PLAYER_STATE_RUN;
-		else if (typeid(*state) == typeid(PlayerShoot))   reportState = PLAYER_STATE_SHOOT;
-		else if (typeid(*state) == typeid(PlayerReload))  reportState = PLAYER_STATE_RELOAD;
+
+		if (typeid(*state) == typeid(PlayerIdle)) reportState = PLAYER_STATE_IDLE;
+		else if (typeid(*state) == typeid(PlayerRun)) reportState = PLAYER_STATE_RUN;
+		else if (typeid(*state) == typeid(PlayerShoot)) reportState = PLAYER_STATE_SHOOT;
+		else if (typeid(*state) == typeid(PlayerReload)) reportState = PLAYER_STATE_RELOAD;
 		else if (typeid(*state) == typeid(PlayerGrenade)) reportState = PLAYER_STATE_GRENADE;
-		else if (typeid(*state) == typeid(PlayerDie))     reportState = PLAYER_STATE_DIE;
+		else if (typeid(*state) == typeid(PlayerDie)) reportState = PLAYER_STATE_DIE;
 
 		if (reportState >= 0)
 		{
-			CS_PLAYER_STATE_CHANGE_PACKET p;
-			p.size = sizeof(p);
-			p.type = CS_PLAYER_STATE_CHANGE;
-			p.state = reportState;
 			NetSession::Instance().ChangeState(reportState);
 		}
 	}
@@ -1684,6 +1681,148 @@ void CPlayer::SetHP(short hp)
 	}
 }
 
+void CPlayer::ResetForNewRound(short fullHp)
+{
+	// 생존 상태와 체력 초기화
+	m_bIsDead = false;
+	m_hp = (fullHp > 0) ? fullHp : 100;
+
+	// 이동 및 충돌 상태 초기화
+	m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	CollVector.clear();
+	m_bWasMoving = false;
+
+	// 이전 라운드 입력 이벤트 제거
+	while (!event_queue.empty())
+	{
+		event_queue.pop();
+	}
+
+	// 새 서버 위치가 오기 전까지 이전 위치로 끌려가지 않게 보간 목표를 현재 위치로 맞춤
+	m_xmf3ServerPosition = m_xmf3Position;
+
+	// 사격 및 재장전 상태 초기화
+	m_bReloading = false;
+	m_fReloadElapsed = 0.0f;
+	m_fReloadDuration = 0.0f;
+	m_fFireCooldown = 0.0f;
+	m_bFireHeld = false;
+	m_bShotAnimRequest = false;
+
+	// 무기 포즈 및 블렌딩 초기화
+	m_eWeaponPose = WEAPON_POSE::IDLE;
+	m_bWeaponBlending = false;
+	m_fWeaponBlendTime = 0.0f;
+	m_bWeaponGrenadeStartCaptured = false;
+	m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
+	m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
+
+	// 플레이어 방향 초기화
+	m_xmf3Right = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	m_xmf3Up = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	m_xmf3Look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+	m_fPitch = 0.0f;
+	m_fYaw = 0.0f;
+	m_fRoll = 0.0f;
+
+	// 수류탄, 사격, 재장전, 사망 상태를 종료하고 Idle로 강제 복구
+	ChangeState(std::make_unique<PlayerIdle>(), true);
+
+	// 소유 중인 모든 무기의 탄창을 최대치로 초기화
+	for (auto& weaponPair : PlayerOwnWeapons)
+	{
+		WeaponItem* pWeaponItem = weaponPair.second.get();
+
+		if (!pWeaponItem)
+			continue;
+
+		pWeaponItem->CurAmmo = pWeaponItem->maxAmmo;
+	}
+
+	// 기본 권총으로 다시 장착
+	DetachCurrentWeapon();
+	m_pEquippedWeaponItem = nullptr;
+
+	if (!EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand"))
+	{
+		OutputDebugString(L"[RoundReset] 기본 권총 장착 실패\n");
+	}
+
+	// 플레이어 본과 무기 IK 프레임 재탐색
+	m_pLeftUpperArm = nullptr;
+	m_pLeftForeArm = nullptr;
+	m_pLeftHand = nullptr;
+	m_pLeftHandGrip = nullptr;
+	m_pWeaponMuzzleSocket = nullptr;
+
+	InitializeLeftHandIK();
+
+	if (m_pWeapon)
+	{
+		m_pLeftHandGrip = m_pWeapon->FindFrame("LeftHandGrip");
+		m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
+	}
+
+	// 무기 로컬 행렬과 포즈 복구
+	ApplyWeaponPose(WEAPON_POSE::IDLE);
+
+	if (m_pWeapon && m_pWeaponSocket)
+	{
+		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	}
+
+	// 사망 애니메이션을 완전히 제거하고 권총 Idle 애니메이션으로 복구
+	CAnimationController* pCtrl = GetAnimationController();
+
+	if (pCtrl)
+	{
+		int idleAnimation = GetIdleAnimationByWeapon();
+
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+
+		pCtrl->SetTrackAnimationSetIfChanged(0, idleAnimation);
+		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnimation);
+
+		pCtrl->SetTrackPosition(0, 0.0f);
+		pCtrl->SetTrackPosition(1, 0.0f);
+
+		pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
+
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackEnable(1, true);
+
+		pCtrl->SetTrackWeight(0, 1.0f);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	// 카메라 거리와 회전 초기화
+	cameraDistance = 15.0f;
+
+	if (m_pCamera)
+	{
+		m_pCamera->GetPitch() = 0.0f;
+		m_pCamera->GetYaw() = 0.0f;
+		m_pCamera->GetRoll() = 0.0f;
+
+		m_pCamera->GetRightVector() = XMFLOAT3(1.0f, 0.0f, 0.0f);
+		m_pCamera->GetUpVector() = XMFLOAT3(0.0f, 1.0f, 0.0f);
+		m_pCamera->GetLookVector() = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+		m_pCamera->SetOffset(XMFLOAT3(0.0f, cameraDistance, -5.0f));
+		m_pCamera->SetPosition(Vector3::Add(m_xmf3Position, m_pCamera->GetOffset()));
+		m_pCamera->Update(m_xmf3Position, 0.0f);
+		m_pCamera->RegenerateViewMatrix();
+	}
+
+	OnPrepareRender();
+	UpdateTransform(NULL);
+
+	OutputDebugString(L"[RoundReset] CPlayer 초기화 완료\n");
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 void CPlayerAnimationController::OnAnimationIK(CGameObject* pRootGameObject)

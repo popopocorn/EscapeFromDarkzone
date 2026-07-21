@@ -6,7 +6,7 @@
 #include "Object.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
-
+#include "TextRenderer.h"
 
 InventoryManager::~InventoryManager()
 {
@@ -41,8 +41,13 @@ void InventoryManager::Initialize(
 	m_pLootInventory->isOpen = false;
 	m_pCraftInventory->isOpen = false;
 
+	m_pLootInventory->SetId(-1);
+	m_pCraftInventory->SetId(-1);
+
 	m_pOpenedLoot = nullptr;
+
 	m_bTabInventoryHold = false;
+	m_bTabOpenedInventory = false;
 
 	m_pPlayer = nullptr;
 	m_pLootShader = nullptr;
@@ -53,7 +58,9 @@ void InventoryManager::Initialize(
 void InventoryManager::Release()
 {
 	m_pOpenedLoot = nullptr;
+
 	m_bTabInventoryHold = false;
+	m_bTabOpenedInventory = false;
 
 	m_vLootContainers.clear();
 
@@ -201,6 +208,29 @@ void InventoryManager::SubmitToShader(UIObjectShader* shader)
 		m_pCraftInventory->SubmitToShader(shader);
 }
 
+void InventoryManager::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+
+	if (pPlayerInventory)
+	{
+		pPlayerInventory->SubmitText(renderer);
+	}
+
+	if (m_pLootInventory)
+	{
+		m_pLootInventory->SubmitText(renderer);
+	}
+
+	if (m_pCraftInventory)
+	{
+		m_pCraftInventory->SubmitText(renderer);
+	}
+}
+
 bool InventoryManager::ProcessClick(POINT mouse)
 {
 	if (m_pLootInventory && m_pLootInventory->isOpen)
@@ -264,7 +294,9 @@ void InventoryManager::CloseLootInventory()
 	{
 		m_pLootInventory->isOpen = false;
 		m_pLootInventory->ClearItems();
+		m_pLootInventory->SetId(-1);
 	}
+
 	m_pOpenedLoot = nullptr;
 }
 
@@ -280,6 +312,7 @@ void InventoryManager::CloseCraftInventory()
 	{
 		m_pCraftInventory->isOpen = false;
 		m_pCraftInventory->ClearItems();
+		m_pCraftInventory->SetId(-1);
 	}
 }
 
@@ -443,6 +476,50 @@ void InventoryManager::CloseAll()
 
 	m_bTabInventoryHold = false;
 	m_bTabOpenedInventory = false;
+}
+
+void InventoryManager::ResetForNewRound()
+{
+	// 모든 인벤토리 창과 Tab 입력 상태 초기화
+	CloseAll();
+
+	// 플레이어 인벤토리 초기화
+	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
+
+	if (pPlayerInventory)
+	{
+		pPlayerInventory->ClearItems();
+		pPlayerInventory->isOpen = false;
+		pPlayerInventory->SetId(-1);
+	}
+
+	// 루팅 인벤토리 초기화
+	if (m_pLootInventory)
+	{
+		m_pLootInventory->ClearItems();
+		m_pLootInventory->isOpen = false;
+		m_pLootInventory->SetId(-1);
+	}
+
+	// 제작 인벤토리 초기화
+	if (m_pCraftInventory)
+	{
+		m_pCraftInventory->ClearItems();
+		m_pCraftInventory->isOpen = false;
+		m_pCraftInventory->SetId(-1);
+	}
+
+	// 이전 라운드에 열어 두었던 루팅 박스 참조 제거
+	m_pOpenedLoot = nullptr;
+
+	// 이전 라운드 월드에 남아 있는 모든 루팅 박스 제거
+	m_vLootContainers.clear();
+
+	// Tab 키 입력 상태 초기화
+	m_bTabInventoryHold = false;
+	m_bTabOpenedInventory = false;
+
+	OutputDebugString(L"[RoundReset] InventoryManager 초기화 완료\n");
 }
 
 bool InventoryManager::IsAnyInventoryOpen() const

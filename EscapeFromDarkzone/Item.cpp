@@ -159,8 +159,13 @@ std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pP
 
 Equip::Equip()
 {
-	helmet = ArmorItem(ItemType::ARMOR_HELMET, ItemID::ARMOR_HELMET_01);
-	body = ArmorItem(ItemType::ARMOR_BODY, ItemID::ARMOR_BODY_01);
-	shoes = ArmorItem(ItemType::ARMOR_SHOES, ItemID::ARMOR_SHOES_01);
-	plate = Plate(ItemType::PLATE, ItemID::ARMOR_PLATE);
+	ResetForNewRound();
+}
+
+void Equip::ResetForNewRound()
+{
+	helmet = ArmorItem(ItemType::ARMOR_HELMET, ItemID::NONE);
+	body = ArmorItem(ItemType::ARMOR_BODY, ItemID::NONE);
+	shoes = ArmorItem(ItemType::ARMOR_SHOES, ItemID::NONE);
+	plate = Plate(ItemType::PLATE, ItemID::NONE);
 }

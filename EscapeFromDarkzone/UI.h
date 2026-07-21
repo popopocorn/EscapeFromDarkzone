@@ -1,7 +1,9 @@
 #pragma once
 #include "Object.h"
-#include"Item.h"
+#include "Item.h"
+#include "UIText.h"
 
+class TextRenderer;
 
 class UIMesh {
 private:
@@ -74,6 +76,10 @@ class Inventory {
 private:
 	std::array<ItemSlot, MAX_SLOTS> slots;
 	std::array<ItemSlotView, MAX_SLOTS> slotViews;
+
+	std::array<std::unique_ptr<UIText>, MAX_SLOTS> m_nameTexts;
+	std::array<std::unique_ptr<UIText>, MAX_SLOTS> m_countTexts;
+
 	CheckBox box;
 
 	float m_baseX = 0.0f;
@@ -86,21 +92,30 @@ private:
 	float m_textRatio = 0.60f;
 	float m_countRatio = 0.20f;
 
-	int ID;		// 이 친구를 써서 인벤토리가 플레이어 것인지 루트박스 것인지 구분하도록 만들기 (-1이면 플레이어, 0 이상이면 npc_id 루트박스)
+	int ID;
 
-	UIMesh* m_pSharedMesh; // UI 공용 메쉬
-	UIMesh* m_pSharedMiddleMesh; // UI 공용 메쉬
+	UIMesh* m_pSharedMesh;
+	UIMesh* m_pSharedMiddleMesh;
 
 private:
-	void BuildSlotViews();  // 3칸 UI 생성
-	void LayoutSlotViews(); // 3칸 위치 배치
+	void BuildSlotViews();
+	void BuildNameTexts();
+	void BuildCountTexts();
+	void LayoutSlotViews();
 
+	void UpdateSlotNameText(int slotIndex);
+	void UpdateSlotCountText(int slotIndex);
+	void UpdateSlotTexts(int slotIndex);
+
+	static XMFLOAT2 ConvertNdcToPixel(float ndcX, float ndcY);
 public:
 	Inventory(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* pShader);
 
 	void SubmitToShader(UIObjectShader* shader);
+	void SubmitText(TextRenderer* renderer);
+
 	void SlotClicked(int slotidx);
 	bool ProcessClick(POINT mouse);
 	//드래그 앤 드롭 처리 함수 추가
@@ -126,7 +141,7 @@ public:
 	virtual void ToggleOpen() { isOpen = !isOpen; }
 	virtual void Update(float fTimeElapsed) {};
 };
-class EquipUI :public UIPanel{
+class EquipUI :public UIPanel {
 private:
 	Equip* player;
 	ItemID		helmet = ItemID::NONE;
@@ -140,9 +155,10 @@ public:
 	EquipUI(CPlayer* player);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void EquipItem(ItemID item);
+	void ResetForNewRound();
 	bool ProcessClick(POINT mouse);
 	void SubmitToShader(UIObjectShader* shader);
-	
+
 };
 enum StatusType {
 	HP_BASE,
@@ -158,10 +174,14 @@ public:
 	PlayerStatus(CPlayer* p);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual bool ProcessClick(POINT mouse);
+
 	void StartEscape() { Escape = true; EscapeTime = 0; }
 	void ResetEscape() { Escape = false; EscapeTime = 0; }
+	void ResetForNewRound(short fullHp = 100);
+
 	virtual void SubmitToShader(UIObjectShader* shader);
 	virtual void Update(float fTimeElapsed);
+
 private:
 	CPlayer* player;
 	short hp;
@@ -177,23 +197,56 @@ private:
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;
 	vector<unique_ptr<UIObject>>Bullets;
 	vector<unique_ptr<UIObject>>ProgressBar;
+
 public:
 	virtual void ToggleOpen() {};
 };
-
 class UIObjectShader;
 
-class HUDManager {
+class HUDManager
+{
 private:
 	vector<unique_ptr<UIObject>> objs;
 	vector<unique_ptr<UIPanel>> panels;
+	vector<unique_ptr<UIText>> texts;
+
 public:
-	void CloseUI(int idx);
 	bool ProcessClick(POINT mouse);
+
 	void SubmitToShader(UIObjectShader* shader);
+	void SubmitText(TextRenderer* renderer);
+
 	void Release();
 	void Update(float fTimeElapsed);
-	void AddToManager(UIObject* obj) { objs.push_back(unique_ptr<UIObject>(obj)); }
-	void AddToManager(UIPanel* obj) { panels.push_back(unique_ptr<UIPanel>(obj)); }
-	vector<unique_ptr<UIPanel>>* GetPanels() { return &panels; }
+	void CloseUI(int idx);
+
+	void AddToManager(UIObject* obj)
+	{
+		if (!obj)
+			return;
+
+		objs.push_back(unique_ptr<UIObject>(obj));
+	}
+
+	void AddToManager(UIPanel* obj)
+	{
+		if (!obj)
+			return;
+
+		panels.push_back(unique_ptr<UIPanel>(obj));
+	}
+
+	UIText* AddText(unique_ptr<UIText> text);
+	void RemoveText(UIText* text);
+	void ClearTexts();
+
+	vector<unique_ptr<UIPanel>>* GetPanels()
+	{
+		return &panels;
+	}
+
+	size_t GetTextCount() const
+	{
+		return texts.size();
+	}
 };

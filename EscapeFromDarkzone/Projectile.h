@@ -24,7 +24,8 @@ public:
 	void Activate(XMFLOAT3 s, XMFLOAT3 dir, float speed, float dist);
 	void Activate(XMFLOAT3 s, XMFLOAT3 dir, float speed, float dist, const DecalInfo& info);
 	virtual void Animate(float fTimeElapsed);
-	bool IsActive() { return active; }
+	bool IsActive() const { return active; }
+	void Deactivate();
 };
 
 class CShader;
@@ -39,6 +40,8 @@ private:
 	CShader* shader=NULL;
 public:
 	void Init(CShader* s);
+	void ResetForNewRound();
+
 	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 dir, float dist);
 	void SpawnProjectile(ProjectileType type, XMFLOAT3 s, XMFLOAT3 dir, float dist, const DecalInfo& info);
 	void Update(float fTimeElapsed);

@@ -136,7 +136,7 @@ protected:
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
 	//현재 장착 중인 무기 데이터
-	WeaponItem* m_pEquippedWeaponItem;
+	WeaponItem* m_pEquippedWeaponItem = nullptr;
 	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
 
@@ -214,7 +214,7 @@ public:
 
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
-	void ChangeState(std::unique_ptr<State<CPlayer>> new_state);
+	void ChangeState(std::unique_ptr<State<CPlayer>> new_state, bool bForce = false);
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
 
 	virtual void HandleCollision(const ColResult& normal);
@@ -313,6 +313,8 @@ public:
 
 	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
+
+	void ResetForNewRound(short fullHp = 100);
 
 	void SetHP(short hp);
 	short GetHP() const { return m_hp; }

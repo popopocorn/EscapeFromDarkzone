@@ -10,6 +10,8 @@
 #include "ShaderManager.h"
 #include "SoundManager.h"
 
+#include "NetSession.h"			// 임시 코드, 라운드 시작 패킷 전송 위치 확정되면 그 때 수정 및 제거 필요
+
 static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
 {
 	if (Vector3::Length(v) < 0.0001f)
@@ -76,6 +78,10 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	{
 		if (!gf.m_pNetEntityMgr) break;
 		gf.m_pNetEntityMgr->OnLoginInfo(reinterpret_cast<SC_LOGIN_INFO_PACKET*>(packet.data()));
+
+		// 임시 코드, 라운드 시작 패킷 전송 위치 확정되면 그 때 수정 및 제거 필요
+		NetSession::Instance().RoundJoin();
+
 		break;
 	}
 	case SC_ADD_PLAYER:
@@ -132,13 +138,15 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_ROUND_START:
 	{
-		// 라운드 시작 수신. 이 패킷이 온 시점에 서버는 이미 이동 가드를 풀었음.
-		// 클라는 이거 받고 나서부터 시작. (약간 수정 필요)
 		OutputDebugString(L"[ROUND] SC_ROUND_START received\n");
-		// TODO: 대기 화면 해제 / 입력 활성화 등 뭔가 UI를 붙이기
+
+		if (gf.m_pNetEntityMgr) {
+			gf.m_pNetEntityMgr->OnRoundStart(reinterpret_cast<SC_ROUND_START_PACKET*>(packet.data()));
+		}
 
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
 		if (not pMainScene)break;
+		pMainScene->ResetForNewRound(100);
 		pMainScene->StartGame();
 		break;
 	}
@@ -180,7 +188,26 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	case SC_GAME_OVER:
 	{
 		// 라운드 제한 시간 초과 (추후 패킷 확장 필요시 확장해서 사용할 것)
+		if (gf.m_pPlayer)
+		{
+			gf.m_pPlayer->SetHP(0);
+		}
 		OutputDebugString(L"[ROUND] SC_GAME_OVER received\n");
+		break;
+	}
+	case SC_ROUND_RESET:
+	{
+		OutputDebugString(L"[ROUND] SC_ROUND_RESET received -> back to lobby\n");
+
+		if (gf.m_pNetEntityMgr) {
+			gf.m_pNetEntityMgr->OnRoundReset();
+		}
+		// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함. 
+		// 아니면 위 OnRoundReset() 함수에서 처리
+
+		// 테스트 용도로 자동 재참가 기능 추가
+		// 나중에 다시 하기 버튼같은 걸 붙이면 좋을 듯. 
+		//NetSession::Instance().RoundJoin();		// 주석처리함. 사망했을 때랑 동일하게 로비로 내보내고 재진입하도록 바꿀 것. 
 		break;
 	}
 	case SC_ADD_NPC:

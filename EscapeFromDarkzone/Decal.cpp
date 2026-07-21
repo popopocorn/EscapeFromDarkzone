@@ -148,6 +148,23 @@ void Decal::Animate(float fTimeElapsed)
 	}
 }
 
+void Decal::Deactivate()
+{
+	active = false;
+
+	lifeTime = 20.0f;
+	elapsed = 0.0f;
+	size = 0.28f;
+
+	type = DecalType::BULLET;
+
+	position = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	normal = XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+	m_xmf4x4ToParent = Matrix4x4::Identity();
+	UpdateTransform(NULL);
+}
+
 BoundingOrientedBox* DecalManager::FindBestHitOOBB(CGameObject* pHitObject, const XMFLOAT3& hitPos)
 {
 	if (!pHitObject)
@@ -277,7 +294,26 @@ void DecalManager::Init(CShader* s)
 			bloodDecals[i]->Deactivate();
 
 		}
+
 	}
+}
+
+void DecalManager::ResetForNewRound()
+{
+	for (auto& decal : bulletDecals)
+	{
+		decal.Deactivate();
+	}
+
+	for (auto& decal : bloodDecals)
+	{
+		decal.Deactivate();
+	}
+
+	lastBulletUse = 0;
+	lastBloodUse = 0;
+
+	OutputDebugString(L"[RoundReset] DecalManager 초기화 완료\n");
 }
 
 void DecalManager::SpawnBulletDecal(XMFLOAT3 pos, XMFLOAT3 normal)

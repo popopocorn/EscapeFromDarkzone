@@ -33,4 +33,6 @@ public:
 	bool GrenadeExplode(const DirectX::XMFLOAT3& pos);
 	bool InventoryClick(char action, short slotidx);
 	bool LootPickup(short box_id, short slotidx);
+	bool RoundJoin();
+	bool RoundLeave();
 };

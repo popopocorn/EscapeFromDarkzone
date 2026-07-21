@@ -88,7 +88,7 @@ public:
 
 	virtual void BuildDefaultLightsAndMaterials();
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) {};
-	void ReleaseObjects() {};
+	virtual void ReleaseObjects() {};
 
 	void SetRoot(ID3D12RootSignature* root) { m_pd3dGraphicsRootSignature = root; }
 
@@ -140,7 +140,16 @@ public:
 	
 
 	unique_ptr<UIObjectShader>			UIShader;
-private:
+
+	HUDManager* GetUIManager()
+	{
+		return uiManager.get();
+	}
+
+	const HUDManager* GetUIManager() const
+	{
+		return uiManager.get();
+	}
 	
 public:
 	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }
@@ -294,8 +303,18 @@ public:
 	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
 	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
 
-	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }		// private에서 public으로 옮김 (05.16)
-	void ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind = 0, XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f)); 
+	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
+
+	void ProcessFireRequest(
+		ItemType weapon,
+		XMFLOAT3 start,
+		XMFLOAT3 direction,
+		float distance,
+		unsigned char hitKind = 0,
+		XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f)
+	);
+
+	void ResetForNewRound(short fullHp = 100);
 	void StartGame();
 };
 

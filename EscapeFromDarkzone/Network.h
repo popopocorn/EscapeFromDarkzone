@@ -62,4 +62,7 @@ public:
 
     bool SendLootPickup(short box_id, short slotidx);
     bool SendCraftRequest(ItemID target);
+
+    bool SendRoundJoin();
+    bool SendRoundLeave();
 };
