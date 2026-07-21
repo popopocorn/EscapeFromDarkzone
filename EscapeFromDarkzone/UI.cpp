@@ -1027,7 +1027,6 @@ PlayerStatus::PlayerStatus(CPlayer* p)
 	hp = p->GetHP();
 	isOpen = true;
 }
-
 void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	Rifle = ResourceManager::Instance().GetUIMesh(UIName::STATUS_RIFLE_BULLET);
@@ -1035,44 +1034,65 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	Shotgun = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SHOTGUN_BULLET);
 	Pistol = ResourceManager::Instance().GetUIMesh(UIName::STATUS_PISTOL_BULLET);
 	bullet = ResourceManager::Instance().GetUIMesh(UIName::STATUS_BULLET_DOT);
-	curammo = player->GetCurrentAmmo();
+
+	curammo = player ? player->GetCurrentAmmo() : 0;
 
 	UIs[HP_BASE] = make_unique<UIObject>();
-	UIs[HP_BASE]->SetScale(0.4, 0.07, 1);
-	UIs[HP_BASE]->SetLocate(0.0, -0.9, 0.5);
+	UIs[HP_BASE]->SetScale(0.4f, 0.07f, 1.0f);
+	UIs[HP_BASE]->SetLocate(0.0f, -0.9f, 0.5f);
 	UIs[HP_BASE]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_BAR));
 
+	constexpr float HEALTH_TEXTURE_VISIBLE_RATIO_X = 484.0f / 1086.0f;
+	constexpr float HEALTH_BAR_FULL_WIDTH = 0.4f;
+	constexpr float HEALTH_DOT_VISIBLE_WIDTH = HEALTH_BAR_FULL_WIDTH * 0.97f;
+	constexpr float HEALTH_MAIN_FULL_SCALE_X = HEALTH_DOT_VISIBLE_WIDTH / HEALTH_TEXTURE_VISIBLE_RATIO_X;
+
+	constexpr float HEALTH_TEXTURE_VISIBLE_CENTER_X = ((294.0f + 778.0f) * 0.5f) / 1086.0f;
+	constexpr float HEALTH_MAIN_CENTER_OFFSET_X =
+		-HEALTH_MAIN_FULL_SCALE_X * (HEALTH_TEXTURE_VISIBLE_CENTER_X - 0.5f);
+
 	UIs[HP_MAIN] = make_unique<UIObject>();
-	UIs[HP_MAIN]->SetScale(0.33, 0.06, 1);
-	UIs[HP_MAIN]->SetLocate(-0.029, -0.9, 0.5);
+	UIs[HP_MAIN]->SetScale(HEALTH_MAIN_FULL_SCALE_X, 0.025f, 1.0f);
+	UIs[HP_MAIN]->SetLocate(HEALTH_MAIN_CENTER_OFFSET_X, -0.9f, 0.5f);
 	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
 
 	UIs[MAG_BASE] = make_unique<UIObject>();
-	XMFLOAT3 r = CalcPixelByRatio(1.0);
-	float wr = 0.15;
-	UIs[MAG_BASE]->SetScale(r.x * wr, r.y * wr, 1);
-	UIs[MAG_BASE]->SetLocate(0.25, -0.9, 0.5);
+	XMFLOAT3 r = CalcPixelByRatio(1.0f);
+	float wr = 0.15f;
+	UIs[MAG_BASE]->SetScale(r.x * wr, r.y * wr, 1.0f);
+	UIs[MAG_BASE]->SetLocate(0.25f, -0.9f, 0.5f);
 	UIs[MAG_BASE]->SetUIMesh(Rifle);
 
 	XMFLOAT3 br = CalcPixelByRatio(30, 58);
-	float bwr = 0.05;
+	float bwr = 0.05f;
+
+	Bullets.clear();
+	Bullets.reserve(35);
+
 	for (int i = 0; i < 35; ++i)
 	{
 		UIObject* t = new UIObject();
-		t->SetScale(br.x * bwr, br.y * bwr, 1.0);
-		t->SetLocate(0.3 + i * br.x * bwr, -0.9, 0.5);
+		t->SetScale(br.x * bwr, br.y * bwr, 1.0f);
+		t->SetLocate(0.3f + i * br.x * bwr, -0.9f, 0.5f);
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
-	float prb = 0.05;
+
+	float prb = 0.05f;
+
+	ProgressBar.clear();
+	ProgressBar.reserve(10);
+
 	for (int i = 0; i < 10; ++i)
 	{
 		UIObject* t = new UIObject();
-		t->SetScale(br.x * prb, br.y * prb, 1.0);
-		t->SetLocate(i * br.x * prb - 0.1, -0.2, 0.5);
+		t->SetScale(br.x * prb, br.y * prb, 1.0f);
+		t->SetLocate(i * br.x * prb - 0.1f, -0.2f, 0.5f);
 		t->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
 		ProgressBar.push_back(unique_ptr<UIObject>(t));
 	}
+
+	Update(0.0f);
 }
 
 void PlayerStatus::ResetForNewRound(short fullHp)
@@ -1084,12 +1104,6 @@ void PlayerStatus::ResetForNewRound(short fullHp)
 	Escape = false;
 	EscapeTime = 0.0f;
 	isOpen = true;
-
-	if (UIs[HP_MAIN])
-	{
-		UIs[HP_MAIN]->SetScale(0.33f, 0.06f, 1.0f);
-		UIs[HP_MAIN]->SetLocate(-0.029f, -0.9f, 0.5f);
-	}
 
 	Update(0.0f);
 
@@ -1129,7 +1143,6 @@ void PlayerStatus::Update(float fTimeElapsed)
 {
 	if (!player) return;
 
-	// HP 바 갱신
 	hp = player->GetHP();
 
 	if (FullHp <= 0)
@@ -1140,40 +1153,43 @@ void PlayerStatus::Update(float fTimeElapsed)
 	float hpRatio = static_cast<float>(hp) / static_cast<float>(FullHp);
 	hpRatio = std::clamp(hpRatio, 0.0f, 1.0f);
 
-	const float hpFullScaleX = 0.4f;
-	const float hpScaleY = 0.06f;
-	const float hpFullCenterX = 0.0f;
-	const float hpCenterY = -0.9f;
+	constexpr float HEALTH_BAR_FULL_WIDTH = 0.4f;
+	constexpr float HEALTH_BAR_CENTER_X = 0.0f;
+	constexpr float HEALTH_BAR_CENTER_Y = -0.9f;
 
-	// 체력 100일 때 HP 바의 왼쪽 끝
-	const float hpLeftX = hpFullCenterX - hpFullScaleX;
+	constexpr float HEALTH_DOT_VISIBLE_WIDTH = HEALTH_BAR_FULL_WIDTH * 0.83f;
+	constexpr float HEALTH_DOT_LEFT_X = HEALTH_BAR_CENTER_X - HEALTH_DOT_VISIBLE_WIDTH * 0.5f;
 
-	// 현재 체력에 따른 초록색 바 크기
-	const float currentScaleX = hpFullScaleX * hpRatio;
+	constexpr float TEXTURE_WIDTH = 1086.0f;
+	constexpr float VISIBLE_LEFT_PIXEL = 294.0f;
+	constexpr float VISIBLE_RIGHT_PIXEL = 778.0f;
 
-	// 왼쪽 끝은 고정하고 오른쪽 끝만 왼쪽으로 이동
-	const float currentCenterX = hpLeftX + currentScaleX;
+	constexpr float VISIBLE_LEFT_U = VISIBLE_LEFT_PIXEL / TEXTURE_WIDTH;
+	constexpr float VISIBLE_RIGHT_U = VISIBLE_RIGHT_PIXEL / TEXTURE_WIDTH;
+	constexpr float VISIBLE_WIDTH_RATIO = VISIBLE_RIGHT_U - VISIBLE_LEFT_U;
+	constexpr float VISIBLE_CENTER_U = (VISIBLE_LEFT_U + VISIBLE_RIGHT_U) * 0.5f;
+
+	const float visibleWidth = HEALTH_DOT_VISIBLE_WIDTH * hpRatio;
+
+	const float objectScaleX = (hpRatio > 0.0f) ? visibleWidth / VISIBLE_WIDTH_RATIO : 0.0f;
+
+	const float desiredVisibleCenterX = HEALTH_DOT_LEFT_X + visibleWidth * 0.5f;
+
+	const float visibleCenterOffsetInObject = objectScaleX * (VISIBLE_CENTER_U - 0.5f);
+	const float objectCenterX = desiredVisibleCenterX - visibleCenterOffsetInObject;
 
 	auto hpMain = UIs.find(HP_MAIN);
 
 	if (hpMain != UIs.end() && hpMain->second)
 	{
-		hpMain->second->SetScale(currentScaleX, hpScaleY, 1.0f);
-		hpMain->second->SetLocate(currentCenterX, hpCenterY, 0.5f);
+		constexpr float HEALTH_DOT_SCALE_Y = 0.025f;
+
+		hpMain->second->SetScale(objectScaleX, HEALTH_DOT_SCALE_Y, 1.0f);
+		hpMain->second->SetLocate(objectCenterX, HEALTH_BAR_CENTER_Y, 0.5f);
 	}
 
-	// 현재 총알 수
 	curammo = player->GetCurrentAmmo();
-
-	if (curammo < 0)
-	{
-		curammo = 0;
-	}
-
-	if (curammo > static_cast<int>(Bullets.size()))
-	{
-		curammo = static_cast<int>(Bullets.size());
-	}
+	curammo = std::clamp(curammo, 0, static_cast<int>(Bullets.size()));
 
 	// 탈출 진행도
 	if (Escape)
@@ -1181,6 +1197,7 @@ void PlayerStatus::Update(float fTimeElapsed)
 		EscapeTime += fTimeElapsed;
 	}
 }
+
 void HUDManager::SubmitToShader(UIObjectShader* shader)
 {
 	for (const auto& o : objs)

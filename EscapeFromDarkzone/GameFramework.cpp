@@ -493,7 +493,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			}
 			break;
 		//갓 모드
-		case 'P':
+		case 'K':
 			
 			break;
 
