@@ -88,6 +88,9 @@ constexpr char SC_ROUND_RESET = 37;			// 로비로 나갈 때 월드 초기화
 constexpr char CS_ROUND_JOIN = 38;			// 로비에서 라운드로 들어올 때
 constexpr char CS_ROUND_LEAVE = 39;			// 게임오버 후 로비로 나가기 (연결끊기 아님)
 
+// C2S 무적 모드 토글 (디버그용)
+constexpr char CS_TOGGLE_GODMODE = 40;
+
 constexpr char ESCAPE_PROG_START = 0;		// 탈출 진행 시작
 constexpr char ESCAPE_PROG_RESET = 1;		// 영역 내 피격으로 인한 타이머 리셋
 constexpr char ESCAPE_PROG_CANCEL = 2;		// 탈출 지역 이탈, 진행 취소
@@ -402,6 +405,11 @@ struct SC_ESCAPE_PROGRESS_PACKET {
 	unsigned char size;
 	char          type;
 	char          event;			// ESCAPE_PROG_START / RESET / CANCEL
+};
+
+struct CS_TOGGLE_GODMODE_PACKET {
+	unsigned char	size;
+	char			type;
 };
 
 #pragma pack (pop)

@@ -65,4 +65,6 @@ public:
 
     bool SendRoundJoin();
     bool SendRoundLeave();
+
+    bool SendToggleGodmode();       // 디버그용 갓모드
 };

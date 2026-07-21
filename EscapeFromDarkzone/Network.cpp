@@ -391,3 +391,12 @@ bool NetworkManager::SendRoundLeave()
 	pkt.type = CS_ROUND_LEAVE;
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
+
+bool NetworkManager::SendToggleGodmode()
+{
+	CS_TOGGLE_GODMODE_PACKET pkt;
+	ZeroMemory(&pkt, sizeof(pkt));
+	pkt.size = sizeof(CS_TOGGLE_GODMODE_PACKET);
+	pkt.type = CS_TOGGLE_GODMODE;
+	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}

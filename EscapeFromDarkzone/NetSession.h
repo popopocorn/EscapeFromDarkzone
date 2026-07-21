@@ -35,4 +35,6 @@ public:
 	bool LootPickup(short box_id, short slotidx);
 	bool RoundJoin();
 	bool RoundLeave();
+
+	bool ToggleGodmode();				// 디버그용 갓모드
 };

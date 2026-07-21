@@ -4,6 +4,7 @@
 
 #include "NetPacketDispatcher.h"
 #include "NetEntityManager.h"
+#include "NetSession.h"
 
 #include "stdafx.h"
 #include "InputManager.h"
@@ -494,7 +495,11 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 		//갓 모드
 		case 'K':
-			
+		{
+			if (NetworkManager::Instance().IsConnected()) {
+				NetSession::Instance().ToggleGodmode();					// 디버그용 갓모드 요청
+			}
+		}
 			break;
 
 		default:

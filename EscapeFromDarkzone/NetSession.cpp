@@ -64,3 +64,8 @@ bool NetSession::RoundLeave()
 { 
 	return NetworkManager::Instance().SendRoundLeave(); 
 }
+
+bool NetSession::ToggleGodmode()
+{
+	return NetworkManager::Instance().SendToggleGodmode();
+}
