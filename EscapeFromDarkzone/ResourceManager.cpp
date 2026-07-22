@@ -295,15 +295,35 @@ void ResourceManager::ReleaseUploadBuffers()
 
 void ResourceManager::ReleaseResources()
 {
+	m_pFontResource.reset();
+
 	m_ModelPrototypes.clear();
-
 	m_SkinnedModelPrototypes.clear();
-
 	m_AnimationSetOwners.clear();
-
 	m_UIPrototypes.clear();
-
 	textureMap.clear();
+
+	if (m_pd3dCbvSrvDescriptorHeap)
+	{
+		m_pd3dCbvSrvDescriptorHeap->Release();
+		m_pd3dCbvSrvDescriptorHeap = nullptr;
+	}
+
+	m_nSrvDescriptorCapacity = 0;
+
+	m_d3dCbvCPUDescriptorStartHandle = {};
+	m_d3dCbvGPUDescriptorStartHandle = {};
+	m_d3dSrvCPUDescriptorStartHandle = {};
+	m_d3dSrvGPUDescriptorStartHandle = {};
+
+	m_d3dCbvCPUDescriptorNextHandle = {};
+	m_d3dCbvGPUDescriptorNextHandle = {};
+	m_d3dSrvCPUDescriptorNextHandle = {};
+	m_d3dSrvGPUDescriptorNextHandle = {};
+
+	OutputDebugStringW(
+		L"[ResourceManager] All resources released.\n"
+	);
 }
 
 bool ResourceManager::LoadAndRegisterModelPrototype(
@@ -892,37 +912,44 @@ void ResourceManager::BuildUIMesh(
 
 bool ResourceManager::BuildFontResource(
 	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	const wchar_t* pAtlasFilePath,
-	const wchar_t* pMetadataFilePath)
+	ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	if (!pd3dDevice || !pd3dCommandList)
 	{
-		OutputDebugStringW(L"[ResourceManager] Font build failed. Device or command list is null.\n");
-		return false;
-	}
+		OutputDebugStringW(
+			L"[ResourceManager] Font build failed. Device or command list is null.\n"
+		);
 
-	if (!pAtlasFilePath || !pMetadataFilePath)
-	{
-		OutputDebugStringW(L"[ResourceManager] Font build failed. File path is null.\n");
 		return false;
 	}
 
 	if (m_pFontResource && m_pFontResource->IsLoaded())
 	{
-		OutputDebugStringW(L"[ResourceManager] Font resource is already loaded.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font resource is already loaded.\n"
+		);
+
 		return true;
 	}
 
-	auto pNewFontResource = make_unique<FontResource>();
+	static constexpr const wchar_t* FONT_ATLAS_FILE_PATH =
+		L"Model/Fonts/KoreanFontAtlas_4096.png";
+
+	static constexpr const wchar_t* FONT_METADATA_FILE_PATH =
+		L"Model/Fonts/KoreanFontAtlas_4096.json";
+
+	auto pNewFontResource = std::make_unique<FontResource>();
 
 	if (!pNewFontResource->Load(
 		pd3dDevice,
 		pd3dCommandList,
-		pAtlasFilePath,
-		pMetadataFilePath))
+		FONT_ATLAS_FILE_PATH,
+		FONT_METADATA_FILE_PATH))
 	{
-		OutputDebugStringW(L"[ResourceManager] Font resource load failed.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font resource load failed.\n"
+		);
+
 		return false;
 	}
 
@@ -933,7 +960,10 @@ bool ResourceManager::BuildFontResource(
 		d3dCpuDescriptorHandle,
 		d3dGpuDescriptorHandle))
 	{
-		OutputDebugStringW(L"[ResourceManager] Font SRV descriptor allocation failed.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font SRV descriptor allocation failed.\n"
+		);
+
 		return false;
 	}
 
@@ -942,16 +972,23 @@ bool ResourceManager::BuildFontResource(
 		d3dCpuDescriptorHandle,
 		d3dGpuDescriptorHandle))
 	{
-		m_d3dSrvCPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
-		m_d3dSrvGPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
+		m_d3dSrvCPUDescriptorNextHandle.ptr -=
+			::gnCbvSrvDescriptorIncrementSize;
 
-		OutputDebugStringW(L"[ResourceManager] Font SRV creation failed.\n");
+		m_d3dSrvGPUDescriptorNextHandle.ptr -=
+			::gnCbvSrvDescriptorIncrementSize;
+
+		OutputDebugStringW(
+			L"[ResourceManager] Font SRV creation failed.\n"
+		);
+
 		return false;
 	}
 
-	m_pFontResource = move(pNewFontResource);
+	m_pFontResource = std::move(pNewFontResource);
 
 	wchar_t debugText[256];
+
 	swprintf_s(
 		debugText,
 		L"[ResourceManager] Font resource ready. Glyphs=%zu, Atlas=%dx%d\n",
@@ -959,6 +996,7 @@ bool ResourceManager::BuildFontResource(
 		m_pFontResource->GetAtlasWidth(),
 		m_pFontResource->GetAtlasHeight()
 	);
+
 	OutputDebugStringW(debugText);
 
 	return true;

@@ -416,9 +416,7 @@ public:
 
 	bool BuildFontResource(
 		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList,
-		const wchar_t* pAtlasFilePath,
-		const wchar_t* pMetadataFilePath
+		ID3D12GraphicsCommandList* pd3dCommandList
 	);
 
 	FontResource* GetFontResource() { return m_pFontResource.get(); }
