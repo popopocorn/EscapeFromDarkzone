@@ -2878,7 +2878,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	UIObject* lobbybutton = new UIObject();
 	lobbybutton->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::LOBBY_START_BUTTON));
 	lobbybutton->SetScale(0.5, 0.5, 1.0);
-	lobbybutton->SetLocate(0.0, -0.5, 0.5);
+	lobbybutton->SetLocate(0.63, -0.5, 0.5);
 
 	lobbybutton->setAABB();
 	lobbybutton->SetFunc([this]() {
