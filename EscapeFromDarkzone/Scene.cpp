@@ -2536,6 +2536,17 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		}
 	}
 
+	if (m_pPlayer)
+	{
+		pd3dCommandList->OMSetStencilRef(0x04);
+		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
+		pd3dCommandList->OMSetStencilRef(0xff);
+	}
+}
+
+void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+
 	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pEffectManager)
@@ -2571,12 +2582,6 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
 	}
 
-	if (m_pPlayer)
-	{
-		pd3dCommandList->OMSetStencilRef(0x04);
-		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
-		pd3dCommandList->OMSetStencilRef(0xff);
-	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
@@ -2917,6 +2922,12 @@ void LobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelin
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	
+}
+
+void LobbyScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+	uiManager->SubmitToShader(UIShader.get());
 	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 }
 
@@ -3003,7 +3014,7 @@ void ResultScene::ReleaseObjects()
 
 void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
 {
-	uiManager->SubmitToShader(UIShader.get());
+	
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
 	pd3dCommandList->SetDescriptorHeaps(1, &heap);
@@ -3014,5 +3025,11 @@ void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipel
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
+	
+}
+
+void ResultScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+	uiManager->SubmitToShader(UIShader.get());
 	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 }

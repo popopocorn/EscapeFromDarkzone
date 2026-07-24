@@ -927,8 +927,25 @@ void CGameFramework::ProcessInput()
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->AnimateObjects(fTimeElapsed);
+
+
+	m_pPlayer->OnPrepareRender();
+
+	if (m_pPlayer->m_pSkinnedAnimationController)
+	{
+		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
+		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
+	}
+	else
+	{
+		m_pPlayer->Animate(fTimeElapsed);
+		m_pPlayer->UpdateTransform(NULL);
+	}
+
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 	m_pPlayer->UpdateTransform(NULL);
+
+
 }
 
 void CGameFramework::WaitForGpuComplete()
@@ -985,20 +1002,21 @@ void CGameFramework::FrameAdvance()
 
 	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 	
-	if (nextScene)
-	{
-		WaitForGpuComplete();
-		PushScene();
-		m_pd3dCommandList->Close(); 
-		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
-		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
-		WaitForGpuComplete(); 
-		
-		m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
-		m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
-	}
+	ChangeScene();
+	
 	ProcessInput();
 
+	
+	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
+	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	d3dResourceBarrier.Transition.pResource = m_ppd3dSwapChainBackBuffers[m_nSwapChainBufferIndex];
+	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
+
+	
 	AnimateObjects(fTimeElapsed);
 	SoundManager::Instance()->UpdateListener(
 		m_pPlayer->GetPosition(),
@@ -1013,62 +1031,11 @@ void CGameFramework::FrameAdvance()
 		ProcessNetworkPackets();
 	}
 
-	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
-	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
-	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	d3dResourceBarrier.Transition.pResource = m_ppd3dSwapChainBackBuffers[m_nSwapChainBufferIndex];
-	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
-
-	m_pPlayer->OnPrepareRender();
-
-	if (m_pPlayer->m_pSkinnedAnimationController)
-	{
-		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
-		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
-	}
-	else
-	{
-		m_pPlayer->Animate(fTimeElapsed);
-		m_pPlayer->UpdateTransform(NULL);
-	}
-
-
-	//shadow rendering pass
-	shadowmap->TransitionToDSV(m_pd3dCommandList);
-	for (int i = 0; i < CASCADE_COUNT; i++)
-	{
-		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
-		m_pScene.back()->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
-	}
-	shadowmap->TransitionToSRV(m_pd3dCommandList);
-	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList);
-	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
+	ShadowRendering();
 	
-	
-	//main rendering pass
-	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
-	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-
-	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
-
-#ifdef _WITH_PLAYER_TOP
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-#endif
-
-	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
-
+	MainRendering();
+	TransparentRendering();
 	RenderTextSystem();
 	//compute pipline
 	
@@ -1124,6 +1091,55 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
+
+void CGameFramework::ShadowRendering()
+{
+	//shadow rendering pass
+	shadowmap->TransitionToDSV(m_pd3dCommandList);
+	for (int i = 0; i < CASCADE_COUNT; i++)
+	{
+		shadowmap->BindAsDepthTarget(m_pd3dCommandList, i);
+		m_pScene.back()->Render(m_pd3dCommandList, SHADOW, m_pScene.back()->GetLightCamera(i));
+	}
+	shadowmap->TransitionToSRV(m_pd3dCommandList);
+	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList);
+	shadowmap->SetTextureOnParameter(m_pd3dCommandList);
+
+}
+
+void CGameFramework::MainRendering()
+{
+	//main rendering pass
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
+
+	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
+
+#ifdef _WITH_PLAYER_TOP
+	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+#endif
+
+	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
+
+}
+
+void CGameFramework::TransparentRendering()
+{
+
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->TransparentRender(m_pd3dCommandList, MAIN, m_pCamera);
+
+}
+
+
 // 03.27 추가
 void CGameFramework::ProcessNetworkPackets()
 {
@@ -1172,4 +1188,20 @@ void CGameFramework::PopScene()
 void CGameFramework::PopScene(SceneName name)
 {
 	
+}
+
+void CGameFramework::ChangeScene()
+{
+	if (nextScene)
+	{
+		WaitForGpuComplete();
+		PushScene();
+		m_pd3dCommandList->Close(); 
+		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
+		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
+		WaitForGpuComplete(); 
+		
+		m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
+		m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
+	}
 }

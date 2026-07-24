@@ -261,8 +261,7 @@ class ShadowMap;
 class CShader;
 //class UIMesh;
 
-class ResourceManager
-{
+class ResourceManager{
 private:
 	ID3D12DescriptorHeap* m_pd3dCbvSrvDescriptorHeap = nullptr;
 

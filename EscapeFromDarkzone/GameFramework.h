@@ -50,6 +50,10 @@ public:
     void AnimateObjects(float fTimeElapsed);
     void FrameAdvance();
 
+	void ShadowRendering();
+	void MainRendering();
+	void TransparentRendering();
+
 	void WaitForGpuComplete();
 	void MoveToNextFrame();
 
@@ -65,6 +69,7 @@ public:
 	void PushScene();
 	void PopScene();
 	void PopScene(SceneName name);
+	void ChangeScene();
 	bool						mouseMove = false;
 	bool						observing = false;
 	ShaderManager* GetShaderManager() { return shadermanager.get(); }
@@ -72,6 +77,7 @@ public:
 	HWND GetHWND() { return m_hWnd; }
 	CCamera* GetObserver() { return observer.get(); }
 	void CreatePopSceneRequest(SceneName target);
+
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 
@@ -90,6 +96,7 @@ private:
 	UINT						m_nSwapChainBufferIndex;
 
 	ID3D12Resource				*m_ppd3dSwapChainBackBuffers[m_nSwapChainBuffers];
+	ID3D12Resource				*m_pd3dColorBuffer = nullptr;
 	ID3D12DescriptorHeap		*m_pd3dRtvDescriptorHeap = NULL;
 
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
@@ -103,7 +110,7 @@ private:
 	ID3D12Fence					*m_pd3dFence = NULL;
 	UINT64						m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE						m_hFenceEvent;
-	
+	D3D12_RESOURCE_BARRIER		d3dResourceBarrier;
 
 	unique_ptr<RootSignature>	root;
 	void BuildTextSystem();
