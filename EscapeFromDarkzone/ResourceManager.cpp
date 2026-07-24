@@ -523,7 +523,7 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		SkinnedShader
 	);
 
-	/*LoadAndRegisterSkinnedModelPrototype(
+	LoadAndRegisterSkinnedModelPrototype(
 		ModelName::PLAYER_02, 
 		pd3dDevice, 
 		pd3dCommandList, 
@@ -538,7 +538,8 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 		"Model/SM_Soldier_03_Complete_Reduced_green.bin", SkinnedShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
-	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);*/
+	ShareSkinnedAnimationSets(ModelName::PLAYER_03, ModelName::PLAYER_01);
+
 }
 
 void ResourceManager::BuildModelPrototypes(

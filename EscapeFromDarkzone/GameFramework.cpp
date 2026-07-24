@@ -602,8 +602,8 @@ void CGameFramework::BuildObjects()
 		root->GetRoot()
 	);
 
-	//m_pScene.push_back(make_unique<LobbyScene>(this));
-	m_pScene.push_back(make_unique<MainScene>(this));
+	m_pScene.push_back(make_unique<LobbyScene>(this));
+	//m_pScene.push_back(make_unique<MainScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
 
 	CMaterial::PrepareShaders(

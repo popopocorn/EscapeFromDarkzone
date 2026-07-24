@@ -84,9 +84,9 @@ constexpr int ROUND_MIN_PLAYERS = 1;					// default: 8
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 
 // 라운드 제한 시간
-constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
+//constexpr float ROUND_TIME_LIMIT_SEC = 60.0f;			// 1분
 //constexpr float ROUND_TIME_LIMIT_SEC = 180.0f;		// 3분
-//constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
+constexpr float ROUND_TIME_LIMIT_SEC = 900.0f;		// 15분
 // =======================
 
 
