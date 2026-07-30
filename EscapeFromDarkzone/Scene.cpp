@@ -1232,22 +1232,7 @@ void MainScene::ExplodeGrenade()
 		effectDir = Vector3::Normalize(effectDir);
 	}
 
-	XMFLOAT3 rightDir = XMFLOAT3(effectDir.z, 0.0f, -effectDir.x);
-
-	XMFLOAT3 serverExplosionPos = explosionPos;
-
-	constexpr float SERVER_GRENADE_OFFSET_RIGHT = 2.0f;
-	constexpr float SERVER_GRENADE_OFFSET_FORWARD = 2.0f;
-	//constexpr float SERVER_GRENADE_OFFSET_UP = 0.25f;
-
-	serverExplosionPos.x += rightDir.x * SERVER_GRENADE_OFFSET_RIGHT;
-	serverExplosionPos.z += rightDir.z * SERVER_GRENADE_OFFSET_RIGHT;
-
-	serverExplosionPos.x += effectDir.x * SERVER_GRENADE_OFFSET_FORWARD;
-	serverExplosionPos.z += effectDir.z * SERVER_GRENADE_OFFSET_FORWARD;
-
-	//serverExplosionPos.y += SERVER_GRENADE_OFFSET_UP;
-
+	// 실제 수류탄 위치를 로컬 이펙트와 서버 요청에 동일하게 사용한다.
 	m_xmf3GrenadePosition = explosionPos;
 
 	m_bGrenadeFlying = false;
@@ -1256,7 +1241,7 @@ void MainScene::ExplodeGrenade()
 	if (NetworkManager::Instance().IsConnected())
 	{
 		SoundManager::Instance()->Play(SoundName::GRANDEBOOM, explosionPos);
-		NetSession::Instance().GrenadeExplode(serverExplosionPos);
+		NetSession::Instance().GrenadeExplode(explosionPos);
 	}
 	else
 	{
@@ -1264,8 +1249,8 @@ void MainScene::ExplodeGrenade()
 		{
 			EffectSpawnDesc desc;
 			desc.id = EffectID::GRENADE_EXPLOSION;
-			desc.position = serverExplosionPos;
-			desc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
+			desc.position = explosionPos;
+			desc.direction = effectDir;
 			desc.ownerId = 0;
 			desc.value = 0.0f;
 
@@ -1279,8 +1264,13 @@ void MainScene::ExplodeGrenade()
 		m_pGrenadeDebugObject->UpdateTransform(NULL);
 	}
 
-	OutputDebugString(L"[Grenade] Explosion\n");
+	wchar_t grenadeDebugText[256];
+	swprintf_s(grenadeDebugText, L"[Grenade] Explosion. Position=(%.3f, %.3f, %.3f)\n",
+		explosionPos.x, explosionPos.y, explosionPos.z);
+
+	OutputDebugStringW(grenadeDebugText);
 }
+
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
 	if (m_pPlayer->m_bIsDead)return;
@@ -2094,13 +2084,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 				XMFLOAT3 muzzleRight;
 				XMFLOAT3 muzzleUp;
 
-				GetCurrentEnemyMuzzleInfo(
-					pEnemy,
-					muzzlePos,
-					muzzleLook,
-					muzzleRight,
-					muzzleUp
-				);
+				GetCurrentEnemyMuzzleInfo(pEnemy, muzzlePos, muzzleLook, muzzleRight, muzzleUp);
 
 				EnemyWeaponType weaponType = pEnemy->GetEnemyWeaponType();
 				EFFECT_TYPE sparkType = GetSparkEffectTypeByEnemyWeapon(weaponType);
@@ -2125,10 +2109,6 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager);
 	}
 
-	if (m_pEffectManager) {
-		m_pEffectManager->Update(fTimeElapsed);
-	}
-
 	UpdateGrenade(fTimeElapsed);
 
 	if (m_pEffectManager)
@@ -2144,22 +2124,8 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		XMFLOAT3 muzzleRight;
 		XMFLOAT3 muzzleUp;
 
-		GetCurrentPlayerMuzzleInfo(
-			m_pPlayer,
-			muzzlePos,
-			muzzleLook,
-			muzzleRight,
-			muzzleUp
-		);
-
-		m_pEffectManager->UpdateLaser(
-			0,
-			muzzlePos,
-			muzzleRight,
-			muzzleUp,
-			muzzleLook,
-			m_fLaserLength
-		);
+		GetCurrentPlayerMuzzleInfo(m_pPlayer, muzzlePos, muzzleLook, muzzleRight, muzzleUp);
+		m_pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, m_fLaserLength);
 	}
 	else if (m_pEffectManager)
 	{
@@ -2172,6 +2138,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
 	}
+
 	ProjectileManager::Instance()->Update(fTimeElapsed);
 	DecalManager::Instance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
@@ -2546,7 +2513,6 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 
 void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
-
 	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
 	if (m_pEffectManager)
@@ -2582,6 +2548,10 @@ void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, in
 		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
 	}
 
+	if (m_pEffectManager)
+	{
+		m_pEffectManager->RenderGpuParticles(pd3dCommandList, pCamera);
+	}
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)

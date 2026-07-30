@@ -1,6 +1,7 @@
 #pragma once
 #include "UI.h"
 #include "FontResource.h"
+#include "ParticleResource.h"
 
 enum class ModelName
 {
@@ -290,6 +291,9 @@ private:
 	// 기본 한글 폰트
 	unique_ptr<FontResource> m_pFontResource;
 
+	// 파티클 텍스처와 이펙트 프리셋 원본
+	unique_ptr<ParticleResource> m_pParticleResource;
+
 	// SRV 힙에서 사용할 수 있는 전체 SRV 개수
 	UINT m_nSrvDescriptorCapacity = 0;
 
@@ -413,13 +417,15 @@ public:
 		ID3D12RootSignature* pd3dGraphicsRootSignature
 	);
 
-	bool BuildFontResource(
-		ID3D12Device* pd3dDevice,
-		ID3D12GraphicsCommandList* pd3dCommandList
-	);
+	bool BuildFontResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+
+	bool BuildParticleResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 
 	FontResource* GetFontResource() { return m_pFontResource.get(); }
 	const FontResource* GetFontResource() const { return m_pFontResource.get(); }
+
+	ParticleResource* GetParticleResource() { return m_pParticleResource.get(); }
+	const ParticleResource* GetParticleResource() const { return m_pParticleResource.get(); }
 
 	// 정적 모델 원본 가져오기
 	CGameObject* GetModelInstance(ModelName key) const;

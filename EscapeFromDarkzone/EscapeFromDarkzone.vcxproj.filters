@@ -4,6 +4,8 @@
     <FxCompile Include="common.hlsli" />
     <FxCompile Include="Light.hlsli" />
     <FxCompile Include="Shaders.hlsl" />
+    <FxCompile Include="ParticleCompute.hlsl" />
+    <FxCompile Include="ParticleRender.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp">
@@ -104,6 +106,7 @@
     <ClCompile Include="UIText.cpp" />
     <ClCompile Include="TextRenderer.cpp" />
     <ClCompile Include="ItemTextData.cpp" />
+    <ClCompile Include="ParticleResource.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -219,6 +222,8 @@
     <ClInclude Include="UIText.h" />
     <ClInclude Include="TextRenderer.h" />
     <ClInclude Include="ItemTextData.h" />
+    <ClInclude Include="ParticleResource.h" />
+    <ClInclude Include="Particle.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">

@@ -4,6 +4,7 @@
 #include "UI.h"
 #include "ResourceManager.h"
 #include "FontResource.h"
+#include "ParticleResource.h"
 
 
 void ResourceManager::CreateCbvSrvDescriptorHeaps(
@@ -267,10 +268,12 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
 	}
+
 	for (auto& obj : textureMap)
 	{
 		obj.second->ReleaseUploadBuffers();
 	}
+
 	for (auto& obj : m_ModelPrototypes)
 	{
 		if (obj.second)
@@ -291,11 +294,17 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		m_pFontResource->ReleaseUploadBuffer();
 	}
+
+	if (m_pParticleResource)
+	{
+		m_pParticleResource->ReleaseUploadBuffers();
+	}
 }
 
 void ResourceManager::ReleaseResources()
 {
 	m_pFontResource.reset();
+	m_pParticleResource.reset();
 
 	m_ModelPrototypes.clear();
 	m_SkinnedModelPrototypes.clear();
@@ -321,9 +330,7 @@ void ResourceManager::ReleaseResources()
 	m_d3dSrvCPUDescriptorNextHandle = {};
 	m_d3dSrvGPUDescriptorNextHandle = {};
 
-	OutputDebugStringW(
-		L"[ResourceManager] All resources released.\n"
-	);
+	OutputDebugStringW(L"[ResourceManager] All resources released.\n");
 }
 
 bool ResourceManager::LoadAndRegisterModelPrototype(
@@ -999,6 +1006,35 @@ bool ResourceManager::BuildFontResource(
 	);
 
 	OutputDebugStringW(debugText);
+
+	return true;
+}
+
+bool ResourceManager::BuildParticleResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (!pd3dDevice || !pd3dCommandList)
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource build failed. Device or command list is null.\n");
+		return false;
+	}
+
+	if (m_pParticleResource && m_pParticleResource->IsLoaded())
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource is already loaded.\n");
+		return true;
+	}
+
+	auto pNewParticleResource = std::make_unique<ParticleResource>();
+
+	if (!pNewParticleResource->Load(pd3dDevice, pd3dCommandList))
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource load failed.\n");
+		return false;
+	}
+
+	m_pParticleResource = std::move(pNewParticleResource);
+
+	OutputDebugStringW(L"[ResourceManager] Particle resource ready.\n");
 
 	return true;
 }
