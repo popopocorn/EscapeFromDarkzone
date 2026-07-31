@@ -229,11 +229,7 @@ VS_PARTICLE_OUTPUT VSParticle(uint vertexId : SV_VertexID, uint instanceId : SV_
     float2 localPosition = gQuadPositions[vertexId];
 
     float3 billboardCenter = particle.position;
-
-    if (particle.billboardMode == PARTICLE_BILLBOARD_CAMERA_FACING)
-    {
-        billboardCenter += up * (particleSize.y * 0.5f);
-    }
+    billboardCenter += up * (particleSize.y * 0.5f);
 
     float3 worldPosition = billboardCenter;
     worldPosition += rotatedRight * localPosition.x * particleSize.x;

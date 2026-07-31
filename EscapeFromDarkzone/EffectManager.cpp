@@ -1881,8 +1881,8 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 	{
 	case EffectID::GRENADE_EXPLOSION:
 	{
+		// 수류탄 폭발은 GPU 파티클 시스템만 사용
 		QueueParticleEffect(desc);
-		RequestPlayEffect(EFFECT_BOMB, desc.position, right, up);
 		break;
 	}
 

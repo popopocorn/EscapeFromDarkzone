@@ -188,7 +188,9 @@ void ParticleResource::BuildGrenadeEffectDesc()
 	flameStreakDesc.speedMin = 4.0f;
 	flameStreakDesc.speedMax = 8.0f;
 	flameStreakDesc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	flameStreakDesc.coneAngleDegrees = 180.0f;
+
+	flameStreakDesc.coneAngleDegrees = 80.0f;
+
 	flameStreakDesc.acceleration = XMFLOAT3(0.0f, -6.0f, 0.0f);
 	flameStreakDesc.startSize = XMFLOAT2(0.55f, 2.2f);
 	flameStreakDesc.endSize = XMFLOAT2(0.12f, 0.40f);
@@ -214,7 +216,9 @@ void ParticleResource::BuildGrenadeEffectDesc()
 	sparkDesc.speedMin = 6.0f;
 	sparkDesc.speedMax = 14.0f;
 	sparkDesc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	sparkDesc.coneAngleDegrees = 180.0f;
+
+	sparkDesc.coneAngleDegrees = 88.0f;
+
 	sparkDesc.acceleration = XMFLOAT3(0.0f, -9.8f, 0.0f);
 	sparkDesc.startSize = XMFLOAT2(0.12f, 0.35f);
 	sparkDesc.endSize = XMFLOAT2(0.02f, 0.06f);
