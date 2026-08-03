@@ -7,10 +7,7 @@
 
 class CCamera;
 class CGameObject;
-class CParticleMesh;
-class CEffectShader;
 class CLaserShader;
-class CMaterial;
 
 // 씬에서는 요청만 받고, 실제 이펙트 생성/업데이트/렌더링은 이 매니저가 담당
 class EffectManager
@@ -80,16 +77,6 @@ private:
 	ID3D12GraphicsCommandList* m_pd3dCommandList = nullptr;
 	ID3D12RootSignature* m_pd3dGraphicsRootSignature = nullptr;
 
-	CEffectShader* m_pEffectShader = nullptr;
-	CParticleMesh* m_pEffectMesh = nullptr;
-	CMaterial* m_pEffectMaterials[EFFECT_MAX];
-
-	std::vector<std::unique_ptr<CEffect>> m_vEffectPools[EFFECT_MAX];
-
-	ID3D12Resource* m_pd3dInstBufferEffect[EFFECT_MAX];
-	EFFECT_INFO* m_pMappedInstBufferEffect[EFFECT_MAX];
-	D3D12_VERTEX_BUFFER_VIEW m_d3dInstBufferViewEffect[EFFECT_MAX];
-
 	CLaserShader* m_pLaserShader = nullptr;
 	std::unordered_map<int, CGameObject*> m_LaserObjects;
 
@@ -138,5 +125,4 @@ private:
 	bool m_bParticleRequestOverflowLogged = false;
 	bool m_bParticleSystemResourcesReady = false;
 
-	static constexpr int INITIAL_EFFECT_POOL_SIZE = 20;
 };

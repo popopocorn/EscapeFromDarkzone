@@ -59,12 +59,6 @@
     <ClCompile Include="ShadowMap.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
-    <ClCompile Include="Effect.cpp">
-      <Filter>소스파일</Filter>
-    </ClCompile>
-    <ClCompile Include="EffectShader.cpp">
-      <Filter>소스파일</Filter>
-    </ClCompile>
     <ClCompile Include="OtherPlayer.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
@@ -169,9 +163,6 @@
     <ClInclude Include="Effect.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="EffectShader.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="OtherPlayer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -235,7 +226,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Debug.hlsli" />
-    <None Include="Effect.hlsli" />
     <None Include="Text.hlsli" />
   </ItemGroup>
   <ItemGroup>

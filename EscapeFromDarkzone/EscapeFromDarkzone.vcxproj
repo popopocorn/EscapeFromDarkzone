@@ -155,7 +155,6 @@
     <ClInclude Include="Decal.h" />
     <ClInclude Include="Effect.h" />
     <ClInclude Include="EffectManager.h" />
-    <ClInclude Include="EffectShader.h" />
     <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
     <ClInclude Include="FontResource.h" />
@@ -201,9 +200,7 @@
     <ClCompile Include="DDSTextureLoader12.cpp" />
     <ClCompile Include="DebugObject.cpp" />
     <ClCompile Include="Decal.cpp" />
-    <ClCompile Include="Effect.cpp" />
     <ClCompile Include="EffectManager.cpp" />
-    <ClCompile Include="EffectShader.cpp" />
     <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
     <ClCompile Include="FontResource.cpp" />
@@ -276,10 +273,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Debug.hlsli">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </None>
-    <None Include="Effect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </None>

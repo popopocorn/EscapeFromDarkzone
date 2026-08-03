@@ -11,7 +11,6 @@
 #include"ShaderManager.h"
 #include "InputManager.h"
 #include "ShadowMap.h"
-#include "EffectShader.h"
 #include "Collision.h"
 
 #include "Item.h"

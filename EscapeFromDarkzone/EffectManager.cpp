@@ -2,7 +2,6 @@
 #include "Scene.h"
 #include "Object.h"
 #include "Camera.h"
-#include "EffectShader.h"
 #include "ResourceManager.h"
 #include "ParticleResource.h"
 #include "EffectManager.h"
@@ -10,14 +9,6 @@
 
 EffectManager::EffectManager()
 {
-	for (int i = 0; i < EFFECT_MAX; ++i)
-	{
-		m_pEffectMaterials[i] = nullptr;
-		m_pd3dInstBufferEffect[i] = nullptr;
-		m_pMappedInstBufferEffect[i] = nullptr;
-		ZeroMemory(&m_d3dInstBufferViewEffect[i], sizeof(D3D12_VERTEX_BUFFER_VIEW));
-	}
-
 	m_PendingParticleSpawnRequests.reserve(MAX_PARTICLE_SPAWN_REQUESTS);
 }
 
@@ -1619,60 +1610,6 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 		OutputDebugStringW(L"[EffectManager] Particle system initialization failed.\n");
 	}
 
-	m_pEffectShader = new CEffectShader();
-	m_pEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
-	m_pEffectShader->CreateGraphicsPipelineState(pd3dDevice, pd3dGraphicsRootSignature, 0);
-
-	float effectWidth = 1.0f;
-	float effectHeight = 1.0f * (180.0f / 182.0f);
-	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
-
-
-	//// Blood
-	//{
-	//	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	//	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList,
-	//		L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
-	//	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
-	//
-	//	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
-	//	m_pEffectMaterials[EFFECT_BLOOD]->SetTexture(pBloodTexture);
-	//	m_pEffectMaterials[EFFECT_BLOOD]->SetShader(m_pEffectShader);
-	//}
-
-	for (int i = 0; i < EFFECT_MAX; ++i)
-	{
-		if (i != EFFECT_BLOOD)
-		{
-			continue;
-		}
-
-		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
-
-		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBufferSize,
-			D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, NULL);
-
-		if (m_pd3dInstBufferEffect[i])
-		{
-			HRESULT hResult = m_pd3dInstBufferEffect[i]->Map(
-				0, NULL, reinterpret_cast<void**>(&m_pMappedInstBufferEffect[i]));
-
-			if (SUCCEEDED(hResult) && m_pMappedInstBufferEffect[i])
-			{
-				m_d3dInstBufferViewEffect[i].BufferLocation =
-					m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
-				m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
-				m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
-			}
-		}
-	}
-
-	for (int i = 0; i < INITIAL_EFFECT_POOL_SIZE; ++i)
-	{
-		m_vEffectPools[EFFECT_BLOOD].push_back(
-			std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
-	}
-
 	// 레이저 쉐이더 생성
 	m_pLaserShader = new CLaserShader();
 	m_pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -1696,44 +1633,12 @@ void EffectManager::Release()
 {
 	ReleaseParticleSystemResources();
 
-	for (int type = 0; type < EFFECT_MAX; ++type)
-	{
-		m_vEffectPools[type].clear();
-
-		if (m_pd3dInstBufferEffect[type])
-		{
-			m_pd3dInstBufferEffect[type]->Unmap(0, NULL);
-			m_pd3dInstBufferEffect[type]->Release();
-			m_pd3dInstBufferEffect[type] = nullptr;
-		}
-
-		m_pMappedInstBufferEffect[type] = nullptr;
-
-		if (m_pEffectMaterials[type])
-		{
-			delete m_pEffectMaterials[type];
-			m_pEffectMaterials[type] = nullptr;
-		}
-	}
-
 	m_LaserObjects.clear();
 
 	if (m_pLaserShader)
 	{
 		delete m_pLaserShader;
 		m_pLaserShader = nullptr;
-	}
-
-	if (m_pEffectMesh)
-	{
-		delete m_pEffectMesh;
-		m_pEffectMesh = nullptr;
-	}
-
-	if (m_pEffectShader)
-	{
-		delete m_pEffectShader;
-		m_pEffectShader = nullptr;
 	}
 
 	m_pd3dDevice = nullptr;
@@ -1743,16 +1648,6 @@ void EffectManager::Release()
 
 void EffectManager::ReleaseUploadBuffers()
 {
-	if (m_pEffectMesh)
-	{
-		m_pEffectMesh->ReleaseUploadBuffers();
-	}
-
-	if (m_pEffectShader)
-	{
-		m_pEffectShader->ReleaseUploadBuffers();
-	}
-
 	if (m_pLaserShader)
 	{
 		m_pLaserShader->ReleaseUploadBuffers();
@@ -1790,120 +1685,69 @@ void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 r
 		return;
 	}
 
-	EffectID gpuSparkId = EffectID::NONE;
+	EffectID gpuEffectId = EffectID::NONE;
 
 	switch (type)
 	{
 	case EFFECT_SPARK_RIFLE_SMG:
-		gpuSparkId = EffectID::SPARK;
+		gpuEffectId = EffectID::SPARK;
 		break;
 
 	case EFFECT_SPARK_SHOTGUN:
-		gpuSparkId = EffectID::SPARK_SHOTGUN;
+		gpuEffectId = EffectID::SPARK_SHOTGUN;
 		break;
 
 	case EFFECT_SPARK_PISTOL:
-		gpuSparkId = EffectID::SPARK_PISTOL;
+		gpuEffectId = EffectID::SPARK_PISTOL;
 		break;
+
+	case EFFECT_BLOOD:
+		return;
 
 	default:
-		break;
-	}
-
-	if (gpuSparkId != EffectID::NONE)
-	{
-		XMVECTOR vRight = XMLoadFloat3(&right);
-		XMVECTOR vUp = XMLoadFloat3(&up);
-		XMVECTOR vDirection = XMVector3Cross(vRight, vUp);
-
-		if (XMVectorGetX(XMVector3LengthSq(vDirection)) < 0.0001f)
-		{
-			vDirection = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-		}
-		else
-		{
-			vDirection = XMVector3Normalize(vDirection);
-		}
-
-		EffectSpawnDesc desc{};
-		desc.id = gpuSparkId;
-		desc.position = pos;
-		XMStoreFloat3(&desc.direction, vDirection);
-		desc.ownerId = 0;
-		desc.value = 0.0f;
-
-		if (!QueueParticleEffect(desc))
-		{
-			switch (type)
-			{
-			case EFFECT_SPARK_RIFLE_SMG:
-				OutputDebugStringW(L"[EffectManager] GPU Rifle/SMG Spark request failed.\n");
-				break;
-
-			case EFFECT_SPARK_SHOTGUN:
-				OutputDebugStringW(L"[EffectManager] GPU Shotgun Spark request failed.\n");
-				break;
-
-			case EFFECT_SPARK_PISTOL:
-				OutputDebugStringW(L"[EffectManager] GPU Pistol Spark request failed.\n");
-				break;
-
-			default:
-				break;
-			}
-		}
-
 		return;
 	}
 
-	if (type != EFFECT_BLOOD)
+	XMVECTOR vRight = XMLoadFloat3(&right);
+	XMVECTOR vUp = XMLoadFloat3(&up);
+	XMVECTOR vDirection = XMVector3Cross(vRight, vUp);
+
+	if (XMVectorGetX(XMVector3LengthSq(vDirection)) < 0.0001f)
 	{
-		return;
+		vDirection = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+	}
+	else
+	{
+		vDirection = XMVector3Normalize(vDirection);
 	}
 
-	for (auto& pEffect : m_vEffectPools[type])
+	EffectSpawnDesc desc{};
+	desc.id = gpuEffectId;
+	desc.position = pos;
+	XMStoreFloat3(&desc.direction, vDirection);
+	desc.ownerId = 0;
+	desc.value = 0.0f;
+
+	if (!QueueParticleEffect(desc))
 	{
-		if (pEffect && pEffect->IsDead())
+		switch (type)
 		{
-			pEffect->Play(pos, right, up);
-			return;
+		case EFFECT_SPARK_RIFLE_SMG:
+			OutputDebugStringW(L"[EffectManager] GPU Rifle/SMG Spark request failed.\n");
+			break;
+
+		case EFFECT_SPARK_SHOTGUN:
+			OutputDebugStringW(L"[EffectManager] GPU Shotgun Spark request failed.\n");
+			break;
+
+		case EFFECT_SPARK_PISTOL:
+			OutputDebugStringW(L"[EffectManager] GPU Pistol Spark request failed.\n");
+			break;
+
+		default:
+			break;
 		}
 	}
-
-	auto pNewEffect = std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f);
-	pNewEffect->Play(pos, right, up);
-
-	m_vEffectPools[type].push_back(std::move(pNewEffect));
-}
-
-void EffectManager::BuildEffectBasis(const XMFLOAT3& direction, XMFLOAT3& outRight, XMFLOAT3& outUp)
-{
-	XMFLOAT3 dir = direction;
-
-	if (Vector3::Length(dir) < 0.0001f)
-	{
-		dir = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	}
-
-	dir = Vector3::Normalize(dir);
-
-	XMVECTOR vDir = XMLoadFloat3(&dir);
-	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-
-	XMVECTOR vRight = XMVector3Cross(vWorldUp, vDir);
-
-	if (XMVectorGetX(XMVector3LengthSq(vRight)) < 0.0001f)
-	{
-		vWorldUp = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
-		vRight = XMVector3Cross(vWorldUp, vDir);
-	}
-
-	vRight = XMVector3Normalize(vRight);
-
-	XMVECTOR vUp = XMVector3Normalize(XMVector3Cross(vDir, vRight));
-
-	XMStoreFloat3(&outRight, vRight);
-	XMStoreFloat3(&outUp, vUp);
 }
 
 void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
@@ -1913,33 +1757,30 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 		return;
 	}
 
-	if (desc.id == EffectID::GRENADE_EXPLOSION ||
-		desc.id == EffectID::SPARK ||
-		desc.id == EffectID::SPARK_SHOTGUN ||
-		desc.id == EffectID::SPARK_PISTOL)
+	switch (desc.id)
+	{
+	case EffectID::GRENADE_EXPLOSION:
+	case EffectID::SPARK:
+	case EffectID::SPARK_SHOTGUN:
+	case EffectID::SPARK_PISTOL:
 	{
 		QueueParticleEffect(desc);
-		return;
+		break;
 	}
 
-	if (desc.id == EffectID::HIT)
+	case EffectID::HIT:
 	{
 		EffectSpawnDesc sparkDesc = desc;
 		sparkDesc.id = EffectID::SPARK;
 		QueueParticleEffect(sparkDesc);
-		return;
+		break;
 	}
 
-	XMFLOAT3 right;
-	XMFLOAT3 up;
-
-	BuildEffectBasis(desc.direction, right, up);
-
-	switch (desc.id)
-	{
 	case EffectID::BLOOD:
-		RequestPlayEffect(EFFECT_BLOOD, desc.position, right, up);
+	{
+		// BLOOD는 현재 구현되어 있지 않은 기존 상태를 유지한다.
 		break;
+	}
 
 	default:
 		break;
@@ -1951,17 +1792,6 @@ void EffectManager::Update(float fTimeElapsed)
 	m_fParticleDeltaTime = max(fTimeElapsed, 0.0f);
 	m_fParticleTotalTime += m_fParticleDeltaTime;
 	m_bParticleComputeExecutedThisFrame = false;
-
-	for (int type = 0; type < EFFECT_MAX; ++type)
-	{
-		for (auto& pEffect : m_vEffectPools[type])
-		{
-			if (pEffect && !pEffect->IsDead())
-			{
-				pEffect->Animate(fTimeElapsed);
-			}
-		}
-	}
 }
 
 CGameObject* EffectManager::GetOrCreateLaserObject(int ownerId)
@@ -2026,49 +1856,6 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 	if (m_pLaserShader)
 	{
 		m_pLaserShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-	}
-
-	if (m_pEffectShader)
-	{
-		m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
-	}
-
-	const int type = EFFECT_BLOOD;
-
-	if (!m_pMappedInstBufferEffect[type] || !m_pd3dInstBufferEffect[type])
-	{
-		return;
-	}
-
-	int activeCount = 0;
-
-	for (auto& pEffect : m_vEffectPools[type])
-	{
-		if (!pEffect || pEffect->IsDead())
-		{
-			continue;
-		}
-
-		m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-		m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
-		m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
-		m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.15f, 0.10f, 1.0f);
-		m_pMappedInstBufferEffect[type][activeCount].vRight = pEffect->GetRight();
-		m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
-
-		++activeCount;
-
-		if (activeCount >= 100)
-		{
-			break;
-		}
-	}
-
-	if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
-	{
-		m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
-		pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
-		m_pEffectMesh->Render(pd3dCommandList, activeCount);
 	}
 }
 
