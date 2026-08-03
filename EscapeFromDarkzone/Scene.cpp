@@ -279,8 +279,14 @@ static EFFECT_TYPE GetSparkEffectTypeByEnemyWeapon(EnemyWeaponType weaponType)
 		return EFFECT_SPARK_RIFLE_SMG;
 	}
 }
-XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
+XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos,
+	const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp)
 {
+	if (weaponType == PlayerWeaponType::Rifle || weaponType == PlayerWeaponType::SMG)
+	{
+		return muzzlePos;
+	}
+
 	XMFLOAT3 sparkPos = muzzlePos;
 
 	float forwardOffset = 0.0f;
@@ -288,16 +294,6 @@ XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& m
 
 	switch (weaponType)
 	{
-	case PlayerWeaponType::Rifle:
-		forwardOffset = 0.05f;
-		upOffset = -0.50f;
-		break;
-
-	case PlayerWeaponType::SMG:
-		forwardOffset = -0.1f;
-		upOffset = -0.50f;
-		break;
-
 	case PlayerWeaponType::Shotgun:
 		forwardOffset = 0.1f;
 		upOffset = 0.50f;
@@ -309,8 +305,6 @@ XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& m
 		break;
 
 	default:
-		forwardOffset = 0.0f;
-		upOffset = 0.0f;
 		break;
 	}
 
@@ -324,6 +318,7 @@ XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& m
 
 	return sparkPos;
 }
+
 static bool GetCurrentEnemyMuzzleInfo(CEnemyObject* pEnemy, XMFLOAT3& outPos, XMFLOAT3& outLook, XMFLOAT3& outRight, XMFLOAT3& outUp)
 {
 	if (!pEnemy)

@@ -26,7 +26,10 @@ enum class EffectID : unsigned char
     SPARK,
 
     BLOOD,
-    HIT
+    HIT,
+
+    SPARK_SHOTGUN,
+    SPARK_PISTOL
 };
 struct EffectSpawnDesc
 {

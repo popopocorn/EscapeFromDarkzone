@@ -76,6 +76,8 @@ struct ParticleEmitterDesc
 	XMFLOAT3 direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
 	float coneAngleDegrees = 0.0f;
 
+	float positionOffsetAlongDirection = 0.0f;
+
 	XMFLOAT3 acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	XMFLOAT2 startSize = XMFLOAT2(1.0f, 1.0f);
@@ -129,6 +131,9 @@ private:
 		const wchar_t* texturePath, const ParticleAtlasDesc& atlasDesc);
 
 	void BuildGrenadeEffectDesc();
+	void BuildRifleSparkEffectDesc();
+	void BuildShotgunSparkEffectDesc();
+	void BuildPistolSparkEffectDesc();
 
 private:
 	bool m_bLoaded = false;

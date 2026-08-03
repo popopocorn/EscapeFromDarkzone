@@ -1171,6 +1171,22 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 		return false;
 	}
 
+	XMFLOAT3 effectDirection = desc.direction;
+
+	if (Vector3::Length(effectDirection) < 0.0001f)
+	{
+		effectDirection = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	}
+	else
+	{
+		effectDirection = Vector3::Normalize(effectDirection);
+	}
+
+	const bool isMuzzleSpark =
+		desc.id == EffectID::SPARK ||
+		desc.id == EffectID::SPARK_SHOTGUN ||
+		desc.id == EffectID::SPARK_PISTOL;
+
 	bool queuedAnyRequest = false;
 
 	for (const ParticleEmitterDesc& emitterDesc : pEffectDesc->emitters)
@@ -1189,9 +1205,24 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 		ParticleSpawnRequest request{};
 
 		request.position = desc.position;
-		request.burstCount = emitterDesc.burstCount;
 
-		request.direction = emitterDesc.direction;
+		// 총구 Spark는 호출부에서 전달된 Socket_Muzzle 위치를 그대로 사용한다.
+		if (!isMuzzleSpark && fabsf(emitterDesc.positionOffsetAlongDirection) > 0.0001f)
+		{
+			request.position.x += effectDirection.x * emitterDesc.positionOffsetAlongDirection;
+			request.position.y += effectDirection.y * emitterDesc.positionOffsetAlongDirection;
+			request.position.z += effectDirection.z * emitterDesc.positionOffsetAlongDirection;
+		}
+
+		// 수류탄의 불꽃과 불씨는 폭발 중심 높이에서 생성한다.
+		if (desc.id == EffectID::GRENADE_EXPLOSION &&
+			emitterDesc.billboardMode == ParticleBillboardMode::VELOCITY_ALIGNED)
+		{
+			request.position.y += 0.9f;
+		}
+
+		request.burstCount = emitterDesc.burstCount;
+		request.direction = isMuzzleSpark ? effectDirection : emitterDesc.direction;
 		request.coneAngleDegrees = emitterDesc.coneAngleDegrees;
 
 		request.acceleration = emitterDesc.acceleration;
@@ -1228,7 +1259,8 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 
 		request.selectedFrameCount = min(emitterDesc.selectedFrameCount, PARTICLE_SELECTED_FRAME_CAPACITY);
 		request.billboardMode = static_cast<UINT>(emitterDesc.billboardMode);
-		request.renderGroup = static_cast<UINT>(ResolveParticleRenderGroup(emitterDesc.textureId, emitterDesc.blendMode));
+		request.renderGroup = static_cast<UINT>(
+			ResolveParticleRenderGroup(emitterDesc.textureId, emitterDesc.blendMode));
 		request.blendMode = static_cast<UINT>(emitterDesc.blendMode);
 
 		for (UINT i = 0; i < request.selectedFrameCount; ++i)
@@ -1584,10 +1616,9 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	if (!InitializeParticleSystemResources(pd3dDevice, pd3dCommandList))
 	{
-		OutputDebugStringW(L"[EffectManager] Particle system initialization failed. Legacy effects will remain active.\n");
+		OutputDebugStringW(L"[EffectManager] Particle system initialization failed.\n");
 	}
 
-	// 이펙트 쉐이더 생성
 	m_pEffectShader = new CEffectShader();
 	m_pEffectShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	m_pEffectShader->CreateGraphicsPipelineState(pd3dDevice, pd3dGraphicsRootSignature, 0);
@@ -1596,55 +1627,12 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	float effectHeight = 1.0f * (180.0f / 182.0f);
 	m_pEffectMesh = new CParticleMesh(pd3dDevice, pd3dCommandList, effectWidth, effectHeight);
 
-	// 이펙트 텍스처 / 머티리얼
-	// Bomb
-	{
-		CTexture* pBombTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pBombTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion3.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBombTexture, 0, 3);
-
-		m_pEffectMaterials[EFFECT_BOMB] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_BOMB]->SetTexture(pBombTexture);
-		m_pEffectMaterials[EFFECT_BOMB]->SetShader(m_pEffectShader);
-	}
-
-	// Spark - Rifle / SMG
-	{
-		CTexture* pSparkRifleSMGTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pSparkRifleSMGTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Rifle_SMG.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkRifleSMGTexture, 0, 3);
-
-		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG]->SetTexture(pSparkRifleSMGTexture);
-		m_pEffectMaterials[EFFECT_SPARK_RIFLE_SMG]->SetShader(m_pEffectShader);
-	}
-
-	// Spark - Shotgun
-	{
-		CTexture* pSparkShotgunTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pSparkShotgunTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Shotgun.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkShotgunTexture, 0, 3);
-
-		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN]->SetTexture(pSparkShotgunTexture);
-		m_pEffectMaterials[EFFECT_SPARK_SHOTGUN]->SetShader(m_pEffectShader);
-	}
-
-	// Spark - Pistol, Rifle/SMG 이펙트 재사용 + 크기만 작게
-	{
-		CTexture* pSparkPistolTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-		pSparkPistolTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Spark_Rifle_SMG.dds", RESOURCE_TEXTURE2D, 0);
-		ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pSparkPistolTexture, 0, 3);
-
-		m_pEffectMaterials[EFFECT_SPARK_PISTOL] = new CMaterial(1);
-		m_pEffectMaterials[EFFECT_SPARK_PISTOL]->SetTexture(pSparkPistolTexture);
-		m_pEffectMaterials[EFFECT_SPARK_PISTOL]->SetShader(m_pEffectShader);
-	}
 
 	//// Blood
 	//{
 	//	CTexture* pBloodTexture = new CTexture(1, RESOURCE_TEXTURE2D, 0, 1);
-	//	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList, L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
+	//	pBloodTexture->LoadTextureFromDDSFile(pd3dDevice, pd3dCommandList,
+	//		L"Model/Explosion1.dds", RESOURCE_TEXTURE2D, 0);
 	//	ResourceManager::Instance().CreateShaderResourceViews(pd3dDevice, pBloodTexture, 0, 3);
 	//
 	//	m_pEffectMaterials[EFFECT_BLOOD] = new CMaterial(1);
@@ -1654,6 +1642,11 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	for (int i = 0; i < EFFECT_MAX; ++i)
 	{
+		if (i != EFFECT_BLOOD)
+		{
+			continue;
+		}
+
 		UINT nBufferSize = sizeof(EFFECT_INFO) * 100;
 
 		m_pd3dInstBufferEffect[i] = ::CreateBufferResource(pd3dDevice, pd3dCommandList, NULL, nBufferSize,
@@ -1661,25 +1654,23 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 		if (m_pd3dInstBufferEffect[i])
 		{
-			HRESULT hResult = m_pd3dInstBufferEffect[i]->Map(0, NULL, reinterpret_cast<void**>(&m_pMappedInstBufferEffect[i]));
+			HRESULT hResult = m_pd3dInstBufferEffect[i]->Map(
+				0, NULL, reinterpret_cast<void**>(&m_pMappedInstBufferEffect[i]));
 
 			if (SUCCEEDED(hResult) && m_pMappedInstBufferEffect[i])
 			{
-				m_d3dInstBufferViewEffect[i].BufferLocation = m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
+				m_d3dInstBufferViewEffect[i].BufferLocation =
+					m_pd3dInstBufferEffect[i]->GetGPUVirtualAddress();
 				m_d3dInstBufferViewEffect[i].StrideInBytes = sizeof(EFFECT_INFO);
 				m_d3dInstBufferViewEffect[i].SizeInBytes = nBufferSize;
 			}
 		}
 	}
 
-	// 기본 이펙트 풀 생성
 	for (int i = 0; i < INITIAL_EFFECT_POOL_SIZE; ++i)
 	{
-		m_vEffectPools[EFFECT_BOMB].push_back(std::make_unique<CEffect>(EFFECT_BOMB, 1.0f));
-		m_vEffectPools[EFFECT_SPARK_RIFLE_SMG].push_back(std::make_unique<CEffect>(EFFECT_SPARK_RIFLE_SMG, 0.055f));
-		m_vEffectPools[EFFECT_SPARK_SHOTGUN].push_back(std::make_unique<CEffect>(EFFECT_SPARK_SHOTGUN, 0.045f));
-		m_vEffectPools[EFFECT_SPARK_PISTOL].push_back(std::make_unique<CEffect>(EFFECT_SPARK_PISTOL, 0.045f));
-		m_vEffectPools[EFFECT_BLOOD].push_back(std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
+		m_vEffectPools[EFFECT_BLOOD].push_back(
+			std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f));
 	}
 
 	// 레이저 쉐이더 생성
@@ -1789,7 +1780,86 @@ void EffectManager::ReleaseUploadBuffers()
 void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 right, XMFLOAT3 up)
 {
 	if (type < 0 || type >= EFFECT_MAX)
+	{
 		return;
+	}
+
+	if (type == EFFECT_BOMB)
+	{
+		OutputDebugStringW(L"[EffectManager] Legacy EFFECT_BOMB request ignored. Use GRENADE_EXPLOSION.\n");
+		return;
+	}
+
+	EffectID gpuSparkId = EffectID::NONE;
+
+	switch (type)
+	{
+	case EFFECT_SPARK_RIFLE_SMG:
+		gpuSparkId = EffectID::SPARK;
+		break;
+
+	case EFFECT_SPARK_SHOTGUN:
+		gpuSparkId = EffectID::SPARK_SHOTGUN;
+		break;
+
+	case EFFECT_SPARK_PISTOL:
+		gpuSparkId = EffectID::SPARK_PISTOL;
+		break;
+
+	default:
+		break;
+	}
+
+	if (gpuSparkId != EffectID::NONE)
+	{
+		XMVECTOR vRight = XMLoadFloat3(&right);
+		XMVECTOR vUp = XMLoadFloat3(&up);
+		XMVECTOR vDirection = XMVector3Cross(vRight, vUp);
+
+		if (XMVectorGetX(XMVector3LengthSq(vDirection)) < 0.0001f)
+		{
+			vDirection = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+		}
+		else
+		{
+			vDirection = XMVector3Normalize(vDirection);
+		}
+
+		EffectSpawnDesc desc{};
+		desc.id = gpuSparkId;
+		desc.position = pos;
+		XMStoreFloat3(&desc.direction, vDirection);
+		desc.ownerId = 0;
+		desc.value = 0.0f;
+
+		if (!QueueParticleEffect(desc))
+		{
+			switch (type)
+			{
+			case EFFECT_SPARK_RIFLE_SMG:
+				OutputDebugStringW(L"[EffectManager] GPU Rifle/SMG Spark request failed.\n");
+				break;
+
+			case EFFECT_SPARK_SHOTGUN:
+				OutputDebugStringW(L"[EffectManager] GPU Shotgun Spark request failed.\n");
+				break;
+
+			case EFFECT_SPARK_PISTOL:
+				OutputDebugStringW(L"[EffectManager] GPU Pistol Spark request failed.\n");
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		return;
+	}
+
+	if (type != EFFECT_BLOOD)
+	{
+		return;
+	}
 
 	for (auto& pEffect : m_vEffectPools[type])
 	{
@@ -1800,36 +1870,7 @@ void EffectManager::RequestPlayEffect(EFFECT_TYPE type, XMFLOAT3 pos, XMFLOAT3 r
 		}
 	}
 
-	float lifeTime = 0.5f;
-
-	switch (type)
-	{
-	case EFFECT_BOMB:
-		lifeTime = 1.0f;
-		break;
-
-	case EFFECT_SPARK_RIFLE_SMG:
-		lifeTime = 0.055f;
-		break;
-
-	case EFFECT_SPARK_SHOTGUN:
-		lifeTime = 0.045f;
-		break;
-
-	case EFFECT_SPARK_PISTOL:
-		lifeTime = 0.045f;
-		break;
-
-	case EFFECT_BLOOD:
-		lifeTime = 0.8f;
-		break;
-
-	default:
-		lifeTime = 0.5f;
-		break;
-	}
-
-	auto pNewEffect = std::make_unique<CEffect>(type, lifeTime);
+	auto pNewEffect = std::make_unique<CEffect>(EFFECT_BLOOD, 0.8f);
 	pNewEffect->Play(pos, right, up);
 
 	m_vEffectPools[type].push_back(std::move(pNewEffect));
@@ -1872,6 +1913,23 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 		return;
 	}
 
+	if (desc.id == EffectID::GRENADE_EXPLOSION ||
+		desc.id == EffectID::SPARK ||
+		desc.id == EffectID::SPARK_SHOTGUN ||
+		desc.id == EffectID::SPARK_PISTOL)
+	{
+		QueueParticleEffect(desc);
+		return;
+	}
+
+	if (desc.id == EffectID::HIT)
+	{
+		EffectSpawnDesc sparkDesc = desc;
+		sparkDesc.id = EffectID::SPARK;
+		QueueParticleEffect(sparkDesc);
+		return;
+	}
+
 	XMFLOAT3 right;
 	XMFLOAT3 up;
 
@@ -1879,30 +1937,9 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 
 	switch (desc.id)
 	{
-	case EffectID::GRENADE_EXPLOSION:
-	{
-		// 수류탄 폭발은 GPU 파티클 시스템만 사용
-		QueueParticleEffect(desc);
-		break;
-	}
-
-	case EffectID::SPARK:
-	{
-		RequestPlayEffect(EFFECT_SPARK_RIFLE_SMG, desc.position, right, up);
-		break;
-	}
-
 	case EffectID::BLOOD:
-	{
 		RequestPlayEffect(EFFECT_BLOOD, desc.position, right, up);
 		break;
-	}
-
-	case EffectID::HIT:
-	{
-		RequestPlayEffect(EFFECT_SPARK_RIFLE_SMG, desc.position, right, up);
-		break;
-	}
 
 	default:
 		break;
@@ -1996,75 +2033,42 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 		m_pEffectShader->Render(pd3dCommandList, pCamera, false, nPipelineState);
 	}
 
-	for (int type = 0; type < EFFECT_MAX; ++type)
+	const int type = EFFECT_BLOOD;
+
+	if (!m_pMappedInstBufferEffect[type] || !m_pd3dInstBufferEffect[type])
 	{
-		if (!m_pMappedInstBufferEffect[type] || !m_pd3dInstBufferEffect[type])
+		return;
+	}
+
+	int activeCount = 0;
+
+	for (auto& pEffect : m_vEffectPools[type])
+	{
+		if (!pEffect || pEffect->IsDead())
 		{
 			continue;
 		}
 
-		int activeCount = 0;
+		m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
+		m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
+		m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
+		m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.15f, 0.10f, 1.0f);
+		m_pMappedInstBufferEffect[type][activeCount].vRight = pEffect->GetRight();
+		m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
 
-		for (auto& pEffect : m_vEffectPools[type])
+		++activeCount;
+
+		if (activeCount >= 100)
 		{
-			if (!pEffect || pEffect->IsDead())
-			{
-				continue;
-			}
-
-			m_pMappedInstBufferEffect[type][activeCount].vPosition = pEffect->GetPosition();
-			m_pMappedInstBufferEffect[type][activeCount].fProgress = pEffect->GetProgress();
-
-			switch (type)
-			{
-			case EFFECT_BOMB:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(6.0f, 6.0f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.86f, 0.65f, 0.45f);
-				break;
-
-			case EFFECT_SPARK_RIFLE_SMG:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.45f, 1.45f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
-				break;
-
-			case EFFECT_SPARK_SHOTGUN:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.8f, 1.8f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
-				break;
-
-			case EFFECT_SPARK_PISTOL:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(0.75f, 0.75f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
-				break;
-
-			case EFFECT_BLOOD:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(2.0f, 2.0f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.15f, 0.10f, 1.0f);
-				break;
-
-			default:
-				m_pMappedInstBufferEffect[type][activeCount].vSize = XMFLOAT2(1.0f, 1.0f);
-				m_pMappedInstBufferEffect[type][activeCount].vColor = XMFLOAT4(1.0f, 0.58f, 0.20f, 1.0f);
-				break;
-			}
-
-			m_pMappedInstBufferEffect[type][activeCount].vRight = pEffect->GetRight();
-			m_pMappedInstBufferEffect[type][activeCount].vUp = pEffect->GetUp();
-
-			++activeCount;
-
-			if (activeCount >= 100)
-			{
-				break;
-			}
+			break;
 		}
+	}
 
-		if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
-		{
-			m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
-			pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
-			m_pEffectMesh->Render(pd3dCommandList, activeCount);
-		}
+	if (activeCount > 0 && m_pEffectMesh && m_pEffectMaterials[type])
+	{
+		m_pEffectMaterials[type]->UpdateShaderVariables(pd3dCommandList);
+		pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dInstBufferViewEffect[type]);
+		m_pEffectMesh->Render(pd3dCommandList, activeCount);
 	}
 }
 

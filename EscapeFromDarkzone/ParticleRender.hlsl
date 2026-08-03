@@ -228,8 +228,9 @@ VS_PARTICLE_OUTPUT VSParticle(uint vertexId : SV_VertexID, uint instanceId : SV_
 
     float2 localPosition = gQuadPositions[vertexId];
 
+    // 회전 여부와 관계없이 쿼드의 아래쪽 중앙을 particle.position에 고정한다.
     float3 billboardCenter = particle.position;
-    billboardCenter += up * (particleSize.y * 0.5f);
+    billboardCenter += rotatedUp * (particleSize.y * 0.5f);
 
     float3 worldPosition = billboardCenter;
     worldPosition += rotatedRight * localPosition.x * particleSize.x;
