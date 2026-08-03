@@ -14,8 +14,13 @@
 #include "ShaderManager.h"
 #include "SoundManager.h"
 #include "TextRenderer.h"
-#include "GameFramework.h"
 #include"Scene.h"
+#include "RenderTarget.h"
+
+
+#include "GameFramework.h"
+
+
 
 int FRAME_BUFFER_WIDTH = 1392;
 int FRAME_BUFFER_HEIGHT = 738;
@@ -126,6 +131,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	CreateSwapChain();
 	CreateDepthStencilView();
 
+	CreateRenderBuffers();
+
 	CoInitialize(NULL);
 
 	shadowmap = std::make_unique<ShadowMap>();
@@ -140,9 +147,10 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 		0,
 		512
 	);
+	CreateRenderBuffersSRV();
 
 	BuildObjects();
-
+	
 	ResourceManager::Instance().CreateshadowResourceViews(
 		m_pd3dDevice,
 		shadowmap.get(),
@@ -327,7 +335,7 @@ void CGameFramework::CreateRtvAndDsvDescriptorHeaps()
 {
 	D3D12_DESCRIPTOR_HEAP_DESC d3dDescriptorHeapDesc;
 	::ZeroMemory(&d3dDescriptorHeapDesc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
-	d3dDescriptorHeapDesc.NumDescriptors = m_nSwapChainBuffers;
+	d3dDescriptorHeapDesc.NumDescriptors = RTV_SLOT_COUNT;
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	d3dDescriptorHeapDesc.NodeMask = 0;
@@ -391,6 +399,40 @@ void CGameFramework::CreateDepthStencilView()
 	m_pd3dDevice->CreateDepthStencilView(m_pd3dDepthStencilBuffer, &d3dDepthStencilViewDesc, d3dDsvCPUDescriptorHandle);
 }
 
+void CGameFramework::CreateRenderBuffers()
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	d3dColorBufferRtvHandle.ptr += (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
+
+	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+
+	renderBuffers.emplace_back(RenderTarget());
+	renderBuffers[0].CreateRenderTarget(
+		m_pd3dDevice,
+		m_nWndClientWidth,
+		m_nWndClientHeight,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		d3dColorBufferRtvHandle,
+		pfClearColor
+	);
+}
+
+void CGameFramework::CreateRenderBuffersSRV()
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dCpuSrvHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE d3dGpuSrvHandle;
+
+	for (int i = 0; i < renderBuffers.size();++i) {
+		if (!ResourceManager::Instance().AllocateNextSrvDescriptor(d3dCpuSrvHandle, d3dGpuSrvHandle))
+		{
+			OutputDebugStringW(L"[GameFramework] Color buffer SRV slot allocation failed.\n");
+			return;
+		}
+
+		renderBuffers[i].CreateSRV(m_pd3dDevice, d3dCpuSrvHandle, d3dGpuSrvHandle);
+	}
+}
+
 void CGameFramework::ChangeSwapChainState()
 {
 
@@ -419,6 +461,10 @@ void CGameFramework::ChangeSwapChainState()
 	m_nSwapChainBufferIndex = m_pdxgiSwapChain->GetCurrentBackBufferIndex();
 
 	CreateRenderTargetViews();
+
+	renderBuffers.clear();
+	CreateRenderBuffers();
+	CreateRenderBuffersSRV();
 }
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
@@ -602,6 +648,8 @@ void CGameFramework::BuildObjects()
 		root->GetRoot()
 	);
 
+	fscreenrenderer.init(m_pd3dDevice, m_pd3dCommandList, shadermanager->GetShader(ShaderType::FULLSCREEN));
+	
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	//m_pScene.push_back(make_unique<MainScene>(this));
 	m_pScene.back()->SetRoot(root->GetRoot());
@@ -1007,14 +1055,6 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	
-	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
-	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	d3dResourceBarrier.Transition.pResource = m_ppd3dSwapChainBackBuffers[m_nSwapChainBufferIndex];
-	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
 	
 	AnimateObjects(fTimeElapsed);
@@ -1033,19 +1073,21 @@ void CGameFramework::FrameAdvance()
 
 
 	ShadowRendering();
-	
+
+	PrepareMainRender();
 	MainRendering();
 	TransparentRendering();
 	RenderTextSystem();
+
 	//compute pipline
-	
+	PreparePostRender();
+
 
 
 	//rendering end
-	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
+	BlitToBackBuffer();
+	
+
 
 	hResult = m_pd3dCommandList->Close();
 
@@ -1091,6 +1133,59 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_pszFrameRate);
 }
 
+void CGameFramework::PrepareMainRender()
+{
+	renderBuffers[BufferName::COLOR].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	d3dRtvCPUDescriptorHandle.ptr += (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
+
+	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+
+}
+
+void CGameFramework::PreparePostRender()
+{
+
+}
+
+void CGameFramework::BlitToBackBuffer()
+{
+	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
+	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	d3dResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	d3dResourceBarrier.Transition.pResource = m_ppd3dSwapChainBackBuffers[m_nSwapChainBufferIndex];
+	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
+
+	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+	m_pd3dCommandList->SetGraphicsRootSignature(root->GetRoot());
+	//color->backbuffer
+	fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[BufferName::COLOR]);
+
+	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
+
+}
+
+
 
 void CGameFramework::ShadowRendering()
 {
@@ -1110,18 +1205,6 @@ void CGameFramework::ShadowRendering()
 void CGameFramework::MainRendering()
 {
 	//main rendering pass
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * ::gnRtvDescriptorIncrementSize);
-
-	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
-	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
-
-	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP

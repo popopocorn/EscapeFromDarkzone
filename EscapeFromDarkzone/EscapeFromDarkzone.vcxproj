@@ -159,6 +159,7 @@
     <ClInclude Include="EnemyObject.h" />
     <ClInclude Include="EscapeFromDarkzone.h" />
     <ClInclude Include="FontResource.h" />
+    <ClInclude Include="FullScreenRenderer.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
     <ClInclude Include="InventoryManager.h" />
@@ -175,6 +176,7 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="Projectile.h" />
     <ClInclude Include="protocol.h" />
+    <ClInclude Include="RenderTarget.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="RootSignature.h" />
@@ -205,6 +207,7 @@
     <ClCompile Include="EnemyObject.cpp" />
     <ClCompile Include="EscapeFromDarkzone.cpp" />
     <ClCompile Include="FontResource.cpp" />
+    <ClCompile Include="FullScreenRenderer.cpp" />
     <ClCompile Include="GameFramework.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="InventoryManager.cpp" />
@@ -219,6 +222,7 @@
     <ClCompile Include="NetPacketDispatcher.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Projectile.cpp" />
+    <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="ResourceManager.cpp" />
     <ClCompile Include="RootSignature.cpp" />
     <ClCompile Include="Scene.cpp" />

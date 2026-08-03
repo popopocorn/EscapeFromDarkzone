@@ -436,7 +436,9 @@ enum class KEY_STATE
 
 enum RENDERINGPASS : int {
 	MAIN = 0,
-	SHADOW = 1,
-	THROUGH =2,
+	SHADOW,
+	THROUGH,
+	POST,
+
 };
 

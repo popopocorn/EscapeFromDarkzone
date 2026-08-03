@@ -20,7 +20,7 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW		UVBufferView;
 	unique_ptr<CTexture>			texture;
 public:	
-	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist);
+	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist, bool fullscreen = false);
 	~UIMesh();
 	virtual void ReleaseUploadBuffers();
 	virtual void LoadTexture(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pszFileName);

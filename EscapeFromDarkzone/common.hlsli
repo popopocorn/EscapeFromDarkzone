@@ -121,7 +121,7 @@ Texture2D gtxtMetallicTexture : register(t9);
 Texture2D gtxtEmissionTexture : register(t10);
 Texture2D gtxtDetailAlbedoTexture : register(t11);
 Texture2D gtxtDetailNormalTexture : register(t12);
-
+Texture2D FullScreenTexture : register(t15);
 SamplerState gssWrap : register(s0);
 
 

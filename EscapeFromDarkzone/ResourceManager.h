@@ -324,10 +324,7 @@ private:
 
 	bool ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey);
 
-	bool AllocateNextSrvDescriptor(
-		D3D12_CPU_DESCRIPTOR_HANDLE& d3dCpuDescriptorHandle,
-		D3D12_GPU_DESCRIPTOR_HANDLE& d3dGpuDescriptorHandle
-	);
+
 
 public:
 	static ResourceManager& Instance()
@@ -340,6 +337,11 @@ public:
 		ID3D12Device* pd3dDevice,
 		int nConstantBufferViews,
 		int nShaderResourceViews
+	);
+
+	bool AllocateNextSrvDescriptor(
+		D3D12_CPU_DESCRIPTOR_HANDLE& d3dCpuDescriptorHandle,
+		D3D12_GPU_DESCRIPTOR_HANDLE& d3dGpuDescriptorHandle
 	);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE CreateConstantBufferViews(

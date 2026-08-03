@@ -12,14 +12,28 @@
 
 #include "OtherPlayer.h"	// 03.30 추가
 #include <array>			// 05.08 추가
-
 #include "RootSignature.h"
+#include "FullScreenRenderer.h"
 
 class NetPacketDispatcher;
 class NetEntityManager;
 class TextRenderer;
 class ShaderManager;
+class RenderTarget;
+class FullScreenRenderer;
 
+enum RtvSlot
+{
+	RTV_BACKBUFFER_0 = 0,
+	RTV_BACKBUFFER_1,
+	RTV_COLOR_BUFFER,
+	
+	RTV_SLOT_COUNT
+};
+enum BufferName {
+	COLOR = 0,
+
+};
 class CGameFramework
 {
 	friend class NetPacketDispatcher;
@@ -40,6 +54,8 @@ public:
 
 	void CreateRenderTargetViews();
 	void CreateDepthStencilView();
+	void CreateRenderBuffers();
+	void CreateRenderBuffersSRV();
 
 	void ChangeSwapChainState();
 
@@ -49,6 +65,9 @@ public:
     void ProcessInput();
     void AnimateObjects(float fTimeElapsed);
     void FrameAdvance();
+	void PrepareMainRender();
+	void PreparePostRender();
+	void BlitToBackBuffer();
 
 	void ShadowRendering();
 	void MainRendering();
@@ -96,7 +115,7 @@ private:
 	UINT						m_nSwapChainBufferIndex;
 
 	ID3D12Resource				*m_ppd3dSwapChainBackBuffers[m_nSwapChainBuffers];
-	ID3D12Resource				*m_pd3dColorBuffer = nullptr;
+	vector<RenderTarget>		renderBuffers;
 	ID3D12DescriptorHeap		*m_pd3dRtvDescriptorHeap = NULL;
 
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
@@ -128,6 +147,7 @@ private:
 	unique_ptr<CCamera>			observer;
 	unique_ptr<ShadowMap>		shadowmap;
 	unique_ptr<ShaderManager>	shadermanager;
+	FullScreenRenderer			fscreenrenderer;
 	
 	
 

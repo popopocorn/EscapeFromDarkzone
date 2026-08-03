@@ -304,4 +304,20 @@ float4 PSThroughPlayer(VS_STANDARD_OUTPUT input) : SV_TARGET
 
     return c;
 }
+VS_UI_OUTPUT VSFullScreen(VS_UI_INPUT input)
+{
+    VS_UI_OUTPUT output;
+    output.position = float4(input.position, 1.0f);
+    output.uv = input.uv;
+    return output;
+}
+float4 PSFullScreen(VS_UI_OUTPUT input) :SV_Target
+{
+    float4 cAlbedoColor = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    
+    cAlbedoColor = FullScreenTexture.Sample(gssWrap, input.uv);
+    
+    return cAlbedoColor;
+}
+
 #endif // SHADERS_HLSL

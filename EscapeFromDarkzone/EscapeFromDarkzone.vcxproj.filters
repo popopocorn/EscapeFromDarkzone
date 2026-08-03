@@ -104,6 +104,8 @@
     <ClCompile Include="UIText.cpp" />
     <ClCompile Include="TextRenderer.cpp" />
     <ClCompile Include="ItemTextData.cpp" />
+    <ClCompile Include="RenderTarget.cpp" />
+    <ClCompile Include="FullScreenRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -219,6 +221,8 @@
     <ClInclude Include="UIText.h" />
     <ClInclude Include="TextRenderer.h" />
     <ClInclude Include="ItemTextData.h" />
+    <ClInclude Include="RenderTarget.h" />
+    <ClInclude Include="FullScreenRenderer.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">

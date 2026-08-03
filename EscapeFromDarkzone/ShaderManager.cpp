@@ -27,6 +27,10 @@ void ShaderManager::BuildShaders(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	pshader->CreateShadowShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	pshader->CreateThroughShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 	Shaders[ShaderType::PLAYER] = unique_ptr<PlayerShader>(pshader);
+
+
+	Shaders[ShaderType::FULLSCREEN] = make_unique<FullscreenShader>();
+	Shaders[ShaderType::FULLSCREEN]->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
 
 CShader* ShaderManager::GetShader(ShaderType type)

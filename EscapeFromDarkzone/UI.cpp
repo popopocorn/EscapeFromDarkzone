@@ -9,25 +9,48 @@
 
 UIName MapItemIDToUIName(ItemID id);
 
-UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
+UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist, bool fullscreen)
 {
-	m_pxmf3Positions.resize(6);
-	m_pxmf3Positions[0] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
-	m_pxmf3Positions[1] = XMFLOAT3(-0.5f, 0.5f, 0.0f); // LT
-	m_pxmf3Positions[2] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
+	if (fullscreen)
+	{
+		m_pxmf3Positions.resize(6);
+		m_pxmf3Positions[0] = XMFLOAT3(-1.0f, -1.0f, 0.0f); // LB
+		m_pxmf3Positions[1] = XMFLOAT3(-1.0f, 1.0f, 0.0f); // LT
+		m_pxmf3Positions[2] = XMFLOAT3(1.0f, 1.0f, 0.0f); // RT
 
-	m_pxmf3Positions[3] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
-	m_pxmf3Positions[4] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
-	m_pxmf3Positions[5] = XMFLOAT3(0.5f, -0.5f, 0.0f); // RB
+		m_pxmf3Positions[3] = XMFLOAT3(-1.0f, -1.0f, 0.0f); // LB
+		m_pxmf3Positions[4] = XMFLOAT3(1.0f, 1.0f, 0.0f); // RT
+		m_pxmf3Positions[5] = XMFLOAT3(1.0f, -1.0f, 0.0f); // RB
 
-	UVs.resize(6);
-	UVs[0] = XMFLOAT2(0.0f, 1.0f); // LB
-	UVs[1] = XMFLOAT2(0.0f, 0.0f); // LT
-	UVs[2] = XMFLOAT2(1.0f, 0.0f); // RT
+		UVs.resize(6);
+		UVs[0] = XMFLOAT2(0.0f, 1.0f); // LB
+		UVs[1] = XMFLOAT2(0.0f, 0.0f); // LT
+		UVs[2] = XMFLOAT2(1.0f, 0.0f); // RT
 
-	UVs[3] = XMFLOAT2(0.0f, 1.0f); // LB
-	UVs[4] = XMFLOAT2(1.0f, 0.0f); // RT
-	UVs[5] = XMFLOAT2(1.0f, 1.0f); // RB
+		UVs[3] = XMFLOAT2(0.0f, 1.0f); // LB
+		UVs[4] = XMFLOAT2(1.0f, 0.0f); // RT
+		UVs[5] = XMFLOAT2(1.0f, 1.0f); // RB
+	}
+	else
+	{
+		m_pxmf3Positions.resize(6);
+		m_pxmf3Positions[0] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
+		m_pxmf3Positions[1] = XMFLOAT3(-0.5f, 0.5f, 0.0f); // LT
+		m_pxmf3Positions[2] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
+
+		m_pxmf3Positions[3] = XMFLOAT3(-0.5f, -0.5f, 0.0f); // LB
+		m_pxmf3Positions[4] = XMFLOAT3(0.5f, 0.5f, 0.0f); // RT
+		m_pxmf3Positions[5] = XMFLOAT3(0.5f, -0.5f, 0.0f); // RB
+
+		UVs.resize(6);
+		UVs[0] = XMFLOAT2(0.0f, 1.0f); // LB
+		UVs[1] = XMFLOAT2(0.0f, 0.0f); // LT
+		UVs[2] = XMFLOAT2(1.0f, 0.0f); // RT
+
+		UVs[3] = XMFLOAT2(0.0f, 1.0f); // LB
+		UVs[4] = XMFLOAT2(1.0f, 0.0f); // RT
+		UVs[5] = XMFLOAT2(1.0f, 1.0f); // RB
+	}
 
 	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
