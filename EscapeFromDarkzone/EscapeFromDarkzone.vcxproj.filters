@@ -4,6 +4,8 @@
     <FxCompile Include="common.hlsli" />
     <FxCompile Include="Light.hlsli" />
     <FxCompile Include="Shaders.hlsl" />
+    <FxCompile Include="ParticleCompute.hlsl" />
+    <FxCompile Include="ParticleRender.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp">
@@ -57,12 +59,6 @@
     <ClCompile Include="ShadowMap.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
-    <ClCompile Include="Effect.cpp">
-      <Filter>소스파일</Filter>
-    </ClCompile>
-    <ClCompile Include="EffectShader.cpp">
-      <Filter>소스파일</Filter>
-    </ClCompile>
     <ClCompile Include="OtherPlayer.cpp">
       <Filter>소스파일</Filter>
     </ClCompile>
@@ -106,6 +102,7 @@
     <ClCompile Include="ItemTextData.cpp" />
     <ClCompile Include="RenderTarget.cpp" />
     <ClCompile Include="FullScreenRenderer.cpp" />
+    <ClCompile Include="ParticleResource.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -168,9 +165,6 @@
     <ClInclude Include="Effect.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="EffectShader.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="OtherPlayer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -223,6 +217,8 @@
     <ClInclude Include="ItemTextData.h" />
     <ClInclude Include="RenderTarget.h" />
     <ClInclude Include="FullScreenRenderer.h" />
+    <ClInclude Include="ParticleResource.h" />
+    <ClInclude Include="Particle.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="EscapeFromDarkzone.ico">
@@ -234,7 +230,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Debug.hlsli" />
-    <None Include="Effect.hlsli" />
     <None Include="Text.hlsli" />
   </ItemGroup>
   <ItemGroup>
