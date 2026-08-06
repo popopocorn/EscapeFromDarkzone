@@ -1247,6 +1247,14 @@ void CFogOverlayShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCame
 	pd3dCommandList->DrawInstanced(3, 1, 0, 0);
 }
 
+D3D12_BLEND_DESC FullscreenShader::CreateBlendState()
+{
+	D3D12_BLEND_DESC desc{};
+	desc.RenderTarget[0].BlendEnable = FALSE;
+	desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	return desc;
+}
+
 D3D12_INPUT_LAYOUT_DESC FullscreenShader::CreateInputLayout()
 {
 	UINT nInputElementDescs = 2;
