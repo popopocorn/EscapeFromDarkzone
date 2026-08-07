@@ -99,7 +99,7 @@ inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 
 // NpcInputEvent
 struct NpcInputEvent {
-    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN, ROUND_LEAVE };
+    enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN, ROUND_LEAVE, LOOT_PICKUP };
     Type type;
 
     int      room_id = -1;      // 이벤트가 적용될 룸
@@ -112,10 +112,17 @@ struct NpcInputEvent {
     short    weapon_type;
     short    weapon_grade;
 
-    int      new_client_id;
+    int      new_client_id;     // ROUND_JOIN, ROUND_LEAVE, LOOT_PICKUP 요청한 클라
+
+    // LOOT_PICKUP 전용
+    short    loot_box_id = -1;
+    short    loot_slot_idx = -1;
 
     XMFLOAT3 explode_pos;
 };
+
+// 룸 틱 스레드 수. (룸 s % ROOM_THREAD_COUNT)
+constexpr int ROOM_THREAD_COUNT = 2;
 
 // NpcInputQueue
 class NpcInputQueue {
@@ -126,4 +133,10 @@ public:
     void DrainTo(std::vector<NpcInputEvent>& out);
 };
 
-extern NpcInputQueue g_npc_input_queue;
+extern std::array<NpcInputQueue, ROOM_THREAD_COUNT> g_npc_queues;
+
+// 담당 스레드 연결. 로비 이벤트(room_id < 0)는 워커 0이 처리한다.
+inline int RoomThreadOf(int room_id)
+{
+    return (room_id < 0) ? 0 : (room_id % ROOM_THREAD_COUNT);
+}

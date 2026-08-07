@@ -578,12 +578,16 @@ static void ReconcileRoomParticipants(Room& r)
 
 // 룸 참가 대기열
 std::vector<int> g_ready_players;
+std::mutex       g_ready_mtx;      // 룸 스레드가 공유하므로 보호
 
 static void spawn_room_npcs(Room& r);
 
 static void start_new_round(Room& r)
 {
 	std::cout << "[ROUND] starting new round in room " << r.id << "\n";
+
+	// 대기열은 룸 스레드가 공유하므로 보호 필요
+	std::lock_guard<std::mutex> rk(g_ready_mtx);
 
 	int bound = 0;
 
@@ -1530,6 +1534,8 @@ static void ApplyDamage(const Room& r, SERVER_NPC& npc, short damage, int attack
 	}
 }
 
+static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID item, int count);
+
 static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 {
 	switch (e.type) {
@@ -1607,11 +1613,14 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		if (!lobby) break;
 
 		// 중복 방지
-		bool exists = false;
-		for (int r_cid : g_ready_players) { if (r_cid == cid) { exists = true; break; } }
-		if (!exists) {
-			g_ready_players.push_back(cid);
-			std::cout << "[ROUND] client " << cid << " ready (" << g_ready_players.size() << ")\n";
+		{
+			std::lock_guard<std::mutex> rk(g_ready_mtx);
+			bool exists = false;
+			for (int r_cid : g_ready_players) { if (r_cid == cid) { exists = true; break; } }
+			if (!exists) {
+				g_ready_players.push_back(cid);
+				std::cout << "[ROUND] client " << cid << " ready (" << g_ready_players.size() << ")\n";
+			}
 		}
 		break;
 	}
@@ -1646,6 +1655,70 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 			if (other < 0) continue;
 			clients[other].send_remove_player_packet(cid);
 		}
+		break;
+	}
+	case NpcInputEvent::LOOT_PICKUP:
+	{
+		int cid = e.new_client_id;
+
+		// 큐에 들어온 뒤 사망했거나 룸을 떠났을 수 있으므로 재확인
+		bool ok = false;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			ok = (clients[cid]._state == ST_INGAME
+				&& !clients[cid].dead
+				&& clients[cid].room_id == r.id);
+		}
+		if (!ok) break;
+
+		// 박스 유효성 검사
+		SERVER_NPC& box = r.npcs[e.loot_box_id];
+		if (!box.loot_active) break;
+
+		ItemSlot& boxSlot = box._inventory[e.loot_slot_idx];
+		if (boxSlot.item == ItemID::NONE || boxSlot.count <= 0) break;
+
+		const ItemID pickItem = boxSlot.item;
+		const int    pickCount = boxSlot.count;
+
+		// 플레이어 인벤에 추가 + 갱신 송신
+		int playerSlotIdx = -1;
+		{
+			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+			playerSlotIdx = AddInventoryItem(
+				clients[cid]._inventory, pickItem, pickCount);
+			if (playerSlotIdx >= 0) {
+				clients[cid].send_inventory_update_packet(
+					static_cast<short>(playerSlotIdx));
+			}
+		}
+		if (playerSlotIdx < 0) break;
+
+		// 박스 슬롯 비우기
+		boxSlot.item = ItemID::NONE;
+		boxSlot.count = 0;
+
+		// 박스 슬롯 변경 브로드캐스트
+		SC_LOOT_BOX_SLOT_UPDATE_PACKET bp;
+		bp.size = sizeof(bp);
+		bp.type = SC_LOOT_BOX_SLOT_UPDATE;
+		bp.box_id = e.loot_box_id;
+		bp.slotidx = e.loot_slot_idx;
+		bp.item_id = ItemID::NONE;
+		bp.count = 0;
+
+		for (int k = 0; k < ROOM_CAPACITY; ++k) {
+			int i = r.participants[k];
+			if (i < 0) continue;
+			clients[i].do_send(&bp);
+		}
+
+		std::cout << "[LOOT_PICKUP] client:" << cid
+			<< " box:" << e.loot_box_id
+			<< " slot:" << e.loot_slot_idx
+			<< " item:" << static_cast<int>(pickItem)
+			<< " count:" << pickCount
+			<< " -> playerSlot:" << playerSlotIdx << "\n";
 		break;
 	}
 	case NpcInputEvent::GRENADE_EXPLODE:
@@ -2278,7 +2351,7 @@ static void DropPlayerLootBox(Room& r, int victim_id)
 	std::cout << "[LOOT] player " << victim_id << " dropped box at slot " << slot << "\n";
 }
 
-static void npc_thread()
+static void npc_thread(int widx)
 {
 	using clock = std::chrono::steady_clock;
 	constexpr auto TICK = std::chrono::milliseconds(33);	// 30Hz
@@ -2303,12 +2376,12 @@ static void npc_thread()
 		}
 		*/
 
-		for (int s = 0; s < MAX_ROOMS; ++s) {
+		for (int s = widx; s < MAX_ROOMS; s += ROOM_THREAD_COUNT) {
 			if (!g_rooms[s].alive) continue;
 			ReconcileRoomParticipants(g_rooms[s]);
 		}
 
-		g_npc_input_queue.DrainTo(events);
+		g_npc_queues[widx].DrainTo(events);
 		for (auto& e : events) {
 			if (e.type == NpcInputEvent::ROUND_JOIN) {
 				HandleNpcEvent(g_rooms[0], e);   // 로비 이벤트 (r 미사용)
@@ -2321,10 +2394,15 @@ static void npc_thread()
 		}
 
 		// ===== 매치메이킹 =====
-		if (static_cast<int>(g_ready_players.size()) >= ROUND_MIN_PLAYERS) {
-			// 빈 룸 슬롯 탐색
+		size_t ready_count;
+		{
+			std::lock_guard<std::mutex> rk(g_ready_mtx);
+			ready_count = g_ready_players.size();
+		}
+		if (static_cast<int>(ready_count) >= ROUND_MIN_PLAYERS) {
+			// 빈 룸 슬롯 탐색 (자기 몫 슬롯만)
 			int slot = -1;
-			for (int s = 0; s < MAX_ROOMS; ++s) {
+			for (int s = widx; s < MAX_ROOMS; s += ROOM_THREAD_COUNT) {
 				if (!g_rooms[s].alive) { slot = s; break; }
 			}
 			if (slot >= 0) {
@@ -2351,8 +2429,8 @@ static void npc_thread()
 
 		const auto now = std::chrono::steady_clock::now();
 
-		// ===== 전 룸 틱 처리 =====
-		for (int s = 0; s < MAX_ROOMS; ++s) {
+		// ===== 룸 틱 처리 =====
+		for (int s = widx; s < MAX_ROOMS; s += ROOM_THREAD_COUNT) {
 			Room& r = g_rooms[s];
 			if (!r.alive) continue;
 
@@ -2550,6 +2628,13 @@ static void TagEventRoom(NpcInputEvent& ev, int c_id)
 	ev.room_gen = clients[c_id].room_gen;
 }
 
+// 룸 태그를 달고 담당 스레드 큐로 보내기
+static void PushRoomEvent(NpcInputEvent& ev, int c_id)
+{
+	TagEventRoom(ev, c_id);
+	g_npc_queues[RoomThreadOf(ev.room_id)].Push(std::move(ev));
+}
+
 void process_packet(int c_id, char* packet)
 {
 	switch (packet[1]) {
@@ -2594,8 +2679,7 @@ void process_packet(int c_id, char* packet)
 		NpcInputEvent ev{};
 		ev.type = NpcInputEvent::ROUND_JOIN;
 		ev.new_client_id = c_id;
-		TagEventRoom(ev, c_id);
-		g_npc_input_queue.Push(std::move(ev));
+		PushRoomEvent(ev, c_id);
 		break;
 	}
 	case CS_ROUND_LEAVE: {
@@ -2603,8 +2687,7 @@ void process_packet(int c_id, char* packet)
 		NpcInputEvent ev{};
 		ev.type = NpcInputEvent::ROUND_LEAVE;
 		ev.new_client_id = c_id;
-		TagEventRoom(ev, c_id);
-		g_npc_input_queue.Push(std::move(ev));
+		PushRoomEvent(ev, c_id);
 		break;
 	}
 	case CS_MOVE: {
@@ -2865,8 +2948,7 @@ void process_packet(int c_id, char* packet)
 			break;										// 데미지, 이펙트 등 전부 안 보냄
 		}
 
-		TagEventRoom(ev, c_id);
-		g_npc_input_queue.Push(std::move(ev));
+		PushRoomEvent(ev, c_id);
 
 		break;
 	}
@@ -3053,68 +3135,15 @@ void process_packet(int c_id, char* packet)
 
 		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
 
-		// 박스 유효성
-		int rid = -1;
-		{
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
-			rid = clients[c_id].room_id;
-		}
-		if (rid < 0 || rid >= MAX_ROOMS || !g_rooms[rid].alive) break;
-
 		if (p->box_id < 0 || p->box_id >= MAX_NPC_PER_ROOM) break;
-		SERVER_NPC& box = g_rooms[rid].npcs[p->box_id];
-		if (!box.loot_active) break;
-
-		// 슬롯 범위
 		if (p->slotidx < 0 || p->slotidx >= INVENTORY_SIZE) break;
 
-		ItemSlot& boxSlot = box._inventory[p->slotidx];
-		if (boxSlot.item == ItemID::NONE || boxSlot.count <= 0) break;
-
-		const ItemID pickItem = boxSlot.item;
-		const int    pickCount = boxSlot.count;
-
-		// 플레이어 인벤에 추가 + 갱신 송신 (한 락 안에서)
-		int playerSlotIdx = -1;
-		{
-			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
-			playerSlotIdx = AddInventoryItem(
-				clients[c_id]._inventory, pickItem, pickCount);
-			if (playerSlotIdx >= 0) {
-				clients[c_id].send_inventory_update_packet(
-					static_cast<short>(playerSlotIdx));
-			}
-		}
-		if (playerSlotIdx < 0) break;  // 인벤 가득 — 박스 그대로
-
-		// 박스 슬롯 비우기
-		boxSlot.item = ItemID::NONE;
-		boxSlot.count = 0;
-
-		// 박스 슬롯 변경 브로드캐스트
-		SC_LOOT_BOX_SLOT_UPDATE_PACKET bp;
-		bp.size = sizeof(bp);
-		bp.type = SC_LOOT_BOX_SLOT_UPDATE;
-		bp.box_id = p->box_id;
-		bp.slotidx = p->slotidx;
-		bp.item_id = ItemID::NONE;
-		bp.count = 0;
-
-		for (auto& pl : clients) {
-			{
-				std::lock_guard<std::mutex> ll(pl._s_lock);
-				if (ST_INGAME != pl._state) continue;
-				if (pl.room_id != rid) continue;
-			}
-			pl.do_send(&bp);
-		}
-
-		std::cout << "[LOOT_PICKUP] client:" << c_id
-			<< " box:" << p->box_id
-			<< " slot:" << p->slotidx
-			<< " item:" << static_cast<int>(pickItem)
-			<< " count:" << pickCount
-			<< " -> playerSlot:" << playerSlotIdx << "\n";
+		NpcInputEvent ev{};
+		ev.type = NpcInputEvent::LOOT_PICKUP;
+		ev.new_client_id = c_id;
+		ev.loot_box_id = p->box_id;
+		ev.loot_slot_idx = p->slotidx;
+		PushRoomEvent(ev, c_id);
 
 		break;
 	}
@@ -3145,8 +3174,7 @@ void process_packet(int c_id, char* packet)
 		ev.attacker_client_id = c_id;
 		ev.explode_pos = { p->x, p->y, p->z };
 
-		TagEventRoom(ev, c_id);
-		g_npc_input_queue.Push(std::move(ev));
+		PushRoomEvent(ev, c_id);
 
 		break;
 	}
@@ -3512,11 +3540,14 @@ int main()
 	for (int i = 0; i < num_threads; ++i)
 		worker_threads.emplace_back(worker_thread, h_iocp);
 
-	std::thread npc_th(npc_thread);
+	std::vector<std::thread> npc_threads;
+	for (int i = 0; i < ROOM_THREAD_COUNT; ++i)
+		npc_threads.emplace_back(npc_thread, i);
 
 	for (auto& th : worker_threads)
 		th.join();
-	npc_th.join();
+	for (auto& th : npc_threads)
+		th.join();
 	closesocket(g_s_socket);
 	WSACleanup();
 }
