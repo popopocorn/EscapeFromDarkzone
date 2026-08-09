@@ -70,6 +70,7 @@ enum ParticleDescriptorIndex : UINT
 	PARTICLE_DESCRIPTOR_COUNT
 };
 
+//GPU풀에 저장되는 개별 파티클 구조체(파티클 시스템에서 사용)
 struct GPUParticle
 {
 	XMFLOAT3 position = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -103,6 +104,7 @@ struct GPUParticle
 	UINT padding1 = 0;
 };
 
+//이미터에서 GPU로 전달되는 파티클 방출 요청 구조체(이미터당 하나)
 struct ParticleSpawnRequest
 {
 	XMFLOAT3 position = XMFLOAT3(0.0f, 0.0f, 0.0f);

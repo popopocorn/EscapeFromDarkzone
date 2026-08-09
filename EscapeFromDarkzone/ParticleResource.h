@@ -55,6 +55,7 @@ struct ParticleAtlasDesc
 	UINT validFrameCount = 1;
 };
 
+//개별 파티클 방출기 설정 구조체(색상, 크기, 속도, 수명 등): 파티클 제작 설정 데이터
 struct ParticleEmitterDesc
 {
 	ParticleTextureID textureId = ParticleTextureID::EXPLOSION;
@@ -109,6 +110,7 @@ struct ParticleEffectDesc
 	std::vector<ParticleEmitterDesc> emitters;
 };
 
+//이펙트 제작 데이터와 텍스처를 관리하는 클래스
 class ParticleResource
 {
 public:

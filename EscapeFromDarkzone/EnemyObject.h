@@ -5,6 +5,7 @@
 #include "Item.h"
 #include "Shader.h"
 #include "ResourceManager.h"
+#include "AI.h"
 
 class CPlayer;
 class Inventory;
@@ -70,7 +71,11 @@ public:
 	virtual void Update(float fTimeElapsed);
 	virtual void HandleCollision(XMFLOAT3 normal);
 	virtual void SetPosition(float x, float y, float z);
-	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
+	void SetPlayer(CGameObject* pPlayer)
+	{
+		m_pPlayer = pPlayer;
+		m_Blackboard.pTarget = nullptr;
+	}
 	virtual void Render(
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		bool batch,
@@ -88,9 +93,20 @@ public:
 	bool ConsumeDeadRemovalRequest();
 	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비			// 서버 권위 구조로 바꾸면서 안씀
 	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시
+
 	void setNav(AstarNavigation* nav) { AStarNav = nav; }
 	AstarNavigation* GetNav() { return AStarNav; }
-	std::unique_ptr<State<CEnemyObject>> m_pState;
+
+	StateMachine<CEnemyObject> m_StateMachine;
+
+	EnemyBlackboard m_Blackboard;
+	std::unique_ptr<BehaviorTree> m_pBehaviorTree;
+
+	EnemyBlackboard& GetBlackboard() { return m_Blackboard; }
+	const EnemyBlackboard& GetBlackboard() const { return m_Blackboard; }
+
+	BehaviorTree* GetBehaviorTree() { return m_pBehaviorTree.get(); }
+	const BehaviorTree* GetBehaviorTree() const { return m_pBehaviorTree.get(); }
 
 	CGameObject* m_pPlayer = nullptr;
 	float						hp = 100;
@@ -121,7 +137,6 @@ public:
 	float m_fLeashRange = 25.0f;
 	float m_fReturnStopDistance = 0.5f;
 
-	float m_fThinkTimer = 0.0f;
 	float m_fThinkInterval = 0.2f;
 
 	float m_fAimTimer = 0.0f;
@@ -130,7 +145,6 @@ public:
 
 	float m_fAttackCooldown = 0.0f;
 
-	float m_fReturnIgnoreTimer = 0.0f;
 	float m_fReturnIgnoreDuration = 1.0f;
 
 	//거리 유지
@@ -162,12 +176,9 @@ public:
 	float m_fReloadTimer = 0.0f;
 	float m_fReloadDuration = 2.0f;
 
-	// 시야각 관련 값
+	// 시야각 관련 값 - 삭제된 데이터는 BlackBoard로 이동
 	float m_fViewAngle = 120.0f;
-	float m_fLoseSightTimer = 0.0f;
 	float m_fLoseSightDuration = 1.0f;
-	bool m_bHasLastSeenPlayer = false;
-	XMFLOAT3 m_xmf3LastSeenPlayerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	//Idle 상태에서 시야 회전 관련 값
 	float m_fCurrentYawDeg = 0.0f;

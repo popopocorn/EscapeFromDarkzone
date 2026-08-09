@@ -1597,7 +1597,7 @@ void EffectManager::ReleaseParticleSystemResources()
 	m_d3dParticleGpuDescriptorStartHandle = {};
 }
 
-//리소스 초기화
+//파티클 시스템 초기화
 void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -1859,6 +1859,7 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 	}
 }
 
+//실제 GPU 파티클 렌더링
 void EffectManager::RenderGpuParticles(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	if (!pd3dCommandList || !pCamera || !m_bParticleSystemResourcesReady)
