@@ -1,9 +1,15 @@
 #pragma once
-#include<functional>
+
 #include "stdafx.h"
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+#include <cfloat>
 
 class CEnemyObject;
 class CGameObject;
+
 
 struct tempNavMesh
 {
@@ -13,6 +19,7 @@ struct tempNavMesh
 	vector<int> idx;
 };
 
+
 struct NavigationPoly
 {
 	int ID;
@@ -21,6 +28,7 @@ struct NavigationPoly
 	array<int, 3> neighborIDs = { -1, -1, -1 };
 	XMFLOAT3 centroid = XMFLOAT3(0.0f, 0.0f, 0.0f);
 };
+
 
 class AstarNavigation
 {
@@ -39,6 +47,7 @@ public:
 
 	int FindPolyID(const XMFLOAT3& pos);
 };
+
 
 struct AStarNode
 {
@@ -67,6 +76,7 @@ enum class BehaviorStatus
 	Running
 };
 
+
 enum class EnemyBehaviorAction
 {
 	None,
@@ -79,14 +89,13 @@ enum class EnemyBehaviorAction
 };
 
 
-// NPC마다 하나씩 소유하는 행동트리 공유 데이터
-// 행동 판단에 필요한 값만 저장
+// NPC마다 하나씩 소유하는 행동트리 공유 데이터.
 struct EnemyBlackboard
 {
 	// 현재 타겟
-	CGameObject* pTarget = nullptr;		// 비소유 포인터
+	CGameObject* pTarget = nullptr;
 
-	// 현재 프레임에서 갱신되는 감지 정보
+	// 현재 감지 정보
 	bool bCanSeeTarget = false;
 	bool bCanShootTarget = false;
 	bool bOutsideLeash = false;
@@ -102,12 +111,12 @@ struct EnemyBlackboard
 	bool bHasMoveTarget = false;
 	XMFLOAT3 xmf3MoveTarget = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-	// 판단용 시간
+	// AI 판단용 시간
 	float fThinkTimer = 0.0f;
 	float fLoseSightTimer = 0.0f;
 	float fReturnIgnoreTimer = 0.0f;
 
-	// 현재 행동(디버그 및 동일 행동 재진입 방지)
+	// 현재 행동
 	EnemyBehaviorAction eCurrentAction = EnemyBehaviorAction::None;
 
 	void ResetPerception();
@@ -157,7 +166,6 @@ protected:
 };
 
 
-// 실행 중인 자식 위치를 기억하는 Sequence
 class SequenceNode : public CompositeNode
 {
 public:
@@ -171,7 +179,6 @@ private:
 };
 
 
-// 실행 중인 자식 위치를 기억하는 Selector
 class SelectorNode : public CompositeNode
 {
 public:
@@ -185,8 +192,6 @@ private:
 };
 
 
-// 매 Tick마다 가장 높은 우선순위부터 다시 검사하는 Selector.
-// Die, Return 등 높은 우선순위 행동이 현재 행동을 즉시 끊을 수 있도록 사용한다.
 class ReactiveSelectorNode : public CompositeNode
 {
 public:
@@ -237,11 +242,32 @@ public:
 
 	void SetRoot(std::unique_ptr<BehaviorNode> pRoot);
 
-	BehaviorStatus Tick(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed);
+	virtual BehaviorStatus Tick(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed);
 	void Reset();
 
 	BehaviorNode* GetRoot() const { return m_pRoot.get(); }
 
 protected:
 	std::unique_ptr<BehaviorNode> m_pRoot;
+};
+
+
+class EnemyBehaviorTree : public BehaviorTree
+{
+public:
+	EnemyBehaviorTree();
+	virtual ~EnemyBehaviorTree() = default;
+
+	virtual BehaviorStatus Tick(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed) override;
+
+private:
+	void BuildTree();
+	void UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed);
+
+	bool ShouldReturn(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+	bool ShouldReload(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+	bool ShouldAttack(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+	bool ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+
+	BehaviorStatus SelectAction(BehaviorContext& context, EnemyBehaviorAction action);
 };

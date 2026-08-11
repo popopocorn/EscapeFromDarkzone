@@ -271,7 +271,17 @@ public:
 	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
 
 	void  TriggerShootAnim() { m_fShootAnimTimer = m_fShootAnimHold; }
+public:
+	CGameObject* GetPlayer() const { return m_pPlayer; }
 
+	bool IsDying() const { return m_bDying; }
+
+	bool NeedsReload() const
+	{
+		return m_bReloading || (m_nCurrentAmmo <= 0);
+	}
+
+	int GetCurrentAmmo() const { return m_nCurrentAmmo; }
 };
 
 class EnemyIdle : public State<CEnemyObject>
@@ -288,9 +298,20 @@ public:
 	virtual bool Enter(CEnemyObject* pEnemy);
 	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
 	virtual void Exit(CEnemyObject* pEnemy);
+
+private:
+	float m_fFootstepTimer = 0.0f;
 };
 
 class EnemyAttack : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyReload : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
