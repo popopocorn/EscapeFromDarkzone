@@ -1156,6 +1156,116 @@ void EnemyIdle::Exit(CEnemyObject* pEnemy)
 {
 }
 
+bool EnemySearch::Enter(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Search;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	pEnemy->ClearPath();
+
+	if (blackboard.Search.bHasTarget)
+		pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
+	else
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+	return true;
+}
+
+void EnemySearch::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->IsDying())
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+	EnemySearchMemory& search = blackboard.Search;
+
+	// 수색 지점 도착 후 잠깐 멈춰서 주변을 살핀다.
+	if (search.fWaitTimer > 0.0f)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+		pEnemy->UpdateIdleLook(fTimeElapsed);
+		return;
+	}
+
+	// 아직 행동트리에서 수색 지점을 생성하지 못한 프레임
+	if (!search.bHasTarget)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	XMFLOAT3 currentPos = pEnemy->GetPosition();
+	XMFLOAT3 toTarget = Vector3::Subtract(search.xmf3Target, currentPos);
+	toTarget.y = 0.0f;
+
+	float distance = Vector3::Length(toTarget);
+
+	if (distance < 0.9f)
+	{
+		search.bHasTarget = false;
+		search.bReachedTarget = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+		return;
+	}
+
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+	bool hasPath = pEnemy->UpdatePathToPosition(search.xmf3Target, fTimeElapsed);
+
+	if (!hasPath)
+	{
+		search.bHasTarget = false;
+		search.bPathFailed = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->ClearPath();
+
+		return;
+	}
+
+	if (!pEnemy->FollowCurrentPath())
+	{
+		search.bHasTarget = false;
+		search.bPathFailed = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->ClearPath();
+	}
+}
+
+void EnemySearch::Exit(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.Search.ResetRuntime();
+	blackboard.bHasMoveTarget = false;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+}
+
 bool EnemyRun::Enter(CEnemyObject* pEnemy)
 {
 	if (!pEnemy)

@@ -1795,18 +1795,29 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	AStarNav = make_unique<AstarNavigation>();
 	AStarNav->LoadNavMeshFromFile("Model/NavMeshData.bin");
 
-	////적 오브젝트 - 네트워크가 안 될 때에만
-	//CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_2));
-	//pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
-	//pEnemy->ApplyDefaultWeaponByEnemyModelType();
-	//pEnemy->SetPosition(0.0f, 0.0f, 0.0f);
-	//pEnemy->SetSpawnPosition(XMFLOAT3(0.0f, 0.0f, 0.0f));
-	//pEnemy->SetScale(1.0f, 1.0f, 1.0f);
-	//pEnemy->setNav(AStarNav.get());
-	//pEnemy->SubmitWeaponToShader(stdshader);
-	//GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
-	//pSkinnedShader->addObjects(pEnemy);
+	// 적 오브젝트 - 네트워크가 안 될 때 로컬 AI 디버깅용 NPC 1마리 생성
+	if (!NetworkManager::Instance().IsConnected())
+	{
+		XMFLOAT3 debugEnemySpawn = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
+		int debugSpawnPoly = AStarNav->FindPolyID(debugEnemySpawn);
+
+		wchar_t debugText[128];
+		swprintf_s(debugText, L"[Enemy AI Debug] Spawn NavPoly = %d\n", debugSpawnPoly);
+		OutputDebugString(debugText);
+
+		CEnemyObject* pEnemy = new CEnemyObject(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature, pSkinnedShader, ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::ENEMY_01_2));
+		pEnemy->SetEnemyModelType(EnemyModelType::Enemy01);
+		pEnemy->ApplyDefaultWeaponByEnemyModelType();
+		pEnemy->SetPosition(debugEnemySpawn.x, debugEnemySpawn.y, debugEnemySpawn.z);
+		pEnemy->SetSpawnPosition(debugEnemySpawn);
+		pEnemy->SetScale(1.0f, 1.0f, 1.0f);
+		pEnemy->setNav(AStarNav.get());
+		pEnemy->SubmitWeaponToShader(stdshader);
+
+		GameObjects.push_back(unique_ptr<CGameObject>(pEnemy));
+		pSkinnedShader->addObjects(pEnemy);
+	}
 
 
 	if (m_pInventoryManager)
@@ -1835,6 +1846,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		}
 	}
 	LinkToPlayer();
+
 	EquipUI* e = new EquipUI(m_pPlayer);
 	e->Init(pd3dDevice, pd3dCommandList);
 	equipUI = e;
@@ -1874,7 +1886,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 			OutputDebugString(L"DEBUG: Server Connect Fail.\n");
 		}
 	}
-	else 
+	else
 	{
 		NetSession::Instance().RoundJoin();
 	}

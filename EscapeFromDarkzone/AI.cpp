@@ -35,6 +35,8 @@ void EnemyBlackboard::Reset()
 	fReturnIgnoreTimer = 0.0f;
 
 	eCurrentAction = EnemyBehaviorAction::None;
+
+	Search = EnemySearchMemory{};
 }
 
 BehaviorNode::BehaviorNode(const char* pName)
@@ -118,6 +120,61 @@ BehaviorStatus SequenceNode::Tick(BehaviorContext& context)
 void SequenceNode::Reset()
 {
 	m_nRunningChild = 0;
+	CompositeNode::Reset();
+}
+
+ReactiveSequenceNode::ReactiveSequenceNode(const char* pName)
+	: CompositeNode(pName)
+{
+}
+
+BehaviorStatus ReactiveSequenceNode::Tick(BehaviorContext& context)
+{
+	for (size_t i = 0; i < m_Children.size(); ++i)
+	{
+		BehaviorNode* pChild = m_Children[i].get();
+
+		if (!pChild)
+			continue;
+
+		BehaviorStatus status = pChild->Tick(context);
+
+		if (status == BehaviorStatus::Success)
+		{
+			pChild->Reset();
+			continue;
+		}
+
+		if (m_nRunningChild != INVALID_CHILD && m_nRunningChild != i && m_nRunningChild < m_Children.size())
+		{
+			if (m_Children[m_nRunningChild])
+				m_Children[m_nRunningChild]->Reset();
+		}
+
+		if (status == BehaviorStatus::Running)
+		{
+			m_nRunningChild = i;
+			return BehaviorStatus::Running;
+		}
+
+		m_nRunningChild = INVALID_CHILD;
+
+		for (size_t j = i + 1; j < m_Children.size(); ++j)
+		{
+			if (m_Children[j])
+				m_Children[j]->Reset();
+		}
+
+		return BehaviorStatus::Failure;
+	}
+
+	m_nRunningChild = INVALID_CHILD;
+	return BehaviorStatus::Success;
+}
+
+void ReactiveSequenceNode::Reset()
+{
+	m_nRunningChild = INVALID_CHILD;
 	CompositeNode::Reset();
 }
 
@@ -656,6 +713,51 @@ int AstarNavigation::FindPolyID(const XMFLOAT3& pos)
 	return -1;
 }
 
+bool AstarNavigation::FindSearchPointAround(const XMFLOAT3& center, float minRadius, float maxRadius, float random01, XMFLOAT3& outPoint) const
+{
+	vector<int> candidates;
+	candidates.reserve(mesh.size());
+
+	float minRadiusSq = minRadius * minRadius;
+	float maxRadiusSq = maxRadius * maxRadius;
+
+	for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+	{
+		const XMFLOAT3& point = mesh[i].centroid;
+
+		float dx = point.x - center.x;
+		float dz = point.z - center.z;
+
+		float distanceSq = dx * dx + dz * dz;
+
+		if (distanceSq < minRadiusSq)
+			continue;
+
+		if (distanceSq > maxRadiusSq)
+			continue;
+
+		candidates.push_back(i);
+	}
+
+	if (candidates.empty())
+		return false;
+
+	if (random01 < 0.0f)
+		random01 = 0.0f;
+
+	if (random01 >= 1.0f)
+		random01 = 0.999999f;
+
+	size_t selectedIndex = static_cast<size_t>(random01 * static_cast<float>(candidates.size()));
+
+	if (selectedIndex >= candidates.size())
+		selectedIndex = candidates.size() - 1;
+
+	outPoint = mesh[candidates[selectedIndex]].centroid;
+
+	return true;
+}
+
 EnemyBehaviorTree::EnemyBehaviorTree()
 {
 	BuildTree();
@@ -668,7 +770,7 @@ void EnemyBehaviorTree::BuildTree()
 	// -------------------------------------------------------------------------
 	// Die
 	// -------------------------------------------------------------------------
-	auto pDieSequence = std::make_unique<SequenceNode>("DieSequence");
+	auto pDieSequence = std::make_unique<ReactiveSequenceNode>("DieSequence");
 
 	pDieSequence->AddChild(std::make_unique<ConditionNode>(
 		"IsDying",
@@ -695,7 +797,7 @@ void EnemyBehaviorTree::BuildTree()
 	// -------------------------------------------------------------------------
 	// Return
 	// -------------------------------------------------------------------------
-	auto pReturnSequence = std::make_unique<SequenceNode>("ReturnSequence");
+	auto pReturnSequence = std::make_unique<ReactiveSequenceNode>("ReturnSequence");
 
 	pReturnSequence->AddChild(std::make_unique<ConditionNode>(
 		"ShouldReturn",
@@ -722,7 +824,7 @@ void EnemyBehaviorTree::BuildTree()
 	// -------------------------------------------------------------------------
 	// Reload
 	// -------------------------------------------------------------------------
-	auto pReloadSequence = std::make_unique<SequenceNode>("ReloadSequence");
+	auto pReloadSequence = std::make_unique<ReactiveSequenceNode>("ReloadSequence");
 
 	pReloadSequence->AddChild(std::make_unique<ConditionNode>(
 		"ShouldReload",
@@ -749,7 +851,7 @@ void EnemyBehaviorTree::BuildTree()
 	// -------------------------------------------------------------------------
 	// Attack
 	// -------------------------------------------------------------------------
-	auto pAttackSequence = std::make_unique<SequenceNode>("AttackSequence");
+	auto pAttackSequence = std::make_unique<ReactiveSequenceNode>("AttackSequence");
 
 	pAttackSequence->AddChild(std::make_unique<ConditionNode>(
 		"ShouldAttack",
@@ -776,7 +878,7 @@ void EnemyBehaviorTree::BuildTree()
 	// -------------------------------------------------------------------------
 	// Chase
 	// -------------------------------------------------------------------------
-	auto pChaseSequence = std::make_unique<SequenceNode>("ChaseSequence");
+	auto pChaseSequence = std::make_unique<ReactiveSequenceNode>("ChaseSequence");
 
 	pChaseSequence->AddChild(std::make_unique<ConditionNode>(
 		"ShouldChase",
@@ -798,6 +900,33 @@ void EnemyBehaviorTree::BuildTree()
 	));
 
 	pRoot->AddChild(std::move(pChaseSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Search
+	// -------------------------------------------------------------------------
+	auto pSearchSequence = std::make_unique<ReactiveSequenceNode>("SearchSequence");
+
+	pSearchSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldSearch",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldSearch(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pSearchSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteSearch",
+		[this](BehaviorContext& context)
+		{
+			return ExecuteSearch(context);
+		}
+	));
+
+	pRoot->AddChild(std::move(pSearchSequence));
 
 
 	// -------------------------------------------------------------------------
@@ -946,6 +1075,159 @@ bool EnemyBehaviorTree::ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard&
 	return false;
 }
 
+float EnemyBehaviorTree::NextSearchRandom01(EnemyBlackboard& blackboard)
+{
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.nRandomSeed == 0)
+		search.nRandomSeed = 0xA341316Cu;
+
+	search.nRandomSeed = search.nRandomSeed * 1664525u + 1013904223u;
+
+	return static_cast<float>(search.nRandomSeed & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
+}
+bool EnemyBehaviorTree::ShouldSearch(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (pEnemy->IsDying())
+		return false;
+
+	if (!pEnemy->GetNav())
+		return false;
+
+	if (blackboard.bOutsideLeash)
+		return false;
+
+	if (blackboard.bNeedsReload)
+		return false;
+
+	if (blackboard.bCanSeeTarget)
+		return false;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return false;
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+		return false;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Return && !pEnemy->IsNearSpawn())
+		return false;
+
+	return true;
+}
+
+bool EnemyBehaviorTree::BuildSearchTarget(CEnemyObject* pEnemy, EnemyBlackboard& blackboard)
+{
+	if (!pEnemy)
+		return false;
+
+	AstarNavigation* pNav = pEnemy->GetNav();
+
+	if (!pNav)
+		return false;
+
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.nRandomSeed == 0)
+	{
+		std::uint64_t address = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(pEnemy));
+		search.nRandomSeed = static_cast<unsigned int>(address ^ (address >> 32));
+
+		if (search.nRandomSeed == 0)
+			search.nRandomSeed = 0xA341316Cu;
+	}
+
+	XMFLOAT3 spawnPos = pEnemy->GetSpawnPosition();
+
+	float random01 = NextSearchRandom01(blackboard);
+
+	XMFLOAT3 searchTarget;
+
+	if (!pNav->FindSearchPointAround(spawnPos, search.fMinTargetDistance, search.fSearchRadius, random01, searchTarget))
+	{
+		search.bHasTarget = false;
+		search.bReachedTarget = false;
+		search.bPathFailed = false;
+		search.fWaitTimer = 0.5f;
+
+		blackboard.bHasMoveTarget = false;
+
+		return false;
+	}
+
+	search.xmf3Target = searchTarget;
+	search.bHasTarget = true;
+	search.bReachedTarget = false;
+	search.bPathFailed = false;
+	search.fWaitTimer = 0.0f;
+
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = searchTarget;
+
+	pEnemy->ClearPath();
+
+	return true;
+}
+
+BehaviorStatus EnemyBehaviorTree::ExecuteSearch(BehaviorContext& context)
+{
+	if (!context.pEnemy || !context.pBlackboard)
+		return BehaviorStatus::Failure;
+
+	CEnemyObject* pEnemy = context.pEnemy;
+	EnemyBlackboard& blackboard = *context.pBlackboard;
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.bReachedTarget)
+	{
+		search.bReachedTarget = false;
+		search.bHasTarget = false;
+
+		float randomWait = NextSearchRandom01(blackboard);
+		search.fWaitTimer = search.fWaitMin + (search.fWaitMax - search.fWaitMin) * randomWait;
+
+		blackboard.bHasMoveTarget = false;
+	}
+
+	if (search.bPathFailed)
+	{
+		search.bPathFailed = false;
+		search.bHasTarget = false;
+		blackboard.bHasMoveTarget = false;
+	}
+
+	if (search.fWaitTimer > 0.0f)
+	{
+		search.fWaitTimer -= context.fTimeElapsed;
+
+		if (search.fWaitTimer < 0.0f)
+			search.fWaitTimer = 0.0f;
+
+		if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+			SelectAction(context, EnemyBehaviorAction::Search);
+
+		return BehaviorStatus::Running;
+	}
+
+	if (!search.bHasTarget)
+	{
+		if (!BuildSearchTarget(pEnemy, blackboard))
+		{
+			if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+				SelectAction(context, EnemyBehaviorAction::Search);
+
+			return BehaviorStatus::Running;
+		}
+	}
+
+	if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+		SelectAction(context, EnemyBehaviorAction::Search);
+
+	return BehaviorStatus::Running;
+}
+
 BehaviorStatus EnemyBehaviorTree::SelectAction(BehaviorContext& context, EnemyBehaviorAction action)
 {
 	if (!context.pEnemy || !context.pBlackboard)
@@ -963,6 +1245,10 @@ BehaviorStatus EnemyBehaviorTree::SelectAction(BehaviorContext& context, EnemyBe
 	{
 	case EnemyBehaviorAction::Idle:
 		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
+		break;
+
+	case EnemyBehaviorAction::Search:
+		pEnemy->ChangeState(std::make_unique<EnemySearch>());
 		break;
 
 	case EnemyBehaviorAction::Chase:

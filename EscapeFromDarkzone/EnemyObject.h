@@ -292,6 +292,14 @@ public:
 	virtual void Exit(CEnemyObject* pEnemy);
 };
 
+class EnemySearch : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
 class EnemyRun : public State<CEnemyObject>
 {
 public:

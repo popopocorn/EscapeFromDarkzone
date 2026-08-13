@@ -46,6 +46,8 @@ public:
 	vector<XMFLOAT3> FindPath(XMFLOAT3 start, XMFLOAT3 end);
 
 	int FindPolyID(const XMFLOAT3& pos);
+
+	bool FindSearchPointAround(const XMFLOAT3& center, float minRadius, float maxRadius, float random01, XMFLOAT3& outPoint) const;
 };
 
 
@@ -81,6 +83,7 @@ enum class EnemyBehaviorAction
 {
 	None,
 	Idle,
+	Search,
 	Chase,
 	Attack,
 	Reload,
@@ -88,6 +91,37 @@ enum class EnemyBehaviorAction
 	Die
 };
 
+struct EnemySearchMemory
+{
+	bool bHasTarget = false;
+	bool bReachedTarget = false;
+	bool bPathFailed = false;
+
+	XMFLOAT3 xmf3Target = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fWaitTimer = 0.0f;
+
+	// 스폰 위치 기준 수색 범위
+	float fSearchRadius = 8.0f;
+	float fMinTargetDistance = 2.0f;
+
+	// 한 지점에 도착한 뒤 주변을 살피는 시간
+	float fWaitMin = 0.8f;
+	float fWaitMax = 1.8f;
+
+	// NPC별 수색 위치 생성용
+	unsigned int nRandomSeed = 0;
+
+	void ResetRuntime()
+	{
+		bHasTarget = false;
+		bReachedTarget = false;
+		bPathFailed = false;
+
+		xmf3Target = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		fWaitTimer = 0.0f;
+	}
+};
 
 // NPC마다 하나씩 소유하는 행동트리 공유 데이터.
 struct EnemyBlackboard
@@ -116,8 +150,10 @@ struct EnemyBlackboard
 	float fLoseSightTimer = 0.0f;
 	float fReturnIgnoreTimer = 0.0f;
 
-	// 현재 행동
 	EnemyBehaviorAction eCurrentAction = EnemyBehaviorAction::None;
+
+	// 스폰 위치 주변 수색 관련 기억
+	EnemySearchMemory Search;
 
 	void ResetPerception();
 	void ResetTargetMemory();
@@ -165,7 +201,6 @@ protected:
 	std::vector<std::unique_ptr<BehaviorNode>> m_Children;
 };
 
-
 class SequenceNode : public CompositeNode
 {
 public:
@@ -178,6 +213,18 @@ private:
 	size_t m_nRunningChild = 0;
 };
 
+class ReactiveSequenceNode : public CompositeNode
+{
+public:
+	explicit ReactiveSequenceNode(const char* pName = "ReactiveSequence");
+
+	BehaviorStatus Tick(BehaviorContext& context) override;
+	void Reset() override;
+
+private:
+	static constexpr size_t INVALID_CHILD = static_cast<size_t>(-1);
+	size_t m_nRunningChild = INVALID_CHILD;
+};
 
 class SelectorNode : public CompositeNode
 {
@@ -190,7 +237,6 @@ public:
 private:
 	size_t m_nRunningChild = 0;
 };
-
 
 class ReactiveSelectorNode : public CompositeNode
 {
@@ -268,6 +314,11 @@ private:
 	bool ShouldReload(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 	bool ShouldAttack(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 	bool ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+	bool ShouldSearch(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 
+	BehaviorStatus ExecuteSearch(BehaviorContext& context);
 	BehaviorStatus SelectAction(BehaviorContext& context, EnemyBehaviorAction action);
+
+	bool BuildSearchTarget(CEnemyObject* pEnemy, EnemyBlackboard& blackboard);
+	float NextSearchRandom01(EnemyBlackboard& blackboard);
 };
