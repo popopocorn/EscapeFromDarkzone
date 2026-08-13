@@ -10,20 +10,22 @@ struct ColResult {
 	//태그
 };
 
-class CollisionManager{
+class CollisionManager {
 public:
 	void DoCollision(
-		CGameObject* main, 
+		CGameObject* main,
 		std::vector<CGameObject*>* target
 	);
 	void CheckCollision(
-		CGameObject* main, 
+		CGameObject* main,
 		CGameObject* target);
-	//void ResolveCollision(CGameObject* object);
+
 	ColResult CalcCollision(
-		const BoundingOrientedBox& main, 
+		const BoundingOrientedBox& main,
 		const BoundingOrientedBox& target
 	);
+
 	XMFLOAT3 GetOOBBHitNormal(const BoundingOrientedBox& oobb, const XMFLOAT3& hitPos);
+
 };
 

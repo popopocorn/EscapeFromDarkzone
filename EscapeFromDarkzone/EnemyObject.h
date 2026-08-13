@@ -69,8 +69,8 @@ public:
 	void SubmitWeaponToShader(CShader* shader);
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
-	virtual void HandleCollision(XMFLOAT3 normal);
 	virtual void SetPosition(float x, float y, float z);
+
 	void SetPlayer(CGameObject* pPlayer)
 	{
 		m_pPlayer = pPlayer;
@@ -282,6 +282,7 @@ public:
 	}
 
 	int GetCurrentAmmo() const { return m_nCurrentAmmo; }
+
 };
 
 class EnemyIdle : public State<CEnemyObject>
@@ -298,6 +299,19 @@ public:
 	virtual bool Enter(CEnemyObject* pEnemy);
 	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
 	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyInvestigate : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+
+private:
+	bool m_bReachedTarget = false;
+	float m_fWaitTimer = 0.0f;
+	float m_fWaitDuration = 1.5f;
 };
 
 class EnemyRun : public State<CEnemyObject>

@@ -36,6 +36,7 @@ void EnemyBlackboard::Reset()
 
 	eCurrentAction = EnemyBehaviorAction::None;
 
+	Hearing.Reset();
 	Search = EnemySearchMemory{};
 }
 
@@ -903,6 +904,33 @@ void EnemyBehaviorTree::BuildTree()
 
 
 	// -------------------------------------------------------------------------
+	// Investigate
+	// -------------------------------------------------------------------------
+	auto pInvestigateSequence = std::make_unique<ReactiveSequenceNode>("InvestigateSequence");
+
+	pInvestigateSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldInvestigate",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldInvestigate(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pInvestigateSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteInvestigate",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Investigate);
+		}
+	));
+
+	pRoot->AddChild(std::move(pInvestigateSequence));
+
+
+	// -------------------------------------------------------------------------
 	// Search
 	// -------------------------------------------------------------------------
 	auto pSearchSequence = std::make_unique<ReactiveSequenceNode>("SearchSequence");
@@ -948,6 +976,19 @@ void EnemyBehaviorTree::UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& 
 	if (!pEnemy)
 		return;
 
+	// 청각 기억 갱신
+	if (blackboard.Hearing.bHasSound)
+	{
+		blackboard.Hearing.fSoundAge += fTimeElapsed;
+
+		// Investigate를 이미 수행 중이라면 목적지까지 기억을 유지한다.
+		if (blackboard.eCurrentAction != EnemyBehaviorAction::Investigate &&
+			blackboard.Hearing.fSoundAge >= blackboard.Hearing.fSoundMemoryDuration)
+		{
+			blackboard.Hearing.Reset();
+		}
+	}
+
 	blackboard.ResetPerception();
 
 	blackboard.bOutsideLeash = pEnemy->IsOutsideLeashRange();
@@ -984,6 +1025,9 @@ void EnemyBehaviorTree::UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& 
 	if (blackboard.bCanSeeTarget)
 	{
 		pEnemy->RefreshLastSeenPlayer();
+
+		// 직접 보게 되었으면 더 이상 소리 위치를 조사할 필요가 없다.
+		blackboard.Hearing.Reset();
 	}
 	else if (blackboard.bHasLastSeenPosition)
 	{
@@ -1075,6 +1119,35 @@ bool EnemyBehaviorTree::ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard&
 	return false;
 }
 
+bool EnemyBehaviorTree::ShouldInvestigate(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (pEnemy->IsDying())
+		return false;
+
+	if (!blackboard.Hearing.bHasSound)
+		return false;
+
+	if (blackboard.bOutsideLeash)
+		return false;
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+		return false;
+
+	if (blackboard.bCanSeeTarget)
+		return false;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return false;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Return && !pEnemy->IsNearSpawn())
+		return false;
+
+	return true;
+}
+
 float EnemyBehaviorTree::NextSearchRandom01(EnemyBlackboard& blackboard)
 {
 	EnemySearchMemory& search = blackboard.Search;
@@ -1107,6 +1180,9 @@ bool EnemyBehaviorTree::ShouldSearch(CEnemyObject* pEnemy, const EnemyBlackboard
 		return false;
 
 	if (pEnemy->HasRecentLastSeenPlayer())
+		return false;
+
+	if (blackboard.Hearing.bHasSound)
 		return false;
 
 	if (blackboard.fReturnIgnoreTimer > 0.0f)
@@ -1249,6 +1325,10 @@ BehaviorStatus EnemyBehaviorTree::SelectAction(BehaviorContext& context, EnemyBe
 
 	case EnemyBehaviorAction::Search:
 		pEnemy->ChangeState(std::make_unique<EnemySearch>());
+		break;
+
+	case EnemyBehaviorAction::Investigate:
+		pEnemy->ChangeState(std::make_unique<EnemyInvestigate>());
 		break;
 
 	case EnemyBehaviorAction::Chase:

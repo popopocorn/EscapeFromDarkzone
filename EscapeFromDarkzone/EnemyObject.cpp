@@ -301,14 +301,6 @@ void CEnemyObject::Update(float fTimeElapsed)
 		m_fShootAnimTimer -= fTimeElapsed;
 	}
 
-	if (!NetworkManager::Instance().IsConnected())
-	{
-		if (m_pBehaviorTree)
-		{
-			m_pBehaviorTree->Tick(this, m_Blackboard, fTimeElapsed);
-		}
-	}
-
 	m_StateMachine.Update(this, fTimeElapsed);
 
 	if (m_bDying)
@@ -327,7 +319,8 @@ void CEnemyObject::Update(float fTimeElapsed)
 		return;
 	}
 
-	if (!IsAlive()) return;
+	if (!IsAlive())
+		return;
 
 	XMFLOAT3 direction = m_xmf3MoveDir;
 	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
@@ -354,49 +347,6 @@ void CEnemyObject::Update(float fTimeElapsed)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
 		m_pRenderWeapon->UpdateTransform(NULL);
-	}
-}
-
-void CEnemyObject::HandleCollision(XMFLOAT3 normal)
-{
-	if (normal.y > 0.5f)
-	{
-		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
-		return;
-	}
-
-	XMVECTOR vNormal = XMLoadFloat3(&normal);
-	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
-	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
-	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-
-	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-	float fPenetrationDepth = XMVectorGetX(vDot);
-
-	if (fPenetrationDepth < 0.0f)
-	{
-		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
-
-		vCurrPos += vCorrection;
-		XMStoreFloat3(&m_xmf3Position, vCurrPos);
-
-		CGameObject::SetPosition(m_xmf3Position);
-		UpdateTransform(NULL);
-	}
-
-	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
-	float fVelDot = XMVectorGetX(vVelDot);
-
-	if (fVelDot < 0.0f)
-	{
-		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
-
-		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
-		{
-			vSlideVel = XMVectorZero();
-		}
-		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
 	}
 }
 
@@ -1261,6 +1211,148 @@ void EnemySearch::Exit(CEnemyObject* pEnemy)
 
 	blackboard.Search.ResetRuntime();
 	blackboard.bHasMoveTarget = false;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+}
+
+bool EnemyInvestigate::Enter(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Investigate;
+
+	// Search 중 선택했던 목적지는 폐기한다.
+	blackboard.Search.ResetRuntime();
+
+	blackboard.bHasMoveTarget = false;
+
+	m_bReachedTarget = false;
+	m_fWaitTimer = 0.0f;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+	if (blackboard.Hearing.bHasSound)
+	{
+		blackboard.bHasMoveTarget = true;
+		blackboard.xmf3MoveTarget = blackboard.Hearing.xmf3SoundPosition;
+
+		pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
+	}
+	else
+	{
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+	}
+
+	return true;
+}
+
+void EnemyInvestigate::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->IsDying())
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+	EnemyHearingMemory& hearing = blackboard.Hearing;
+
+	if (!hearing.bHasSound)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	// 소리가 난 위치까지 도착했으면 잠시 주변을 확인한다.
+	if (m_bReachedTarget)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+		pEnemy->UpdateIdleLook(fTimeElapsed);
+
+		m_fWaitTimer += fTimeElapsed;
+
+		if (m_fWaitTimer >= m_fWaitDuration)
+		{
+			hearing.Reset();
+
+			blackboard.bHasMoveTarget = false;
+
+			pEnemy->ClearPath();
+		}
+
+		return;
+	}
+
+	XMFLOAT3 currentPos = pEnemy->GetPosition();
+	XMFLOAT3 soundPos = hearing.xmf3SoundPosition;
+
+	XMFLOAT3 toSound = Vector3::Subtract(soundPos, currentPos);
+	toSound.y = 0.0f;
+
+	float distance = Vector3::Length(toSound);
+
+	if (distance < 0.9f)
+	{
+		m_bReachedTarget = true;
+		m_fWaitTimer = 0.0f;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+		return;
+	}
+
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = soundPos;
+
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+	bool hasPath = pEnemy->UpdatePathToPosition(soundPos, fTimeElapsed);
+
+	if (!hasPath)
+	{
+		hearing.Reset();
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+		return;
+	}
+
+	if (!pEnemy->FollowCurrentPath())
+	{
+		hearing.Reset();
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	}
+}
+
+void EnemyInvestigate::Exit(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.Hearing.Reset();
+	blackboard.bHasMoveTarget = false;
+
+	m_bReachedTarget = false;
+	m_fWaitTimer = 0.0f;
 
 	pEnemy->ClearPath();
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));

@@ -84,6 +84,7 @@ enum class EnemyBehaviorAction
 	None,
 	Idle,
 	Search,
+	Investigate,
 	Chase,
 	Attack,
 	Reload,
@@ -123,6 +124,51 @@ struct EnemySearchMemory
 	}
 };
 
+enum class EnemySoundType
+{
+	None,
+	Footstep,
+	Gunshot,
+	Explosion
+};
+
+
+struct EnemySoundEvent
+{
+	EnemySoundType eType = EnemySoundType::None;
+
+	XMFLOAT3 xmf3Position = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fRadius = 0.0f;
+	float fStrength = 1.0f;
+};
+
+
+struct EnemyHearingMemory
+{
+	bool bHasSound = false;
+
+	EnemySoundType eSoundType = EnemySoundType::None;
+
+	XMFLOAT3 xmf3SoundPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fSoundStrength = 0.0f;
+
+	float fSoundAge = 0.0f;
+	float fSoundMemoryDuration = 4.0f;
+
+	void Reset()
+	{
+		bHasSound = false;
+		eSoundType = EnemySoundType::None;
+
+		xmf3SoundPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+		fSoundStrength = 0.0f;
+		fSoundAge = 0.0f;
+	}
+};
+
 // NPC마다 하나씩 소유하는 행동트리 공유 데이터.
 struct EnemyBlackboard
 {
@@ -152,7 +198,8 @@ struct EnemyBlackboard
 
 	EnemyBehaviorAction eCurrentAction = EnemyBehaviorAction::None;
 
-	// 스폰 위치 주변 수색 관련 기억
+	//주변 수색 관련 기억
+	EnemyHearingMemory Hearing;
 	EnemySearchMemory Search;
 
 	void ResetPerception();
@@ -314,6 +361,7 @@ private:
 	bool ShouldReload(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 	bool ShouldAttack(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 	bool ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
+	bool ShouldInvestigate(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 	bool ShouldSearch(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const;
 
 	BehaviorStatus ExecuteSearch(BehaviorContext& context);
