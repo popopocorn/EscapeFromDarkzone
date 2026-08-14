@@ -95,7 +95,8 @@ public:
 	virtual bool ProcessInput(UCHAR *pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
-	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
+	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
+	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
 	void AddObj(CGameObject* obj) { GameObjects.push_back(unique_ptr<CGameObject>(obj)); }
 	virtual void ReleaseUploadBuffers() {
@@ -175,7 +176,8 @@ public:
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
-	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	
 private:
 
@@ -197,7 +199,8 @@ public:
 	virtual bool ProcessInput(UCHAR* pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
-	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL);
 
 	virtual void ReleaseUploadBuffers();
@@ -331,7 +334,8 @@ public:
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
-	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
+	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 
 private:
 	bool escapeSuccess = false;

@@ -122,8 +122,10 @@ VS_VIEW_OUTPUT VSView(VS_VIEW_INPUT input)
 //}
 
 
-float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
+PS_GBUFFER_OUTPUT PSStandard(VS_STANDARD_OUTPUT input) : SV_Target
 {
+    PS_GBUFFER_OUTPUT output;
+    
     float4 cAlbedoColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     if (gnTexturesMask & MATERIAL_ALBEDO_MAP)
         cAlbedoColor = gtxtAlbedoTexture.Sample(gssWrap, input.uv);
@@ -184,7 +186,19 @@ float4 PSStandard(VS_STANDARD_OUTPUT input) : SV_TARGET
     finalColor = finalColor / (finalColor + float3(0.65f, 0.65f, 0.65f));
     finalColor *= 1.25f;
 
-    return float4(saturate(finalColor), cAlbedoColor.a);
+    //output.Color = float4(saturate(finalColor), cAlbedoColor.a);
+    //output.Color = float4(cAlbedoColor.rgb, 1.0f);
+    //output.Color = float4(normalW * 0.5f + 0.5f, 1.0f);
+    
+    
+    output.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
+    
+    float emissiveStrength = dot(cEmissionColor.rgb, float3(0.333f, 0.333f, 0.333f));
+    output.Material = float4(specStrength, metalStrength, emissiveStrength, 1.0f);
+    
+    //output.Color = float4(specStrength, metalStrength, emissiveStrength, 1.0f);
+    
+    return output;
 }
 
 VS_STANDARD_OUTPUT VSSkinnedAnimationStandard(VS_SKINNED_STANDARD_INPUT input)

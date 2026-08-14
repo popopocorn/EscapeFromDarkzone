@@ -27,11 +27,17 @@ enum RtvSlot
 	RTV_BACKBUFFER_0 = 0,
 	RTV_BACKBUFFER_1,
 	RTV_COLOR_BUFFER,
+	RTV_NORMAL_BUFFER,
+	RTV_MATERIAL_BUFFER,
 	
 	RTV_SLOT_COUNT
 };
 enum BufferName {
 	COLOR = 0,
+	NORMAL,
+	MATRIAL,
+
+	BUFFER_SIZE
 
 };
 class CGameFramework
@@ -71,7 +77,8 @@ public:
 
 	void ShadowRendering();
 	void MainRendering();
-	void TransparentRendering();
+	void EffectRendering();
+	void UIRendering();
 
 	void WaitForGpuComplete();
 	void MoveToNextFrame();

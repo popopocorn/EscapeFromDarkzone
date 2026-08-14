@@ -401,8 +401,9 @@ void CGameFramework::CreateDepthStencilView()
 
 void CGameFramework::CreateRenderBuffers()
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	d3dColorBufferRtvHandle.ptr += (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandleBase = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandle;
+	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
 
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 
@@ -411,7 +412,30 @@ void CGameFramework::CreateRenderBuffers()
 		m_pd3dDevice,
 		m_nWndClientWidth,
 		m_nWndClientHeight,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		d3dColorBufferRtvHandle,
+		pfClearColor
+	);
+
+	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_NORMAL_BUFFER * ::gnRtvDescriptorIncrementSize);
+	renderBuffers.emplace_back(RenderTarget());
+	renderBuffers[1].CreateRenderTarget(
+		m_pd3dDevice,
+		m_nWndClientWidth,
+		m_nWndClientHeight,
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		d3dColorBufferRtvHandle,
+		pfClearColor
+	);
+
+
+	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_MATERIAL_BUFFER * ::gnRtvDescriptorIncrementSize);
+	renderBuffers.emplace_back(RenderTarget());
+	renderBuffers[2].CreateRenderTarget(
+		m_pd3dDevice,
+		m_nWndClientWidth,
+		m_nWndClientHeight,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
 		d3dColorBufferRtvHandle,
 		pfClearColor
 	);
@@ -1075,15 +1099,19 @@ void CGameFramework::FrameAdvance()
 
 	PrepareMainRender();
 	MainRendering();
-	TransparentRendering();
-	RenderTextSystem();
+
+
+	EffectRendering();
+	
 
 	//compute pipline
 	PreparePostRender();
 
 
-
 	//rendering end
+	UIRendering();
+	RenderTextSystem();
+
 	BlitToBackBuffer();
 	
 
@@ -1134,17 +1162,23 @@ void CGameFramework::FrameAdvance()
 
 void CGameFramework::PrepareMainRender()
 {
-	renderBuffers[BufferName::COLOR].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	d3dRtvCPUDescriptorHandle.ptr += (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
+	
+	array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> RtvCPUDescriptorHandles;
+	for (int i = 0; i < BufferName::BUFFER_SIZE; ++i)
+	{
+		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		d3dRtvCPUDescriptorHandle.ptr += ( (i + 2) * ::gnRtvDescriptorIncrementSize);
+		RtvCPUDescriptorHandles[i] = d3dRtvCPUDescriptorHandle;
 
-	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
-	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
+		float pfClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
+	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+	m_pd3dCommandList->OMSetRenderTargets(BufferName::BUFFER_SIZE, RtvCPUDescriptorHandles.data(), TRUE, &d3dDsvCPUDescriptorHandle);
 
 }
 
@@ -1173,7 +1207,6 @@ void CGameFramework::BlitToBackBuffer()
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
-	m_pd3dCommandList->SetGraphicsRootSignature(root->GetRoot());
 	//color->backbuffer
 	fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[BufferName::COLOR]);
 
@@ -1214,11 +1247,19 @@ void CGameFramework::MainRendering()
 
 }
 
-void CGameFramework::TransparentRendering()
+void CGameFramework::EffectRendering()
 {
 
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->TransparentRender(m_pd3dCommandList, MAIN, m_pCamera);
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->EffectRender(m_pd3dCommandList, MAIN, m_pCamera);	
+	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
 
+	m_pd3dCommandList->SetDescriptorHeaps(1, &heap);
+	m_pd3dCommandList->SetGraphicsRootSignature(root->GetRoot());
+}
+
+void CGameFramework::UIRendering()
+{
+	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->UIRender(m_pd3dCommandList, MAIN, m_pCamera);
 }
 
 

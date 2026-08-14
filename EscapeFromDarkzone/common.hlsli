@@ -91,6 +91,13 @@ struct VS_STANDARD_OUTPUT
     float2 uv : TEXCOORD;
 };
 
+struct PS_GBUFFER_OUTPUT
+{
+    float4 Color : SV_Target0;
+    float4 Normal : SV_Target1;
+    float4 Material : SV_Target2;
+};
+
 struct MATERIAL
 {
     float4 m_cAmbient;

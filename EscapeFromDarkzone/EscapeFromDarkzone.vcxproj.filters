@@ -1,11 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <FxCompile Include="common.hlsli" />
     <FxCompile Include="Light.hlsli" />
-    <FxCompile Include="Shaders.hlsl" />
-    <FxCompile Include="ParticleCompute.hlsl" />
-    <FxCompile Include="ParticleRender.hlsl" />
+    <FxCompile Include="common.hlsli">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleCompute.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleRender.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp">
@@ -229,8 +237,12 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Debug.hlsli" />
-    <None Include="Text.hlsli" />
+    <None Include="Debug.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Text.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="소스파일">
@@ -241,6 +253,9 @@
     </Filter>
     <Filter Include="리소스 파일">
       <UniqueIdentifier>{4b55e2f4-1f9b-419a-bb15-370a71b726f7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{2d301345-0f46-4a20-adf1-cb2abedf6440}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

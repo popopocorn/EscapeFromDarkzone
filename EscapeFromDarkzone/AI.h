@@ -29,7 +29,7 @@ private:
 	vector<XMFLOAT3> FindPathPoint(vector<int> polyidx, XMFLOAT3 start, XMFLOAT3 end);
 
 public:
-	//밑에는 추출한 메쉬 읽는 함수, 쓰기 위한 함수 등 
+	//밑에는 추출한 메쉬 읽는 함수, 사용하기 위한 함수 등 
 	void LoadNavMeshFromFile(const char* file);
 	vector<XMFLOAT3> FindPath(XMFLOAT3 start, XMFLOAT3 end);
 

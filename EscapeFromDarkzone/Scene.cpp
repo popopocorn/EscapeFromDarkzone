@@ -2505,7 +2505,7 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 	}
 }
 
-void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+void MainScene::EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	DecalManager::Instance()->Render(pd3dCommandList, pCamera, true);
 
@@ -2523,12 +2523,6 @@ void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, in
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
 
-	uiManager->SubmitToShader(UIShader.get());
-
-	if (UIShader)
-	{
-		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
-	}
 
 #ifdef _DEBUG
 	if (m_pDebugShader)
@@ -2537,15 +2531,28 @@ void MainScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, in
 	}
 #endif
 
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
-	}
 
 	if (m_pEffectManager)
 	{
 		m_pEffectManager->RenderGpuParticles(pd3dCommandList, pCamera);
 	}
+}
+
+void MainScene::UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+
+	uiManager->SubmitToShader(UIShader.get());
+
+	if (UIShader)
+	{
+		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
+	}
+
+	if (m_pInventoryManager)
+	{
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
+	}
+
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
@@ -2889,7 +2896,12 @@ void LobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelin
 	
 }
 
-void LobbyScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+void LobbyScene::EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+	
+}
+
+void LobbyScene::UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	uiManager->SubmitToShader(UIShader.get());
 	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
@@ -2992,7 +3004,12 @@ void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipel
 	
 }
 
-void ResultScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+void ResultScene::EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
+{
+
+}
+
+void ResultScene::UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	uiManager->SubmitToShader(UIShader.get());
 	UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
