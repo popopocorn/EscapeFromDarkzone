@@ -186,7 +186,7 @@ PS_GBUFFER_OUTPUT PSStandard(VS_STANDARD_OUTPUT input) : SV_Target
     finalColor = finalColor / (finalColor + float3(0.65f, 0.65f, 0.65f));
     finalColor *= 1.25f;
 
-    //output.Color = float4(saturate(finalColor), cAlbedoColor.a);
+    output.Color = float4(saturate(finalColor), cAlbedoColor.a);
     //output.Color = float4(cAlbedoColor.rgb, 1.0f);
     //output.Color = float4(normalW * 0.5f + 0.5f, 1.0f);
     
