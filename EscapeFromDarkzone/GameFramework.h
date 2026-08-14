@@ -103,7 +103,7 @@ public:
 	HWND GetHWND() { return m_hWnd; }
 	CCamera* GetObserver() { return observer.get(); }
 	void CreatePopSceneRequest(SceneName target);
-
+	int slot = 0;
 private:
 	HINSTANCE					m_hInstance;
 	HWND						m_hWnd; 

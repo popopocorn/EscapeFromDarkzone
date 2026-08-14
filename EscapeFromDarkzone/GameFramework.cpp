@@ -571,12 +571,14 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			}
 		}
 			break;
-
+		case'P':
+			++slot;
+			if (slot > 2)slot = 0;
+			break;
 		default:
 			break;
 		}
 		break;
-
 	default:
 		break;
 	}
@@ -1208,7 +1210,8 @@ void CGameFramework::BlitToBackBuffer()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 	//color->backbuffer
-	fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[BufferName::COLOR]);
+	//fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[BufferName::COLOR]);
+	fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[slot]);
 
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
