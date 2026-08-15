@@ -620,10 +620,10 @@ static void start_new_round(Room& r)
 
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
 			clients[cid]._inventory.fill(ItemSlot{});
-			clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
-			clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
-			clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
-			clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
+			//clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+			//clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+			//clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+			//clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
 		}
 
 		g_ready_players.erase(g_ready_players.begin() + idx);
@@ -3340,17 +3340,23 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 
 	switch (npc.kind) {
 	case NPC_TIER_3:
-		dropCount = rand() % 2 + 2;
-		minQty = 7; maxQty = 12;
+		//dropCount = rand() % 2 + 2;
+		//minQty = 7; maxQty = 12;
+		dropCount = 3;		// 3종류 고정
+		minQty = 20; maxQty = 24;
 		break;
 	case NPC_TIER_2:
-		dropCount = rand() % 2 + 2; // 2~3종류
-		minQty = 4; maxQty = 6;
+		//dropCount = rand() % 2 + 2;		// 2~3종류
+		//minQty = 4; maxQty = 6;
+		dropCount = 3;		// 3종류 고정
+		minQty = 10; maxQty = 14;
 		break;
 	case NPC_TIER_1:
 	default:
-		dropCount = rand() % 2 + 1; // 1~2종류
-		minQty = 2; maxQty = 4;
+		//dropCount = rand() % 2 + 1;		// 1~2종류
+		//minQty = 2; maxQty = 4;
+		dropCount = 3;		// 3종류 고정
+		minQty = 5; maxQty = 9;
 		break;
 	}
 
@@ -3366,7 +3372,8 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	for (int j = 0; j < dropCount; ++j) {
 		if (currentSlot >= INVENTORY_SIZE) break;
 
-		ItemID item = dropPool[rand() % poolSize];
+		//ItemID item = dropPool[rand() % poolSize];
+		ItemID item = dropPool[j % poolSize];			// 중복없음 + 순차선택
 		int count = minQty + (rand() % (maxQty - minQty + 1));
 		bool bFound = false;
 		for (int k = 0; k < currentSlot; ++k) {
@@ -3384,7 +3391,8 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	}
 
 	// --- 업그레이드 재료 랜덤 드랍 처리 ---
-	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+	// 업그레이드 재료 드랍 막음
+	if (currentSlot < INVENTORY_SIZE && /*(rand() % 100 < 50)*/ false) {
 		ItemID upgradeItem = ItemID::NONE;
 
 		switch (npc.kind) {
