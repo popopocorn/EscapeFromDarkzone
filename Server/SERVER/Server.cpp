@@ -3360,6 +3360,7 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 				npc._inventory[currentSlot].item = item;
 				npc._inventory[currentSlot].count = count;
 				currentSlot++;
+			}
 		}
 		break;
 	case NPC_TIER_2:
