@@ -3337,6 +3337,7 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	int dropCount = 0;   // 몇 종류의 아이템을 떨어뜨릴 것인가
 	int minQty = 1, maxQty = 3; // 한 종류당 떨어지는 최소/최대 개수
 
+	int currentSlot = 0;
 
 	switch (npc.kind) {
 	case NPC_TIER_3:
@@ -3344,6 +3345,22 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 		//minQty = 7; maxQty = 12;
 		dropCount = 3;		// 3종류 고정
 		minQty = 20; maxQty = 24;
+		{
+			ItemID item = ItemID::ESCAPE_KEY;
+			int count = 1;
+			bool bFound = false;
+			for (int k = 0; k < currentSlot; ++k) {
+				if (npc._inventory[k].item == item) {
+					npc._inventory[k].count += count;
+					bFound = true;
+					break;
+				}
+			}
+			if (!bFound) {
+				npc._inventory[currentSlot].item = item;
+				npc._inventory[currentSlot].count = count;
+				currentSlot++;
+		}
 		break;
 	case NPC_TIER_2:
 		//dropCount = rand() % 2 + 2;		// 2~3종류
@@ -3366,8 +3383,6 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 		ItemID::MAT_3_BOLT_AND_NUT,
 	};
 	int poolSize = sizeof(dropPool) / sizeof(dropPool[0]);
-
-	int currentSlot = 0;
 
 	for (int j = 0; j < dropCount; ++j) {
 		if (currentSlot >= INVENTORY_SIZE) break;
@@ -3421,17 +3436,17 @@ static void spawn_room_npcs(Room& r)
 
 	struct NpcSpawnDef { float x, z; char tier; char outfit; };
 	static const NpcSpawnDef main_npc_def[] = {
-		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
-		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
-		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
-		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
-		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
-		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
-		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
-		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
-		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
-		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
-		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
+		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
+		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
+		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
+		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
+		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
+		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
+		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
+		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
+		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
+		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
+		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
 	};
 	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 
