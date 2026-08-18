@@ -92,6 +92,8 @@ enum class EnemyBehaviorAction
 	Die
 };
 
+//search 관련 기억
+//npc별 블랙보드 하나씩 소유
 struct EnemySearchMemory
 {
 	bool bHasTarget = false;
@@ -143,7 +145,8 @@ struct EnemySoundEvent
 	float fStrength = 1.0f;
 };
 
-
+//npc가 들은	소리 기억
+//soundposition은 소리 발생 위치(investigate에 사용)
 struct EnemyHearingMemory
 {
 	bool bHasSound = false;
@@ -166,6 +169,65 @@ struct EnemyHearingMemory
 
 		fSoundStrength = 0.0f;
 		fSoundAge = 0.0f;
+	}
+};
+
+enum class EnemyDamageType
+{
+	None,
+	Bullet,
+	Explosion
+};
+
+// NPC가 실제로 피해를 입었을 때 AI에 전달하는 피격 이벤트
+// 이 구조 자체는 행동을 결정하지 않고 피격 당시 정보만 전달
+struct EnemyDamageEvent
+{
+	EnemyDamageType eType = EnemyDamageType::None;
+
+	int nAttackerId = -1;
+
+	// 피해가 시작된 위치.
+	// Bullet = 발사 위치, Explosion = 폭발 중심.
+	XMFLOAT3 xmf3SourcePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	// 피해가 NPC 쪽으로 진행한 방향.
+	XMFLOAT3 xmf3IncomingDirection = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fDamage = 0.0f;
+};
+
+// NPC가 최근 피격을 기억하기 위한 Blackboard 데이터
+// LastSeenPlayer 정보를 여기서 갱신하지 않음
+struct EnemyDamageMemory
+{
+	bool bHasDamage = false;
+
+	EnemyDamageType eDamageType = EnemyDamageType::None;
+
+	int nAttackerId = -1;
+
+	XMFLOAT3 xmf3SourcePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	XMFLOAT3 xmf3IncomingDirection = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	float fDamage = 0.0f;
+
+	float fDamageAge = 0.0f;
+	float fMemoryDuration = 4.0f;
+
+	void Reset()
+	{
+		bHasDamage = false;
+
+		eDamageType = EnemyDamageType::None;
+
+		nAttackerId = -1;
+
+		xmf3SourcePosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+		xmf3IncomingDirection = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+		fDamage = 0.0f;
+		fDamageAge = 0.0f;
 	}
 };
 
@@ -201,6 +263,9 @@ struct EnemyBlackboard
 	//주변 수색 관련 기억
 	EnemyHearingMemory Hearing;
 	EnemySearchMemory Search;
+
+	//피격 관련 기억
+	EnemyDamageMemory Damage;
 
 	void ResetPerception();
 	void ResetTargetMemory();

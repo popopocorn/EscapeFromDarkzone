@@ -90,6 +90,8 @@ public:
 
 	void HandleHP(float value);
 
+	void RegisterSoundEvent(const EnemySoundEvent& soundEvent);
+
 	bool ConsumeDeadRemovalRequest();
 	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비			// 서버 권위 구조로 바꾸면서 안씀
 	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시

@@ -267,6 +267,65 @@ void CEnemyObject::HandleHP(float value)
 	}
 }
 
+void CEnemyObject::RegisterDamageEvent(const EnemyDamageEvent& damageEvent)
+{
+	if (m_bDying)
+		return;
+
+	// 온라인 NPC의 Damage Memory와 행동 판단은 서버에서 담당한다.
+	if (NetworkManager::Instance().IsConnected())
+		return;
+
+	if (damageEvent.eType == EnemyDamageType::None)
+		return;
+
+	if (damageEvent.fDamage <= 0.0f)
+		return;
+
+	EnemyDamageMemory& damage = m_Blackboard.Damage;
+
+	damage.bHasDamage = true;
+	damage.eDamageType = damageEvent.eType;
+	damage.nAttackerId = damageEvent.nAttackerId;
+
+	damage.xmf3SourcePosition = damageEvent.xmf3SourcePosition;
+	damage.xmf3IncomingDirection = NormalizeXZ(damageEvent.xmf3IncomingDirection);
+
+	damage.fDamage = damageEvent.fDamage;
+	damage.fDamageAge = 0.0f;
+
+	// 서버에서는 검증이 끝나 실제 피해가 적용되는 순간 동일한 정보를 Blackboard에 기록한다.
+}
+
+//새로운	사운드 이벤트를 등록하는 함수
+void CEnemyObject::RegisterSoundEvent(const EnemySoundEvent& soundEvent)
+{
+	if (m_bDying)
+		return;
+
+	if (NetworkManager::Instance().IsConnected())
+		return;
+
+	if (soundEvent.eType == EnemySoundType::None)
+		return;
+
+	if (soundEvent.fRadius <= 0.0f)
+		return;
+
+	float distance = DistanceXZ(m_xmf3Position, soundEvent.xmf3Position);
+
+	if (distance > soundEvent.fRadius)
+		return;
+
+	EnemyHearingMemory& hearing = m_Blackboard.Hearing;
+
+	hearing.bHasSound = true;
+	hearing.eSoundType = soundEvent.eType;
+	hearing.xmf3SoundPosition = soundEvent.xmf3Position;
+	hearing.fSoundStrength = soundEvent.fStrength;
+	hearing.fSoundAge = 0.0f;
+}
+
 bool CEnemyObject::ConsumeDeadRemovalRequest()
 {
 	if (!m_bDeadRemoveRequested) return false;
@@ -1134,10 +1193,15 @@ void EnemySearch::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsDying())
 		return;
 
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
 	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 	EnemySearchMemory& search = blackboard.Search;
 
-	// 수색 지점 도착 후 잠깐 멈춰서 주변을 살핀다.
 	if (search.fWaitTimer > 0.0f)
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1146,7 +1210,6 @@ void EnemySearch::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	// 아직 행동트리에서 수색 지점을 생성하지 못한 프레임
 	if (!search.bHasTarget)
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1225,7 +1288,6 @@ bool EnemyInvestigate::Enter(CEnemyObject* pEnemy)
 
 	blackboard.eCurrentAction = EnemyBehaviorAction::Investigate;
 
-	// Search 중 선택했던 목적지는 폐기한다.
 	blackboard.Search.ResetRuntime();
 
 	blackboard.bHasMoveTarget = false;
@@ -1259,6 +1321,13 @@ void EnemyInvestigate::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsDying())
 		return;
 
+	// 서버 Blackboard의 Hearing.xmf3SoundPosition을 목적지로 사용하고 이동
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
 	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 	EnemyHearingMemory& hearing = blackboard.Hearing;
 
@@ -1268,7 +1337,6 @@ void EnemyInvestigate::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	// 소리가 난 위치까지 도착했으면 잠시 주변을 확인한다.
 	if (m_bReachedTarget)
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -1383,6 +1451,40 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 	if (pEnemy->m_bDying)
 		return;
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+		XMFLOAT3 toServer;
+		toServer.x = pEnemy->m_xmf3ServerPosition.x - pEnemy->m_xmf3Position.x;
+		toServer.y = 0.0f;
+		toServer.z = pEnemy->m_xmf3ServerPosition.z - pEnemy->m_xmf3Position.z;
+
+		float moveLen = Vector3::Length(toServer);
+
+		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;
+
+		if (moveLen < MOVE_ANIM_THRESHOLD)
+		{
+			pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+			m_fFootstepTimer = 0.0f;
+		}
+		else
+		{
+			pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+			m_fFootstepTimer += fTimeElapsed;
+
+			if (m_fFootstepTimer > 0.5f)
+			{
+				SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+				m_fFootstepTimer -= 0.5f;
+			}
+		}
+
+		return;
+	}
 
 	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 

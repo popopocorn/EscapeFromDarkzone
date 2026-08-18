@@ -38,6 +38,7 @@ void EnemyBlackboard::Reset()
 
 	Hearing.Reset();
 	Search = EnemySearchMemory{};
+	Damage.Reset();
 }
 
 BehaviorNode::BehaviorNode(const char* pName)
@@ -989,6 +990,18 @@ void EnemyBehaviorTree::UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& 
 		}
 	}
 
+	// 최근 피격 기억 갱신
+	// 서버 AI Tick에서도 NPC별 Damage Memory를 동일하게 갱신한다.
+	if (blackboard.Damage.bHasDamage)
+	{
+		blackboard.Damage.fDamageAge += fTimeElapsed;
+
+		if (blackboard.Damage.fDamageAge >= blackboard.Damage.fMemoryDuration)
+		{
+			blackboard.Damage.Reset();
+		}
+	}
+
 	blackboard.ResetPerception();
 
 	blackboard.bOutsideLeash = pEnemy->IsOutsideLeashRange();
@@ -1026,7 +1039,6 @@ void EnemyBehaviorTree::UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& 
 	{
 		pEnemy->RefreshLastSeenPlayer();
 
-		// 직접 보게 되었으면 더 이상 소리 위치를 조사할 필요가 없다.
 		blackboard.Hearing.Reset();
 	}
 	else if (blackboard.bHasLastSeenPosition)
@@ -1247,6 +1259,7 @@ bool EnemyBehaviorTree::BuildSearchTarget(CEnemyObject* pEnemy, EnemyBlackboard&
 	return true;
 }
 
+//BT는 search목적지만 정하고, 실제 이동은 EnemySearchState에서 처리
 BehaviorStatus EnemyBehaviorTree::ExecuteSearch(BehaviorContext& context)
 {
 	if (!context.pEnemy || !context.pBlackboard)
