@@ -90,6 +90,7 @@ public:
 
 	void HandleHP(float value);
 
+	void RegisterDamageEvent(const EnemyDamageEvent& damageEvent);
 	void RegisterSoundEvent(const EnemySoundEvent& soundEvent);
 
 	bool ConsumeDeadRemovalRequest();

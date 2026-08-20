@@ -198,7 +198,7 @@ struct EnemyDamageEvent
 };
 
 // NPC가 최근 피격을 기억하기 위한 Blackboard 데이터
-// LastSeenPlayer 정보를 여기서 갱신하지 않음
+// LastSeenPlayer 정보를 여기서 갱신하지 않음(맞았다고 본 게 아니라, 맞았다는 사실만 기억)
 struct EnemyDamageMemory
 {
 	bool bHasDamage = false;
