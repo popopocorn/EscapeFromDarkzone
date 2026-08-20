@@ -21,12 +21,12 @@ template<class T>
 class StateMachine
 {
 public:
-	void ChangeState(T* pOwner, std::unique_ptr<State<T>> pNewState)
+	void ChangeState(T* pOwner, std::unique_ptr<State<T>> pNewState, bool bForce = false)
 	{
 		if (!pOwner || !pNewState)
 			return;
 
-		if (m_pCurrentState && typeid(*m_pCurrentState) == typeid(*pNewState))
+		if (!bForce && m_pCurrentState && typeid(*m_pCurrentState) == typeid(*pNewState))
 			return;
 
 		if (m_pCurrentState)
