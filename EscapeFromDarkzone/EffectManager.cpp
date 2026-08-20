@@ -1,4 +1,4 @@
-#include "stdafx.h"
+癤�#include "stdafx.h"
 #include "Scene.h"
 #include "Object.h"
 #include "Camera.h"
@@ -1091,55 +1091,31 @@ bool EffectManager::CreateParticleDescriptors(ID3D12Device* pd3dDevice)
 			PARTICLE_DESCRIPTOR_RENDER_EXPLOSION_ALPHA_SRV + i, MAX_GPU_PARTICLES, sizeof(UINT));
 	}
 
-	CTexture* pExplosionTexture = pParticleResource->GetTexture(ParticleTextureID::EXPLOSION);
-	CTexture* pRifleSparkTexture = pParticleResource->GetTexture(ParticleTextureID::SPARK_RIFLE_SMG);
-	CTexture* pShotgunSparkTexture = pParticleResource->GetTexture(ParticleTextureID::SPARK_SHOTGUN);
-
-	if (!pExplosionTexture || !pRifleSparkTexture || !pShotgunSparkTexture ||
-		!pExplosionTexture->GetResource(0) || !pRifleSparkTexture->GetResource(0) ||
-		!pShotgunSparkTexture->GetResource(0))
+	for (UINT textureIndex = 0; textureIndex < static_cast<UINT>(ParticleTextureID::COUNT); ++textureIndex)
 	{
-		OutputDebugStringW(L"[EffectManager] Particle texture descriptor creation failed. Texture is null.\n");
-		return false;
+		ParticleTextureID textureId = static_cast<ParticleTextureID>(textureIndex);
+		CTexture* pTexture = pParticleResource->GetTexture(textureId);
+
+		if (!pTexture || !pTexture->GetResource(0))
+		{
+			wchar_t debugText[256];
+			swprintf_s(debugText, L"[EffectManager] Particle texture descriptor creation failed. TextureId=%u\n", textureIndex);
+			OutputDebugStringW(debugText);
+			return false;
+		}
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = pTexture->GetShaderResourceViewDesc(0);
+
+		pd3dDevice->CreateShaderResourceView(pTexture->GetResource(0), &srvDesc,
+			GetParticleCpuDescriptorHandle(PARTICLE_DESCRIPTOR_TEXTURE_EXPLOSION_SRV + textureIndex));
 	}
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC explosionSrvDesc = pExplosionTexture->GetShaderResourceViewDesc(0);
-	D3D12_SHADER_RESOURCE_VIEW_DESC rifleSparkSrvDesc = pRifleSparkTexture->GetShaderResourceViewDesc(0);
-	D3D12_SHADER_RESOURCE_VIEW_DESC shotgunSparkSrvDesc = pShotgunSparkTexture->GetShaderResourceViewDesc(0);
-
-	pd3dDevice->CreateShaderResourceView(pExplosionTexture->GetResource(0), &explosionSrvDesc,
-		GetParticleCpuDescriptorHandle(PARTICLE_DESCRIPTOR_TEXTURE_EXPLOSION_SRV));
-
-	pd3dDevice->CreateShaderResourceView(pRifleSparkTexture->GetResource(0), &rifleSparkSrvDesc,
-		GetParticleCpuDescriptorHandle(PARTICLE_DESCRIPTOR_TEXTURE_SPARK_RIFLE_SMG_SRV));
-
-	pd3dDevice->CreateShaderResourceView(pShotgunSparkTexture->GetResource(0), &shotgunSparkSrvDesc,
-		GetParticleCpuDescriptorHandle(PARTICLE_DESCRIPTOR_TEXTURE_SPARK_SHOTGUN_SRV));
 
 	OutputDebugStringW(L"[EffectManager] Particle SRV and UAV descriptors created.\n");
 
 	return true;
 }
 
-ParticleRenderGroup EffectManager::ResolveParticleRenderGroup(ParticleTextureID textureId, ParticleBlendMode blendMode) const
-{
-	switch (textureId)
-	{
-	case ParticleTextureID::EXPLOSION:
-		return (blendMode == ParticleBlendMode::ADDITIVE) ?
-			ParticleRenderGroup::EXPLOSION_ADDITIVE : ParticleRenderGroup::EXPLOSION_ALPHA;
 
-	case ParticleTextureID::SPARK_SHOTGUN:
-		return ParticleRenderGroup::SHOTGUN_ADDITIVE;
-
-	case ParticleTextureID::SPARK_RIFLE_SMG:
-		return (blendMode == ParticleBlendMode::ADDITIVE) ?
-			ParticleRenderGroup::RIFLE_ADDITIVE : ParticleRenderGroup::RIFLE_ALPHA;
-
-	default:
-		return ParticleRenderGroup::EXPLOSION_ALPHA;
-	}
-}
 
 bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 {
@@ -1173,11 +1149,6 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 		effectDirection = Vector3::Normalize(effectDirection);
 	}
 
-	const bool isMuzzleSpark =
-		desc.id == EffectID::SPARK ||
-		desc.id == EffectID::SPARK_SHOTGUN ||
-		desc.id == EffectID::SPARK_PISTOL;
-
 	bool queuedAnyRequest = false;
 
 	for (const ParticleEmitterDesc& emitterDesc : pEffectDesc->emitters)
@@ -1194,26 +1165,22 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 		}
 
 		ParticleSpawnRequest request{};
-
 		request.position = desc.position;
 
-		// 총구 Spark는 호출부에서 전달된 Socket_Muzzle 위치를 그대로 사용한다.
-		if (!isMuzzleSpark && fabsf(emitterDesc.positionOffsetAlongDirection) > 0.0001f)
+		if (fabsf(emitterDesc.positionOffsetAlongDirection) > 0.0001f)
 		{
 			request.position.x += effectDirection.x * emitterDesc.positionOffsetAlongDirection;
 			request.position.y += effectDirection.y * emitterDesc.positionOffsetAlongDirection;
 			request.position.z += effectDirection.z * emitterDesc.positionOffsetAlongDirection;
 		}
 
-		// 수류탄의 불꽃과 불씨는 폭발 중심 높이에서 생성한다.
-		if (desc.id == EffectID::GRENADE_EXPLOSION &&
-			emitterDesc.billboardMode == ParticleBillboardMode::VELOCITY_ALIGNED)
-		{
-			request.position.y += 0.9f;
-		}
+		request.position.x += emitterDesc.positionOffset.x;
+		request.position.y += emitterDesc.positionOffset.y;
+		request.position.z += emitterDesc.positionOffset.z;
 
 		request.burstCount = emitterDesc.burstCount;
-		request.direction = isMuzzleSpark ? effectDirection : emitterDesc.direction;
+		request.direction = (emitterDesc.directionMode == ParticleDirectionMode::EFFECT_DIRECTION) ?
+			effectDirection : emitterDesc.direction;
 		request.coneAngleDegrees = emitterDesc.coneAngleDegrees;
 
 		request.acceleration = emitterDesc.acceleration;
@@ -1250,8 +1217,7 @@ bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 
 		request.selectedFrameCount = min(emitterDesc.selectedFrameCount, PARTICLE_SELECTED_FRAME_CAPACITY);
 		request.billboardMode = static_cast<UINT>(emitterDesc.billboardMode);
-		request.renderGroup = static_cast<UINT>(
-			ResolveParticleRenderGroup(emitterDesc.textureId, emitterDesc.blendMode));
+		request.renderGroup = emitterDesc.renderGroup;
 		request.blendMode = static_cast<UINT>(emitterDesc.blendMode);
 
 		for (UINT i = 0; i < request.selectedFrameCount; ++i)
@@ -1597,7 +1563,6 @@ void EffectManager::ReleaseParticleSystemResources()
 	m_d3dParticleGpuDescriptorStartHandle = {};
 }
 
-//파티클 시스템 초기화
 void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
@@ -1610,7 +1575,6 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 		OutputDebugStringW(L"[EffectManager] Particle system initialization failed.\n");
 	}
 
-	// 레이저 쉐이더 생성
 	m_pLaserShader = new CLaserShader();
 	m_pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	m_pLaserShader->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
@@ -1757,34 +1721,26 @@ void EffectManager::PlayEffectByID(const EffectSpawnDesc& desc)
 		return;
 	}
 
-	switch (desc.id)
+	EffectSpawnDesc particleDesc = desc;
+
+	if (particleDesc.id == EffectID::HIT)
 	{
-	case EffectID::GRENADE_EXPLOSION:
-	case EffectID::SPARK:
-	case EffectID::SPARK_SHOTGUN:
-	case EffectID::SPARK_PISTOL:
-	{
-		QueueParticleEffect(desc);
-		break;
+		particleDesc.id = EffectID::SPARK;
 	}
 
-	case EffectID::HIT:
+	ParticleResource* pParticleResource = ResourceManager::Instance().GetParticleResource();
+
+	if (!pParticleResource || !pParticleResource->IsLoaded())
 	{
-		EffectSpawnDesc sparkDesc = desc;
-		sparkDesc.id = EffectID::SPARK;
-		QueueParticleEffect(sparkDesc);
-		break;
+		return;
 	}
 
-	case EffectID::BLOOD:
+	if (!pParticleResource->GetEffectDesc(particleDesc.id))
 	{
-		// BLOOD는 현재 구현되어 있지 않은 기존 상태를 유지한다.
-		break;
+		return;
 	}
 
-	default:
-		break;
-	}
+	QueueParticleEffect(particleDesc);
 }
 
 void EffectManager::Update(float fTimeElapsed)
@@ -1859,7 +1815,6 @@ void EffectManager::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* 
 	}
 }
 
-//실제 GPU 파티클 렌더링
 void EffectManager::RenderGpuParticles(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	if (!pd3dCommandList || !pCamera || !m_bParticleSystemResourcesReady)
@@ -1934,40 +1889,15 @@ void EffectManager::RenderGpuParticles(ID3D12GraphicsCommandList* pd3dCommandLis
 
 	for (UINT renderGroupIndex = 0; renderGroupIndex < renderGroupCount; ++renderGroupIndex)
 	{
-		ParticleRenderGroup renderGroup = static_cast<ParticleRenderGroup>(renderGroupIndex);
-		ParticleTextureID textureId = ParticleTextureID::EXPLOSION;
-		bool additiveBlend = false;
+		const ParticleRenderGroupDesc* pRenderGroupDesc = pParticleResource->GetRenderGroupDesc(renderGroupIndex);
 
-		switch (renderGroup)
+		if (!pRenderGroupDesc)
 		{
-		case ParticleRenderGroup::EXPLOSION_ALPHA:
-			textureId = ParticleTextureID::EXPLOSION;
-			additiveBlend = false;
-			break;
-
-		case ParticleRenderGroup::EXPLOSION_ADDITIVE:
-			textureId = ParticleTextureID::EXPLOSION;
-			additiveBlend = true;
-			break;
-
-		case ParticleRenderGroup::SHOTGUN_ADDITIVE:
-			textureId = ParticleTextureID::SPARK_SHOTGUN;
-			additiveBlend = true;
-			break;
-
-		case ParticleRenderGroup::RIFLE_ADDITIVE:
-			textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-			additiveBlend = true;
-			break;
-
-		case ParticleRenderGroup::RIFLE_ALPHA:
-			textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-			additiveBlend = false;
-			break;
-
-		default:
 			continue;
 		}
+
+		ParticleTextureID textureId = pRenderGroupDesc->textureId;
+		bool additiveBlend = (pRenderGroupDesc->blendMode == ParticleBlendMode::ADDITIVE);
 
 		const ParticleAtlasDesc* pAtlasDesc = pParticleResource->GetAtlasDesc(textureId);
 

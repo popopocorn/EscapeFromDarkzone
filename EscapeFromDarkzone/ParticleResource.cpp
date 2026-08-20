@@ -1,17 +1,619 @@
 #include "stdafx.h"
 #include "Object.h"
 #include "ParticleResource.h"
+#include "Particle.h"
+
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <limits>
+#include <string>
+#include <vector>
+
+namespace
+{
+	bool ReadFileToString(const wchar_t* pFilePath, std::string& outText)
+	{
+		if (!pFilePath)
+			return false;
+
+		std::ifstream file(pFilePath, std::ios::binary);
+
+		if (!file.is_open())
+			return false;
+
+		file.seekg(0, std::ios::end);
+		std::streamoff fileSize = file.tellg();
+
+		if (fileSize <= 0)
+			return false;
+
+		file.seekg(0, std::ios::beg);
+
+		outText.resize(static_cast<size_t>(fileSize));
+		file.read(outText.data(), fileSize);
+
+		return file.good() || file.eof();
+	}
+
+	void SkipWhitespace(const std::string& text, size_t& position, size_t endPosition)
+	{
+		while (position < endPosition)
+		{
+			unsigned char ch = static_cast<unsigned char>(text[position]);
+
+			if (!std::isspace(ch))
+				break;
+
+			++position;
+		}
+	}
+
+	size_t FindMatchingDelimiter(const std::string& text, size_t openPosition, char openDelimiter, char closeDelimiter)
+	{
+		if (openPosition >= text.size() || text[openPosition] != openDelimiter)
+			return std::string::npos;
+
+		int depth = 0;
+		bool insideString = false;
+		bool escaped = false;
+
+		for (size_t i = openPosition; i < text.size(); ++i)
+		{
+			char ch = text[i];
+
+			if (insideString)
+			{
+				if (escaped)
+				{
+					escaped = false;
+					continue;
+				}
+
+				if (ch == '\\')
+				{
+					escaped = true;
+					continue;
+				}
+
+				if (ch == '"')
+					insideString = false;
+
+				continue;
+			}
+
+			if (ch == '"')
+			{
+				insideString = true;
+				continue;
+			}
+
+			if (ch == openDelimiter)
+			{
+				++depth;
+				continue;
+			}
+
+			if (ch == closeDelimiter)
+			{
+				--depth;
+
+				if (depth == 0)
+					return i;
+			}
+		}
+
+		return std::string::npos;
+	}
+
+	bool FindValueStart(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, size_t& outValuePosition)
+	{
+		if (!pKey || beginPosition >= endPosition)
+			return false;
+
+		std::string token = "\"";
+		token += pKey;
+		token += "\"";
+
+		size_t keyPosition = text.find(token, beginPosition);
+
+		if (keyPosition == std::string::npos || keyPosition >= endPosition)
+			return false;
+
+		size_t colonPosition = text.find(':', keyPosition + token.length());
+
+		if (colonPosition == std::string::npos || colonPosition >= endPosition)
+			return false;
+
+		outValuePosition = colonPosition + 1;
+		SkipWhitespace(text, outValuePosition, endPosition);
+
+		return outValuePosition < endPosition;
+	}
+
+	bool ParseJsonStringAt(const std::string& text, size_t valuePosition, size_t endPosition, std::string& outValue)
+	{
+		if (valuePosition >= endPosition || text[valuePosition] != '"')
+			return false;
+
+		outValue.clear();
+
+		for (size_t i = valuePosition + 1; i < endPosition; ++i)
+		{
+			char ch = text[i];
+
+			if (ch == '"')
+				return true;
+
+			if (ch == '\\')
+			{
+				if (i + 1 >= endPosition)
+					return false;
+
+				char escaped = text[++i];
+
+				switch (escaped)
+				{
+				case '"': outValue.push_back('"'); break;
+				case '\\': outValue.push_back('\\'); break;
+				case '/': outValue.push_back('/'); break;
+				case 'n': outValue.push_back('\n'); break;
+				case 'r': outValue.push_back('\r'); break;
+				case 't': outValue.push_back('\t'); break;
+				default: return false;
+				}
+
+				continue;
+			}
+
+			outValue.push_back(ch);
+		}
+
+		return false;
+	}
+
+	bool FindStringValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, std::string& outValue)
+	{
+		size_t valuePosition = 0;
+
+		if (!FindValueStart(text, beginPosition, endPosition, pKey, valuePosition))
+			return false;
+
+		return ParseJsonStringAt(text, valuePosition, endPosition, outValue);
+	}
+
+	bool FindNumberValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, double& outValue)
+	{
+		size_t valuePosition = 0;
+
+		if (!FindValueStart(text, beginPosition, endPosition, pKey, valuePosition))
+			return false;
+
+		const char* pNumberStart = text.c_str() + valuePosition;
+		char* pNumberEnd = nullptr;
+		double parsedValue = std::strtod(pNumberStart, &pNumberEnd);
+
+		if (pNumberEnd == pNumberStart)
+			return false;
+
+		size_t parsedEndPosition = static_cast<size_t>(pNumberEnd - text.c_str());
+
+		if (parsedEndPosition > endPosition)
+			return false;
+
+		outValue = parsedValue;
+		return true;
+	}
+
+	bool FindFloatValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, float& outValue)
+	{
+		double value = 0.0;
+
+		if (!FindNumberValue(text, beginPosition, endPosition, pKey, value))
+			return false;
+
+		if (value < -static_cast<double>(std::numeric_limits<float>::max()) ||
+			value > static_cast<double>(std::numeric_limits<float>::max()))
+		{
+			return false;
+		}
+
+		outValue = static_cast<float>(value);
+		return true;
+	}
+
+	bool FindUIntValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, UINT& outValue)
+	{
+		double value = 0.0;
+
+		if (!FindNumberValue(text, beginPosition, endPosition, pKey, value))
+			return false;
+
+		if (value < 0.0 || value > static_cast<double>(std::numeric_limits<UINT>::max()))
+			return false;
+
+		if (std::floor(value) != value)
+			return false;
+
+		outValue = static_cast<UINT>(value);
+		return true;
+	}
+
+	bool FindArrayRange(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, size_t& outOpenPosition, size_t& outClosePosition)
+	{
+		size_t valuePosition = 0;
+
+		if (!FindValueStart(text, beginPosition, endPosition, pKey, valuePosition))
+			return false;
+
+		if (text[valuePosition] != '[')
+			return false;
+
+		size_t closePosition = FindMatchingDelimiter(text, valuePosition, '[', ']');
+
+		if (closePosition == std::string::npos || closePosition >= endPosition)
+			return false;
+
+		outOpenPosition = valuePosition;
+		outClosePosition = closePosition;
+		return true;
+	}
+
+	bool FindObjectRange(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, size_t& outOpenPosition, size_t& outClosePosition)
+	{
+		size_t valuePosition = 0;
+
+		if (!FindValueStart(text, beginPosition, endPosition, pKey, valuePosition))
+			return false;
+
+		if (text[valuePosition] != '{')
+			return false;
+
+		size_t closePosition = FindMatchingDelimiter(text, valuePosition, '{', '}');
+
+		if (closePosition == std::string::npos || closePosition >= endPosition)
+			return false;
+
+		outOpenPosition = valuePosition;
+		outClosePosition = closePosition;
+		return true;
+	}
+
+	bool ParseNumberArray(const std::string& text, size_t openPosition, size_t closePosition, std::vector<double>& outValues)
+	{
+		if (openPosition >= closePosition || text[openPosition] != '[' || text[closePosition] != ']')
+			return false;
+
+		outValues.clear();
+		size_t currentPosition = openPosition + 1;
+
+		while (currentPosition < closePosition)
+		{
+			SkipWhitespace(text, currentPosition, closePosition);
+
+			if (currentPosition >= closePosition)
+				break;
+
+			if (text[currentPosition] == ',')
+			{
+				++currentPosition;
+				continue;
+			}
+
+			const char* pNumberStart = text.c_str() + currentPosition;
+			char* pNumberEnd = nullptr;
+			double value = std::strtod(pNumberStart, &pNumberEnd);
+
+			if (pNumberEnd == pNumberStart)
+				return false;
+
+			size_t parsedEndPosition = static_cast<size_t>(pNumberEnd - text.c_str());
+
+			if (parsedEndPosition > closePosition)
+				return false;
+
+			outValues.push_back(value);
+			currentPosition = parsedEndPosition;
+		}
+
+		return true;
+	}
+
+	bool FindFloatArrayValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, size_t expectedCount, float* pOutValues)
+	{
+		if (!pOutValues || expectedCount == 0)
+			return false;
+
+		size_t openPosition = 0;
+		size_t closePosition = 0;
+
+		if (!FindArrayRange(text, beginPosition, endPosition, pKey, openPosition, closePosition))
+			return false;
+
+		std::vector<double> values;
+
+		if (!ParseNumberArray(text, openPosition, closePosition, values) || values.size() != expectedCount)
+			return false;
+
+		for (size_t i = 0; i < expectedCount; ++i)
+		{
+			if (values[i] < -static_cast<double>(std::numeric_limits<float>::max()) ||
+				values[i] > static_cast<double>(std::numeric_limits<float>::max()))
+			{
+				return false;
+			}
+
+			pOutValues[i] = static_cast<float>(values[i]);
+		}
+
+		return true;
+	}
+
+	bool FindUIntArrayValue(const std::string& text, size_t beginPosition, size_t endPosition, const char* pKey, std::vector<UINT>& outValues)
+	{
+		size_t openPosition = 0;
+		size_t closePosition = 0;
+
+		if (!FindArrayRange(text, beginPosition, endPosition, pKey, openPosition, closePosition))
+			return false;
+
+		std::vector<double> values;
+
+		if (!ParseNumberArray(text, openPosition, closePosition, values))
+			return false;
+
+		outValues.clear();
+		outValues.reserve(values.size());
+
+		for (double value : values)
+		{
+			if (value < 0.0 || value > static_cast<double>(std::numeric_limits<UINT>::max()))
+				return false;
+
+			if (std::floor(value) != value)
+				return false;
+
+			outValues.push_back(static_cast<UINT>(value));
+		}
+
+		return true;
+	}
+
+	bool ConvertUtf8ToWide(const std::string& utf8Text, std::wstring& outWideText)
+	{
+		outWideText.clear();
+
+		if (utf8Text.empty())
+			return false;
+
+		int requiredLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Text.c_str(), static_cast<int>(utf8Text.size()), nullptr, 0);
+
+		if (requiredLength <= 0)
+			return false;
+
+		outWideText.resize(static_cast<size_t>(requiredLength));
+
+		int convertedLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Text.c_str(), static_cast<int>(utf8Text.size()), outWideText.data(), requiredLength);
+		return convertedLength == requiredLength;
+	}
+
+	bool ParseParticleTextureID(const std::string& value, ParticleTextureID& outValue)
+	{
+		if (value == "EXPLOSION") outValue = ParticleTextureID::EXPLOSION;
+		else if (value == "SPARK_RIFLE_SMG") outValue = ParticleTextureID::SPARK_RIFLE_SMG;
+		else if (value == "SPARK_SHOTGUN") outValue = ParticleTextureID::SPARK_SHOTGUN;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseParticleBlendMode(const std::string& value, ParticleBlendMode& outValue)
+	{
+		if (value == "ALPHA") outValue = ParticleBlendMode::ALPHA;
+		else if (value == "ADDITIVE") outValue = ParticleBlendMode::ADDITIVE;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseParticleBillboardMode(const std::string& value, ParticleBillboardMode& outValue)
+	{
+		if (value == "CAMERA_FACING") outValue = ParticleBillboardMode::CAMERA_FACING;
+		else if (value == "VELOCITY_ALIGNED") outValue = ParticleBillboardMode::VELOCITY_ALIGNED;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseParticleFrameMode(const std::string& value, ParticleFrameMode& outValue)
+	{
+		if (value == "FIXED_FRAME") outValue = ParticleFrameMode::FIXED_FRAME;
+		else if (value == "SEQUENTIAL") outValue = ParticleFrameMode::SEQUENTIAL;
+		else if (value == "RANDOM_SELECTED") outValue = ParticleFrameMode::RANDOM_SELECTED;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseParticleDirectionMode(const std::string& value, ParticleDirectionMode& outValue)
+	{
+		if (value == "CONFIGURED") outValue = ParticleDirectionMode::CONFIGURED;
+		else if (value == "EFFECT_DIRECTION") outValue = ParticleDirectionMode::EFFECT_DIRECTION;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseParticleRenderGroup(const std::string& value, UINT& outValue)
+	{
+		if (value == "EXPLOSION_ALPHA") outValue = static_cast<UINT>(ParticleRenderGroup::EXPLOSION_ALPHA);
+		else if (value == "EXPLOSION_ADDITIVE") outValue = static_cast<UINT>(ParticleRenderGroup::EXPLOSION_ADDITIVE);
+		else if (value == "SHOTGUN_ADDITIVE") outValue = static_cast<UINT>(ParticleRenderGroup::SHOTGUN_ADDITIVE);
+		else if (value == "RIFLE_ADDITIVE") outValue = static_cast<UINT>(ParticleRenderGroup::RIFLE_ADDITIVE);
+		else if (value == "RIFLE_ALPHA") outValue = static_cast<UINT>(ParticleRenderGroup::RIFLE_ALPHA);
+		else return false;
+
+		return true;
+	}
+
+	bool ParseEffectID(const std::string& value, EffectID& outValue)
+	{
+		if (value == "GRENADE_EXPLOSION") outValue = EffectID::GRENADE_EXPLOSION;
+		else if (value == "SPARK") outValue = EffectID::SPARK;
+		else if (value == "SPARK_SHOTGUN") outValue = EffectID::SPARK_SHOTGUN;
+		else if (value == "SPARK_PISTOL") outValue = EffectID::SPARK_PISTOL;
+		else return false;
+
+		return true;
+	}
+
+	bool ParseAtlasDesc(const std::string& text, size_t beginPosition, size_t endPosition, ParticleAtlasDesc& outDesc)
+	{
+		if (!FindUIntValue(text, beginPosition, endPosition, "textureWidth", outDesc.textureWidth) ||
+			!FindUIntValue(text, beginPosition, endPosition, "textureHeight", outDesc.textureHeight) ||
+			!FindUIntValue(text, beginPosition, endPosition, "columns", outDesc.columns) ||
+			!FindUIntValue(text, beginPosition, endPosition, "rows", outDesc.rows) ||
+			!FindUIntValue(text, beginPosition, endPosition, "frameWidth", outDesc.frameWidth) ||
+			!FindUIntValue(text, beginPosition, endPosition, "frameHeight", outDesc.frameHeight) ||
+			!FindUIntValue(text, beginPosition, endPosition, "borderX", outDesc.borderX) ||
+			!FindUIntValue(text, beginPosition, endPosition, "borderY", outDesc.borderY) ||
+			!FindUIntValue(text, beginPosition, endPosition, "spacingX", outDesc.spacingX) ||
+			!FindUIntValue(text, beginPosition, endPosition, "spacingY", outDesc.spacingY) ||
+			!FindUIntValue(text, beginPosition, endPosition, "validFrameCount", outDesc.validFrameCount))
+		{
+			return false;
+		}
+
+		if (outDesc.textureWidth == 0 || outDesc.textureHeight == 0 ||
+			outDesc.columns == 0 || outDesc.rows == 0 ||
+			outDesc.frameWidth == 0 || outDesc.frameHeight == 0 ||
+			outDesc.validFrameCount == 0)
+		{
+			return false;
+		}
+
+		UINT64 requiredWidth = static_cast<UINT64>(outDesc.borderX) * 2ull +
+			static_cast<UINT64>(outDesc.columns) * outDesc.frameWidth +
+			static_cast<UINT64>(outDesc.columns - 1) * outDesc.spacingX;
+
+		UINT64 requiredHeight = static_cast<UINT64>(outDesc.borderY) * 2ull +
+			static_cast<UINT64>(outDesc.rows) * outDesc.frameHeight +
+			static_cast<UINT64>(outDesc.rows - 1) * outDesc.spacingY;
+
+		UINT64 totalFrameCapacity = static_cast<UINT64>(outDesc.columns) * outDesc.rows;
+
+		if (requiredWidth > outDesc.textureWidth || requiredHeight > outDesc.textureHeight)
+			return false;
+
+		if (outDesc.validFrameCount > totalFrameCapacity)
+			return false;
+
+		return true;
+	}
+
+	bool ParseEmitterDesc(const std::string& text, size_t beginPosition, size_t endPosition, ParticleEmitterDesc& outDesc)
+	{
+		std::string renderGroupText;
+		std::string directionModeText;
+		std::string billboardModeText;
+		std::string frameModeText;
+
+		if (!FindStringValue(text, beginPosition, endPosition, "renderGroup", renderGroupText) ||
+			!FindStringValue(text, beginPosition, endPosition, "directionMode", directionModeText) ||
+			!FindStringValue(text, beginPosition, endPosition, "billboardMode", billboardModeText) ||
+			!FindStringValue(text, beginPosition, endPosition, "frameMode", frameModeText))
+		{
+			return false;
+		}
+
+		if (!ParseParticleRenderGroup(renderGroupText, outDesc.renderGroup) ||
+			!ParseParticleDirectionMode(directionModeText, outDesc.directionMode) ||
+			!ParseParticleBillboardMode(billboardModeText, outDesc.billboardMode) ||
+			!ParseParticleFrameMode(frameModeText, outDesc.frameMode))
+		{
+			return false;
+		}
+
+		if (!FindUIntValue(text, beginPosition, endPosition, "burstCount", outDesc.burstCount) ||
+			!FindFloatValue(text, beginPosition, endPosition, "spawnDelayMin", outDesc.spawnDelayMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "spawnDelayMax", outDesc.spawnDelayMax) ||
+			!FindFloatValue(text, beginPosition, endPosition, "lifeTimeMin", outDesc.lifeTimeMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "lifeTimeMax", outDesc.lifeTimeMax) ||
+			!FindFloatValue(text, beginPosition, endPosition, "speedMin", outDesc.speedMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "speedMax", outDesc.speedMax) ||
+			!FindFloatValue(text, beginPosition, endPosition, "coneAngleDegrees", outDesc.coneAngleDegrees) ||
+			!FindFloatValue(text, beginPosition, endPosition, "positionOffsetAlongDirection", outDesc.positionOffsetAlongDirection) ||
+			!FindFloatValue(text, beginPosition, endPosition, "sizeScaleMin", outDesc.sizeScaleMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "sizeScaleMax", outDesc.sizeScaleMax) ||
+			!FindFloatValue(text, beginPosition, endPosition, "rotationMin", outDesc.rotationMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "rotationMax", outDesc.rotationMax) ||
+			!FindFloatValue(text, beginPosition, endPosition, "angularVelocityMin", outDesc.angularVelocityMin) ||
+			!FindFloatValue(text, beginPosition, endPosition, "angularVelocityMax", outDesc.angularVelocityMax) ||
+			!FindUIntValue(text, beginPosition, endPosition, "firstFrame", outDesc.firstFrame) ||
+			!FindUIntValue(text, beginPosition, endPosition, "frameCount", outDesc.frameCount) ||
+			!FindUIntValue(text, beginPosition, endPosition, "loopAnimation", outDesc.loopAnimation))
+		{
+			return false;
+		}
+
+		float direction[3] = {};
+		float positionOffset[3] = {};
+		float acceleration[3] = {};
+		float startSize[2] = {};
+		float endSize[2] = {};
+		float startColor[4] = {};
+		float endColor[4] = {};
+
+		if (!FindFloatArrayValue(text, beginPosition, endPosition, "direction", 3, direction) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "positionOffset", 3, positionOffset) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "acceleration", 3, acceleration) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "startSize", 2, startSize) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "endSize", 2, endSize) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "startColor", 4, startColor) ||
+			!FindFloatArrayValue(text, beginPosition, endPosition, "endColor", 4, endColor))
+		{
+			return false;
+		}
+
+		outDesc.direction = XMFLOAT3(direction[0], direction[1], direction[2]);
+		outDesc.positionOffset = XMFLOAT3(positionOffset[0], positionOffset[1], positionOffset[2]);
+		outDesc.acceleration = XMFLOAT3(acceleration[0], acceleration[1], acceleration[2]);
+		outDesc.startSize = XMFLOAT2(startSize[0], startSize[1]);
+		outDesc.endSize = XMFLOAT2(endSize[0], endSize[1]);
+		outDesc.startColor = XMFLOAT4(startColor[0], startColor[1], startColor[2], startColor[3]);
+		outDesc.endColor = XMFLOAT4(endColor[0], endColor[1], endColor[2], endColor[3]);
+
+		std::vector<UINT> selectedFrames;
+
+		if (!FindUIntArrayValue(text, beginPosition, endPosition, "selectedFrames", selectedFrames))
+			return false;
+
+		if (selectedFrames.size() > PARTICLE_SELECTED_FRAME_CAPACITY)
+			return false;
+
+		outDesc.selectedFrameCount = static_cast<UINT>(selectedFrames.size());
+
+		for (UINT i = 0; i < outDesc.selectedFrameCount; ++i)
+		{
+			outDesc.selectedFrames[i] = selectedFrames[i];
+		}
+
+		return true;
+	}
+
+}
 
 ParticleResource::~ParticleResource()
 {
 	Release();
 }
 
-bool ParticleResource::Load(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+bool ParticleResource::Load(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pConfigFilePath)
 {
-	if (!pd3dDevice || !pd3dCommandList)
+	if (!pd3dDevice || !pd3dCommandList || !pConfigFilePath)
 	{
-		OutputDebugStringW(L"[ParticleResource] Load failed. Device or command list is null.\n");
+		OutputDebugStringW(L"[ParticleResource] Load failed. Device, command list, or config path is null.\n");
 		return false;
 	}
 
@@ -23,74 +625,361 @@ bool ParticleResource::Load(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList*
 
 	Release();
 
-	ParticleAtlasDesc explosionAtlasDesc;
-	explosionAtlasDesc.textureWidth = 3584;
-	explosionAtlasDesc.textureHeight = 3072;
-	explosionAtlasDesc.columns = 7;
-	explosionAtlasDesc.rows = 6;
-	explosionAtlasDesc.frameWidth = 512;
-	explosionAtlasDesc.frameHeight = 512;
-	explosionAtlasDesc.borderX = 0;
-	explosionAtlasDesc.borderY = 0;
-	explosionAtlasDesc.spacingX = 0;
-	explosionAtlasDesc.spacingY = 0;
-	explosionAtlasDesc.validFrameCount = 38;
-
-	ParticleAtlasDesc rifleSparkAtlasDesc;
-	rifleSparkAtlasDesc.textureWidth = 14352;
-	rifleSparkAtlasDesc.textureHeight = 6926;
-	rifleSparkAtlasDesc.columns = 7;
-	rifleSparkAtlasDesc.rows = 6;
-	rifleSparkAtlasDesc.frameWidth = 2048;
-	rifleSparkAtlasDesc.frameHeight = 1152;
-	rifleSparkAtlasDesc.borderX = 2;
-	rifleSparkAtlasDesc.borderY = 2;
-	rifleSparkAtlasDesc.spacingX = 2;
-	rifleSparkAtlasDesc.spacingY = 2;
-	rifleSparkAtlasDesc.validFrameCount = 42;
-
-	ParticleAtlasDesc shotgunSparkAtlasDesc;
-	shotgunSparkAtlasDesc.textureWidth = 8080;
-	shotgunSparkAtlasDesc.textureHeight = 12302;
-	shotgunSparkAtlasDesc.columns = 7;
-	shotgunSparkAtlasDesc.rows = 6;
-	shotgunSparkAtlasDesc.frameWidth = 1152;
-	shotgunSparkAtlasDesc.frameHeight = 2048;
-	shotgunSparkAtlasDesc.borderX = 2;
-	shotgunSparkAtlasDesc.borderY = 2;
-	shotgunSparkAtlasDesc.spacingX = 2;
-	shotgunSparkAtlasDesc.spacingY = 2;
-	shotgunSparkAtlasDesc.validFrameCount = 42;
-
-	if (!LoadTexture(ParticleTextureID::EXPLOSION, pd3dDevice, pd3dCommandList,
-		L"Model/Explosion3.dds", explosionAtlasDesc))
+	if (!LoadConfig(pd3dDevice, pd3dCommandList, pConfigFilePath))
 	{
+		OutputDebugStringW(L"[ParticleResource] Particle JSON config load failed.\n");
 		Release();
 		return false;
 	}
 
-	if (!LoadTexture(ParticleTextureID::SPARK_RIFLE_SMG, pd3dDevice, pd3dCommandList,
-		L"Model/Spark_Rifle_SMG.dds", rifleSparkAtlasDesc))
+	if (m_Textures.size() != static_cast<size_t>(ParticleTextureID::COUNT) ||
+		m_RenderGroupDescs.size() != static_cast<size_t>(ParticleRenderGroup::COUNT) ||
+		m_EffectDescs.empty())
 	{
+		OutputDebugStringW(L"[ParticleResource] Particle JSON config is incomplete.\n");
 		Release();
 		return false;
 	}
-
-	if (!LoadTexture(ParticleTextureID::SPARK_SHOTGUN, pd3dDevice, pd3dCommandList,
-		L"Model/Spark_Shotgun.dds", shotgunSparkAtlasDesc))
-	{
-		Release();
-		return false;
-	}
-
-	BuildGrenadeEffectDesc();
-	BuildRifleSparkEffectDesc();
-	BuildShotgunSparkEffectDesc();
-	BuildPistolSparkEffectDesc();
 
 	m_bLoaded = true;
 
-	OutputDebugStringW(L"[ParticleResource] Particle textures and effect descriptions loaded.\n");
+	wchar_t debugText[256];
+	swprintf_s(debugText, L"[ParticleResource] Particle JSON loaded. Textures=%zu, RenderGroups=%zu, Effects=%zu\n",
+		m_Textures.size(), m_RenderGroupDescs.size(), m_EffectDescs.size());
+	OutputDebugStringW(debugText);
+
+	return true;
+}
+
+bool ParticleResource::LoadConfig(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pConfigFilePath)
+{
+	std::string jsonText;
+
+	if (!ReadFileToString(pConfigFilePath, jsonText))
+	{
+		OutputDebugStringW(L"[ParticleResource] Failed to open particle JSON config file.\n");
+		return false;
+	}
+
+	size_t texturesOpenPosition = 0;
+	size_t texturesClosePosition = 0;
+
+	if (!FindArrayRange(jsonText, 0, jsonText.size(), "textures", texturesOpenPosition, texturesClosePosition))
+	{
+		OutputDebugStringW(L"[ParticleResource] JSON does not contain a valid textures array.\n");
+		return false;
+	}
+
+	size_t currentPosition = texturesOpenPosition + 1;
+
+	while (currentPosition < texturesClosePosition)
+	{
+		SkipWhitespace(jsonText, currentPosition, texturesClosePosition);
+
+		if (currentPosition >= texturesClosePosition)
+			break;
+
+		if (jsonText[currentPosition] == ',')
+		{
+			++currentPosition;
+			continue;
+		}
+
+		if (jsonText[currentPosition] != '{')
+		{
+			OutputDebugStringW(L"[ParticleResource] Invalid texture object in JSON.\n");
+			return false;
+		}
+
+		size_t objectClosePosition = FindMatchingDelimiter(jsonText, currentPosition, '{', '}');
+
+		if (objectClosePosition == std::string::npos || objectClosePosition > texturesClosePosition)
+		{
+			OutputDebugStringW(L"[ParticleResource] Texture object closing bracket was not found.\n");
+			return false;
+		}
+
+		size_t objectEndPosition = objectClosePosition + 1;
+		std::string textureIdText;
+		std::string texturePathText;
+
+		if (!FindStringValue(jsonText, currentPosition, objectEndPosition, "id", textureIdText) ||
+			!FindStringValue(jsonText, currentPosition, objectEndPosition, "path", texturePathText))
+		{
+			OutputDebugStringW(L"[ParticleResource] Texture id or path parse failed.\n");
+			return false;
+		}
+
+		ParticleTextureID textureId = ParticleTextureID::COUNT;
+
+		if (!ParseParticleTextureID(textureIdText, textureId))
+		{
+			OutputDebugStringW(L"[ParticleResource] Unknown texture id in JSON.\n");
+			return false;
+		}
+
+		if (m_Textures.find(textureId) != m_Textures.end())
+		{
+			OutputDebugStringW(L"[ParticleResource] Duplicate texture id in JSON.\n");
+			return false;
+		}
+
+		size_t atlasOpenPosition = 0;
+		size_t atlasClosePosition = 0;
+
+		if (!FindObjectRange(jsonText, currentPosition, objectEndPosition, "atlas", atlasOpenPosition, atlasClosePosition))
+		{
+			OutputDebugStringW(L"[ParticleResource] Texture atlas object parse failed.\n");
+			return false;
+		}
+
+		ParticleAtlasDesc atlasDesc;
+
+		if (!ParseAtlasDesc(jsonText, atlasOpenPosition, atlasClosePosition + 1, atlasDesc))
+		{
+			OutputDebugStringW(L"[ParticleResource] Texture atlas data is invalid.\n");
+			return false;
+		}
+
+		std::wstring texturePath;
+
+		if (!ConvertUtf8ToWide(texturePathText, texturePath))
+		{
+			OutputDebugStringW(L"[ParticleResource] Texture path UTF-8 conversion failed.\n");
+			return false;
+		}
+
+		if (!LoadTexture(textureId, pd3dDevice, pd3dCommandList, texturePath.c_str(), atlasDesc))
+			return false;
+
+		currentPosition = objectEndPosition;
+	}
+
+
+	size_t renderGroupsOpenPosition = 0;
+	size_t renderGroupsClosePosition = 0;
+
+	if (!FindArrayRange(jsonText, 0, jsonText.size(), "renderGroups", renderGroupsOpenPosition, renderGroupsClosePosition))
+	{
+		OutputDebugStringW(L"[ParticleResource] JSON does not contain a valid renderGroups array.\n");
+		return false;
+	}
+
+	currentPosition = renderGroupsOpenPosition + 1;
+
+	while (currentPosition < renderGroupsClosePosition)
+	{
+		SkipWhitespace(jsonText, currentPosition, renderGroupsClosePosition);
+
+		if (currentPosition >= renderGroupsClosePosition)
+			break;
+
+		if (jsonText[currentPosition] == ',')
+		{
+			++currentPosition;
+			continue;
+		}
+
+		if (jsonText[currentPosition] != '{')
+		{
+			OutputDebugStringW(L"[ParticleResource] Invalid render group object in JSON.\n");
+			return false;
+		}
+
+		size_t objectClosePosition = FindMatchingDelimiter(jsonText, currentPosition, '{', '}');
+
+		if (objectClosePosition == std::string::npos || objectClosePosition > renderGroupsClosePosition)
+		{
+			OutputDebugStringW(L"[ParticleResource] Render group object closing bracket was not found.\n");
+			return false;
+		}
+
+		size_t objectEndPosition = objectClosePosition + 1;
+		std::string renderGroupText;
+		std::string textureIdText;
+		std::string blendModeText;
+
+		if (!FindStringValue(jsonText, currentPosition, objectEndPosition, "id", renderGroupText) ||
+			!FindStringValue(jsonText, currentPosition, objectEndPosition, "textureId", textureIdText) ||
+			!FindStringValue(jsonText, currentPosition, objectEndPosition, "blendMode", blendModeText))
+		{
+			OutputDebugStringW(L"[ParticleResource] Render group data parse failed.\n");
+			return false;
+		}
+
+		UINT renderGroupIndex = 0;
+		ParticleRenderGroupDesc renderGroupDesc;
+
+		if (!ParseParticleRenderGroup(renderGroupText, renderGroupIndex) ||
+			!ParseParticleTextureID(textureIdText, renderGroupDesc.textureId) ||
+			!ParseParticleBlendMode(blendModeText, renderGroupDesc.blendMode))
+		{
+			OutputDebugStringW(L"[ParticleResource] Unknown render group configuration in JSON.\n");
+			return false;
+		}
+
+		if (renderGroupIndex >= static_cast<UINT>(ParticleRenderGroup::COUNT))
+		{
+			OutputDebugStringW(L"[ParticleResource] Render group index is out of range.\n");
+			return false;
+		}
+
+		if (m_RenderGroupDescs.find(renderGroupIndex) != m_RenderGroupDescs.end())
+		{
+			OutputDebugStringW(L"[ParticleResource] Duplicate render group id in JSON.\n");
+			return false;
+		}
+
+		if (m_Textures.find(renderGroupDesc.textureId) == m_Textures.end())
+		{
+			OutputDebugStringW(L"[ParticleResource] Render group references an unloaded texture.\n");
+			return false;
+		}
+
+		m_RenderGroupDescs[renderGroupIndex] = renderGroupDesc;
+		currentPosition = objectEndPosition;
+	}
+
+	size_t effectsOpenPosition = 0;
+	size_t effectsClosePosition = 0;
+
+	if (!FindArrayRange(jsonText, 0, jsonText.size(), "effects", effectsOpenPosition, effectsClosePosition))
+	{
+		OutputDebugStringW(L"[ParticleResource] JSON does not contain a valid effects array.\n");
+		return false;
+	}
+
+	currentPosition = effectsOpenPosition + 1;
+
+	while (currentPosition < effectsClosePosition)
+	{
+		SkipWhitespace(jsonText, currentPosition, effectsClosePosition);
+
+		if (currentPosition >= effectsClosePosition)
+			break;
+
+		if (jsonText[currentPosition] == ',')
+		{
+			++currentPosition;
+			continue;
+		}
+
+		if (jsonText[currentPosition] != '{')
+		{
+			OutputDebugStringW(L"[ParticleResource] Invalid effect object in JSON.\n");
+			return false;
+		}
+
+		size_t effectObjectClosePosition = FindMatchingDelimiter(jsonText, currentPosition, '{', '}');
+
+		if (effectObjectClosePosition == std::string::npos || effectObjectClosePosition > effectsClosePosition)
+		{
+			OutputDebugStringW(L"[ParticleResource] Effect object closing bracket was not found.\n");
+			return false;
+		}
+
+		size_t effectObjectEndPosition = effectObjectClosePosition + 1;
+		std::string effectIdText;
+
+		if (!FindStringValue(jsonText, currentPosition, effectObjectEndPosition, "id", effectIdText))
+		{
+			OutputDebugStringW(L"[ParticleResource] Effect id parse failed.\n");
+			return false;
+		}
+
+		EffectID effectId = EffectID::NONE;
+
+		if (!ParseEffectID(effectIdText, effectId))
+		{
+			OutputDebugStringW(L"[ParticleResource] Unknown effect id in JSON.\n");
+			return false;
+		}
+
+		if (m_EffectDescs.find(effectId) != m_EffectDescs.end())
+		{
+			OutputDebugStringW(L"[ParticleResource] Duplicate effect id in JSON.\n");
+			return false;
+		}
+
+		size_t emittersOpenPosition = 0;
+		size_t emittersClosePosition = 0;
+
+		if (!FindArrayRange(jsonText, currentPosition, effectObjectEndPosition, "emitters", emittersOpenPosition, emittersClosePosition))
+		{
+			OutputDebugStringW(L"[ParticleResource] Effect emitters array parse failed.\n");
+			return false;
+		}
+
+		ParticleEffectDesc effectDesc;
+		effectDesc.id = effectId;
+
+		size_t emitterPosition = emittersOpenPosition + 1;
+
+		while (emitterPosition < emittersClosePosition)
+		{
+			SkipWhitespace(jsonText, emitterPosition, emittersClosePosition);
+
+			if (emitterPosition >= emittersClosePosition)
+				break;
+
+			if (jsonText[emitterPosition] == ',')
+			{
+				++emitterPosition;
+				continue;
+			}
+
+			if (jsonText[emitterPosition] != '{')
+			{
+				OutputDebugStringW(L"[ParticleResource] Invalid emitter object in JSON.\n");
+				return false;
+			}
+
+			size_t emitterClosePosition = FindMatchingDelimiter(jsonText, emitterPosition, '{', '}');
+
+			if (emitterClosePosition == std::string::npos || emitterClosePosition > emittersClosePosition)
+			{
+				OutputDebugStringW(L"[ParticleResource] Emitter object closing bracket was not found.\n");
+				return false;
+			}
+
+			ParticleEmitterDesc emitterDesc;
+
+			if (!ParseEmitterDesc(jsonText, emitterPosition, emitterClosePosition + 1, emitterDesc))
+			{
+				OutputDebugStringW(L"[ParticleResource] Emitter data parse failed.\n");
+				return false;
+			}
+
+			auto renderGroupIt = m_RenderGroupDescs.find(emitterDesc.renderGroup);
+
+			if (renderGroupIt == m_RenderGroupDescs.end())
+			{
+				OutputDebugStringW(L"[ParticleResource] Emitter references an unknown render group.\n");
+				return false;
+			}
+
+			emitterDesc.textureId = renderGroupIt->second.textureId;
+			emitterDesc.blendMode = renderGroupIt->second.blendMode;
+
+			if (!ValidateEmitterDesc(emitterDesc))
+			{
+				OutputDebugStringW(L"[ParticleResource] Emitter data validation failed.\n");
+				return false;
+			}
+
+			effectDesc.emitters.push_back(emitterDesc);
+			emitterPosition = emitterClosePosition + 1;
+		}
+
+		if (effectDesc.emitters.empty())
+		{
+			OutputDebugStringW(L"[ParticleResource] Effect does not contain any emitters.\n");
+			return false;
+		}
+
+		m_EffectDescs[effectDesc.id] = std::move(effectDesc);
+		currentPosition = effectObjectEndPosition;
+	}
 
 	return true;
 }
@@ -120,589 +1009,113 @@ bool ParticleResource::LoadTexture(ParticleTextureID textureId, ID3D12Device* pd
 		return false;
 	}
 
+	D3D12_RESOURCE_DESC textureDesc = pTexture->GetResource(0)->GetDesc();
+
+	if (textureDesc.Width != atlasDesc.textureWidth || textureDesc.Height != atlasDesc.textureHeight)
+	{
+		wchar_t debugText[256];
+		swprintf_s(debugText, L"[ParticleResource] Texture size mismatch. JSON=%ux%u, DDS=%llux%u\n",
+			atlasDesc.textureWidth, atlasDesc.textureHeight, textureDesc.Width, textureDesc.Height);
+		OutputDebugStringW(debugText);
+		return false;
+	}
+
 	m_AtlasDescs[textureId] = atlasDesc;
 	m_Textures[textureId] = std::move(pTexture);
 
 	wchar_t debugText[256];
-
 	swprintf_s(debugText, L"[ParticleResource] Texture loaded. ID=%u, Size=%ux%u, Atlas=%ux%u, Frames=%u\n",
 		static_cast<UINT>(textureId), atlasDesc.textureWidth, atlasDesc.textureHeight,
 		atlasDesc.columns, atlasDesc.rows, atlasDesc.validFrameCount);
-
 	OutputDebugStringW(debugText);
 
 	return true;
 }
 
-void ParticleResource::BuildGrenadeEffectDesc()
+bool ParticleResource::ValidateEmitterDesc(const ParticleEmitterDesc& emitterDesc) const
 {
-	ParticleEffectDesc grenadeDesc;
-	grenadeDesc.id = EffectID::GRENADE_EXPLOSION;
-	grenadeDesc.emitters.reserve(5);
+	auto renderGroupIt = m_RenderGroupDescs.find(emitterDesc.renderGroup);
 
-	// 순간 섬광
-	ParticleEmitterDesc flashDesc;
-	flashDesc.textureId = ParticleTextureID::EXPLOSION;
-	flashDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	flashDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	flashDesc.frameMode = ParticleFrameMode::FIXED_FRAME;
-	flashDesc.burstCount = 1;
-	flashDesc.lifeTimeMin = 0.035f;
-	flashDesc.lifeTimeMax = 0.05f;
-	flashDesc.startSize = XMFLOAT2(1.5f, 1.5f);
-	flashDesc.endSize = XMFLOAT2(3.6f, 3.6f);
-	flashDesc.startColor = XMFLOAT4(1.0f, 0.78f, 0.35f, 1.0f);
-	flashDesc.endColor = XMFLOAT4(1.0f, 0.18f, 0.02f, 0.0f);
-	flashDesc.rotationMin = 0.0f;
-	flashDesc.rotationMax = 0.0f;
-	flashDesc.firstFrame = 2;
-	flashDesc.frameCount = 1;
-	grenadeDesc.emitters.push_back(flashDesc);
+	if (renderGroupIt == m_RenderGroupDescs.end())
+		return false;
 
-	// 중앙 폭발 본체
-	ParticleEmitterDesc coreDesc;
-	coreDesc.textureId = ParticleTextureID::EXPLOSION;
-	coreDesc.blendMode = ParticleBlendMode::ALPHA;
-	coreDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	coreDesc.frameMode = ParticleFrameMode::SEQUENTIAL;
-	coreDesc.burstCount = 1;
-	coreDesc.lifeTimeMin = 0.58f;
-	coreDesc.lifeTimeMax = 0.68f;
-	coreDesc.startSize = XMFLOAT2(1.8f, 1.8f);
-	coreDesc.endSize = XMFLOAT2(4.6f, 4.6f);
-	coreDesc.startColor = XMFLOAT4(1.0f, 0.95f, 0.82f, 0.95f);
-	coreDesc.endColor = XMFLOAT4(0.58f, 0.54f, 0.52f, 0.0f);
-	coreDesc.rotationMin = -0.08f;
-	coreDesc.rotationMax = 0.08f;
-	coreDesc.angularVelocityMin = -0.12f;
-	coreDesc.angularVelocityMax = 0.12f;
-	coreDesc.firstFrame = 0;
-	coreDesc.frameCount = 35;
-	grenadeDesc.emitters.push_back(coreDesc);
-
-	// 방사형 화염 줄기
-	ParticleEmitterDesc flameStreakDesc;
-	flameStreakDesc.textureId = ParticleTextureID::SPARK_SHOTGUN;
-	flameStreakDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	flameStreakDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-
-	// Shotgun 애니메이션은 0번 이후 빠르게 회색으로 사라지므로
-	// 가장 밝은 0번 프레임을 고정하고 색상 알파로 사라지게 한다.
-	flameStreakDesc.frameMode = ParticleFrameMode::FIXED_FRAME;
-
-	flameStreakDesc.burstCount = 8;
-	flameStreakDesc.spawnDelayMin = 0.0f;
-	flameStreakDesc.spawnDelayMax = 0.015f;
-	flameStreakDesc.lifeTimeMin = 0.12f;
-	flameStreakDesc.lifeTimeMax = 0.19f;
-	flameStreakDesc.speedMin = 5.5f;
-	flameStreakDesc.speedMax = 9.5f;
-	flameStreakDesc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	flameStreakDesc.coneAngleDegrees = 78.0f;
-	flameStreakDesc.acceleration = XMFLOAT3(0.0f, -3.0f, 0.0f);
-	flameStreakDesc.startSize = XMFLOAT2(0.24f, 1.45f);
-	flameStreakDesc.endSize = XMFLOAT2(0.05f, 0.30f);
-	flameStreakDesc.sizeScaleMin = 0.85f;
-	flameStreakDesc.sizeScaleMax = 1.20f;
-	flameStreakDesc.startColor = XMFLOAT4(1.0f, 0.68f, 0.18f, 1.0f);
-	flameStreakDesc.endColor = XMFLOAT4(1.0f, 0.08f, 0.01f, 0.0f);
-	flameStreakDesc.firstFrame = 0;
-	flameStreakDesc.frameCount = 1;
-	grenadeDesc.emitters.push_back(flameStreakDesc);
-
-	// 불씨와 작은 화염 조각
-	ParticleEmitterDesc sparkDesc;
-	sparkDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	sparkDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	sparkDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	sparkDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	sparkDesc.burstCount = 36;
-	sparkDesc.spawnDelayMin = 0.0f;
-	sparkDesc.spawnDelayMax = 0.04f;
-	sparkDesc.lifeTimeMin = 0.28f;
-	sparkDesc.lifeTimeMax = 0.62f;
-	sparkDesc.speedMin = 5.5f;
-	sparkDesc.speedMax = 11.5f;
-	sparkDesc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	sparkDesc.coneAngleDegrees = 86.0f;
-	sparkDesc.acceleration = XMFLOAT3(0.0f, -7.5f, 0.0f);
-	sparkDesc.startSize = XMFLOAT2(0.08f, 0.38f);
-	sparkDesc.endSize = XMFLOAT2(0.015f, 0.06f);
-	sparkDesc.sizeScaleMin = 0.75f;
-	sparkDesc.sizeScaleMax = 1.35f;
-	sparkDesc.startColor = XMFLOAT4(1.0f, 0.82f, 0.28f, 1.0f);
-	sparkDesc.endColor = XMFLOAT4(1.0f, 0.06f, 0.01f, 0.0f);
-
-	const UINT sparkFrames[] = { 0, 3, 6, 9, 15, 21, 22, 24, 29 };
-	sparkDesc.selectedFrameCount = static_cast<UINT>(_countof(sparkFrames));
-
-	for (UINT i = 0; i < sparkDesc.selectedFrameCount; ++i)
+	if (renderGroupIt->second.textureId != emitterDesc.textureId ||
+		renderGroupIt->second.blendMode != emitterDesc.blendMode)
 	{
-		sparkDesc.selectedFrames[i] = sparkFrames[i];
+		return false;
 	}
 
-	grenadeDesc.emitters.push_back(sparkDesc);
+	auto atlasIt = m_AtlasDescs.find(emitterDesc.textureId);
 
-	// 중앙 폭발 이후 천천히 올라오는 연기
-	ParticleEmitterDesc smokeDesc;
-	smokeDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	smokeDesc.blendMode = ParticleBlendMode::ALPHA;
-	smokeDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	smokeDesc.frameMode = ParticleFrameMode::SEQUENTIAL;
-	smokeDesc.burstCount = 8;
+	if (atlasIt == m_AtlasDescs.end())
+		return false;
 
-	// 폭발 초반에는 코어와 불꽃이 보이도록 연기 출현을 늦춘다.
-	smokeDesc.spawnDelayMin = 0.22f;
-	smokeDesc.spawnDelayMax = 0.38f;
+	const ParticleAtlasDesc& atlasDesc = atlasIt->second;
 
-	smokeDesc.lifeTimeMin = 1.0f;
-	smokeDesc.lifeTimeMax = 1.45f;
-	smokeDesc.speedMin = 0.25f;
-	smokeDesc.speedMax = 0.80f;
-	smokeDesc.direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
-	smokeDesc.coneAngleDegrees = 42.0f;
-	smokeDesc.acceleration = XMFLOAT3(0.0f, 0.25f, 0.0f);
-	smokeDesc.startSize = XMFLOAT2(0.8f, 0.8f);
-	smokeDesc.endSize = XMFLOAT2(3.6f, 3.6f);
-	smokeDesc.sizeScaleMin = 0.80f;
-	smokeDesc.sizeScaleMax = 1.25f;
-	smokeDesc.startColor = XMFLOAT4(0.65f, 0.62f, 0.58f, 0.38f);
-	smokeDesc.endColor = XMFLOAT4(0.35f, 0.35f, 0.35f, 0.0f);
-	smokeDesc.rotationMin = 0.0f;
-	smokeDesc.rotationMax = XM_2PI;
-	smokeDesc.angularVelocityMin = -0.65f;
-	smokeDesc.angularVelocityMax = 0.65f;
-	smokeDesc.firstFrame = 35;
-	smokeDesc.frameCount = 7;
-	grenadeDesc.emitters.push_back(smokeDesc);
-
-	m_EffectDescs[grenadeDesc.id] = std::move(grenadeDesc);
-}
-
-void ParticleResource::BuildRifleSparkEffectDesc()
-{
-	ParticleEffectDesc sparkEffectDesc;
-	sparkEffectDesc.id = EffectID::SPARK;
-	sparkEffectDesc.emitters.reserve(4);
-
-	const UINT brightFrames[] = { 0, 3, 6, 9, 15, 21, 22, 24, 29 };
-
-	// 총구 근처를 순간적으로 밝게 만드는 짧은 코어 플래시
-	ParticleEmitterDesc muzzleFlashCoreDesc;
-	muzzleFlashCoreDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	muzzleFlashCoreDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	muzzleFlashCoreDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	muzzleFlashCoreDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	muzzleFlashCoreDesc.burstCount = 1;
-	muzzleFlashCoreDesc.spawnDelayMin = 0.0f;
-	muzzleFlashCoreDesc.spawnDelayMax = 0.0f;
-	muzzleFlashCoreDesc.lifeTimeMin = 0.025f;
-	muzzleFlashCoreDesc.lifeTimeMax = 0.040f;
-	muzzleFlashCoreDesc.speedMin = 0.0f;
-	muzzleFlashCoreDesc.speedMax = 0.0f;
-	muzzleFlashCoreDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	muzzleFlashCoreDesc.coneAngleDegrees = 0.0f;
-
-	// 코어의 밝은 부분이 총구 바로 앞에 붙도록 약간 뒤로 이동한다.
-	muzzleFlashCoreDesc.positionOffsetAlongDirection = -0.20f;
-
-	muzzleFlashCoreDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	muzzleFlashCoreDesc.startSize = XMFLOAT2(0.75f, 0.75f);
-	muzzleFlashCoreDesc.endSize = XMFLOAT2(0.20f, 0.20f);
-	muzzleFlashCoreDesc.sizeScaleMin = 0.95f;
-	muzzleFlashCoreDesc.sizeScaleMax = 1.10f;
-	muzzleFlashCoreDesc.startColor = XMFLOAT4(1.8f, 1.45f, 0.75f, 1.0f);
-	muzzleFlashCoreDesc.endColor = XMFLOAT4(1.2f, 0.35f, 0.04f, 0.0f);
-	muzzleFlashCoreDesc.rotationMin = 0.0f;
-	muzzleFlashCoreDesc.rotationMax = XM_2PI;
-	muzzleFlashCoreDesc.angularVelocityMin = 0.0f;
-	muzzleFlashCoreDesc.angularVelocityMax = 0.0f;
-	muzzleFlashCoreDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < muzzleFlashCoreDesc.selectedFrameCount; ++i)
+	if (emitterDesc.directionMode != ParticleDirectionMode::CONFIGURED &&
+		emitterDesc.directionMode != ParticleDirectionMode::EFFECT_DIRECTION)
 	{
-		muzzleFlashCoreDesc.selectedFrames[i] = brightFrames[i];
+		return false;
 	}
 
-	sparkEffectDesc.emitters.push_back(muzzleFlashCoreDesc);
+	if (emitterDesc.spawnDelayMin < 0.0f || emitterDesc.spawnDelayMax < emitterDesc.spawnDelayMin)
+		return false;
 
-	// 총구에서 앞으로 길게 뻗는 메인 불씨
-	ParticleEmitterDesc muzzleFlameDesc;
-	muzzleFlameDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	muzzleFlameDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	muzzleFlameDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	muzzleFlameDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	muzzleFlameDesc.burstCount = 1;
-	muzzleFlameDesc.spawnDelayMin = 0.0f;
-	muzzleFlameDesc.spawnDelayMax = 0.0f;
-	muzzleFlameDesc.lifeTimeMin = 0.050f;
-	muzzleFlameDesc.lifeTimeMax = 0.070f;
+	if (emitterDesc.lifeTimeMin <= 0.0f || emitterDesc.lifeTimeMax < emitterDesc.lifeTimeMin)
+		return false;
 
-	// 이동량보다 방향 정렬이 목적
-	muzzleFlameDesc.speedMin = 0.20f;
-	muzzleFlameDesc.speedMax = 0.28f;
-	muzzleFlameDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	muzzleFlameDesc.coneAngleDegrees = 2.0f;
+	if (emitterDesc.speedMin < 0.0f || emitterDesc.speedMax < emitterDesc.speedMin)
+		return false;
 
-	// 영상에서 총구와 가장 크게 떨어져 있던 메인 불씨를 뒤로 당긴다.
-	muzzleFlameDesc.positionOffsetAlongDirection = -0.52f;
+	if (emitterDesc.coneAngleDegrees < 0.0f || emitterDesc.coneAngleDegrees > 180.0f)
+		return false;
 
-	muzzleFlameDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	muzzleFlameDesc.startSize = XMFLOAT2(0.95f, 1.95f);
-	muzzleFlameDesc.endSize = XMFLOAT2(0.22f, 0.60f);
-	muzzleFlameDesc.sizeScaleMin = 0.95f;
-	muzzleFlameDesc.sizeScaleMax = 1.15f;
-	muzzleFlameDesc.startColor = XMFLOAT4(1.7f, 1.30f, 0.52f, 1.0f);
-	muzzleFlameDesc.endColor = XMFLOAT4(1.15f, 0.20f, 0.02f, 0.0f);
-	muzzleFlameDesc.rotationMin = -0.05f;
-	muzzleFlameDesc.rotationMax = 0.05f;
-	muzzleFlameDesc.angularVelocityMin = 0.0f;
-	muzzleFlameDesc.angularVelocityMax = 0.0f;
-	muzzleFlameDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
+	if (emitterDesc.sizeScaleMin <= 0.0f || emitterDesc.sizeScaleMax < emitterDesc.sizeScaleMin)
+		return false;
 
-	for (UINT i = 0; i < muzzleFlameDesc.selectedFrameCount; ++i)
+	if (emitterDesc.rotationMax < emitterDesc.rotationMin)
+		return false;
+
+	if (emitterDesc.angularVelocityMax < emitterDesc.angularVelocityMin)
+		return false;
+
+	if (emitterDesc.startSize.x < 0.0f || emitterDesc.startSize.y < 0.0f ||
+		emitterDesc.endSize.x < 0.0f || emitterDesc.endSize.y < 0.0f)
 	{
-		muzzleFlameDesc.selectedFrames[i] = brightFrames[i];
+		return false;
 	}
 
-	sparkEffectDesc.emitters.push_back(muzzleFlameDesc);
+	if (emitterDesc.firstFrame >= atlasDesc.validFrameCount)
+		return false;
 
-	// 총구 앞쪽으로 튀는 주 불씨
-	ParticleEmitterDesc muzzleSparkDesc;
-	muzzleSparkDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	muzzleSparkDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	muzzleSparkDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	muzzleSparkDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	muzzleSparkDesc.burstCount = 5;
-	muzzleSparkDesc.spawnDelayMin = 0.0f;
-	muzzleSparkDesc.spawnDelayMax = 0.010f;
-	muzzleSparkDesc.lifeTimeMin = 0.070f;
-	muzzleSparkDesc.lifeTimeMax = 0.125f;
-	muzzleSparkDesc.speedMin = 3.6f;
-	muzzleSparkDesc.speedMax = 6.2f;
-	muzzleSparkDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	muzzleSparkDesc.coneAngleDegrees = 12.0f;
-
-	// 긴 보조 불씨도 총구에서 출발하는 것처럼 소폭 뒤로 당긴다.
-	muzzleSparkDesc.positionOffsetAlongDirection = -0.10f;
-
-	muzzleSparkDesc.acceleration = XMFLOAT3(0.0f, -1.2f, 0.0f);
-	muzzleSparkDesc.startSize = XMFLOAT2(0.070f, 0.55f);
-	muzzleSparkDesc.endSize = XMFLOAT2(0.012f, 0.085f);
-	muzzleSparkDesc.sizeScaleMin = 0.85f;
-	muzzleSparkDesc.sizeScaleMax = 1.25f;
-	muzzleSparkDesc.startColor = XMFLOAT4(1.6f, 1.10f, 0.42f, 1.0f);
-	muzzleSparkDesc.endColor = XMFLOAT4(1.0f, 0.10f, 0.01f, 0.0f);
-	muzzleSparkDesc.rotationMin = -0.10f;
-	muzzleSparkDesc.rotationMax = 0.10f;
-	muzzleSparkDesc.angularVelocityMin = 0.0f;
-	muzzleSparkDesc.angularVelocityMax = 0.0f;
-	muzzleSparkDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < muzzleSparkDesc.selectedFrameCount; ++i)
+	switch (emitterDesc.frameMode)
 	{
-		muzzleSparkDesc.selectedFrames[i] = brightFrames[i];
+	case ParticleFrameMode::FIXED_FRAME:
+		if (emitterDesc.frameCount == 0)
+			return false;
+		break;
+
+	case ParticleFrameMode::SEQUENTIAL:
+		if (emitterDesc.frameCount == 0 || emitterDesc.frameCount > atlasDesc.validFrameCount - emitterDesc.firstFrame)
+			return false;
+		break;
+
+	case ParticleFrameMode::RANDOM_SELECTED:
+		if (emitterDesc.selectedFrameCount == 0 || emitterDesc.selectedFrameCount > PARTICLE_SELECTED_FRAME_CAPACITY)
+			return false;
+
+		for (UINT i = 0; i < emitterDesc.selectedFrameCount; ++i)
+		{
+			if (emitterDesc.selectedFrames[i] >= atlasDesc.validFrameCount)
+				return false;
+		}
+		break;
+
+	default:
+		return false;
 	}
 
-	sparkEffectDesc.emitters.push_back(muzzleSparkDesc);
-
-	// 메인 불씨 주변으로 좌우 / 위아래에 퍼지는 더 작은 보조 불씨
-	ParticleEmitterDesc scatteredSparkDesc;
-	scatteredSparkDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	scatteredSparkDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	scatteredSparkDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	scatteredSparkDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	scatteredSparkDesc.burstCount = 12;
-	scatteredSparkDesc.spawnDelayMin = 0.0f;
-	scatteredSparkDesc.spawnDelayMax = 0.010f;
-	scatteredSparkDesc.lifeTimeMin = 0.045f;
-	scatteredSparkDesc.lifeTimeMax = 0.090f;
-	scatteredSparkDesc.speedMin = 2.6f;
-	scatteredSparkDesc.speedMax = 5.0f;
-	scatteredSparkDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-
-	// 발사 방향을 중심으로 넓게 퍼지게 해서 좌우/상하 보조 불씨를 만든다.
-	scatteredSparkDesc.coneAngleDegrees = 82.0f;
-
-	// 작은 불씨의 출발점도 총구에 모이도록 조금만 뒤로 당긴다.
-	scatteredSparkDesc.positionOffsetAlongDirection = -0.06f;
-
-	scatteredSparkDesc.acceleration = XMFLOAT3(0.0f, -0.6f, 0.0f);
-	scatteredSparkDesc.startSize = XMFLOAT2(0.032f, 0.24f);
-	scatteredSparkDesc.endSize = XMFLOAT2(0.006f, 0.040f);
-	scatteredSparkDesc.sizeScaleMin = 0.80f;
-	scatteredSparkDesc.sizeScaleMax = 1.20f;
-	scatteredSparkDesc.startColor = XMFLOAT4(1.45f, 1.00f, 0.36f, 0.95f);
-	scatteredSparkDesc.endColor = XMFLOAT4(1.0f, 0.08f, 0.01f, 0.0f);
-	scatteredSparkDesc.rotationMin = -0.18f;
-	scatteredSparkDesc.rotationMax = 0.18f;
-	scatteredSparkDesc.angularVelocityMin = 0.0f;
-	scatteredSparkDesc.angularVelocityMax = 0.0f;
-	scatteredSparkDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < scatteredSparkDesc.selectedFrameCount; ++i)
-	{
-		scatteredSparkDesc.selectedFrames[i] = brightFrames[i];
-	}
-
-	sparkEffectDesc.emitters.push_back(scatteredSparkDesc);
-
-	m_EffectDescs[sparkEffectDesc.id] = std::move(sparkEffectDesc);
-}
-
-void ParticleResource::BuildShotgunSparkEffectDesc()
-{
-	ParticleEffectDesc shotgunSparkEffectDesc;
-	shotgunSparkEffectDesc.id = EffectID::SPARK_SHOTGUN;
-	shotgunSparkEffectDesc.emitters.reserve(4);
-
-	const UINT brightRifleFrames[] = { 0, 3, 6, 9, 15, 21, 22, 24, 29 };
-
-	// 총구 중심에서 순간적으로 강하게 빛나는 섬광
-	ParticleEmitterDesc muzzleCoreDesc;
-	muzzleCoreDesc.textureId = ParticleTextureID::SPARK_SHOTGUN;
-	muzzleCoreDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	muzzleCoreDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	muzzleCoreDesc.frameMode = ParticleFrameMode::FIXED_FRAME;
-	muzzleCoreDesc.burstCount = 1;
-	muzzleCoreDesc.spawnDelayMin = 0.0f;
-	muzzleCoreDesc.spawnDelayMax = 0.0f;
-	muzzleCoreDesc.lifeTimeMin = 0.030f;
-	muzzleCoreDesc.lifeTimeMax = 0.045f;
-	muzzleCoreDesc.speedMin = 0.0f;
-	muzzleCoreDesc.speedMax = 0.0f;
-	muzzleCoreDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	muzzleCoreDesc.coneAngleDegrees = 0.0f;
-	muzzleCoreDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	muzzleCoreDesc.startSize = XMFLOAT2(1.10f, 1.10f);
-	muzzleCoreDesc.endSize = XMFLOAT2(0.30f, 0.30f);
-	muzzleCoreDesc.sizeScaleMin = 0.95f;
-	muzzleCoreDesc.sizeScaleMax = 1.10f;
-	muzzleCoreDesc.startColor = XMFLOAT4(2.0f, 1.55f, 0.72f, 1.0f);
-	muzzleCoreDesc.endColor = XMFLOAT4(1.2f, 0.24f, 0.02f, 0.0f);
-	muzzleCoreDesc.rotationMin = 0.0f;
-	muzzleCoreDesc.rotationMax = XM_2PI;
-	muzzleCoreDesc.angularVelocityMin = 0.0f;
-	muzzleCoreDesc.angularVelocityMax = 0.0f;
-	muzzleCoreDesc.firstFrame = 0;
-	muzzleCoreDesc.frameCount = 1;
-
-	shotgunSparkEffectDesc.emitters.push_back(muzzleCoreDesc);
-
-	// 총구 정면으로 굵고 길게 뻗는 주 화염
-	ParticleEmitterDesc mainFlameDesc;
-	mainFlameDesc.textureId = ParticleTextureID::SPARK_SHOTGUN;
-	mainFlameDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	mainFlameDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	mainFlameDesc.frameMode = ParticleFrameMode::FIXED_FRAME;
-	mainFlameDesc.burstCount = 1;
-	mainFlameDesc.spawnDelayMin = 0.0f;
-	mainFlameDesc.spawnDelayMax = 0.0f;
-	mainFlameDesc.lifeTimeMin = 0.055f;
-	mainFlameDesc.lifeTimeMax = 0.075f;
-	mainFlameDesc.speedMin = 0.18f;
-	mainFlameDesc.speedMax = 0.26f;
-	mainFlameDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	mainFlameDesc.coneAngleDegrees = 3.0f;
-	mainFlameDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	mainFlameDesc.startSize = XMFLOAT2(1.15f, 2.35f);
-	mainFlameDesc.endSize = XMFLOAT2(0.30f, 0.70f);
-	mainFlameDesc.sizeScaleMin = 0.95f;
-	mainFlameDesc.sizeScaleMax = 1.15f;
-	mainFlameDesc.startColor = XMFLOAT4(1.9f, 1.35f, 0.50f, 1.0f);
-	mainFlameDesc.endColor = XMFLOAT4(1.1f, 0.16f, 0.01f, 0.0f);
-	mainFlameDesc.rotationMin = -0.05f;
-	mainFlameDesc.rotationMax = 0.05f;
-	mainFlameDesc.angularVelocityMin = 0.0f;
-	mainFlameDesc.angularVelocityMax = 0.0f;
-	mainFlameDesc.firstFrame = 0;
-	mainFlameDesc.frameCount = 1;
-
-	shotgunSparkEffectDesc.emitters.push_back(mainFlameDesc);
-
-	// 샷건 특유의 넓은 범위로 퍼지는 짧은 화염
-	ParticleEmitterDesc wideFlameDesc;
-	wideFlameDesc.textureId = ParticleTextureID::SPARK_SHOTGUN;
-	wideFlameDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	wideFlameDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	wideFlameDesc.frameMode = ParticleFrameMode::FIXED_FRAME;
-	wideFlameDesc.burstCount = 5;
-	wideFlameDesc.spawnDelayMin = 0.0f;
-	wideFlameDesc.spawnDelayMax = 0.008f;
-	wideFlameDesc.lifeTimeMin = 0.040f;
-	wideFlameDesc.lifeTimeMax = 0.070f;
-	wideFlameDesc.speedMin = 0.8f;
-	wideFlameDesc.speedMax = 1.7f;
-	wideFlameDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	wideFlameDesc.coneAngleDegrees = 38.0f;
-	wideFlameDesc.acceleration = XMFLOAT3(0.0f, -0.4f, 0.0f);
-	wideFlameDesc.startSize = XMFLOAT2(0.28f, 0.90f);
-	wideFlameDesc.endSize = XMFLOAT2(0.05f, 0.16f);
-	wideFlameDesc.sizeScaleMin = 0.80f;
-	wideFlameDesc.sizeScaleMax = 1.25f;
-	wideFlameDesc.startColor = XMFLOAT4(1.7f, 1.05f, 0.30f, 1.0f);
-	wideFlameDesc.endColor = XMFLOAT4(1.0f, 0.08f, 0.01f, 0.0f);
-	wideFlameDesc.rotationMin = -0.10f;
-	wideFlameDesc.rotationMax = 0.10f;
-	wideFlameDesc.angularVelocityMin = 0.0f;
-	wideFlameDesc.angularVelocityMax = 0.0f;
-	wideFlameDesc.firstFrame = 0;
-	wideFlameDesc.frameCount = 1;
-
-	shotgunSparkEffectDesc.emitters.push_back(wideFlameDesc);
-
-	// 총구 주변과 전방으로 넓게 튀는 작은 불씨
-	ParticleEmitterDesc scatteredSparkDesc;
-	scatteredSparkDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	scatteredSparkDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	scatteredSparkDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	scatteredSparkDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	scatteredSparkDesc.burstCount = 18;
-	scatteredSparkDesc.spawnDelayMin = 0.0f;
-	scatteredSparkDesc.spawnDelayMax = 0.015f;
-	scatteredSparkDesc.lifeTimeMin = 0.060f;
-	scatteredSparkDesc.lifeTimeMax = 0.140f;
-	scatteredSparkDesc.speedMin = 3.5f;
-	scatteredSparkDesc.speedMax = 7.0f;
-	scatteredSparkDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	scatteredSparkDesc.coneAngleDegrees = 58.0f;
-	scatteredSparkDesc.acceleration = XMFLOAT3(0.0f, -1.8f, 0.0f);
-	scatteredSparkDesc.startSize = XMFLOAT2(0.040f, 0.32f);
-	scatteredSparkDesc.endSize = XMFLOAT2(0.006f, 0.050f);
-	scatteredSparkDesc.sizeScaleMin = 0.75f;
-	scatteredSparkDesc.sizeScaleMax = 1.30f;
-	scatteredSparkDesc.startColor = XMFLOAT4(1.65f, 1.10f, 0.38f, 1.0f);
-	scatteredSparkDesc.endColor = XMFLOAT4(1.0f, 0.06f, 0.01f, 0.0f);
-	scatteredSparkDesc.rotationMin = -0.15f;
-	scatteredSparkDesc.rotationMax = 0.15f;
-	scatteredSparkDesc.angularVelocityMin = 0.0f;
-	scatteredSparkDesc.angularVelocityMax = 0.0f;
-	scatteredSparkDesc.selectedFrameCount = static_cast<UINT>(_countof(brightRifleFrames));
-
-	for (UINT i = 0; i < scatteredSparkDesc.selectedFrameCount; ++i)
-	{
-		scatteredSparkDesc.selectedFrames[i] = brightRifleFrames[i];
-	}
-
-	shotgunSparkEffectDesc.emitters.push_back(scatteredSparkDesc);
-
-	m_EffectDescs[shotgunSparkEffectDesc.id] = std::move(shotgunSparkEffectDesc);
-}
-
-void ParticleResource::BuildPistolSparkEffectDesc()
-{
-	ParticleEffectDesc pistolSparkEffectDesc;
-	pistolSparkEffectDesc.id = EffectID::SPARK_PISTOL;
-	pistolSparkEffectDesc.emitters.reserve(3);
-
-	const UINT brightFrames[] = { 0, 3, 6, 9, 15, 21, 22, 24, 29 };
-
-	// 피스톨 총구 근처의 짧은 중심 섬광
-	ParticleEmitterDesc muzzleCoreDesc;
-	muzzleCoreDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	muzzleCoreDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	muzzleCoreDesc.billboardMode = ParticleBillboardMode::CAMERA_FACING;
-	muzzleCoreDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	muzzleCoreDesc.burstCount = 1;
-	muzzleCoreDesc.spawnDelayMin = 0.0f;
-	muzzleCoreDesc.spawnDelayMax = 0.0f;
-	muzzleCoreDesc.lifeTimeMin = 0.020f;
-	muzzleCoreDesc.lifeTimeMax = 0.035f;
-	muzzleCoreDesc.speedMin = 0.0f;
-	muzzleCoreDesc.speedMax = 0.0f;
-	muzzleCoreDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	muzzleCoreDesc.coneAngleDegrees = 0.0f;
-	muzzleCoreDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	muzzleCoreDesc.startSize = XMFLOAT2(0.38f, 0.38f);
-	muzzleCoreDesc.endSize = XMFLOAT2(0.10f, 0.10f);
-	muzzleCoreDesc.sizeScaleMin = 0.90f;
-	muzzleCoreDesc.sizeScaleMax = 1.10f;
-	muzzleCoreDesc.startColor = XMFLOAT4(1.65f, 1.20f, 0.48f, 1.0f);
-	muzzleCoreDesc.endColor = XMFLOAT4(1.0f, 0.15f, 0.01f, 0.0f);
-	muzzleCoreDesc.rotationMin = 0.0f;
-	muzzleCoreDesc.rotationMax = XM_2PI;
-	muzzleCoreDesc.angularVelocityMin = 0.0f;
-	muzzleCoreDesc.angularVelocityMax = 0.0f;
-	muzzleCoreDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < muzzleCoreDesc.selectedFrameCount; ++i)
-	{
-		muzzleCoreDesc.selectedFrames[i] = brightFrames[i];
-	}
-
-	pistolSparkEffectDesc.emitters.push_back(muzzleCoreDesc);
-
-	// 피스톨 총구에서 짧게 앞으로 뻗는 주 화염
-	ParticleEmitterDesc mainFlameDesc;
-	mainFlameDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	mainFlameDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	mainFlameDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	mainFlameDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	mainFlameDesc.burstCount = 1;
-	mainFlameDesc.spawnDelayMin = 0.0f;
-	mainFlameDesc.spawnDelayMax = 0.0f;
-	mainFlameDesc.lifeTimeMin = 0.032f;
-	mainFlameDesc.lifeTimeMax = 0.050f;
-	mainFlameDesc.speedMin = 0.12f;
-	mainFlameDesc.speedMax = 0.18f;
-	mainFlameDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	mainFlameDesc.coneAngleDegrees = 3.0f;
-	mainFlameDesc.acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	mainFlameDesc.startSize = XMFLOAT2(0.32f, 0.75f);
-	mainFlameDesc.endSize = XMFLOAT2(0.08f, 0.22f);
-	mainFlameDesc.sizeScaleMin = 0.90f;
-	mainFlameDesc.sizeScaleMax = 1.10f;
-	mainFlameDesc.startColor = XMFLOAT4(1.65f, 1.12f, 0.40f, 1.0f);
-	mainFlameDesc.endColor = XMFLOAT4(1.0f, 0.10f, 0.01f, 0.0f);
-	mainFlameDesc.rotationMin = -0.06f;
-	mainFlameDesc.rotationMax = 0.06f;
-	mainFlameDesc.angularVelocityMin = 0.0f;
-	mainFlameDesc.angularVelocityMax = 0.0f;
-	mainFlameDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < mainFlameDesc.selectedFrameCount; ++i)
-	{
-		mainFlameDesc.selectedFrames[i] = brightFrames[i];
-	}
-
-	pistolSparkEffectDesc.emitters.push_back(mainFlameDesc);
-
-	// 피스톨 총구 주변으로 적게 튀는 작은 불씨
-	ParticleEmitterDesc scatteredSparkDesc;
-	scatteredSparkDesc.textureId = ParticleTextureID::SPARK_RIFLE_SMG;
-	scatteredSparkDesc.blendMode = ParticleBlendMode::ADDITIVE;
-	scatteredSparkDesc.billboardMode = ParticleBillboardMode::VELOCITY_ALIGNED;
-	scatteredSparkDesc.frameMode = ParticleFrameMode::RANDOM_SELECTED;
-	scatteredSparkDesc.burstCount = 4;
-	scatteredSparkDesc.spawnDelayMin = 0.0f;
-	scatteredSparkDesc.spawnDelayMax = 0.008f;
-	scatteredSparkDesc.lifeTimeMin = 0.040f;
-	scatteredSparkDesc.lifeTimeMax = 0.080f;
-	scatteredSparkDesc.speedMin = 2.0f;
-	scatteredSparkDesc.speedMax = 4.2f;
-	scatteredSparkDesc.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	scatteredSparkDesc.coneAngleDegrees = 38.0f;
-	scatteredSparkDesc.acceleration = XMFLOAT3(0.0f, -0.7f, 0.0f);
-	scatteredSparkDesc.startSize = XMFLOAT2(0.018f, 0.14f);
-	scatteredSparkDesc.endSize = XMFLOAT2(0.003f, 0.020f);
-	scatteredSparkDesc.sizeScaleMin = 0.75f;
-	scatteredSparkDesc.sizeScaleMax = 1.20f;
-	scatteredSparkDesc.startColor = XMFLOAT4(1.45f, 0.95f, 0.30f, 0.95f);
-	scatteredSparkDesc.endColor = XMFLOAT4(1.0f, 0.05f, 0.01f, 0.0f);
-	scatteredSparkDesc.rotationMin = -0.12f;
-	scatteredSparkDesc.rotationMax = 0.12f;
-	scatteredSparkDesc.angularVelocityMin = 0.0f;
-	scatteredSparkDesc.angularVelocityMax = 0.0f;
-	scatteredSparkDesc.selectedFrameCount = static_cast<UINT>(_countof(brightFrames));
-
-	for (UINT i = 0; i < scatteredSparkDesc.selectedFrameCount; ++i)
-	{
-		scatteredSparkDesc.selectedFrames[i] = brightFrames[i];
-	}
-
-	pistolSparkEffectDesc.emitters.push_back(scatteredSparkDesc);
-
-	m_EffectDescs[pistolSparkEffectDesc.id] = std::move(pistolSparkEffectDesc);
+	return true;
 }
 
 void ParticleResource::ReleaseUploadBuffers()
@@ -721,6 +1134,7 @@ void ParticleResource::Release()
 	ReleaseUploadBuffers();
 
 	m_EffectDescs.clear();
+	m_RenderGroupDescs.clear();
 	m_AtlasDescs.clear();
 	m_Textures.clear();
 
@@ -756,6 +1170,18 @@ const ParticleAtlasDesc* ParticleResource::GetAtlasDesc(ParticleTextureID textur
 	auto it = m_AtlasDescs.find(textureId);
 
 	if (it == m_AtlasDescs.end())
+	{
+		return nullptr;
+	}
+
+	return &it->second;
+}
+
+const ParticleRenderGroupDesc* ParticleResource::GetRenderGroupDesc(UINT renderGroupIndex) const
+{
+	auto it = m_RenderGroupDescs.find(renderGroupIndex);
+
+	if (it == m_RenderGroupDescs.end())
 	{
 		return nullptr;
 	}

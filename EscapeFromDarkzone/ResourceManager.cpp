@@ -531,17 +531,17 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_02, 
-		pd3dDevice, 
-		pd3dCommandList, 
-		pd3dGraphicsRootSignature, 
+		ModelName::PLAYER_02,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
 		"Model/SM_Soldier_03_Complete_Reduced_yellow.bin", SkinnedShader);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_03, 
-		pd3dDevice, 
-		pd3dCommandList, 
-		pd3dGraphicsRootSignature, 
+		ModelName::PLAYER_03,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
 		"Model/SM_Soldier_03_Complete_Reduced_green.bin", SkinnedShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
@@ -1024,9 +1024,11 @@ bool ResourceManager::BuildParticleResource(ID3D12Device* pd3dDevice, ID3D12Grap
 		return true;
 	}
 
+	static constexpr const wchar_t* PARTICLE_CONFIG_FILE_PATH = L"Model/ParticleEffects.json";
+
 	auto pNewParticleResource = std::make_unique<ParticleResource>();
 
-	if (!pNewParticleResource->Load(pd3dDevice, pd3dCommandList))
+	if (!pNewParticleResource->Load(pd3dDevice, pd3dCommandList, PARTICLE_CONFIG_FILE_PATH))
 	{
 		OutputDebugStringW(L"[ResourceManager] Particle resource load failed.\n");
 		return false;
@@ -1232,7 +1234,7 @@ void ResourceManager::LoadMaterialsFromFile(ID3D12Device* pd3dDevice, ID3D12Grap
 	}
 }
 
-void ResourceManager::LoadAnimationFromFile(FILE * pInFile, CLoadedModelInfo * pLoadedModel)
+void ResourceManager::LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel)
 {
 	char pstrToken[260] = { '\0' };
 	UINT nReads = 0;
@@ -1312,7 +1314,7 @@ void ResourceManager::LoadAnimationFromFile(FILE * pInFile, CLoadedModelInfo * p
 	}
 }
 
-ModelResource* ResourceManager::LoadFrameHierarchyFromFile(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature, ModelResource * pParent, FILE * pInFile, CShader * pShader, int* pnSkinnedMeshes, const char* pstrFileName)
+ModelResource* ResourceManager::LoadFrameHierarchyFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, ModelResource* pParent, FILE* pInFile, CShader* pShader, int* pnSkinnedMeshes, const char* pstrFileName)
 {
 	char pstrToken[260] = { '\0' };
 	UINT nReads = 0;
