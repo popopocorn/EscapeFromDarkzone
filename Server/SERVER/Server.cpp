@@ -631,10 +631,10 @@ static void start_new_round(Room& r)
 
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
 			clients[cid]._inventory.fill(ItemSlot{});
-			clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
-			clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
-			clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
-			clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
+			//clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+			//clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+			//clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+			//clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
 		}
 
 		g_ready_players.erase(g_ready_players.begin() + idx);
@@ -3287,20 +3287,44 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	int dropCount = 0;   // 몇 종류의 아이템을 떨어뜨릴 것인가
 	int minQty = 1, maxQty = 3; // 한 종류당 떨어지는 최소/최대 개수
 
+	int currentSlot = 0;
 
 	switch (npc.kind) {
 	case NPC_TIER_3:
-		dropCount = rand() % 2 + 2;
-		minQty = 7; maxQty = 12;
+		//dropCount = rand() % 2 + 2;
+		//minQty = 7; maxQty = 12;
+		dropCount = 3;		// 3종류 고정
+		minQty = 20; maxQty = 24;
+		{
+			ItemID item = ItemID::ESCAPE_KEY;
+			int count = 1;
+			bool bFound = false;
+			for (int k = 0; k < currentSlot; ++k) {
+				if (npc._inventory[k].item == item) {
+					npc._inventory[k].count += count;
+					bFound = true;
+					break;
+				}
+			}
+			if (!bFound) {
+				npc._inventory[currentSlot].item = item;
+				npc._inventory[currentSlot].count = count;
+				currentSlot++;
+			}
+		}
 		break;
 	case NPC_TIER_2:
-		dropCount = rand() % 2 + 2; // 2~3종류
-		minQty = 4; maxQty = 6;
+		//dropCount = rand() % 2 + 2;		// 2~3종류
+		//minQty = 4; maxQty = 6;
+		dropCount = 3;		// 3종류 고정
+		minQty = 10; maxQty = 14;
 		break;
 	case NPC_TIER_1:
 	default:
-		dropCount = rand() % 2 + 1; // 1~2종류
-		minQty = 2; maxQty = 4;
+		//dropCount = rand() % 2 + 1;		// 1~2종류
+		//minQty = 2; maxQty = 4;
+		dropCount = 3;		// 3종류 고정
+		minQty = 5; maxQty = 9;
 		break;
 	}
 
@@ -3311,12 +3335,11 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	};
 	int poolSize = sizeof(dropPool) / sizeof(dropPool[0]);
 
-	int currentSlot = 0;
-
 	for (int j = 0; j < dropCount; ++j) {
 		if (currentSlot >= INVENTORY_SIZE) break;
 
-		ItemID item = dropPool[rand() % poolSize];
+		//ItemID item = dropPool[rand() % poolSize];
+		ItemID item = dropPool[j % poolSize];			// 중복없음 + 순차선택
 		int count = minQty + (rand() % (maxQty - minQty + 1));
 		bool bFound = false;
 		for (int k = 0; k < currentSlot; ++k) {
@@ -3334,7 +3357,8 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	}
 
 	// --- 업그레이드 재료 랜덤 드랍 처리 ---
-	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+	// 업그레이드 재료 드랍 막음
+	if (currentSlot < INVENTORY_SIZE && /*(rand() % 100 < 50)*/ false) {
 		ItemID upgradeItem = ItemID::NONE;
 
 		switch (npc.kind) {
@@ -3363,17 +3387,17 @@ static void spawn_room_npcs(Room& r)
 
 	struct NpcSpawnDef { float x, z; char tier; char outfit; };
 	static const NpcSpawnDef main_npc_def[] = {
-		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
-		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
-		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
-		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
-		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
-		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
-		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
-		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
-		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
-		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
-		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
+		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
+		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
+		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
+		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
+		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
+		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
+		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
+		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
+		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
+		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
+		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
 	};
 	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 

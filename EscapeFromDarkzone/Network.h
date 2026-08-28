@@ -11,7 +11,7 @@
 #pragma comment(lib, "WS2_32.lib")
 
 constexpr char SERVER_ADDR[] = "127.0.0.1";
-//constexpr char SERVER_ADDR[] = "119.195.220.93";
+//constexpr char SERVER_ADDR[] = "58.124.82.168";
 
 
 // 패킷 큐 최대 크기

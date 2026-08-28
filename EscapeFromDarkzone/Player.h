@@ -78,16 +78,19 @@ protected:
 	LPVOID						m_pCameraUpdatedContext = NULL;
 
 	CCamera* m_pCamera = NULL;
-	std::unique_ptr<State<CPlayer>> state;
+	StateMachine<CPlayer>			m_LowerStateMachine;
+	StateMachine<CPlayer>			m_UpperStateMachine;
 	std::queue<GameEvent>		event_queue;
 
-	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
-	float						speed{5.0};		//서버 이동속도랑 맞추기
+	float						m_fDeadTimer = 0.0f;
+	bool						m_bDeathResultRequested = false;
+	char						m_nLastReportedPlayerState = -1;
 
-	// 충돌 노멀
+	XMFLOAT3					MoveDir = XMFLOAT3(0, 0, 0);
+	float						speed{ 5.0 };
+
 	std::vector<XMFLOAT3>		CollVector;
 
-	//애니메이션 관련 무기
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 	CGameObject* m_pWeaponMuzzleSocket = nullptr;
@@ -113,13 +116,12 @@ protected:
 
 	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
-	// 무기 포즈 블렌딩
 	bool m_bWeaponBlending = false;
 	float m_fWeaponBlendTime = 0.0f;
 	float m_fWeaponBlendDuration = 0.25f;
 	XMFLOAT4X4 m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
 
-	// grenade 포즈용
+	// grenade 
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
 	CGameObject* m_pLeftHand = nullptr;
@@ -132,10 +134,9 @@ protected:
 	void ApplyGrenadeWeaponPose();
 	void ApplyShootWeaponPose();
 
-	// 04.10 추가: 서버 위치 보간
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
-	//현재 장착 중인 무기 데이터
+	//    
 	WeaponItem* m_pEquippedWeaponItem = nullptr;
 	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
@@ -147,14 +148,14 @@ protected:
 	bool  m_bFireHeld = false;
 	bool  m_bShotAnimRequest = false;
 
-	bool m_bWasMoving = false;			// 이동이 끝나는 시점에 서버로 패킷을 전송하기
+	bool m_bWasMoving = false;
 
-	short m_hp = 100;		// 임시 체력 추가
+	short m_hp = 100;
 
 	std::unique_ptr<Inventory>	m_pInventory;
 	//equips
 	unique_ptr<Equip>			Equipments;
-	
+
 public:
 	CPlayer();
 	virtual ~CPlayer();
@@ -214,7 +215,16 @@ public:
 
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 	void AddEvent(const GameEvent& event) { event_queue.push(event); }
-	void ChangeState(std::unique_ptr<State<CPlayer>> new_state, bool bForce = false);
+
+	void ChangeLowerState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
+	void ChangeUpperState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
+	void ChangeState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false); // 기존 외부 호출 호환용
+	void EnterDeadState();
+	void ReportStateToServer(bool bForce = false);
+	void RefreshAnimationTracksFromStates();
+
+	bool IsLowerRunState() const;
+	bool IsUpperIdleState() const;
 	void SetMoveDir(XMFLOAT3 dir) { MoveDir = dir; }
 
 	virtual void HandleCollision(const ColResult& normal);
@@ -274,7 +284,6 @@ public:
 	void BeginGrenadeWeaponPose();
 	void EndGrenadeWeaponPose();
 
-	//현재 장착 무기 데이터
 	bool EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
@@ -311,7 +320,6 @@ public:
 
 	Inventory* GetInventory() const { return m_pInventory.get(); }
 
-	// 04.10 추가: 서버 위치 보간
 	void SetServerPosition(const XMFLOAT3& pos) { m_xmf3ServerPosition = pos; }
 
 	void ResetForNewRound(short fullHp = 100);
@@ -321,7 +329,7 @@ public:
 	float	cameraDistance = 15.0f;
 	Equip* GetEquips() { return Equipments.get(); }
 	bool						m_bIsDead = false;
-	CGameFramework*				frame;
+	CGameFramework* frame;
 };
 
 class CPlayerAnimationController : public CAnimationController
@@ -403,23 +411,15 @@ public:
 	virtual void Update(float fTimeElapsed);
 };
 
-class PlayerIdle : public State<CPlayer> {
+class PlayerLowerIdle : public State<CPlayer> {
 	virtual bool Enter(CPlayer* Player) override;
 	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
 	virtual void Exit(CPlayer* Player) override;
 };
 
-class PlayerRun : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player) override;
-	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
-	virtual void Exit(CPlayer* Player) override;
-};
-
-class PlayerGrenade : public State<CPlayer> {
+class PlayerLowerRun : public State<CPlayer> {
 private:
-	float m_fElapsed = 0.0f;
-	int m_nLastLowerAnim = PLAYER_RIFLE_SMG_IDLE;
-	bool m_bKeepRun = false;
+	float m_fFootstepTimer = 0.0f;
 
 public:
 	virtual bool Enter(CPlayer* Player) override;
@@ -427,7 +427,23 @@ public:
 	virtual void Exit(CPlayer* Player) override;
 };
 
-class PlayerShoot : public State<CPlayer> {
+class PlayerUpperIdle : public State<CPlayer> {
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
+};
+
+class PlayerUpperGrenade : public State<CPlayer> {
+private:
+	float m_fElapsed = 0.0f;
+
+public:
+	virtual bool Enter(CPlayer* Player) override;
+	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
+	virtual void Exit(CPlayer* Player) override;
+};
+
+class PlayerUpperShoot : public State<CPlayer> {
 private:
 	float m_fElapsed = 0.0f;
 	float m_fAnimDuration = 0.15f;
@@ -438,16 +454,21 @@ public:
 	virtual void Exit(CPlayer* Player) override;
 };
 
-class PlayerReload : public State<CPlayer> {
+class PlayerUpperReload : public State<CPlayer> {
 public:
 	virtual bool Enter(CPlayer* Player) override;
 	virtual void Update(CPlayer* Player, float fTimeElapsed) override;
 	virtual void Exit(CPlayer* Player) override;
 };
 
-class PlayerDie : public State<CPlayer> {
-	virtual bool Enter(CPlayer* Player);
-	virtual void Update(CPlayer* Player, float fTimeElapsed);
-	virtual void Exit(CPlayer* Player);
-	float deadTimer = 0;;
+// 기존 코드와 외부 호출을 한 번에 깨지 않기 위한 호환 별칭.
+using PlayerIdle = PlayerLowerIdle;
+using PlayerRun = PlayerLowerRun;
+using PlayerGrenade = PlayerUpperGrenade;
+using PlayerShoot = PlayerUpperShoot;
+using PlayerReload = PlayerUpperReload;
+
+// 기존 PlayerDie 생성 호출이 남아 있어도 컴파일되도록 두는 호환 마커.
+class PlayerDie : public State<CPlayer>
+{
 };

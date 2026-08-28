@@ -4,6 +4,7 @@
 #include "UI.h"
 #include "ResourceManager.h"
 #include "FontResource.h"
+#include "ParticleResource.h"
 
 
 void ResourceManager::CreateCbvSrvDescriptorHeaps(
@@ -267,10 +268,12 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		obj.second->m_pModelRootObject->ReleaseUploadBuffers();
 	}
+
 	for (auto& obj : textureMap)
 	{
 		obj.second->ReleaseUploadBuffers();
 	}
+
 	for (auto& obj : m_ModelPrototypes)
 	{
 		if (obj.second)
@@ -291,19 +294,43 @@ void ResourceManager::ReleaseUploadBuffers()
 	{
 		m_pFontResource->ReleaseUploadBuffer();
 	}
+
+	if (m_pParticleResource)
+	{
+		m_pParticleResource->ReleaseUploadBuffers();
+	}
 }
 
 void ResourceManager::ReleaseResources()
 {
+	m_pFontResource.reset();
+	m_pParticleResource.reset();
+
 	m_ModelPrototypes.clear();
-
 	m_SkinnedModelPrototypes.clear();
-
 	m_AnimationSetOwners.clear();
-
 	m_UIPrototypes.clear();
-
 	textureMap.clear();
+
+	if (m_pd3dCbvSrvDescriptorHeap)
+	{
+		m_pd3dCbvSrvDescriptorHeap->Release();
+		m_pd3dCbvSrvDescriptorHeap = nullptr;
+	}
+
+	m_nSrvDescriptorCapacity = 0;
+
+	m_d3dCbvCPUDescriptorStartHandle = {};
+	m_d3dCbvGPUDescriptorStartHandle = {};
+	m_d3dSrvCPUDescriptorStartHandle = {};
+	m_d3dSrvGPUDescriptorStartHandle = {};
+
+	m_d3dCbvCPUDescriptorNextHandle = {};
+	m_d3dCbvGPUDescriptorNextHandle = {};
+	m_d3dSrvCPUDescriptorNextHandle = {};
+	m_d3dSrvGPUDescriptorNextHandle = {};
+
+	OutputDebugStringW(L"[ResourceManager] All resources released.\n");
 }
 
 bool ResourceManager::LoadAndRegisterModelPrototype(
@@ -504,17 +531,17 @@ void ResourceManager::BuildSkinnedModelPrototypes(
 	);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_02, 
-		pd3dDevice, 
-		pd3dCommandList, 
-		pd3dGraphicsRootSignature, 
+		ModelName::PLAYER_02,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
 		"Model/SM_Soldier_03_Complete_Reduced_yellow.bin", SkinnedShader);
 
 	LoadAndRegisterSkinnedModelPrototype(
-		ModelName::PLAYER_03, 
-		pd3dDevice, 
-		pd3dCommandList, 
-		pd3dGraphicsRootSignature, 
+		ModelName::PLAYER_03,
+		pd3dDevice,
+		pd3dCommandList,
+		pd3dGraphicsRootSignature,
 		"Model/SM_Soldier_03_Complete_Reduced_green.bin", SkinnedShader);
 
 	ShareSkinnedAnimationSets(ModelName::PLAYER_02, ModelName::PLAYER_01);
@@ -893,37 +920,44 @@ void ResourceManager::BuildUIMesh(
 
 bool ResourceManager::BuildFontResource(
 	ID3D12Device* pd3dDevice,
-	ID3D12GraphicsCommandList* pd3dCommandList,
-	const wchar_t* pAtlasFilePath,
-	const wchar_t* pMetadataFilePath)
+	ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	if (!pd3dDevice || !pd3dCommandList)
 	{
-		OutputDebugStringW(L"[ResourceManager] Font build failed. Device or command list is null.\n");
-		return false;
-	}
+		OutputDebugStringW(
+			L"[ResourceManager] Font build failed. Device or command list is null.\n"
+		);
 
-	if (!pAtlasFilePath || !pMetadataFilePath)
-	{
-		OutputDebugStringW(L"[ResourceManager] Font build failed. File path is null.\n");
 		return false;
 	}
 
 	if (m_pFontResource && m_pFontResource->IsLoaded())
 	{
-		OutputDebugStringW(L"[ResourceManager] Font resource is already loaded.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font resource is already loaded.\n"
+		);
+
 		return true;
 	}
 
-	auto pNewFontResource = make_unique<FontResource>();
+	static constexpr const wchar_t* FONT_ATLAS_FILE_PATH =
+		L"Model/Fonts/KoreanFontAtlas_4096.png";
+
+	static constexpr const wchar_t* FONT_METADATA_FILE_PATH =
+		L"Model/Fonts/KoreanFontAtlas_4096.json";
+
+	auto pNewFontResource = std::make_unique<FontResource>();
 
 	if (!pNewFontResource->Load(
 		pd3dDevice,
 		pd3dCommandList,
-		pAtlasFilePath,
-		pMetadataFilePath))
+		FONT_ATLAS_FILE_PATH,
+		FONT_METADATA_FILE_PATH))
 	{
-		OutputDebugStringW(L"[ResourceManager] Font resource load failed.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font resource load failed.\n"
+		);
+
 		return false;
 	}
 
@@ -934,7 +968,10 @@ bool ResourceManager::BuildFontResource(
 		d3dCpuDescriptorHandle,
 		d3dGpuDescriptorHandle))
 	{
-		OutputDebugStringW(L"[ResourceManager] Font SRV descriptor allocation failed.\n");
+		OutputDebugStringW(
+			L"[ResourceManager] Font SRV descriptor allocation failed.\n"
+		);
+
 		return false;
 	}
 
@@ -943,16 +980,23 @@ bool ResourceManager::BuildFontResource(
 		d3dCpuDescriptorHandle,
 		d3dGpuDescriptorHandle))
 	{
-		m_d3dSrvCPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
-		m_d3dSrvGPUDescriptorNextHandle.ptr -= ::gnCbvSrvDescriptorIncrementSize;
+		m_d3dSrvCPUDescriptorNextHandle.ptr -=
+			::gnCbvSrvDescriptorIncrementSize;
 
-		OutputDebugStringW(L"[ResourceManager] Font SRV creation failed.\n");
+		m_d3dSrvGPUDescriptorNextHandle.ptr -=
+			::gnCbvSrvDescriptorIncrementSize;
+
+		OutputDebugStringW(
+			L"[ResourceManager] Font SRV creation failed.\n"
+		);
+
 		return false;
 	}
 
-	m_pFontResource = move(pNewFontResource);
+	m_pFontResource = std::move(pNewFontResource);
 
 	wchar_t debugText[256];
+
 	swprintf_s(
 		debugText,
 		L"[ResourceManager] Font resource ready. Glyphs=%zu, Atlas=%dx%d\n",
@@ -960,7 +1004,39 @@ bool ResourceManager::BuildFontResource(
 		m_pFontResource->GetAtlasWidth(),
 		m_pFontResource->GetAtlasHeight()
 	);
+
 	OutputDebugStringW(debugText);
+
+	return true;
+}
+
+bool ResourceManager::BuildParticleResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
+{
+	if (!pd3dDevice || !pd3dCommandList)
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource build failed. Device or command list is null.\n");
+		return false;
+	}
+
+	if (m_pParticleResource && m_pParticleResource->IsLoaded())
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource is already loaded.\n");
+		return true;
+	}
+
+	static constexpr const wchar_t* PARTICLE_CONFIG_FILE_PATH = L"Model/ParticleEffects.json";
+
+	auto pNewParticleResource = std::make_unique<ParticleResource>();
+
+	if (!pNewParticleResource->Load(pd3dDevice, pd3dCommandList, PARTICLE_CONFIG_FILE_PATH))
+	{
+		OutputDebugStringW(L"[ResourceManager] Particle resource load failed.\n");
+		return false;
+	}
+
+	m_pParticleResource = std::move(pNewParticleResource);
+
+	OutputDebugStringW(L"[ResourceManager] Particle resource ready.\n");
 
 	return true;
 }
@@ -1158,7 +1234,7 @@ void ResourceManager::LoadMaterialsFromFile(ID3D12Device* pd3dDevice, ID3D12Grap
 	}
 }
 
-void ResourceManager::LoadAnimationFromFile(FILE * pInFile, CLoadedModelInfo * pLoadedModel)
+void ResourceManager::LoadAnimationFromFile(FILE* pInFile, CLoadedModelInfo* pLoadedModel)
 {
 	char pstrToken[260] = { '\0' };
 	UINT nReads = 0;
@@ -1238,7 +1314,7 @@ void ResourceManager::LoadAnimationFromFile(FILE * pInFile, CLoadedModelInfo * p
 	}
 }
 
-ModelResource* ResourceManager::LoadFrameHierarchyFromFile(ID3D12Device * pd3dDevice, ID3D12GraphicsCommandList * pd3dCommandList, ID3D12RootSignature * pd3dGraphicsRootSignature, ModelResource * pParent, FILE * pInFile, CShader * pShader, int* pnSkinnedMeshes, const char* pstrFileName)
+ModelResource* ResourceManager::LoadFrameHierarchyFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, ModelResource* pParent, FILE* pInFile, CShader* pShader, int* pnSkinnedMeshes, const char* pstrFileName)
 {
 	char pstrToken[260] = { '\0' };
 	UINT nReads = 0;

@@ -675,12 +675,11 @@ void CGameFramework::BuildObjects()
 		);
 	}
 
-	bool bFontLoaded = ResourceManager::Instance().BuildFontResource(
-		m_pd3dDevice,
-		m_pd3dCommandList,
-		L"Model/Fonts/KoreanFontAtlas_4096.png",
-		L"Model/Fonts/KoreanFontAtlas_4096.json"
-	);
+	bool bFontLoaded =
+		ResourceManager::Instance().BuildFontResource(
+			m_pd3dDevice,
+			m_pd3dCommandList
+		);
 
 	if (!bFontLoaded)
 	{

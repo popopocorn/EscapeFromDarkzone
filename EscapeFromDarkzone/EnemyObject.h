@@ -5,6 +5,7 @@
 #include "Item.h"
 #include "Shader.h"
 #include "ResourceManager.h"
+#include "AI.h"
 
 class CPlayer;
 class Inventory;
@@ -68,9 +69,13 @@ public:
 	void SubmitWeaponToShader(CShader* shader);
 	virtual void Animate(float fTimeElapsed) override;
 	virtual void Update(float fTimeElapsed);
-	virtual void HandleCollision(XMFLOAT3 normal);
 	virtual void SetPosition(float x, float y, float z);
-	void SetPlayer(CGameObject* pPlayer) { m_pPlayer = pPlayer; }
+
+	void SetPlayer(CGameObject* pPlayer)
+	{
+		m_pPlayer = pPlayer;
+		m_Blackboard.pTarget = nullptr;
+	}
 	virtual void Render(
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		bool batch,
@@ -85,12 +90,26 @@ public:
 
 	void HandleHP(float value);
 
+	void RegisterDamageEvent(const EnemyDamageEvent& damageEvent);
+	void RegisterSoundEvent(const EnemySoundEvent& soundEvent);
+
 	bool ConsumeDeadRemovalRequest();
 	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비			// 서버 권위 구조로 바꾸면서 안씀
 	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시
+
 	void setNav(AstarNavigation* nav) { AStarNav = nav; }
 	AstarNavigation* GetNav() { return AStarNav; }
-	std::unique_ptr<State<CEnemyObject>> m_pState;
+
+	StateMachine<CEnemyObject> m_StateMachine;
+
+	EnemyBlackboard m_Blackboard;
+	std::unique_ptr<BehaviorTree> m_pBehaviorTree;
+
+	EnemyBlackboard& GetBlackboard() { return m_Blackboard; }
+	const EnemyBlackboard& GetBlackboard() const { return m_Blackboard; }
+
+	BehaviorTree* GetBehaviorTree() { return m_pBehaviorTree.get(); }
+	const BehaviorTree* GetBehaviorTree() const { return m_pBehaviorTree.get(); }
 
 	CGameObject* m_pPlayer = nullptr;
 	float						hp = 100;
@@ -121,7 +140,6 @@ public:
 	float m_fLeashRange = 25.0f;
 	float m_fReturnStopDistance = 0.5f;
 
-	float m_fThinkTimer = 0.0f;
 	float m_fThinkInterval = 0.2f;
 
 	float m_fAimTimer = 0.0f;
@@ -130,7 +148,6 @@ public:
 
 	float m_fAttackCooldown = 0.0f;
 
-	float m_fReturnIgnoreTimer = 0.0f;
 	float m_fReturnIgnoreDuration = 1.0f;
 
 	//거리 유지
@@ -162,12 +179,9 @@ public:
 	float m_fReloadTimer = 0.0f;
 	float m_fReloadDuration = 2.0f;
 
-	// 시야각 관련 값
+	// 시야각 관련 값 - 삭제된 데이터는 BlackBoard로 이동
 	float m_fViewAngle = 120.0f;
-	float m_fLoseSightTimer = 0.0f;
 	float m_fLoseSightDuration = 1.0f;
-	bool m_bHasLastSeenPlayer = false;
-	XMFLOAT3 m_xmf3LastSeenPlayerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	//Idle 상태에서 시야 회전 관련 값
 	float m_fCurrentYawDeg = 0.0f;
@@ -260,6 +274,17 @@ public:
 	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
 
 	void  TriggerShootAnim() { m_fShootAnimTimer = m_fShootAnimHold; }
+public:
+	CGameObject* GetPlayer() const { return m_pPlayer; }
+
+	bool IsDying() const { return m_bDying; }
+
+	bool NeedsReload() const
+	{
+		return m_bReloading || (m_nCurrentAmmo <= 0);
+	}
+
+	int GetCurrentAmmo() const { return m_nCurrentAmmo; }
 
 };
 
@@ -271,7 +296,7 @@ public:
 	virtual void Exit(CEnemyObject* pEnemy);
 };
 
-class EnemyRun : public State<CEnemyObject>
+class EnemySearch : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
@@ -279,7 +304,39 @@ public:
 	virtual void Exit(CEnemyObject* pEnemy);
 };
 
+class EnemyInvestigate : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+
+private:
+	bool m_bReachedTarget = false;
+	float m_fWaitTimer = 0.0f;
+	float m_fWaitDuration = 1.5f;
+};
+
+class EnemyRun : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+
+private:
+	float m_fFootstepTimer = 0.0f;
+};
+
 class EnemyAttack : public State<CEnemyObject>
+{
+public:
+	virtual bool Enter(CEnemyObject* pEnemy);
+	virtual void Update(CEnemyObject* pEnemy, float fTimeElapsed);
+	virtual void Exit(CEnemyObject* pEnemy);
+};
+
+class EnemyReload : public State<CEnemyObject>
 {
 public:
 	virtual bool Enter(CEnemyObject* pEnemy);
