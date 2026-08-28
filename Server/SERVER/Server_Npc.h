@@ -12,6 +12,21 @@ using namespace DirectX;
 
 constexpr int MAX_NPC_PER_ROOM = 66;
 
+constexpr int   NPC_BT_MAX_COMPOSITES = 16;
+constexpr float NPC_BT_STATE_MIN_HOLD = 0.15f;
+
+struct NpcPerception
+{
+    int      target_id = -1;
+    XMFLOAT3 target_pos = { 0.0f, 0.0f, 0.0f };
+    bool     can_see = false;
+    bool     can_shoot = false;
+    bool     has_recent_sight = false;
+    bool     outside_leash = false;
+    bool     out_of_attack_range = true;
+    bool     near_spawn = false;
+};
+
 struct SERVER_NPC {
     short    id;                 // NPC ID
     char     kind;               // NPC 단계(tier): 1=PISTOL, 2=SMG, 3=RIFLE
@@ -35,6 +50,10 @@ struct SERVER_NPC {
     std::vector<XMFLOAT3>  coll_normals;       // 이번 틱 누적 충돌 노멀 (아직안씀?)
 
     float think_timer;              // AI 행동 주기
+
+    NpcPerception percep;
+    std::array<uint8_t, NPC_BT_MAX_COMPOSITES> bt_running_child;
+    float state_hold_timer;
 
     float    lose_sight_timer;      // 마지막 목격 처리 관련
     bool     has_last_seen_player;
