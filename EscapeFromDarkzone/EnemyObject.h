@@ -273,6 +273,8 @@ public:
 
 	void SnapToServerPosition();					// 05.14 추가: idle 상태 시 즉시 보정
 
+	void UpdateServerAnimation(float fTimeElapsed, float* pFootstepTimer = nullptr);		// 서버 연결됐을 때 애니메이션 셀렉터
+
 	void  TriggerShootAnim() { m_fShootAnimTimer = m_fShootAnimHold; }
 public:
 	CGameObject* GetPlayer() const { return m_pPlayer; }
