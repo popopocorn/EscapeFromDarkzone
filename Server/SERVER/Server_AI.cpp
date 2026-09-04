@@ -1,4 +1,4 @@
-#include "Server_AI.h"
+﻿#include "Server_AI.h"
 
 #include <fstream>
 #include <map>
@@ -386,4 +386,41 @@ int AstarNavigation::FindPolyID(const XMFLOAT3& pos)
     }
 
     return -1;
+}
+
+bool AstarNavigation::FindSearchPointAround(const XMFLOAT3& center,
+    float minRadius, float maxRadius, float random01, XMFLOAT3& outPoint) const
+{
+    std::vector<int> candidates;
+    candidates.reserve(mesh.size());
+
+    const float minRadiusSq = minRadius * minRadius;
+    const float maxRadiusSq = maxRadius * maxRadius;
+
+    for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+    {
+        const XMFLOAT3& point = mesh[i].centroid;
+
+        const float dx = point.x - center.x;
+        const float dz = point.z - center.z;
+        const float distanceSq = dx * dx + dz * dz;
+
+        if (distanceSq < minRadiusSq) continue;
+        if (distanceSq > maxRadiusSq) continue;
+
+        candidates.push_back(i);
+    }
+
+    if (candidates.empty())
+        return false;
+
+    if (random01 < 0.0f)   random01 = 0.0f;
+    if (random01 >= 1.0f)  random01 = 0.999999f;
+
+    size_t selectedIndex = static_cast<size_t>(random01 * static_cast<float>(candidates.size()));
+    if (selectedIndex >= candidates.size())
+        selectedIndex = candidates.size() - 1;
+
+    outPoint = mesh[candidates[selectedIndex]].centroid;
+    return true;
 }

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <array>
@@ -37,6 +37,12 @@ public:
     void              LoadNavMeshFromFile(const char* file);
     std::vector<XMFLOAT3>  FindPath(XMFLOAT3 start, XMFLOAT3 end);
     int               FindPolyID(const XMFLOAT3& pos);
+
+    // 수색용: center에서 XZ 거리 [minRadius, maxRadius] 안에 있는 폴리곤 중심점 하나를
+    // random01(0~1)로 골라 outPoint에 담는다. 후보가 없으면 false.
+    bool              FindSearchPointAround(const XMFLOAT3& center,
+                                            float minRadius, float maxRadius,
+                                            float random01, XMFLOAT3& outPoint) const;
 };
 
 struct AStarNode {

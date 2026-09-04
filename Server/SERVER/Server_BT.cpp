@@ -1,4 +1,5 @@
 ﻿#include "Server_BT.h"
+#include <cassert>
 #include "Server_Npc.h"
 #include "Server_Room.h"
 
@@ -189,6 +190,13 @@ static bool CondShouldChase(NpcBtContext& ctx)
     return n.percep.can_see || n.percep.has_recent_sight;
 }
 
+static bool CondShouldSearch(NpcBtContext& ctx)
+{
+    // 위 브랜치(Return / Reload / Attack / Chase)가 이미 다 걸러낸 뒤에 온다.
+    // 남는 판단은 하나뿐 — 스폰 복귀 직후에는 잠깐 제자리에서 쉰다.
+    return ctx.npc->return_ignore_timer <= 0.0f;
+}
+
 template <char STATE> static BtStatus ActSelectState(NpcBtContext& ctx)
 {
     ChangeNpcState(*ctx.room, *ctx.npc, STATE);
@@ -197,7 +205,8 @@ template <char STATE> static BtStatus ActSelectState(NpcBtContext& ctx)
 
 uint8_t NpcBehaviorTree::AllocSlot()
 {
-    // 슬롯이 모자라면 NPC_BT_MAX_COMPOSITES를 늘릴 것
+    // 슬롯이 모자라면 Server_Npc.h의 NPC_BT_MAX_COMPOSITES를 늘릴 것
+    assert(m_composite_count < NPC_BT_MAX_COMPOSITES && "Composite 슬롯 초과");
     return m_composite_count++;
 }
  
@@ -239,6 +248,10 @@ void NpcBehaviorTree::Build()
     root->AddChild(MakeBranch("ChaseBranch", AllocSlot(),
         "ShouldChase", &CondShouldChase,
         "SelectChase", &ActSelectState<NPC_STATE_RUN>));
+ 
+    root->AddChild(MakeBranch("SearchBranch", AllocSlot(),
+        "ShouldSearch", &CondShouldSearch,
+        "SelectSearch", &ActSelectState<NPC_STATE_SEARCH>));
  
     // 폴백 — 조건 없음
     root->AddChild(std::make_unique<BtAction>(

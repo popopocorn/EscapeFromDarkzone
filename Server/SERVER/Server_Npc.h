@@ -1,8 +1,9 @@
-#pragma once
+ï»¿#pragma once
 
 #include <array>
 #include <vector>
 #include <mutex>
+#include <cstdint>
 #include <DirectXMath.h>
 #include <chrono>
 #include "protocol.h"
@@ -27,71 +28,81 @@ struct NpcPerception
     bool     near_spawn = false;
 };
 
+// ìˆ˜ìƒ‰(Search) ê¸°ì–µ. UpdateNpcSearch()ê°€ ì†Œìœ í•˜ê³ , BTëŠ” ì½ì§€ ì•ŠëŠ”ë‹¤.
+struct NpcSearchMemory
+{
+    bool     has_target = false;
+    XMFLOAT3 target     = { 0.0f, 0.0f, 0.0f };
+    float    wait_timer = 0.0f;   // ë„ì°© í›„ ì£¼ë³€ì„ ì‚´í”¼ëŠ” ë‚¨ì€ ì‹œê°„
+    uint32_t seed       = 0;      // npc.idì—ì„œ ì§€ì—° ì´ˆê¸°í™”. 0 = ë¯¸ì´ˆê¸°í™”
+};
+
 struct SERVER_NPC {
     short    id;                 // NPC ID
-    char     kind;               // NPC ´Ü°è(tier): 1=PISTOL, 2=SMG, 3=RIFLE
-    char     outfit;             // ¿ÜÇü ÇÁ¸®¼Â(0/1/2). tier¿Í µ¶¸³ (Á¶ÇÕ 3x3=9Á¾)
-    bool     alive;              // »ì¾ÆÀÖ´ÂÁö (Á×À¸¸é slot ¾È ¾²°Ô?)
-    char     state;              // NPC»óÅÂ  NPC_STATE_IDLE / NPC_STATE_RUN / NPC_STATE_DIE
+    char     kind;               // NPC ë‹¨ê³„(tier): 1=PISTOL, 2=SMG, 3=RIFLE
+    char     outfit;             // ì™¸í˜• í”„ë¦¬ì…‹(0/1/2). tierì™€ ë…ë¦½ (ì¡°í•© 3x3=9ì¢…)
+    bool     alive;              // ì‚´ì•„ìˆëŠ”ì§€ (ì£½ìœ¼ë©´ slot ì•ˆ ì“°ê²Œ?)
+    char     state;              // NPCìƒíƒœ  NPC_STATE_IDLE / NPC_STATE_RUN / NPC_STATE_DIE
 
     XMFLOAT3 position;
-    XMFLOAT3 spawn_position;    // º¹±Í ±âÁØÁ¡
-    float    yaw;               // ¶óµğ¾È
+    XMFLOAT3 spawn_position;    // ë³µê·€ ê¸°ì¤€ì 
+    float    yaw;               // ë¼ë””ì•ˆ
 
     short    hp;
     short    max_hp;
 
-    float                  path_update_timer;  // A* ÁÖ±â (1ÃÊ¸¶´Ù)
-    std::vector<XMFLOAT3>  waypoints;          // ÇöÀç °æ·Î
-    int                    way_idx;            // ´ÙÀ½ ¸ñÇ¥ waypoint ÀÎµ¦½º
+    float                  path_update_timer;  // A* ì£¼ê¸° (1ì´ˆë§ˆë‹¤)
+    std::vector<XMFLOAT3>  waypoints;          // í˜„ì¬ ê²½ë¡œ
+    int                    way_idx;            // ë‹¤ìŒ ëª©í‘œ waypoint ì¸ë±ìŠ¤
 
-    float                  die_timer;          // Die »óÅÂ ÁøÀÔ ÈÄ °æ°ú ½Ã°£
+    float                  die_timer;          // Die ìƒíƒœ ì§„ì… í›„ ê²½ê³¼ ì‹œê°„
 
-    std::vector<XMFLOAT3>  coll_normals;       // ÀÌ¹ø Æ½ ´©Àû Ãæµ¹ ³ë¸Ö (¾ÆÁ÷¾È¾¸?)
+    std::vector<XMFLOAT3>  coll_normals;       // ì´ë²ˆ í‹± ëˆ„ì  ì¶©ëŒ ë…¸ë©€ (ì•„ì§ì•ˆì”€?)
 
-    float think_timer;              // AI Çàµ¿ ÁÖ±â
+    float think_timer;              // AI í–‰ë™ ì£¼ê¸°
 
     NpcPerception percep;
+    NpcSearchMemory search;
     std::array<uint8_t, NPC_BT_MAX_COMPOSITES> bt_running_child;
     float state_hold_timer;
 
-    float    lose_sight_timer;      // ¸¶Áö¸· ¸ñ°İ Ã³¸® °ü·Ã
+    float    lose_sight_timer;      // ë§ˆì§€ë§‰ ëª©ê²© ì²˜ë¦¬ ê´€ë ¨
     bool     has_last_seen_player;
     XMFLOAT3 last_seen_player_pos;
 
     float    return_ignore_timer;
 
-    float    aim_timer;             // Á¶ÁØ ½Ã°£, °ø°İ Äğ´Ù¿î
+    float    aim_timer;             // ì¡°ì¤€ ì‹œê°„, ê³µê²© ì¿¨ë‹¤ìš´
     float    attack_cooldown;
 
-    int      burst_shots_left;      // ¹ö½ºÆ® »ç°İ
+    int      burst_shots_left;      // ë²„ìŠ¤íŠ¸ ì‚¬ê²©
     int      burst_serial;
     float    burst_shot_timer;
     float    burst_rest_timer;
 
-    float    strafe_timer;          // ½ºÆ®·¹ÀÌÇÁ
+    float    strafe_timer;          // ìŠ¤íŠ¸ë ˆì´í”„
     float    strafe_sign;
 
-    int      current_ammo;          // ÀçÀåÀü
+    int      current_ammo;          // ì¬ì¥ì „
     bool     reloading;
     float    reload_timer;
 
     short    weapon_type;
     short    weapon_grade;
 
-    std::array<ItemSlot, INVENTORY_SIZE>    _inventory;     // ·çÆÃ¹Ú½º ³»¿ë¹°
-    bool                                    loot_active;    // ¹Ú½º È°¼º ¿©ºÎ
-    std::chrono::steady_clock::time_point   death_time;     // lifetime ±âÁØ
+    std::array<ItemSlot, INVENTORY_SIZE>    _inventory;     // ë£¨íŒ…ë°•ìŠ¤ ë‚´ìš©ë¬¼
+    bool                                    loot_active;    // ë°•ìŠ¤ í™œì„± ì—¬ë¶€
+    std::chrono::steady_clock::time_point   death_time;     // lifetime ê¸°ì¤€
 };
 
-// NPC ´Ü°è(tier) »ó¼ö
+// NPC ë‹¨ê³„(tier) ìƒìˆ˜
 constexpr char NPC_TIER_1 = 1;   // PISTOL
 constexpr char NPC_TIER_2 = 2;   // SMG
 constexpr char NPC_TIER_3 = 3;   // RIFLE
 
-constexpr short NPC_TIER1_HP = 100;   // 2´Ü°è x1.5=150, 3´Ü°è x2=200
+constexpr short NPC_TIER1_HP = 100;   // 2ë‹¨ê³„ x1.5=150, 3ë‹¨ê³„ x2=200
 
-// tier·ÎºÎÅÍ ¹«±â type/grade¿Í max_hp °áÁ¤. ½ºÆù ½Ã È£Ãâ.
+// tierë¡œë¶€í„° ë¬´ê¸° type/gradeì™€ max_hp ê²°ì •. ìŠ¤í° ì‹œ í˜¸ì¶œ.
 inline void ApplyNpcTier(SERVER_NPC& npc, char tier)
 {
     npc.kind = tier;
@@ -121,8 +132,8 @@ struct NpcInputEvent {
     enum Type { HIT, GRENADE_EXPLODE, ROUND_JOIN, ROUND_LEAVE, LOOT_PICKUP };
     Type type;
 
-    int      room_id = -1;      // ÀÌº¥Æ®°¡ Àû¿ëµÉ ·ë
-    uint32_t room_gen = 0;      // ·ëÀÇ generation°ú ÀÏÄ¡ÇÏ´ÂÁö È®ÀÎ (¿¾³¯·ë ÀÌº¥Æ®·Î ÇöÀç·ë °»½ÅÇÏ´Â µ¿ÀÛ ¹æÁö)
+    int      room_id = -1;      // ì´ë²¤íŠ¸ê°€ ì ìš©ë  ë£¸
+    uint32_t room_gen = 0;      // ë£¸ì˜ generationê³¼ ì¼ì¹˜í•˜ëŠ”ì§€ í™•ì¸ (ì˜›ë‚ ë£¸ ì´ë²¤íŠ¸ë¡œ í˜„ì¬ë£¸ ê°±ì‹ í•˜ëŠ” ë™ì‘ ë°©ì§€)
 
     int      attacker_client_id;
     XMFLOAT3 ray_origin;
@@ -131,16 +142,16 @@ struct NpcInputEvent {
     short    weapon_type;
     short    weapon_grade;
 
-    int      new_client_id;     // ROUND_JOIN, ROUND_LEAVE, LOOT_PICKUP ¿äÃ»ÇÑ Å¬¶ó
+    int      new_client_id;     // ROUND_JOIN, ROUND_LEAVE, LOOT_PICKUP ìš”ì²­í•œ í´ë¼
 
-    // LOOT_PICKUP Àü¿ë
+    // LOOT_PICKUP ì „ìš©
     short    loot_box_id = -1;
     short    loot_slot_idx = -1;
 
     XMFLOAT3 explode_pos;
 };
 
-// ·ë Æ½ ½º·¹µå ¼ö. (·ë s % ROOM_THREAD_COUNT)
+// ë£¸ í‹± ìŠ¤ë ˆë“œ ìˆ˜. (ë£¸ s % ROOM_THREAD_COUNT)
 constexpr int ROOM_THREAD_COUNT = 2;
 
 // NpcInputQueue
@@ -154,7 +165,7 @@ public:
 
 extern std::array<NpcInputQueue, ROOM_THREAD_COUNT> g_npc_queues;
 
-// ´ã´ç ½º·¹µå ¿¬°á. ·Îºñ ÀÌº¥Æ®(room_id < 0)´Â ¿öÄ¿ 0ÀÌ Ã³¸®ÇÑ´Ù.
+// ë‹´ë‹¹ ìŠ¤ë ˆë“œ ì—°ê²°. ë¡œë¹„ ì´ë²¤íŠ¸(room_id < 0)ëŠ” ì›Œì»¤ 0ì´ ì²˜ë¦¬í•œë‹¤.
 inline int RoomThreadOf(int room_id)
 {
     return (room_id < 0) ? 0 : (room_id % ROOM_THREAD_COUNT);

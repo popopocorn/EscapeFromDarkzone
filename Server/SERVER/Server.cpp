@@ -75,6 +75,15 @@ constexpr float NPC_RETURN_STOP_DIST_SQ		= NPC_RETURN_STOP_DIST * NPC_RETURN_STO
 constexpr float NPC_TOO_CLOSE_RANGE_SQ		= NPC_TOO_CLOSE_RANGE * NPC_TOO_CLOSE_RANGE;
 constexpr float NPC_WAYPOINT_REACH_DIST_SQ	= NPC_WAYPOINT_REACH_DIST * NPC_WAYPOINT_REACH_DIST;
 
+// 수색(Search)
+constexpr float NPC_SEARCH_RADIUS			= 8.0f;	// 스폰 기준 수색 반경
+constexpr float NPC_SEARCH_MIN_DIST			= 2.0f;	// 너무 가까운 지점은 제외
+constexpr float NPC_SEARCH_REACH_DIST		= 1.2f;	// 수색 지점 도착 판정 (NPC_WAYPOINT_REACH_DIST=1.0 보다 커야 한다)
+constexpr float NPC_SEARCH_WAIT_MIN			= 0.8f;	// 도착 후 대기 최소
+constexpr float NPC_SEARCH_WAIT_MAX			= 1.8f;	// 도착 후 대기 최대
+constexpr float NPC_SEARCH_RETRY_WAIT		= 0.5f;	// 지점/경로 실패 시 재시도 간격
+constexpr float NPC_SEARCH_REACH_DIST_SQ	= NPC_SEARCH_REACH_DIST * NPC_SEARCH_REACH_DIST;
+
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
@@ -531,6 +540,7 @@ static void init_room_npcs(Room& r)
 		npc.death_time = {};
 
 		npc.percep = NpcPerception{};
+		npc.search = NpcSearchMemory{};
 		npc.state_hold_timer = 0.0f;
 		g_npc_bt.ResetNpc(npc);
 
@@ -1377,6 +1387,15 @@ static void OnEnterNpcState(SERVER_NPC& npc, char old_state, char new_state)
 		npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;   // 진입 즉시 A* 1회
 		break;
 
+	case NPC_STATE_SEARCH:
+		npc.search.has_target = false;
+		npc.search.wait_timer = 0.0f;
+
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+		npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;
+		break;
+
 	case NPC_STATE_IDLE:
 		if (old_state == NPC_STATE_RETURN) {                // 스폰 복귀 완료
 			npc.hp = npc.max_hp;
@@ -2167,6 +2186,148 @@ static void UpdateNpcDie(const Room& r, SERVER_NPC& npc, float dt)
 	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
 }
 
+// NPC별 결정적 난수. 시드를 npc.id에서 뽑으므로 서버를 재시작해도 같은 순서로 돈다.
+static float NextNpcSearchRandom01(SERVER_NPC& npc)
+{
+	if (npc.search.seed == 0)
+		npc.search.seed = 1664525u * (static_cast<uint32_t>(npc.id) + 1u) + 1013904223u;
+
+	npc.search.seed = npc.search.seed * 1664525u + 1013904223u;
+	return static_cast<float>(npc.search.seed & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
+}
+
+// 스폰 주변 내비메시에서 다음 수색 지점을 하나 고른다.
+static bool BuildNpcSearchTarget(SERVER_NPC& npc)
+{
+	const float r01 = NextNpcSearchRandom01(npc);
+
+	XMFLOAT3 point;
+	if (!g_astar.FindSearchPointAround(npc.spawn_position,
+		NPC_SEARCH_MIN_DIST, NPC_SEARCH_RADIUS, r01, point))
+	{
+		// 후보가 없다 — 잠시 뒤 다시 시도
+		npc.search.has_target = false;
+		npc.search.wait_timer = NPC_SEARCH_RETRY_WAIT;
+		return false;
+	}
+
+	npc.search.target     = point;
+	npc.search.has_target = true;
+	npc.search.wait_timer = 0.0f;
+
+	npc.waypoints.clear();
+	npc.way_idx           = 0;
+	npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;   // 즉시 A* 1회
+
+	// 테스트용 로그
+	std::cout << "[NPC " << npc.id << "] search -> ("
+		<< point.x << ", " << point.z << ")\n";
+
+	return true;
+}
+
+static void UpdateNpcSearch(const Room& r, SERVER_NPC& npc, float dt)
+{
+	(void)r;
+
+	NpcSearchMemory& s = npc.search;
+
+	XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
+
+	// 1. 도착 후 대기 — 제자리에서 주변을 살핀다
+	if (s.wait_timer > 0.0f) {
+		s.wait_timer -= dt;
+		if (s.wait_timer < 0.0f) s.wait_timer = 0.0f;
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	// 2. 목표가 없으면 새로 뽑는다 (실패 시 wait_timer가 걸려 다음 틱 재시도)
+	if (!s.has_target) {
+		if (!BuildNpcSearchTarget(npc)) return;
+	}
+
+	// 3. 도착 판정
+	float dx = s.target.x - npc.position.x;
+	float dz = s.target.z - npc.position.z;
+
+	if (dx * dx + dz * dz < NPC_SEARCH_REACH_DIST_SQ) {
+		s.has_target = false;
+		s.wait_timer = NPC_SEARCH_WAIT_MIN
+			+ (NPC_SEARCH_WAIT_MAX - NPC_SEARCH_WAIT_MIN) * NextNpcSearchRandom01(npc);
+
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	// 4. 주기적 A* 재탐색
+	npc.path_update_timer += dt;
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
+		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
+		npc.waypoints = g_astar.FindPath(npc.position, s.target);
+		npc.way_idx   = 0;
+
+		// 경로가 없다 — 목표를 버리고 다음 틱에 다른 지점을 고른다
+		if (npc.waypoints.empty()) {
+			s.has_target = false;
+			s.wait_timer = NPC_SEARCH_RETRY_WAIT;
+
+			ApplyNpcSlide(npc, zero);
+			ResolveNpcCollision(npc, npc.yaw);
+			return;
+		}
+	}
+
+	// 5. waypoint 따라가기 (UpdateNpcRun과 동일 구조)
+	XMFLOAT3 look     = { 0.0f, 0.0f, 1.0f };
+	XMFLOAT3 move_dir = { 0.0f, 0.0f, 0.0f };
+	bool     is_moving = false;
+
+	while (npc.way_idx < (int)npc.waypoints.size()) {
+		const XMFLOAT3& wp = npc.waypoints[npc.way_idx];
+		float wdx = wp.x - npc.position.x;
+		float wdz = wp.z - npc.position.z;
+		float wd_sq = wdx * wdx + wdz * wdz;
+
+		if (wd_sq < NPC_WAYPOINT_REACH_DIST_SQ) {
+			npc.way_idx++;
+		}
+		else {
+			float wd = std::sqrt(wd_sq);
+			look.x = wdx / wd;
+			look.y = 0.0f;
+			look.z = wdz / wd;
+			move_dir = look;
+			is_moving = true;
+			break;
+		}
+	}
+
+	// 6. 경로를 다 소진했는데 목표에 못 닿았다 — 목표를 버린다
+	if (!is_moving) {
+		s.has_target = false;
+		s.wait_timer = NPC_SEARCH_RETRY_WAIT;
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	npc.yaw = std::atan2(look.x, look.z);
+
+	ApplyNpcSlide(npc, move_dir);
+	npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+	npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+	ResolveNpcCollision(npc, npc.yaw);
+}
+
+
 static void UpdateNpc(const Room& r, SERVER_NPC& npc, float dt)
 {
 	UpdateNpcPerception(r, npc, dt);
@@ -2176,6 +2337,7 @@ static void UpdateNpc(const Room& r, SERVER_NPC& npc, float dt)
 	case NPC_STATE_IDLE:   UpdateNpcIdle(r, npc, dt);   break;
 	case NPC_STATE_RUN:    UpdateNpcRun(r, npc, dt);    break;
 	case NPC_STATE_RETURN: UpdateNpcReturn(r, npc, dt); break;
+	case NPC_STATE_SEARCH: UpdateNpcSearch(r, npc, dt); break;
 	case NPC_STATE_ATTACK:
 	case NPC_STATE_RELOAD: UpdateNpcAttack(r, npc, dt); break;
 	case NPC_STATE_DIE:    UpdateNpcDie(r, npc, dt);    break;
@@ -3287,44 +3449,20 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	int dropCount = 0;   // 몇 종류의 아이템을 떨어뜨릴 것인가
 	int minQty = 1, maxQty = 3; // 한 종류당 떨어지는 최소/최대 개수
 
-	int currentSlot = 0;
 
 	switch (npc.kind) {
 	case NPC_TIER_3:
-		//dropCount = rand() % 2 + 2;
-		//minQty = 7; maxQty = 12;
-		dropCount = 3;		// 3종류 고정
-		minQty = 20; maxQty = 24;
-		{
-			ItemID item = ItemID::ESCAPE_KEY;
-			int count = 1;
-			bool bFound = false;
-			for (int k = 0; k < currentSlot; ++k) {
-				if (npc._inventory[k].item == item) {
-					npc._inventory[k].count += count;
-					bFound = true;
-					break;
-				}
-			}
-			if (!bFound) {
-				npc._inventory[currentSlot].item = item;
-				npc._inventory[currentSlot].count = count;
-				currentSlot++;
-			}
-		}
+		dropCount = rand() % 2 + 2;
+		minQty = 7; maxQty = 12;
 		break;
 	case NPC_TIER_2:
-		//dropCount = rand() % 2 + 2;		// 2~3종류
-		//minQty = 4; maxQty = 6;
-		dropCount = 3;		// 3종류 고정
-		minQty = 10; maxQty = 14;
+		dropCount = rand() % 2 + 2; // 2~3종류
+		minQty = 4; maxQty = 6;
 		break;
 	case NPC_TIER_1:
 	default:
-		//dropCount = rand() % 2 + 1;		// 1~2종류
-		//minQty = 2; maxQty = 4;
-		dropCount = 3;		// 3종류 고정
-		minQty = 5; maxQty = 9;
+		dropCount = rand() % 2 + 1; // 1~2종류
+		minQty = 2; maxQty = 4;
 		break;
 	}
 
@@ -3335,11 +3473,12 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	};
 	int poolSize = sizeof(dropPool) / sizeof(dropPool[0]);
 
+	int currentSlot = 0;
+
 	for (int j = 0; j < dropCount; ++j) {
 		if (currentSlot >= INVENTORY_SIZE) break;
 
-		//ItemID item = dropPool[rand() % poolSize];
-		ItemID item = dropPool[j % poolSize];			// 중복없음 + 순차선택
+		ItemID item = dropPool[rand() % poolSize];
 		int count = minQty + (rand() % (maxQty - minQty + 1));
 		bool bFound = false;
 		for (int k = 0; k < currentSlot; ++k) {
@@ -3357,8 +3496,7 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	}
 
 	// --- 업그레이드 재료 랜덤 드랍 처리 ---
-	// 업그레이드 재료 드랍 막음
-	if (currentSlot < INVENTORY_SIZE && /*(rand() % 100 < 50)*/ false) {
+	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
 		ItemID upgradeItem = ItemID::NONE;
 
 		switch (npc.kind) {
@@ -3387,17 +3525,17 @@ static void spawn_room_npcs(Room& r)
 
 	struct NpcSpawnDef { float x, z; char tier; char outfit; };
 	static const NpcSpawnDef main_npc_def[] = {
-		{   3.0f,  42.0f, 1, 0 }, {   0.0f,  42.0f, 1, 1 }, {   1.0f,  44.0f, 2, 0 },
-		{   5.0f, -14.0f, 1, 1 }, {  -2.0f, -10.0f, 1, 2 }, {   2.0f, -11.0f, 2, 1 },
-		{   2.0f, -59.0f, 1, 0 }, {   3.0f, -63.0f, 1, 2 }, {   0.0f, -62.0f, 2, 2 },
-		{  13.0f, -92.0f, 1, 0 }, {   9.0f, -91.0f, 1, 1 }, {  10.0f, -95.0f, 2, 0 },
-		{ -37.0f,  -5.0f, 1, 1 }, { -40.0f, -11.0f, 1, 2 }, { -42.0f,  -7.0f, 2, 1 },
-		{ -40.0f, -58.0f, 1, 0 }, { -39.0f, -52.0f, 1, 2 }, { -39.0f, -57.0f, 2, 2 },
-		{ -57.0f,  29.0f, 1, 0 }, { -61.0f,  25.0f, 1, 1 }, { -62.0f,  31.0f, 2, 0 },
-		{ -61.0f, -66.0f, 1, 1 }, { -61.0f, -57.0f, 1, 2 }, { -57.0f, -63.0f, 2, 1 },
-		{ -93.0f, -90.0f, 1, 0 }, { -99.0f, -85.0f, 1, 2 }, { -99.0f, -91.0f, 2, 2 },
-		{ -127.0f, -48.0f, 1, 0 }, { -125.0f, -34.0f, 1, 1 }, { -131.0f, -39.0f, 2, 0 },
-		{  12.0f, -135.0f, 3, 0 }, { -113.0f, -121.0f, 3, 1 }, { -100.0f,  25.0f, 3, 2 },
+		{   3.0f,  42.0f, 0, 0 }, {   0.0f,  42.0f, 0, 1 }, {   1.0f,  44.0f, 1, 0 },
+		{   5.0f, -14.0f, 0, 1 }, {  -2.0f, -10.0f, 0, 2 }, {   2.0f, -11.0f, 1, 1 },
+		{   2.0f, -59.0f, 0, 0 }, {   3.0f, -63.0f, 0, 2 }, {   0.0f, -62.0f, 1, 2 },
+		{  13.0f, -92.0f, 0, 0 }, {   9.0f, -91.0f, 0, 1 }, {  10.0f, -95.0f, 1, 0 },
+		{ -37.0f,  -5.0f, 0, 1 }, { -40.0f, -11.0f, 0, 2 }, { -42.0f,  -7.0f, 1, 1 },
+		{ -40.0f, -58.0f, 0, 0 }, { -39.0f, -52.0f, 0, 2 }, { -39.0f, -57.0f, 1, 2 },
+		{ -57.0f,  29.0f, 0, 0 }, { -61.0f,  25.0f, 0, 1 }, { -62.0f,  31.0f, 1, 0 },
+		{ -61.0f, -66.0f, 0, 1 }, { -61.0f, -57.0f, 0, 2 }, { -57.0f, -63.0f, 1, 1 },
+		{ -93.0f, -90.0f, 0, 0 }, { -99.0f, -85.0f, 0, 2 }, { -99.0f, -91.0f, 1, 2 },
+		{ -127.0f, -48.0f, 0, 0 }, { -125.0f, -34.0f, 0, 1 }, { -131.0f, -39.0f, 1, 0 },
+		{  12.0f, -135.0f, 2, 0 }, { -113.0f, -121.0f, 2, 1 }, { -100.0f,  25.0f, 2, 2 },
 	};
 	const int npc_count = static_cast<int>(sizeof(main_npc_def) / sizeof(main_npc_def[0]));  // 33
 
@@ -3415,8 +3553,11 @@ static void spawn_room_npcs(Room& r)
 		GenerateNpcLoot(npc);
 
 		npc.percep = NpcPerception{};
+		npc.search = NpcSearchMemory{};
 		npc.state_hold_timer = 0.0f;
 		g_npc_bt.ResetNpc(npc);
+
+		npc.think_timer = NPC_THINK_INTERVAL - (npc.id % 6) * (NPC_THINK_INTERVAL / 6.0f);
 	}
 }
 
