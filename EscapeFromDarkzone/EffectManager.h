@@ -9,7 +9,6 @@ class CCamera;
 class CGameObject;
 class CLaserShader;
 
-// 씬에서는 요청만 받고, 실제 이펙트 생성/업데이트/렌더링은 이 매니저가 담당
 class EffectManager
 {
 public:
@@ -61,7 +60,6 @@ private:
 	ID3D12Resource* CreateParticleUploadBuffer(ID3D12Device* pd3dDevice, UINT64 bufferSize);
 
 	bool QueueParticleEffect(const EffectSpawnDesc& desc);
-	ParticleRenderGroup ResolveParticleRenderGroup(ParticleTextureID textureId, ParticleBlendMode blendMode) const;
 
 	void ExecuteParticleCompute(ID3D12GraphicsCommandList* pd3dCommandList);
 	UINT UploadPendingParticleSpawnRequests();

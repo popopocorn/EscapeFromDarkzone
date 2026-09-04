@@ -32,8 +32,12 @@ public:
 
 	CAnimationController* GetAnimationController() { return m_pSkinnedAnimationController; }
 
-	void ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false);
-	std::unique_ptr<State<OtherPlayer>> m_pState;
+	StateMachine<OtherPlayer> m_LowerStateMachine;
+	StateMachine<OtherPlayer> m_UpperStateMachine;
+
+	void ChangeLowerState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false);
+	void ChangeUpperState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false);
+	void ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false); // 기존 네트워크 호출 호환용
 
 	static OtherPlayer* Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, float x, float y, float z, short playerID);
 
@@ -73,7 +77,7 @@ public:
 	void SubmitWeaponToShader(CShader* shader);
 };
 
-class OtherPlayerIdle : public State<OtherPlayer>
+class OtherPlayerLowerIdle : public State<OtherPlayer>
 {
 public:
 	virtual bool Enter(OtherPlayer* Player);
@@ -81,7 +85,7 @@ public:
 	virtual void Exit(OtherPlayer* Player);
 };
 
-class OtherPlayerRun : public State<OtherPlayer>
+class OtherPlayerLowerRun : public State<OtherPlayer>
 {
 private:
 	float m_fFootstepTimer = 0.0f;
@@ -92,12 +96,19 @@ public:
 	virtual void Exit(OtherPlayer* Player);
 };
 
-class OtherPlayerGrenade : public State<OtherPlayer>
+class OtherPlayerUpperIdle : public State<OtherPlayer>
+{
+public:
+	virtual bool Enter(OtherPlayer* Player);
+	virtual void Update(OtherPlayer* Player, float fTimeElapsed);
+	virtual void Exit(OtherPlayer* Player);
+};
+
+class OtherPlayerUpperGrenade : public State<OtherPlayer>
 {
 private:
 	float m_fElapsed = 0.0f;
 	float m_fAnimDuration = 2.80f;
-	int m_nLastLowerAnim = PLAYER_RIFLE_SMG_IDLE;
 
 public:
 	virtual bool Enter(OtherPlayer* Player);
@@ -105,7 +116,7 @@ public:
 	virtual void Exit(OtherPlayer* Player);
 };
 
-class OtherPlayerShoot : public State<OtherPlayer>
+class OtherPlayerUpperShoot : public State<OtherPlayer>
 {
 private:
 	float m_fElapsed = 0.0f;
@@ -117,7 +128,7 @@ public:
 	virtual void Exit(OtherPlayer* Player);
 };
 
-class OtherPlayerReload : public State<OtherPlayer>
+class OtherPlayerUpperReload : public State<OtherPlayer>
 {
 private:
 	float m_fElapsed = 0.0f;
@@ -129,10 +140,12 @@ public:
 	virtual void Exit(OtherPlayer* Player);
 };
 
+using OtherPlayerIdle = OtherPlayerLowerIdle;
+using OtherPlayerRun = OtherPlayerLowerRun;
+using OtherPlayerGrenade = OtherPlayerUpperGrenade;
+using OtherPlayerShoot = OtherPlayerUpperShoot;
+using OtherPlayerReload = OtherPlayerUpperReload;
+
 class OtherPlayerDie : public State<OtherPlayer>
 {
-public:
-	virtual bool Enter(OtherPlayer* Player);
-	virtual void Update(OtherPlayer* Player, float fTimeElapsed);
-	virtual void Exit(OtherPlayer* Player);
 };

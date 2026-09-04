@@ -108,7 +108,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		pPlayerModel = ResourceManager::Instance().CreateSkinnedModelInstance(ModelName::PLAYER_03);
 		break;
 	}
-	
+
 
 	if (!pPlayerModel)
 	{
@@ -121,19 +121,19 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		return;
 	}
 
-	
+
 
 	m_pRenderWeapon = make_unique<CGameObject>();
 	m_pRenderWeapon->SetOOBB(NULL);
 	m_pRenderWeapon->isColl = false;
 
 	EquipDefaultPistol();
-	
-	m_pSkinnedAnimationController = 
+
+	m_pSkinnedAnimationController =
 		new CAnimationController(
-			pd3dDevice, 
-			pd3dCommandList, 
-			2, 
+			pd3dDevice,
+			pd3dCommandList,
+			2,
 			pPlayerModel
 		);
 	SetChild(pPlayerModel->m_pRootObject.release(), true);
@@ -157,7 +157,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
 		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
 	}
-	
+
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	delete pPlayerModel;
@@ -178,8 +178,11 @@ void OtherPlayer::Animate(float fTimeElapsed)
 
 void OtherPlayer::Update(float fTimeElapsed)
 {
-	if (m_pState)
-		m_pState->Update(this, fTimeElapsed);
+	if (!m_bDead)
+	{
+		m_LowerStateMachine.Update(this, fTimeElapsed);
+		m_UpperStateMachine.Update(this, fTimeElapsed);
+	}
 
 	if (m_bUseServerLerp)
 	{
@@ -223,32 +226,57 @@ void OtherPlayer::Render(
 	CGameObject::Render(pd3dCommandList, batch, nPipelineState, pCamera);
 }
 
+void OtherPlayer::ChangeLowerState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce)
+{
+	if (m_bDead || !pNewState)
+		return;
+
+	m_LowerStateMachine.ChangeState(this, std::move(pNewState), bForce);
+}
+
+void OtherPlayer::ChangeUpperState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce)
+{
+	if (m_bDead || !pNewState)
+		return;
+
+	m_UpperStateMachine.ChangeState(this, std::move(pNewState), bForce);
+}
+
 void OtherPlayer::ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce)
 {
 	if (!pNewState)
 		return;
 
-	bool bNewStateIsDie = (typeid(*pNewState) == typeid(OtherPlayerDie));
-
-	if (m_bDead && !bNewStateIsDie)
-		return;
-
-	if (bNewStateIsDie)
+	if (typeid(*pNewState) == typeid(OtherPlayerDie))
 	{
-		m_bDead = true;
-		m_bServerMoving = false;
-		m_bUseServerLerp = false;
+		MarkDeadFromServer();
+		return;
 	}
 
-	if (!bForce && m_pState && typeid(*m_pState) == typeid(*pNewState))
+	if (m_bDead)
 		return;
 
-	if (m_pState)
-		m_pState->Exit(this);
+	if (typeid(*pNewState) == typeid(OtherPlayerLowerIdle))
+	{
+		ChangeLowerState(std::move(pNewState), bForce);
+		ChangeUpperState(std::make_unique<OtherPlayerUpperIdle>());
+		return;
+	}
 
-	m_pState = std::move(pNewState);
+	if (typeid(*pNewState) == typeid(OtherPlayerLowerRun))
+	{
+		ChangeLowerState(std::move(pNewState), bForce);
+		ChangeUpperState(std::make_unique<OtherPlayerUpperIdle>());
+		return;
+	}
 
-	m_pState->Enter(this);
+	if (typeid(*pNewState) == typeid(OtherPlayerUpperIdle) ||
+		typeid(*pNewState) == typeid(OtherPlayerUpperShoot) ||
+		typeid(*pNewState) == typeid(OtherPlayerUpperReload) ||
+		typeid(*pNewState) == typeid(OtherPlayerUpperGrenade))
+	{
+		ChangeUpperState(std::move(pNewState), bForce);
+	}
 }
 
 int OtherPlayer::GetIdleAnimationByWeapon() const
@@ -336,28 +364,57 @@ int OtherPlayer::GetLowerAnimationByServerState() const
 }
 void OtherPlayer::RefreshBaseAnimationByServerState()
 {
+	if (m_bDead)
+		return;
+
 	auto* pCtrl = GetAnimationController();
 	if (!pCtrl)
 		return;
 
 	int lowerAnim = GetLowerAnimationByServerState();
+	float lowerSpeed = m_bServerMoving ? OTHER_PLAYER_RUN_ANIM_SPEED : OTHER_PLAYER_NORMAL_ANIM_SPEED;
 
 	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
 	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+	pCtrl->SetTrackSpeed(0, lowerSpeed);
 	pCtrl->SetTrackEnable(0, true);
 	pCtrl->SetTrackWeight(0, 1.0f);
 
-	pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-	pCtrl->SetTrackAnimationSetIfChanged(1, lowerAnim);
+	int upperAnim = GetIdleAnimationByWeapon();
+	int upperType = ANIMATION_TYPE_LOOP;
+
+	if (m_UpperStateMachine.IsCurrentState<OtherPlayerUpperGrenade>())
+	{
+		upperAnim = GetGrenadeAnimationByWeapon();
+		upperType = ANIMATION_TYPE_ONCE;
+	}
+	else if (m_UpperStateMachine.IsCurrentState<OtherPlayerUpperReload>())
+	{
+		upperAnim = GetReloadAnimationByWeapon();
+		upperType = ANIMATION_TYPE_ONCE;
+	}
+	else if (m_UpperStateMachine.IsCurrentState<OtherPlayerUpperShoot>())
+	{
+		upperAnim = GetShootAnimationByWeapon();
+		upperType = ANIMATION_TYPE_ONCE;
+	}
+
+	pCtrl->SetTrackType(1, upperType);
+	pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
+	pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
 	pCtrl->SetTrackEnable(1, true);
 	pCtrl->SetTrackWeight(1, 1.0f);
+
+	if (upperType == ANIMATION_TYPE_ONCE)
+		pCtrl->SetTrackPosition(1, 0.0f);
 }
+
 void OtherPlayer::TriggerShootAnim()
 {
 	if (m_bDead)
 		return;
 
-	ChangeState(std::make_unique<OtherPlayerShoot>(), true);
+	ChangeUpperState(std::make_unique<OtherPlayerUpperShoot>(), true);
 }
 
 void OtherPlayer::TriggerReloadAnim()
@@ -365,7 +422,7 @@ void OtherPlayer::TriggerReloadAnim()
 	if (m_bDead)
 		return;
 
-	ChangeState(std::make_unique<OtherPlayerReload>(), true);
+	ChangeUpperState(std::make_unique<OtherPlayerUpperReload>(), true);
 }
 
 void OtherPlayer::TriggerGrenadeAnim()
@@ -373,7 +430,7 @@ void OtherPlayer::TriggerGrenadeAnim()
 	if (m_bDead)
 		return;
 
-	ChangeState(std::make_unique<OtherPlayerGrenade>(), true);
+	ChangeUpperState(std::make_unique<OtherPlayerUpperGrenade>(), true);
 }
 
 void OtherPlayer::TriggerDieAnim()
@@ -390,333 +447,13 @@ void OtherPlayer::MarkDeadFromServer()
 	m_bServerMoving = false;
 	m_bUseServerLerp = false;
 
-	ChangeState(std::make_unique<OtherPlayerDie>(), true);
-}
+	m_LowerStateMachine.Reset(this);
+	m_UpperStateMachine.Reset(this);
 
-bool OtherPlayerIdle::Enter(OtherPlayer* Player)
-{
-	Player->SetServerMoving(false);
-
-	auto* pCtrl = Player->GetAnimationController();
+	auto* pCtrl = GetAnimationController();
 	if (pCtrl)
 	{
-		int idleAnim = Player->GetIdleAnimationByWeapon();
-
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-
-		pCtrl->SetTrackAnimationSetIfChanged(0, idleAnim);
-		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
-
-		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_NORMAL_ANIM_SPEED);
-		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
-
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackEnable(1, true);
-
-		pCtrl->SetTrackWeight(0, 1.0f);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	return true;
-}
-
-void OtherPlayerIdle::Update(OtherPlayer* Player, float fTimeElapsed)
-{
-}
-
-void OtherPlayerIdle::Exit(OtherPlayer* Player)
-{
-}
-
-bool OtherPlayerRun::Enter(OtherPlayer* Player)
-{
-	Player->SetServerMoving(true);
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		int runAnim = Player->GetForwardRunAnimationByWeapon();
-		int idleAnim = Player->GetIdleAnimationByWeapon();
-
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-
-		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
-		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
-
-		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
-		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
-
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackEnable(1, true);
-
-		pCtrl->SetTrackWeight(0, 1.0f);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	return true;
-}
-
-void OtherPlayerRun::Update(OtherPlayer* Player, float fTimeElapsed)
-{
-	m_fFootstepTimer += fTimeElapsed;
-
-	if (m_fFootstepTimer > 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED)
-	{
-		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
-		m_fFootstepTimer -= 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED;
-	}
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		int runAnim = Player->GetForwardRunAnimationByWeapon();
-		int idleAnim = Player->GetIdleAnimationByWeapon();
-
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-
-		pCtrl->SetTrackAnimationSetIfChanged(0, runAnim);
-		pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
-
-		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
-		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
-
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackEnable(1, true);
-
-		pCtrl->SetTrackWeight(0, 1.0f);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-}
-
-void OtherPlayerRun::Exit(OtherPlayer* Player)
-{
-}
-
-bool OtherPlayerGrenade::Enter(OtherPlayer* Player)
-{
-	m_fElapsed = 0.0f;
-	m_nLastLowerAnim = Player->GetLowerAnimationByServerState();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, m_nLastLowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
-
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetGrenadeAnimationByWeapon());
-		pCtrl->SetTrackPosition(1, 0.0f);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	return true;
-}
-
-void OtherPlayerGrenade::Update(OtherPlayer* Player, float fTimeElapsed)
-{
-	m_fElapsed += fTimeElapsed;
-
-	m_nLastLowerAnim = Player->GetLowerAnimationByServerState();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, m_nLastLowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
-
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	if (m_fElapsed >= m_fAnimDuration)
-	{
-		if (Player->IsServerMoving())
-			Player->ChangeState(std::make_unique<OtherPlayerRun>());
-		else
-			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
-	}
-}
-
-void OtherPlayerGrenade::Exit(OtherPlayer* Player)
-{
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(1, m_nLastLowerAnim);
-
-		float fLowerPosition = pCtrl->GetTrackPosition(0);
-		pCtrl->SetTrackPosition(1, fLowerPosition);
-	}
-}
-
-bool OtherPlayerShoot::Enter(OtherPlayer* Player)
-{
-	m_fElapsed = 0.0f;
-
-	bool bPistolIdleShoot = (!Player->IsServerMoving() && Player->GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
-
-	int lowerAnim = bPistolIdleShoot ? Player->GetShootAnimationByWeapon() : Player->GetLowerAnimationByServerState();
-	int upperAnim = Player->GetShootAnimationByWeapon();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		if (bPistolIdleShoot)
-		{
-			pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
-			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-			pCtrl->SetTrackPosition(0, 0.0f);
-			pCtrl->SetTrackEnable(0, true);
-			pCtrl->SetTrackWeight(0, 1.0f);
-		}
-		else
-		{
-			pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-			pCtrl->SetTrackEnable(0, true);
-			pCtrl->SetTrackWeight(0, 1.0f);
-		}
-
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
-		pCtrl->SetTrackPosition(1, 0.0f);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	return true;
-}
-
-void OtherPlayerShoot::Update(OtherPlayer* Player, float fTimeElapsed)
-{
-	m_fElapsed += fTimeElapsed;
-
-	bool bPistolIdleShoot = (!Player->IsServerMoving() && Player->GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
-
-	int lowerAnim = bPistolIdleShoot ? Player->GetShootAnimationByWeapon() : Player->GetLowerAnimationByServerState();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		if (bPistolIdleShoot)
-		{
-			pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
-			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-			pCtrl->SetTrackEnable(0, true);
-			pCtrl->SetTrackWeight(0, 1.0f);
-		}
-		else
-		{
-			pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-			pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-			pCtrl->SetTrackEnable(0, true);
-			pCtrl->SetTrackWeight(0, 1.0f);
-		}
-
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	if (m_fElapsed >= m_fAnimDuration)
-	{
-		if (Player->IsServerMoving())
-			Player->ChangeState(std::make_unique<OtherPlayerRun>());
-		else
-			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
-	}
-}
-
-void OtherPlayerShoot::Exit(OtherPlayer* Player)
-{
-	auto* pCtrl = Player->GetAnimationController();
-	if (!pCtrl)
-		return;
-
-	int lowerAnim = Player->GetLowerAnimationByServerState();
-
-	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-	pCtrl->SetTrackEnable(0, true);
-	pCtrl->SetTrackWeight(0, 1.0f);
-
-	pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-	pCtrl->SetTrackAnimationSetIfChanged(1, lowerAnim);
-	pCtrl->SetTrackEnable(1, true);
-	pCtrl->SetTrackWeight(1, 1.0f);
-}
-
-bool OtherPlayerReload::Enter(OtherPlayer* Player)
-{
-	m_fElapsed = 0.0f;
-
-	int lowerAnim = Player->GetLowerAnimationByServerState();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
-
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetReloadAnimationByWeapon());
-		pCtrl->SetTrackPosition(1, 0.0f);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
-	}
-
-	return true;
-}
-
-void OtherPlayerReload::Update(OtherPlayer* Player, float fTimeElapsed)
-{
-	m_fElapsed += fTimeElapsed;
-
-	int lowerAnim = Player->GetLowerAnimationByServerState();
-
-	auto* pCtrl = Player->GetAnimationController();
-	if (pCtrl)
-	{
-		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
-		pCtrl->SetTrackEnable(0, true);
-		pCtrl->SetTrackWeight(0, 1.0f);
-	}
-
-	if (m_fElapsed >= m_fAnimDuration)
-	{
-		if (Player->IsServerMoving())
-			Player->ChangeState(std::make_unique<OtherPlayerRun>());
-		else
-			Player->ChangeState(std::make_unique<OtherPlayerIdle>());
-	}
-}
-
-void OtherPlayerReload::Exit(OtherPlayer* Player)
-{
-}
-
-bool OtherPlayerDie::Enter(OtherPlayer* Player)
-{
-	Player->SetServerMoving(false);
-
-	auto* pCtrl = Player->GetAnimationController();
-
-	if (pCtrl)
-	{
-		int dieAnim = Player->GetDieAnimationByWeapon();
+		int dieAnim = GetDieAnimationByWeapon();
 
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
@@ -736,16 +473,203 @@ bool OtherPlayerDie::Enter(OtherPlayer* Player)
 		pCtrl->SetTrackWeight(0, 1.0f);
 		pCtrl->SetTrackWeight(1, 1.0f);
 	}
+}
+
+bool OtherPlayerLowerIdle::Enter(OtherPlayer* Player)
+{
+	Player->SetServerMoving(false);
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+	}
 
 	return true;
 }
 
-void OtherPlayerDie::Update(OtherPlayer* Player, float fTimeElapsed)
+void OtherPlayerLowerIdle::Update(OtherPlayer* Player, float fTimeElapsed)
 {
+	UNREFERENCED_PARAMETER(Player);
+	UNREFERENCED_PARAMETER(fTimeElapsed);
 }
 
-void OtherPlayerDie::Exit(OtherPlayer* Player)
+void OtherPlayerLowerIdle::Exit(OtherPlayer* Player)
 {
+	UNREFERENCED_PARAMETER(Player);
+}
+
+bool OtherPlayerLowerRun::Enter(OtherPlayer* Player)
+{
+	m_fFootstepTimer = 0.0f;
+	Player->SetServerMoving(true);
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetForwardRunAnimationByWeapon());
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerLowerRun::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fFootstepTimer += fTimeElapsed;
+
+	if (m_fFootstepTimer > 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED)
+	{
+		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, Player->GetPosition());
+		m_fFootstepTimer -= 0.5f / OTHER_PLAYER_RUN_ANIM_SPEED;
+	}
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetForwardRunAnimationByWeapon());
+		pCtrl->SetTrackSpeed(0, OTHER_PLAYER_RUN_ANIM_SPEED);
+		pCtrl->SetTrackEnable(0, true);
+		pCtrl->SetTrackWeight(0, 1.0f);
+	}
+}
+
+void OtherPlayerLowerRun::Exit(OtherPlayer* Player)
+{
+	UNREFERENCED_PARAMETER(Player);
+}
+
+bool OtherPlayerUpperIdle::Enter(OtherPlayer* Player)
+{
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerUpperIdle::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	UNREFERENCED_PARAMETER(Player);
+	UNREFERENCED_PARAMETER(fTimeElapsed);
+}
+
+void OtherPlayerUpperIdle::Exit(OtherPlayer* Player)
+{
+	UNREFERENCED_PARAMETER(Player);
+}
+
+bool OtherPlayerUpperGrenade::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetGrenadeAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerUpperGrenade::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		Player->ChangeUpperState(std::make_unique<OtherPlayerUpperIdle>());
+	}
+}
+
+void OtherPlayerUpperGrenade::Exit(OtherPlayer* Player)
+{
+	UNREFERENCED_PARAMETER(Player);
+}
+
+bool OtherPlayerUpperShoot::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerUpperShoot::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		Player->ChangeUpperState(std::make_unique<OtherPlayerUpperIdle>());
+	}
+}
+
+void OtherPlayerUpperShoot::Exit(OtherPlayer* Player)
+{
+	UNREFERENCED_PARAMETER(Player);
+}
+
+bool OtherPlayerUpperReload::Enter(OtherPlayer* Player)
+{
+	m_fElapsed = 0.0f;
+
+	auto* pCtrl = Player->GetAnimationController();
+	if (pCtrl)
+	{
+		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
+		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetReloadAnimationByWeapon());
+		pCtrl->SetTrackPosition(1, 0.0f);
+		pCtrl->SetTrackSpeed(1, OTHER_PLAYER_NORMAL_ANIM_SPEED);
+		pCtrl->SetTrackEnable(1, true);
+		pCtrl->SetTrackWeight(1, 1.0f);
+	}
+
+	return true;
+}
+
+void OtherPlayerUpperReload::Update(OtherPlayer* Player, float fTimeElapsed)
+{
+	m_fElapsed += fTimeElapsed;
+
+	if (m_fElapsed >= m_fAnimDuration)
+	{
+		Player->ChangeUpperState(std::make_unique<OtherPlayerUpperIdle>());
+	}
+}
+
+void OtherPlayerUpperReload::Exit(OtherPlayer* Player)
+{
+	UNREFERENCED_PARAMETER(Player);
 }
 
 OtherPlayer* OtherPlayer::Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature,
@@ -764,8 +688,22 @@ void OtherPlayer::UpdatePosition(float x, float y, float z)
 	if (m_bDead)
 		return;
 
-	m_xmf3ServerPosition = XMFLOAT3(x, y, z);
+	XMFLOAT3 nextServerPosition = XMFLOAT3(x, y, z);
+
+	float dx = nextServerPosition.x - m_xmf3ServerPosition.x;
+	float dz = nextServerPosition.z - m_xmf3ServerPosition.z;
+	bool bMovingNow = (dx * dx + dz * dz) > 0.000001f;
+
+	m_xmf3ServerPosition = nextServerPosition;
 	m_bUseServerLerp = true;
+
+	if (bMovingNow != m_bServerMoving)
+	{
+		if (bMovingNow)
+			ChangeLowerState(std::make_unique<OtherPlayerLowerRun>());
+		else
+			ChangeLowerState(std::make_unique<OtherPlayerLowerIdle>());
+	}
 }
 
 void OtherPlayer::SetServerYaw(float yawRad)
@@ -813,8 +751,8 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 	}
 	m_pWeaponSocket = pRightHand;
 
-	pWeaponInstance->m_pParent = m_pRenderWeapon.get();   
-	pWeaponInstance->m_pSibling.reset();                
+	pWeaponInstance->m_pParent = m_pRenderWeapon.get();
+	pWeaponInstance->m_pSibling.reset();
 
 	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();

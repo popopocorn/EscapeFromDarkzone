@@ -198,14 +198,16 @@ CEnemyObject::CEnemyObject(
 	enemyBox.Orientation = XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	SetOOBB(enemyBox);
-	
+
 	m_pSkinnedAnimationController = new CAnimationController(
 		pd3dDevice,
 		pd3dCommandList,
 		1,
 		pEnemyModel
 	);
+
 	SetChild(pEnemyModel->m_pRootObject.release(), true);
+
 	m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
 	m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, ENEMY_RIFLE_SMG_IDLE);
 	m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
@@ -214,6 +216,10 @@ CEnemyObject::CEnemyObject(
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	ConfigureWeaponStats();
+
+	m_Blackboard.Reset();
+
+	m_pBehaviorTree = std::make_unique<EnemyBehaviorTree>();
 
 	if (pEnemyModel)
 	{
@@ -238,14 +244,7 @@ void CEnemyObject::SubmitWeaponToShader(CShader* shader)
 
 void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
 {
-	if (!pNewState) return;
-
-	if (m_pState && typeid(*m_pState) == typeid(*pNewState)) return;
-
-	if (m_pState) m_pState->Exit(this);
-
-	m_pState = std::move(pNewState);
-	m_pState->Enter(this);
+	m_StateMachine.ChangeState(this, std::move(pNewState));
 }
 
 void CEnemyObject::HandleHP(float value)
@@ -266,6 +265,65 @@ void CEnemyObject::HandleHP(float value)
 		ChangeState(std::make_unique<EnemyDie>());
 		OutputDebugString(L"Enemy Die Start\n");
 	}
+}
+
+void CEnemyObject::RegisterDamageEvent(const EnemyDamageEvent& damageEvent)
+{
+	if (m_bDying)
+		return;
+
+	// 온라인 NPC의 Damage Memory와 행동 판단은 서버에서 담당한다.
+	if (NetworkManager::Instance().IsConnected())
+		return;
+
+	if (damageEvent.eType == EnemyDamageType::None)
+		return;
+
+	if (damageEvent.fDamage <= 0.0f)
+		return;
+
+	EnemyDamageMemory& damage = m_Blackboard.Damage;
+
+	damage.bHasDamage = true;
+	damage.eDamageType = damageEvent.eType;
+	damage.nAttackerId = damageEvent.nAttackerId;
+
+	damage.xmf3SourcePosition = damageEvent.xmf3SourcePosition;
+	damage.xmf3IncomingDirection = NormalizeXZ(damageEvent.xmf3IncomingDirection);
+
+	damage.fDamage = damageEvent.fDamage;
+	damage.fDamageAge = 0.0f;
+
+	// 서버에서는 검증이 끝나 실제 피해가 적용되는 순간 동일한 정보를 Blackboard에 기록한다.
+}
+
+//새로운	사운드 이벤트를 등록하는 함수
+void CEnemyObject::RegisterSoundEvent(const EnemySoundEvent& soundEvent)
+{
+	if (m_bDying)
+		return;
+
+	if (NetworkManager::Instance().IsConnected())
+		return;
+
+	if (soundEvent.eType == EnemySoundType::None)
+		return;
+
+	if (soundEvent.fRadius <= 0.0f)
+		return;
+
+	float distance = DistanceXZ(m_xmf3Position, soundEvent.xmf3Position);
+
+	if (distance > soundEvent.fRadius)
+		return;
+
+	EnemyHearingMemory& hearing = m_Blackboard.Hearing;
+
+	hearing.bHasSound = true;
+	hearing.eSoundType = soundEvent.eType;
+	hearing.xmf3SoundPosition = soundEvent.xmf3Position;
+	hearing.fSoundStrength = soundEvent.fStrength;
+	hearing.fSoundAge = 0.0f;
 }
 
 bool CEnemyObject::ConsumeDeadRemovalRequest()
@@ -297,14 +355,12 @@ void CEnemyObject::Update(float fTimeElapsed)
 {
 	m_xmf3PrevPos = m_xmf3Position;
 
-	if (m_fShootAnimTimer > 0.0f) {
+	if (m_fShootAnimTimer > 0.0f)
+	{
 		m_fShootAnimTimer -= fTimeElapsed;
 	}
 
-	if (m_pState)
-	{
-		m_pState->Update(this, fTimeElapsed);
-	}
+	m_StateMachine.Update(this, fTimeElapsed);
 
 	if (m_bDying)
 	{
@@ -322,7 +378,8 @@ void CEnemyObject::Update(float fTimeElapsed)
 		return;
 	}
 
-	if (!IsAlive()) return;
+	if (!IsAlive())
+		return;
 
 	XMFLOAT3 direction = m_xmf3MoveDir;
 	m_xmf3Velocity = Vector3::ScalarProduct(direction, m_fMoveSpeed, false);
@@ -333,6 +390,7 @@ void CEnemyObject::Update(float fTimeElapsed)
 	if (m_bUseServerLerp)
 	{
 		constexpr float ALPHA = 0.08f;
+
 		m_xmf3Position.x += (m_xmf3ServerPosition.x - m_xmf3Position.x) * ALPHA;
 		m_xmf3Position.y += (m_xmf3ServerPosition.y - m_xmf3Position.y) * ALPHA;
 		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * ALPHA;
@@ -348,49 +406,6 @@ void CEnemyObject::Update(float fTimeElapsed)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
 		m_pRenderWeapon->UpdateTransform(NULL);
-	}
-}
-
-void CEnemyObject::HandleCollision(XMFLOAT3 normal)
-{
-	if (normal.y > 0.5f)
-	{
-		if (m_xmf3Velocity.y < 0.0f) m_xmf3Velocity.y = 0.0f;
-		return;
-	}
-
-	XMVECTOR vNormal = XMLoadFloat3(&normal);
-	XMVECTOR vVelocity = XMLoadFloat3(&m_xmf3Velocity);
-	XMVECTOR vCurrPos = XMLoadFloat3(&m_xmf3Position);
-	XMVECTOR vPrevPos = XMLoadFloat3(&m_xmf3PrevPos);
-
-	XMVECTOR vMoveDelta = vCurrPos - vPrevPos;
-	XMVECTOR vDot = XMVector3Dot(vMoveDelta, vNormal);
-	float fPenetrationDepth = XMVectorGetX(vDot);
-
-	if (fPenetrationDepth < 0.0f)
-	{
-		XMVECTOR vCorrection = vNormal * (fabs(fPenetrationDepth) + 0.0001f);
-
-		vCurrPos += vCorrection;
-		XMStoreFloat3(&m_xmf3Position, vCurrPos);
-
-		CGameObject::SetPosition(m_xmf3Position);
-		UpdateTransform(NULL);
-	}
-
-	XMVECTOR vVelDot = XMVector3Dot(vVelocity, vNormal);
-	float fVelDot = XMVectorGetX(vVelDot);
-
-	if (fVelDot < 0.0f)
-	{
-		XMVECTOR vSlideVel = vVelocity - (vNormal * fVelDot);
-
-		if (XMVectorGetX(XMVector3Length(vSlideVel)) < 0.01f)
-		{
-			vSlideVel = XMVectorZero();
-		}
-		XMStoreFloat3(&m_xmf3Velocity, vSlideVel);
 	}
 }
 
@@ -914,9 +929,15 @@ void CEnemyObject::StartReload()
 
 	m_bReloading = true;
 	m_fReloadTimer = m_fReloadDuration;
+
 	m_nBurstShotsLeft = 0;
 	m_fBurstShotTimer = 0.0f;
 	m_fBurstRestTimer = 0.0f;
+
+	m_Blackboard.bNeedsReload = true;
+	m_Blackboard.eCurrentAction = EnemyBehaviorAction::Reload;
+	m_Blackboard.bHasMoveTarget = false;
+
 	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	SetEnemyAnimation(GetReloadAnimationByWeapon(), false, true);
 
@@ -936,11 +957,14 @@ void CEnemyObject::UpdateReload(float fTimeElapsed)
 	{
 		m_bReloading = false;
 		m_fReloadTimer = 0.0f;
+
 		m_nCurrentAmmo = m_nMagazineAmmo;
 		m_nBurstShotsLeft = 0;
 		m_fBurstShotTimer = 0.0f;
 		m_fBurstRestTimer = 0.0f;
 		m_fAimTimer = 0.0f;
+
+		m_Blackboard.bNeedsReload = false;
 
 		OutputDebugString(L"[Enemy AI] Reload Finish\n");
 	}
@@ -1027,14 +1051,18 @@ void CEnemyObject::RefreshLastSeenPlayer()
 	if (!m_pPlayer)
 		return;
 
-	m_xmf3LastSeenPlayerPosition = m_pPlayer->GetPosition();
-	m_fLoseSightTimer = 0.0f;
-	m_bHasLastSeenPlayer = true;
+	m_Blackboard.pTarget = m_pPlayer;
+	m_Blackboard.xmf3LastSeenPosition = m_pPlayer->GetPosition();
+	m_Blackboard.fLoseSightTimer = 0.0f;
+	m_Blackboard.bHasLastSeenPosition = true;
+
+	m_Blackboard.bCanSeeTarget = true;
+	m_Blackboard.fTargetDistance = GetDistanceToPlayerXZ();
 }
 
 bool CEnemyObject::HasRecentLastSeenPlayer() const
 {
-	return m_bHasLastSeenPlayer && (m_fLoseSightTimer < m_fLoseSightDuration);
+	return m_Blackboard.bHasLastSeenPosition && (m_Blackboard.fLoseSightTimer < m_fLoseSightDuration);
 }
 
 void CEnemyObject::UpdateIdleLook(float fTimeElapsed)
@@ -1101,7 +1129,15 @@ bool CEnemyObject::ConsumeShootEffectRequest()
 
 bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 {
-	pEnemy->SetMoveDir(XMFLOAT3(0, 0, 0));
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Idle;
+	blackboard.bHasMoveTarget = false;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->ClearPath();
 
 	pEnemy->m_fIdleBaseYawDeg = pEnemy->m_fCurrentYawDeg;
@@ -1115,48 +1151,294 @@ bool EnemyIdle::Enter(CEnemyObject* pEnemy)
 
 void EnemyIdle::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (!pEnemy->m_pPlayer) return;
-	if (pEnemy->m_bDying) return;
+	if (!pEnemy)
+		return;
 
+	if (pEnemy->m_bDying)
+		return;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->UpdateIdleLook(fTimeElapsed);
-
-	if (pEnemy->m_fReturnIgnoreTimer > 0.0f)
-	{
-		pEnemy->m_fReturnIgnoreTimer -= fTimeElapsed;
-		return;
-	}
-
-	pEnemy->m_fThinkTimer += fTimeElapsed;
-
-	if (pEnemy->m_fThinkTimer < pEnemy->m_fThinkInterval)
-		return;
-
-	pEnemy->m_fThinkTimer = 0.0f;
-
-	if (!pEnemy->CanDetectPlayer())
-		return;
-
-	pEnemy->RefreshLastSeenPlayer();
-
-	if (pEnemy->CanShootPlayer())
-	{
-		pEnemy->ChangeState(std::make_unique<EnemyAttack>());
-	}
-	else
-	{
-		pEnemy->ChangeState(std::make_unique<EnemyRun>());
-	}
 }
 
 void EnemyIdle::Exit(CEnemyObject* pEnemy)
 {
 }
 
-bool EnemyRun::Enter(CEnemyObject* pEnemy)
+bool EnemySearch::Enter(CEnemyObject* pEnemy)
 {
-	pEnemy->m_fThinkTimer = 0.0f;
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Search;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->ClearPath();
 
+	if (blackboard.Search.bHasTarget)
+		pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
+	else
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+	return true;
+}
+
+void EnemySearch::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->IsDying())
+		return;
+
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.fWaitTimer > 0.0f)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+		pEnemy->UpdateIdleLook(fTimeElapsed);
+		return;
+	}
+
+	if (!search.bHasTarget)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	XMFLOAT3 currentPos = pEnemy->GetPosition();
+	XMFLOAT3 toTarget = Vector3::Subtract(search.xmf3Target, currentPos);
+	toTarget.y = 0.0f;
+
+	float distance = Vector3::Length(toTarget);
+
+	if (distance < 0.9f)
+	{
+		search.bHasTarget = false;
+		search.bReachedTarget = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+		return;
+	}
+
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+	bool hasPath = pEnemy->UpdatePathToPosition(search.xmf3Target, fTimeElapsed);
+
+	if (!hasPath)
+	{
+		search.bHasTarget = false;
+		search.bPathFailed = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->ClearPath();
+
+		return;
+	}
+
+	if (!pEnemy->FollowCurrentPath())
+	{
+		search.bHasTarget = false;
+		search.bPathFailed = true;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->ClearPath();
+	}
+}
+
+void EnemySearch::Exit(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.Search.ResetRuntime();
+	blackboard.bHasMoveTarget = false;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+}
+
+bool EnemyInvestigate::Enter(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Investigate;
+
+	blackboard.Search.ResetRuntime();
+
+	blackboard.bHasMoveTarget = false;
+
+	m_bReachedTarget = false;
+	m_fWaitTimer = 0.0f;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+	if (blackboard.Hearing.bHasSound)
+	{
+		blackboard.bHasMoveTarget = true;
+		blackboard.xmf3MoveTarget = blackboard.Hearing.xmf3SoundPosition;
+
+		pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
+	}
+	else
+	{
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+	}
+
+	return true;
+}
+
+void EnemyInvestigate::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->IsDying())
+		return;
+
+	// 서버 Blackboard의 Hearing.xmf3SoundPosition을 목적지로 사용하고 이동
+	if (NetworkManager::Instance().IsConnected())
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+	EnemyHearingMemory& hearing = blackboard.Hearing;
+
+	if (!hearing.bHasSound)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		return;
+	}
+
+	if (m_bReachedTarget)
+	{
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+		pEnemy->UpdateIdleLook(fTimeElapsed);
+
+		m_fWaitTimer += fTimeElapsed;
+
+		if (m_fWaitTimer >= m_fWaitDuration)
+		{
+			hearing.Reset();
+
+			blackboard.bHasMoveTarget = false;
+
+			pEnemy->ClearPath();
+		}
+
+		return;
+	}
+
+	XMFLOAT3 currentPos = pEnemy->GetPosition();
+	XMFLOAT3 soundPos = hearing.xmf3SoundPosition;
+
+	XMFLOAT3 toSound = Vector3::Subtract(soundPos, currentPos);
+	toSound.y = 0.0f;
+
+	float distance = Vector3::Length(toSound);
+
+	if (distance < 0.9f)
+	{
+		m_bReachedTarget = true;
+		m_fWaitTimer = 0.0f;
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+		pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, true);
+
+		return;
+	}
+
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = soundPos;
+
+	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+	bool hasPath = pEnemy->UpdatePathToPosition(soundPos, fTimeElapsed);
+
+	if (!hasPath)
+	{
+		hearing.Reset();
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+		return;
+	}
+
+	if (!pEnemy->FollowCurrentPath())
+	{
+		hearing.Reset();
+
+		blackboard.bHasMoveTarget = false;
+
+		pEnemy->ClearPath();
+		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	}
+}
+
+void EnemyInvestigate::Exit(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.Hearing.Reset();
+	blackboard.bHasMoveTarget = false;
+
+	m_bReachedTarget = false;
+	m_fWaitTimer = 0.0f;
+
+	pEnemy->ClearPath();
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+}
+
+bool EnemyRun::Enter(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Chase;
+	blackboard.bHasMoveTarget = false;
+
+	m_fFootstepTimer = 0.0f;
+
+	pEnemy->ClearPath();
 	pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, true);
 
 	return true;
@@ -1164,77 +1446,77 @@ bool EnemyRun::Enter(CEnemyObject* pEnemy)
 
 void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (!pEnemy->m_pPlayer) return;
-	if (pEnemy->m_bDying) return;
+	if (!pEnemy)
+		return;
 
-	static float timeacu = 0.0f;
-	timeacu += fTimeElapsed;
+	if (pEnemy->m_bDying)
+		return;
 
-	if (timeacu > 0.5f)
-	{
-		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
-		timeacu -= 0.5f;
-	}
-
-	if (pEnemy->IsOutsideLeashRange())
+	if (NetworkManager::Instance().IsConnected())
 	{
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-		pEnemy->ClearPath();
-		pEnemy->ChangeState(std::make_unique<EnemyReturn>());
+
+		XMFLOAT3 toServer;
+		toServer.x = pEnemy->m_xmf3ServerPosition.x - pEnemy->m_xmf3Position.x;
+		toServer.y = 0.0f;
+		toServer.z = pEnemy->m_xmf3ServerPosition.z - pEnemy->m_xmf3Position.z;
+
+		float moveLen = Vector3::Length(toServer);
+
+		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;
+
+		if (moveLen < MOVE_ANIM_THRESHOLD)
+		{
+			pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
+			m_fFootstepTimer = 0.0f;
+		}
+		else
+		{
+			pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
+
+			m_fFootstepTimer += fTimeElapsed;
+
+			if (m_fFootstepTimer > 0.5f)
+			{
+				SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+				m_fFootstepTimer -= 0.5f;
+			}
+		}
+
 		return;
 	}
 
-	bool bCanDetectPlayer = pEnemy->CanDetectPlayer();
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 
-	if (bCanDetectPlayer)
+	m_fFootstepTimer += fTimeElapsed;
+
+	if (m_fFootstepTimer > 0.5f)
 	{
-		pEnemy->RefreshLastSeenPlayer();
-	}
-	else
-	{
-		pEnemy->m_fLoseSightTimer += fTimeElapsed;
-	}
-
-	pEnemy->m_fThinkTimer += fTimeElapsed;
-
-	if (pEnemy->m_fThinkTimer >= pEnemy->m_fThinkInterval)
-	{
-		pEnemy->m_fThinkTimer = 0.0f;
-
-		if (pEnemy->CanShootPlayer())
-		{
-			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			pEnemy->ClearPath();
-			pEnemy->ChangeState(std::make_unique<EnemyAttack>());
-			return;
-		}
-
-		if (!bCanDetectPlayer && !pEnemy->HasRecentLastSeenPlayer())
-		{
-			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			pEnemy->ClearPath();
-			pEnemy->ChangeState(std::make_unique<EnemyReturn>());
-			return;
-		}
+		SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
+		m_fFootstepTimer -= 0.5f;
 	}
 
 	XMFLOAT3 targetPos;
 
-	if (bCanDetectPlayer)
+	if (blackboard.bCanSeeTarget && blackboard.pTarget)
 	{
-		targetPos = pEnemy->m_pPlayer->GetPosition();
+		targetPos = blackboard.pTarget->GetPosition();
 	}
-	else if (pEnemy->HasRecentLastSeenPlayer())
+	else if (blackboard.bHasLastSeenPosition)
 	{
-		targetPos = pEnemy->m_xmf3LastSeenPlayerPosition;
+		targetPos = blackboard.xmf3LastSeenPosition;
 	}
 	else
 	{
+		blackboard.bHasMoveTarget = false;
 		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 		return;
 	}
 
-	bool hasPath = pEnemy->UpdatePathToPosition(targetPos, fTimeElapsed);
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = targetPos;
+
+	bool hasPath = pEnemy->UpdatePathToPosition(blackboard.xmf3MoveTarget, fTimeElapsed);
 
 	if (hasPath && pEnemy->FollowCurrentPath())
 	{
@@ -1246,17 +1528,31 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 void EnemyRun::Exit(CEnemyObject* pEnemy)
 {
+	if (!pEnemy)
+		return;
+
+	pEnemy->GetBlackboard().bHasMoveTarget = false;
+
+	m_fFootstepTimer = 0.0f;
+
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 }
 
 bool EnemyAttack::Enter(CEnemyObject* pEnemy)
 {
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Attack;
+	blackboard.bHasMoveTarget = false;
+
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 	pEnemy->ClearPath();
 
 	pEnemy->m_fAimTimer = 0.0f;
 	pEnemy->m_fAttackCooldown = 0.0f;
-	pEnemy->m_fThinkTimer = 0.0f;
 
 	pEnemy->m_nBurstShotsLeft = 0;
 	pEnemy->m_fBurstShotTimer = 0.0f;
@@ -1272,7 +1568,11 @@ bool EnemyAttack::Enter(CEnemyObject* pEnemy)
 
 void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (pEnemy->m_bDying) return;
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->m_bDying)
+		return;
 
 	if (NetworkManager::Instance().IsConnected())
 	{
@@ -1283,7 +1583,8 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 			return;
 		}
 
-		if (pEnemy->m_fShootAnimTimer > 0.0f) {
+		if (pEnemy->m_fShootAnimTimer > 0.0f)
+		{
 			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 			return;
 		}
@@ -1297,20 +1598,21 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;		// 임시
 
-		if (moveLen < MOVE_ANIM_THRESHOLD) {				// 안움직임
+		if (moveLen < MOVE_ANIM_THRESHOLD)
+		{
 			pEnemy->SetEnemyAnimation(pEnemy->GetAttackAnimationByWeapon(), true, false);
 		}
-		else {												// 움직임
+		else
+		{
 			XMFLOAT3 moveDir = NormalizeXZ(toServer);
 			XMFLOAT3 forward = pEnemy->GetForwardXZ();
 			XMFLOAT3 right = GetRightFromForwardXZ(forward);
 
-			float fwdDot = moveDir.x * forward.x + moveDir.z * forward.z;   // 전후 성분
-			float rightDot = moveDir.x * right.x + moveDir.z * right.z;     // 좌우 성분
+			float fwdDot = moveDir.x * forward.x + moveDir.z * forward.z;
+			float rightDot = moveDir.x * right.x + moveDir.z * right.z;
 
 			if (fabsf(rightDot) > fabsf(fwdDot))
 			{
-				// 옆걸음
 				if (rightDot >= 0.0f)
 					pEnemy->SetEnemyAnimation(pEnemy->GetRightRunAnimationByWeapon(), true, false);
 				else
@@ -1318,7 +1620,6 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 			}
 			else
 			{
-				// 전진 
 				pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
 			}
 		}
@@ -1326,72 +1627,18 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	if (!pEnemy->m_pPlayer) return;
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 
-	if (pEnemy->IsOutsideLeashRange())
+	if (blackboard.bCanSeeTarget && blackboard.pTarget)
 	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-		pEnemy->ChangeState(std::make_unique<EnemyReturn>());
-		return;
+		pEnemy->FaceToPosition(blackboard.pTarget->GetPosition());
+	}
+	else if (blackboard.bHasLastSeenPosition)
+	{
+		pEnemy->FaceToPosition(blackboard.xmf3LastSeenPosition);
 	}
 
-	if (pEnemy->IsReloading())
-	{
-		pEnemy->UpdateReload(fTimeElapsed);
-
-		if (pEnemy->CanDetectPlayer())
-		{
-			pEnemy->RefreshLastSeenPlayer();
-			XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
-			pEnemy->FaceToPosition(playerPos);
-		}
-
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-		return;
-	}
-
-	bool bCanDetectPlayer = pEnemy->CanDetectPlayer();
-	bool bCanShootPlayer = pEnemy->CanShootPlayer();
-
-	if (bCanDetectPlayer)
-	{
-		pEnemy->RefreshLastSeenPlayer();
-
-		XMFLOAT3 playerPos = pEnemy->m_pPlayer->GetPosition();
-		pEnemy->FaceToPosition(playerPos);
-	}
-	else
-	{
-		pEnemy->m_fLoseSightTimer += fTimeElapsed;
-
-		if (pEnemy->HasRecentLastSeenPlayer())
-		{
-			pEnemy->FaceToPosition(pEnemy->m_xmf3LastSeenPlayerPosition);
-		}
-	}
-
-	pEnemy->m_fThinkTimer += fTimeElapsed;
-
-	if (pEnemy->m_fThinkTimer >= pEnemy->m_fThinkInterval)
-	{
-		pEnemy->m_fThinkTimer = 0.0f;
-
-		if (pEnemy->IsPlayerOutOfAttackRange())
-		{
-			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			pEnemy->ChangeState(std::make_unique<EnemyRun>());
-			return;
-		}
-
-		if (!bCanDetectPlayer && !pEnemy->HasRecentLastSeenPlayer())
-		{
-			pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-			pEnemy->ChangeState(std::make_unique<EnemyRun>());
-			return;
-		}
-	}
-
-	if (pEnemy->m_nCurrentAmmo <= 0)
+	if (pEnemy->NeedsReload())
 	{
 		pEnemy->StartReload();
 		return;
@@ -1406,7 +1653,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 		return;
 	}
 
-	if (!bCanShootPlayer)
+	if (!blackboard.bCanShootTarget)
 	{
 		pEnemy->m_fStrafeTimer -= fTimeElapsed;
 
@@ -1416,7 +1663,7 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 			pEnemy->m_fStrafeSign *= -1.0f;
 		}
 
-		if (bCanDetectPlayer)
+		if (blackboard.bCanSeeTarget)
 		{
 			pEnemy->UpdateCombatMove(fTimeElapsed);
 		}
@@ -1432,7 +1679,6 @@ void EnemyAttack::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->m_fBurstRestTimer > 0.0f)
 	{
 		pEnemy->m_fBurstRestTimer -= fTimeElapsed;
-
 		pEnemy->m_fStrafeTimer -= fTimeElapsed;
 
 		if (pEnemy->m_fStrafeTimer <= 0.0f)
@@ -1491,9 +1737,70 @@ void EnemyAttack::Exit(CEnemyObject* pEnemy)
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 }
 
+bool EnemyReload::Enter(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Reload;
+	blackboard.bHasMoveTarget = false;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	pEnemy->ClearPath();
+
+	if (!pEnemy->IsReloading())
+	{
+		pEnemy->StartReload();
+	}
+	else
+	{
+		pEnemy->SetEnemyAnimation(pEnemy->GetReloadAnimationByWeapon(), false, false);
+	}
+
+	return true;
+}
+
+void EnemyReload::Update(CEnemyObject* pEnemy, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->m_bDying)
+		return;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+	if (blackboard.bCanSeeTarget && blackboard.pTarget)
+	{
+		pEnemy->FaceToPosition(blackboard.pTarget->GetPosition());
+	}
+
+	pEnemy->UpdateReload(fTimeElapsed);
+}
+
+void EnemyReload::Exit(CEnemyObject* pEnemy)
+{
+	if (!pEnemy)
+		return;
+
+	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+}
+
 bool EnemyReturn::Enter(CEnemyObject* pEnemy)
 {
-	pEnemy->m_fThinkTimer = 0.0f;
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Return;
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = pEnemy->GetSpawnPosition();
+
 	pEnemy->updateTimer = pEnemy->findTime;
 
 	pEnemy->ClearPath();
@@ -1506,15 +1813,23 @@ bool EnemyReturn::Enter(CEnemyObject* pEnemy)
 
 void EnemyReturn::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 {
-	if (pEnemy->m_bDying) return;
+	if (!pEnemy)
+		return;
+
+	if (pEnemy->m_bDying)
+		return;
 
 	if (NetworkManager::Instance().IsConnected())
 	{
 		return;
 	}
 
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
 
 	XMFLOAT3 spawnPos = pEnemy->GetSpawnPosition();
+
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = spawnPos;
 
 	if (pEnemy->IsNearSpawn())
 	{
@@ -1523,15 +1838,14 @@ void EnemyReturn::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 		pEnemy->SetPosition(spawnPos.x, spawnPos.y, spawnPos.z);
 
-		pEnemy->m_fReturnIgnoreTimer = pEnemy->m_fReturnIgnoreDuration;
-		pEnemy->m_bHasLastSeenPlayer = false;
-		pEnemy->m_fLoseSightTimer = 0.0f;
+		blackboard.ResetTargetMemory();
+		blackboard.fReturnIgnoreTimer = pEnemy->m_fReturnIgnoreDuration;
+		blackboard.bHasMoveTarget = false;
 
-		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
 		return;
 	}
 
-	bool hasPath = pEnemy->UpdatePathToPosition(spawnPos, fTimeElapsed);
+	bool hasPath = pEnemy->UpdatePathToPosition(blackboard.xmf3MoveTarget, fTimeElapsed);
 
 	if (hasPath && pEnemy->FollowCurrentPath())
 	{
@@ -1553,12 +1867,27 @@ void EnemyReturn::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 
 void EnemyReturn::Exit(CEnemyObject* pEnemy)
 {
+	if (!pEnemy)
+		return;
+
+	pEnemy->GetBlackboard().bHasMoveTarget = false;
+
 	pEnemy->ClearPath();
 	pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
 }
 
 bool EnemyDie::Enter(CEnemyObject* pEnemy)
 {
+	if (!pEnemy)
+		return false;
+
+	EnemyBlackboard& blackboard = pEnemy->GetBlackboard();
+
+	blackboard.eCurrentAction = EnemyBehaviorAction::Die;
+	blackboard.bHasMoveTarget = false;
+	blackboard.bCanSeeTarget = false;
+	blackboard.bCanShootTarget = false;
+
 	pEnemy->isColl = false;
 	pEnemy->m_bDying = true;
 	pEnemy->m_fDieElapsed = 0.0f;

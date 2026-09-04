@@ -35,6 +35,18 @@ enum class ParticleFrameMode : UINT
 	RANDOM_SELECTED
 };
 
+enum class ParticleDirectionMode : UINT
+{
+	CONFIGURED = 0,
+	EFFECT_DIRECTION
+};
+
+struct ParticleRenderGroupDesc
+{
+	ParticleTextureID textureId = ParticleTextureID::EXPLOSION;
+	ParticleBlendMode blendMode = ParticleBlendMode::ALPHA;
+};
+
 struct ParticleAtlasDesc
 {
 	UINT textureWidth = 1;
@@ -55,12 +67,15 @@ struct ParticleAtlasDesc
 	UINT validFrameCount = 1;
 };
 
+//개별 파티클 방출기 설정 구조체(색상, 크기, 속도, 수명 등): 파티클 제작 설정 데이터
 struct ParticleEmitterDesc
 {
 	ParticleTextureID textureId = ParticleTextureID::EXPLOSION;
 	ParticleBlendMode blendMode = ParticleBlendMode::ALPHA;
 	ParticleBillboardMode billboardMode = ParticleBillboardMode::CAMERA_FACING;
 	ParticleFrameMode frameMode = ParticleFrameMode::FIXED_FRAME;
+	ParticleDirectionMode directionMode = ParticleDirectionMode::CONFIGURED;
+	UINT renderGroup = 0;
 
 	UINT burstCount = 0;
 
@@ -77,6 +92,7 @@ struct ParticleEmitterDesc
 	float coneAngleDegrees = 0.0f;
 
 	float positionOffsetAlongDirection = 0.0f;
+	XMFLOAT3 positionOffset = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
 	XMFLOAT3 acceleration = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
@@ -109,13 +125,14 @@ struct ParticleEffectDesc
 	std::vector<ParticleEmitterDesc> emitters;
 };
 
+//이펙트 제작 데이터와 텍스처를 관리하는 클래스
 class ParticleResource
 {
 public:
 	ParticleResource() = default;
 	~ParticleResource();
 
-	bool Load(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
+	bool Load(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pConfigFilePath);
 
 	void ReleaseUploadBuffers();
 	void Release();
@@ -125,20 +142,19 @@ public:
 	const ParticleEffectDesc* GetEffectDesc(EffectID effectId) const;
 	CTexture* GetTexture(ParticleTextureID textureId) const;
 	const ParticleAtlasDesc* GetAtlasDesc(ParticleTextureID textureId) const;
+	const ParticleRenderGroupDesc* GetRenderGroupDesc(UINT renderGroupIndex) const;
 
 private:
+	bool LoadConfig(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, const wchar_t* pConfigFilePath);
 	bool LoadTexture(ParticleTextureID textureId, ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		const wchar_t* texturePath, const ParticleAtlasDesc& atlasDesc);
-
-	void BuildGrenadeEffectDesc();
-	void BuildRifleSparkEffectDesc();
-	void BuildShotgunSparkEffectDesc();
-	void BuildPistolSparkEffectDesc();
+	bool ValidateEmitterDesc(const ParticleEmitterDesc& emitterDesc) const;
 
 private:
 	bool m_bLoaded = false;
 
 	std::unordered_map<ParticleTextureID, std::unique_ptr<CTexture>> m_Textures;
 	std::unordered_map<ParticleTextureID, ParticleAtlasDesc> m_AtlasDescs;
+	std::unordered_map<UINT, ParticleRenderGroupDesc> m_RenderGroupDescs;
 	std::unordered_map<EffectID, ParticleEffectDesc> m_EffectDescs;
 };

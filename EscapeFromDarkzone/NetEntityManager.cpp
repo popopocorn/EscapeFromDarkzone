@@ -296,7 +296,15 @@ void NetEntityManager::OnNpcStateChange(const SC_NPC_STATE_CHANGE_PACKET* p)
 		case NPC_STATE_DIE:
 			pNpc->ChangeState(std::make_unique<EnemyDie>());
 			break;
+		// 08.13 한준수 추가(행동트리)
+		case NPC_STATE_SEARCH:
+			pNpc->ChangeState(std::make_unique<EnemyRun>());
+			break;
+		case NPC_STATE_INVESTIGATE:
+			pNpc->ChangeState(std::make_unique<EnemyRun>());
+			break;
 		}
+		
 	}
 }
 

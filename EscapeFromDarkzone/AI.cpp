@@ -1,7 +1,339 @@
-#include"stdafx.h"
+#include "stdafx.h"
 #include "AI.h"
-#include<fstream>
+#include "EnemyObject.h"
+#include <fstream>
 
+void EnemyBlackboard::ResetPerception()
+{
+	bCanSeeTarget = false;
+	bCanShootTarget = false;
+	bOutsideLeash = false;
+	bNeedsReload = false;
+
+	fTargetDistance = FLT_MAX;
+}
+
+void EnemyBlackboard::ResetTargetMemory()
+{
+	pTarget = nullptr;
+
+	bHasLastSeenPosition = false;
+	xmf3LastSeenPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	bHasMoveTarget = false;
+	xmf3MoveTarget = XMFLOAT3(0.0f, 0.0f, 0.0f);
+
+	fLoseSightTimer = 0.0f;
+}
+
+void EnemyBlackboard::Reset()
+{
+	ResetPerception();
+	ResetTargetMemory();
+
+	fThinkTimer = 0.0f;
+	fReturnIgnoreTimer = 0.0f;
+
+	eCurrentAction = EnemyBehaviorAction::None;
+
+	Hearing.Reset();
+	Search = EnemySearchMemory{};
+	Damage.Reset();
+}
+
+BehaviorNode::BehaviorNode(const char* pName)
+{
+	if (pName)
+		m_strName = pName;
+	else
+		m_strName = "BehaviorNode";
+}
+
+void BehaviorNode::Reset()
+{
+}
+
+CompositeNode::CompositeNode(const char* pName)
+	: BehaviorNode(pName)
+{
+}
+
+void CompositeNode::AddChild(std::unique_ptr<BehaviorNode> pChild)
+{
+	if (!pChild)
+		return;
+
+	m_Children.push_back(std::move(pChild));
+}
+
+void CompositeNode::ResetChildren()
+{
+	for (auto& child : m_Children)
+	{
+		if (child)
+			child->Reset();
+	}
+}
+
+void CompositeNode::Reset()
+{
+	ResetChildren();
+}
+
+SequenceNode::SequenceNode(const char* pName)
+	: CompositeNode(pName)
+{
+}
+
+BehaviorStatus SequenceNode::Tick(BehaviorContext& context)
+{
+	if (m_Children.empty())
+		return BehaviorStatus::Success;
+
+	while (m_nRunningChild < m_Children.size())
+	{
+		BehaviorNode* pChild = m_Children[m_nRunningChild].get();
+
+		if (!pChild)
+		{
+			m_nRunningChild++;
+			continue;
+		}
+
+		BehaviorStatus status = pChild->Tick(context);
+
+		if (status == BehaviorStatus::Running)
+			return BehaviorStatus::Running;
+
+		if (status == BehaviorStatus::Failure)
+		{
+			Reset();
+			return BehaviorStatus::Failure;
+		}
+
+		pChild->Reset();
+		m_nRunningChild++;
+	}
+
+	Reset();
+	return BehaviorStatus::Success;
+}
+
+void SequenceNode::Reset()
+{
+	m_nRunningChild = 0;
+	CompositeNode::Reset();
+}
+
+ReactiveSequenceNode::ReactiveSequenceNode(const char* pName)
+	: CompositeNode(pName)
+{
+}
+
+BehaviorStatus ReactiveSequenceNode::Tick(BehaviorContext& context)
+{
+	for (size_t i = 0; i < m_Children.size(); ++i)
+	{
+		BehaviorNode* pChild = m_Children[i].get();
+
+		if (!pChild)
+			continue;
+
+		BehaviorStatus status = pChild->Tick(context);
+
+		if (status == BehaviorStatus::Success)
+		{
+			pChild->Reset();
+			continue;
+		}
+
+		if (m_nRunningChild != INVALID_CHILD && m_nRunningChild != i && m_nRunningChild < m_Children.size())
+		{
+			if (m_Children[m_nRunningChild])
+				m_Children[m_nRunningChild]->Reset();
+		}
+
+		if (status == BehaviorStatus::Running)
+		{
+			m_nRunningChild = i;
+			return BehaviorStatus::Running;
+		}
+
+		m_nRunningChild = INVALID_CHILD;
+
+		for (size_t j = i + 1; j < m_Children.size(); ++j)
+		{
+			if (m_Children[j])
+				m_Children[j]->Reset();
+		}
+
+		return BehaviorStatus::Failure;
+	}
+
+	m_nRunningChild = INVALID_CHILD;
+	return BehaviorStatus::Success;
+}
+
+void ReactiveSequenceNode::Reset()
+{
+	m_nRunningChild = INVALID_CHILD;
+	CompositeNode::Reset();
+}
+
+SelectorNode::SelectorNode(const char* pName)
+	: CompositeNode(pName)
+{
+}
+
+BehaviorStatus SelectorNode::Tick(BehaviorContext& context)
+{
+	if (m_Children.empty())
+		return BehaviorStatus::Failure;
+
+	while (m_nRunningChild < m_Children.size())
+	{
+		BehaviorNode* pChild = m_Children[m_nRunningChild].get();
+
+		if (!pChild)
+		{
+			m_nRunningChild++;
+			continue;
+		}
+
+		BehaviorStatus status = pChild->Tick(context);
+
+		if (status == BehaviorStatus::Running)
+			return BehaviorStatus::Running;
+
+		if (status == BehaviorStatus::Success)
+		{
+			Reset();
+			return BehaviorStatus::Success;
+		}
+
+		pChild->Reset();
+		m_nRunningChild++;
+	}
+
+	Reset();
+	return BehaviorStatus::Failure;
+}
+
+void SelectorNode::Reset()
+{
+	m_nRunningChild = 0;
+	CompositeNode::Reset();
+}
+
+ReactiveSelectorNode::ReactiveSelectorNode(const char* pName)
+	: CompositeNode(pName)
+{
+}
+
+BehaviorStatus ReactiveSelectorNode::Tick(BehaviorContext& context)
+{
+	size_t selectedChild = INVALID_CHILD;
+	BehaviorStatus selectedStatus = BehaviorStatus::Failure;
+
+	for (size_t i = 0; i < m_Children.size(); ++i)
+	{
+		BehaviorNode* pChild = m_Children[i].get();
+
+		if (!pChild)
+			continue;
+
+		BehaviorStatus status = pChild->Tick(context);
+
+		if (status == BehaviorStatus::Failure)
+		{
+			pChild->Reset();
+			continue;
+		}
+
+		selectedChild = i;
+		selectedStatus = status;
+		break;
+	}
+
+	if (m_nRunningChild != INVALID_CHILD && m_nRunningChild != selectedChild && m_nRunningChild < m_Children.size())
+	{
+		if (m_Children[m_nRunningChild])
+			m_Children[m_nRunningChild]->Reset();
+	}
+
+	if (selectedStatus == BehaviorStatus::Running)
+	{
+		m_nRunningChild = selectedChild;
+	}
+	else
+	{
+		m_nRunningChild = INVALID_CHILD;
+
+		if (selectedChild != INVALID_CHILD && selectedChild < m_Children.size() && m_Children[selectedChild])
+			m_Children[selectedChild]->Reset();
+	}
+
+	return selectedStatus;
+}
+
+void ReactiveSelectorNode::Reset()
+{
+	m_nRunningChild = INVALID_CHILD;
+	CompositeNode::Reset();
+}
+
+ConditionNode::ConditionNode(const char* pName, ConditionFunction condition)
+	: BehaviorNode(pName), m_Condition(std::move(condition))
+{
+}
+
+BehaviorStatus ConditionNode::Tick(BehaviorContext& context)
+{
+	if (!m_Condition)
+		return BehaviorStatus::Failure;
+
+	return m_Condition(context) ? BehaviorStatus::Success : BehaviorStatus::Failure;
+}
+
+ActionNode::ActionNode(const char* pName, ActionFunction action)
+	: BehaviorNode(pName), m_Action(std::move(action))
+{
+}
+
+BehaviorStatus ActionNode::Tick(BehaviorContext& context)
+{
+	if (!m_Action)
+		return BehaviorStatus::Failure;
+
+	return m_Action(context);
+}
+
+void BehaviorTree::SetRoot(std::unique_ptr<BehaviorNode> pRoot)
+{
+	if (m_pRoot)
+		m_pRoot->Reset();
+
+	m_pRoot = std::move(pRoot);
+}
+
+BehaviorStatus BehaviorTree::Tick(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed)
+{
+	if (!m_pRoot || !pEnemy)
+		return BehaviorStatus::Failure;
+
+	BehaviorContext context;
+	context.pEnemy = pEnemy;
+	context.pBlackboard = &blackboard;
+	context.fTimeElapsed = fTimeElapsed;
+
+	return m_pRoot->Tick(context);
+}
+
+void BehaviorTree::Reset()
+{
+	if (m_pRoot)
+		m_pRoot->Reset();
+}
 
 bool IsSamePosition(const XMFLOAT3& p1, const XMFLOAT3& p2)
 {
@@ -381,4 +713,661 @@ int AstarNavigation::FindPolyID(const XMFLOAT3& pos)
 	}
 
 	return -1;
+}
+
+bool AstarNavigation::FindSearchPointAround(const XMFLOAT3& center, float minRadius, float maxRadius, float random01, XMFLOAT3& outPoint) const
+{
+	vector<int> candidates;
+	candidates.reserve(mesh.size());
+
+	float minRadiusSq = minRadius * minRadius;
+	float maxRadiusSq = maxRadius * maxRadius;
+
+	for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+	{
+		const XMFLOAT3& point = mesh[i].centroid;
+
+		float dx = point.x - center.x;
+		float dz = point.z - center.z;
+
+		float distanceSq = dx * dx + dz * dz;
+
+		if (distanceSq < minRadiusSq)
+			continue;
+
+		if (distanceSq > maxRadiusSq)
+			continue;
+
+		candidates.push_back(i);
+	}
+
+	if (candidates.empty())
+		return false;
+
+	if (random01 < 0.0f)
+		random01 = 0.0f;
+
+	if (random01 >= 1.0f)
+		random01 = 0.999999f;
+
+	size_t selectedIndex = static_cast<size_t>(random01 * static_cast<float>(candidates.size()));
+
+	if (selectedIndex >= candidates.size())
+		selectedIndex = candidates.size() - 1;
+
+	outPoint = mesh[candidates[selectedIndex]].centroid;
+
+	return true;
+}
+
+EnemyBehaviorTree::EnemyBehaviorTree()
+{
+	BuildTree();
+}
+
+void EnemyBehaviorTree::BuildTree()
+{
+	auto pRoot = std::make_unique<ReactiveSelectorNode>("EnemyRoot");
+
+	// -------------------------------------------------------------------------
+	// Die
+	// -------------------------------------------------------------------------
+	auto pDieSequence = std::make_unique<ReactiveSequenceNode>("DieSequence");
+
+	pDieSequence->AddChild(std::make_unique<ConditionNode>(
+		"IsDying",
+		[](BehaviorContext& context)
+		{
+			if (!context.pEnemy)
+				return false;
+
+			return context.pEnemy->IsDying();
+		}
+	));
+
+	pDieSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteDie",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Die);
+		}
+	));
+
+	pRoot->AddChild(std::move(pDieSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Return
+	// -------------------------------------------------------------------------
+	auto pReturnSequence = std::make_unique<ReactiveSequenceNode>("ReturnSequence");
+
+	pReturnSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldReturn",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldReturn(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pReturnSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteReturn",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Return);
+		}
+	));
+
+	pRoot->AddChild(std::move(pReturnSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Reload
+	// -------------------------------------------------------------------------
+	auto pReloadSequence = std::make_unique<ReactiveSequenceNode>("ReloadSequence");
+
+	pReloadSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldReload",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldReload(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pReloadSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteReload",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Reload);
+		}
+	));
+
+	pRoot->AddChild(std::move(pReloadSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Attack
+	// -------------------------------------------------------------------------
+	auto pAttackSequence = std::make_unique<ReactiveSequenceNode>("AttackSequence");
+
+	pAttackSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldAttack",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldAttack(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pAttackSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteAttack",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Attack);
+		}
+	));
+
+	pRoot->AddChild(std::move(pAttackSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Chase
+	// -------------------------------------------------------------------------
+	auto pChaseSequence = std::make_unique<ReactiveSequenceNode>("ChaseSequence");
+
+	pChaseSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldChase",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldChase(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pChaseSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteChase",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Chase);
+		}
+	));
+
+	pRoot->AddChild(std::move(pChaseSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Investigate
+	// -------------------------------------------------------------------------
+	auto pInvestigateSequence = std::make_unique<ReactiveSequenceNode>("InvestigateSequence");
+
+	pInvestigateSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldInvestigate",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldInvestigate(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pInvestigateSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteInvestigate",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Investigate);
+		}
+	));
+
+	pRoot->AddChild(std::move(pInvestigateSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Search
+	// -------------------------------------------------------------------------
+	auto pSearchSequence = std::make_unique<ReactiveSequenceNode>("SearchSequence");
+
+	pSearchSequence->AddChild(std::make_unique<ConditionNode>(
+		"ShouldSearch",
+		[this](BehaviorContext& context)
+		{
+			if (!context.pEnemy || !context.pBlackboard)
+				return false;
+
+			return ShouldSearch(context.pEnemy, *context.pBlackboard);
+		}
+	));
+
+	pSearchSequence->AddChild(std::make_unique<ActionNode>(
+		"ExecuteSearch",
+		[this](BehaviorContext& context)
+		{
+			return ExecuteSearch(context);
+		}
+	));
+
+	pRoot->AddChild(std::move(pSearchSequence));
+
+
+	// -------------------------------------------------------------------------
+	// Idle
+	// -------------------------------------------------------------------------
+	pRoot->AddChild(std::make_unique<ActionNode>(
+		"ExecuteIdle",
+		[this](BehaviorContext& context)
+		{
+			return SelectAction(context, EnemyBehaviorAction::Idle);
+		}
+	));
+
+	SetRoot(std::move(pRoot));
+}
+
+void EnemyBehaviorTree::UpdateBlackboard(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return;
+
+	// 청각 기억 갱신
+	if (blackboard.Hearing.bHasSound)
+	{
+		blackboard.Hearing.fSoundAge += fTimeElapsed;
+
+		// Investigate를 이미 수행 중이라면 목적지까지 기억을 유지한다.
+		if (blackboard.eCurrentAction != EnemyBehaviorAction::Investigate &&
+			blackboard.Hearing.fSoundAge >= blackboard.Hearing.fSoundMemoryDuration)
+		{
+			blackboard.Hearing.Reset();
+		}
+	}
+
+	// 최근 피격 기억 갱신
+	// 서버 AI Tick에서도 NPC별 Damage Memory를 동일하게 갱신한다.
+	if (blackboard.Damage.bHasDamage)
+	{
+		blackboard.Damage.fDamageAge += fTimeElapsed;
+
+		if (blackboard.Damage.fDamageAge >= blackboard.Damage.fMemoryDuration)
+		{
+			blackboard.Damage.Reset();
+		}
+	}
+
+	blackboard.ResetPerception();
+
+	blackboard.bOutsideLeash = pEnemy->IsOutsideLeashRange();
+	blackboard.bNeedsReload = pEnemy->NeedsReload();
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+	{
+		blackboard.fReturnIgnoreTimer -= fTimeElapsed;
+
+		if (blackboard.fReturnIgnoreTimer < 0.0f)
+			blackboard.fReturnIgnoreTimer = 0.0f;
+	}
+
+	CGameObject* pPlayer = pEnemy->GetPlayer();
+
+	if (!pPlayer)
+	{
+		blackboard.fTargetDistance = FLT_MAX;
+		return;
+	}
+
+	blackboard.fTargetDistance = pEnemy->GetDistanceToPlayerXZ();
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+	{
+		blackboard.bCanSeeTarget = false;
+		blackboard.bCanShootTarget = false;
+		return;
+	}
+
+	blackboard.bCanSeeTarget = pEnemy->CanDetectPlayer();
+	blackboard.bCanShootTarget = blackboard.bCanSeeTarget && pEnemy->CanShootPlayer();
+
+	if (blackboard.bCanSeeTarget)
+	{
+		pEnemy->RefreshLastSeenPlayer();
+
+		blackboard.Hearing.Reset();
+	}
+	else if (blackboard.bHasLastSeenPosition)
+	{
+		blackboard.fLoseSightTimer += fTimeElapsed;
+	}
+}
+
+BehaviorStatus EnemyBehaviorTree::Tick(CEnemyObject* pEnemy, EnemyBlackboard& blackboard, float fTimeElapsed)
+{
+	if (!pEnemy)
+		return BehaviorStatus::Failure;
+
+	UpdateBlackboard(pEnemy, blackboard, fTimeElapsed);
+
+	return BehaviorTree::Tick(pEnemy, blackboard, fTimeElapsed);
+}
+
+bool EnemyBehaviorTree::ShouldReturn(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (blackboard.bOutsideLeash)
+		return true;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Return && !pEnemy->IsNearSpawn())
+		return true;
+
+	if (pEnemy->IsReloading())
+		return false;
+
+	if (blackboard.bHasLastSeenPosition && !pEnemy->HasRecentLastSeenPlayer())
+		return true;
+
+	return false;
+}
+
+bool EnemyBehaviorTree::ShouldReload(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (!blackboard.bNeedsReload)
+		return false;
+
+	if (pEnemy->IsReloading())
+		return true;
+
+	if (blackboard.bCanSeeTarget)
+		return true;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return true;
+
+	return false;
+}
+
+bool EnemyBehaviorTree::ShouldAttack(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (blackboard.bCanShootTarget)
+		return true;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Attack)
+	{
+		if (!pEnemy->IsPlayerOutOfAttackRange())
+		{
+			if (blackboard.bCanSeeTarget || pEnemy->HasRecentLastSeenPlayer())
+				return true;
+		}
+	}
+
+	return false;
+}
+
+bool EnemyBehaviorTree::ShouldChase(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (blackboard.bCanSeeTarget)
+		return true;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return true;
+
+	return false;
+}
+
+bool EnemyBehaviorTree::ShouldInvestigate(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (pEnemy->IsDying())
+		return false;
+
+	if (!blackboard.Hearing.bHasSound)
+		return false;
+
+	if (blackboard.bOutsideLeash)
+		return false;
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+		return false;
+
+	if (blackboard.bCanSeeTarget)
+		return false;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return false;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Return && !pEnemy->IsNearSpawn())
+		return false;
+
+	return true;
+}
+
+float EnemyBehaviorTree::NextSearchRandom01(EnemyBlackboard& blackboard)
+{
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.nRandomSeed == 0)
+		search.nRandomSeed = 0xA341316Cu;
+
+	search.nRandomSeed = search.nRandomSeed * 1664525u + 1013904223u;
+
+	return static_cast<float>(search.nRandomSeed & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
+}
+bool EnemyBehaviorTree::ShouldSearch(CEnemyObject* pEnemy, const EnemyBlackboard& blackboard) const
+{
+	if (!pEnemy)
+		return false;
+
+	if (pEnemy->IsDying())
+		return false;
+
+	if (!pEnemy->GetNav())
+		return false;
+
+	if (blackboard.bOutsideLeash)
+		return false;
+
+	if (blackboard.bNeedsReload)
+		return false;
+
+	if (blackboard.bCanSeeTarget)
+		return false;
+
+	if (pEnemy->HasRecentLastSeenPlayer())
+		return false;
+
+	if (blackboard.Hearing.bHasSound)
+		return false;
+
+	if (blackboard.fReturnIgnoreTimer > 0.0f)
+		return false;
+
+	if (blackboard.eCurrentAction == EnemyBehaviorAction::Return && !pEnemy->IsNearSpawn())
+		return false;
+
+	return true;
+}
+
+bool EnemyBehaviorTree::BuildSearchTarget(CEnemyObject* pEnemy, EnemyBlackboard& blackboard)
+{
+	if (!pEnemy)
+		return false;
+
+	AstarNavigation* pNav = pEnemy->GetNav();
+
+	if (!pNav)
+		return false;
+
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.nRandomSeed == 0)
+	{
+		std::uint64_t address = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(pEnemy));
+		search.nRandomSeed = static_cast<unsigned int>(address ^ (address >> 32));
+
+		if (search.nRandomSeed == 0)
+			search.nRandomSeed = 0xA341316Cu;
+	}
+
+	XMFLOAT3 spawnPos = pEnemy->GetSpawnPosition();
+
+	float random01 = NextSearchRandom01(blackboard);
+
+	XMFLOAT3 searchTarget;
+
+	if (!pNav->FindSearchPointAround(spawnPos, search.fMinTargetDistance, search.fSearchRadius, random01, searchTarget))
+	{
+		search.bHasTarget = false;
+		search.bReachedTarget = false;
+		search.bPathFailed = false;
+		search.fWaitTimer = 0.5f;
+
+		blackboard.bHasMoveTarget = false;
+
+		return false;
+	}
+
+	search.xmf3Target = searchTarget;
+	search.bHasTarget = true;
+	search.bReachedTarget = false;
+	search.bPathFailed = false;
+	search.fWaitTimer = 0.0f;
+
+	blackboard.bHasMoveTarget = true;
+	blackboard.xmf3MoveTarget = searchTarget;
+
+	pEnemy->ClearPath();
+
+	return true;
+}
+
+//BT는 search목적지만 정하고, 실제 이동은 EnemySearchState에서 처리
+BehaviorStatus EnemyBehaviorTree::ExecuteSearch(BehaviorContext& context)
+{
+	if (!context.pEnemy || !context.pBlackboard)
+		return BehaviorStatus::Failure;
+
+	CEnemyObject* pEnemy = context.pEnemy;
+	EnemyBlackboard& blackboard = *context.pBlackboard;
+	EnemySearchMemory& search = blackboard.Search;
+
+	if (search.bReachedTarget)
+	{
+		search.bReachedTarget = false;
+		search.bHasTarget = false;
+
+		float randomWait = NextSearchRandom01(blackboard);
+		search.fWaitTimer = search.fWaitMin + (search.fWaitMax - search.fWaitMin) * randomWait;
+
+		blackboard.bHasMoveTarget = false;
+	}
+
+	if (search.bPathFailed)
+	{
+		search.bPathFailed = false;
+		search.bHasTarget = false;
+		blackboard.bHasMoveTarget = false;
+	}
+
+	if (search.fWaitTimer > 0.0f)
+	{
+		search.fWaitTimer -= context.fTimeElapsed;
+
+		if (search.fWaitTimer < 0.0f)
+			search.fWaitTimer = 0.0f;
+
+		if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+			SelectAction(context, EnemyBehaviorAction::Search);
+
+		return BehaviorStatus::Running;
+	}
+
+	if (!search.bHasTarget)
+	{
+		if (!BuildSearchTarget(pEnemy, blackboard))
+		{
+			if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+				SelectAction(context, EnemyBehaviorAction::Search);
+
+			return BehaviorStatus::Running;
+		}
+	}
+
+	if (blackboard.eCurrentAction != EnemyBehaviorAction::Search)
+		SelectAction(context, EnemyBehaviorAction::Search);
+
+	return BehaviorStatus::Running;
+}
+
+BehaviorStatus EnemyBehaviorTree::SelectAction(BehaviorContext& context, EnemyBehaviorAction action)
+{
+	if (!context.pEnemy || !context.pBlackboard)
+		return BehaviorStatus::Failure;
+
+	CEnemyObject* pEnemy = context.pEnemy;
+	EnemyBlackboard& blackboard = *context.pBlackboard;
+
+	if (blackboard.eCurrentAction == action)
+		return BehaviorStatus::Running;
+
+	blackboard.eCurrentAction = action;
+
+	switch (action)
+	{
+	case EnemyBehaviorAction::Idle:
+		pEnemy->ChangeState(std::make_unique<EnemyIdle>());
+		break;
+
+	case EnemyBehaviorAction::Search:
+		pEnemy->ChangeState(std::make_unique<EnemySearch>());
+		break;
+
+	case EnemyBehaviorAction::Investigate:
+		pEnemy->ChangeState(std::make_unique<EnemyInvestigate>());
+		break;
+
+	case EnemyBehaviorAction::Chase:
+		pEnemy->ChangeState(std::make_unique<EnemyRun>());
+		break;
+
+	case EnemyBehaviorAction::Attack:
+		pEnemy->ChangeState(std::make_unique<EnemyAttack>());
+		break;
+
+	case EnemyBehaviorAction::Reload:
+		pEnemy->ChangeState(std::make_unique<EnemyReload>());
+		break;
+
+	case EnemyBehaviorAction::Return:
+		pEnemy->ChangeState(std::make_unique<EnemyReturn>());
+		break;
+
+	case EnemyBehaviorAction::Die:
+		pEnemy->ChangeState(std::make_unique<EnemyDie>());
+		break;
+
+	case EnemyBehaviorAction::None:
+	default:
+		return BehaviorStatus::Failure;
+	}
+
+	return BehaviorStatus::Running;
 }
