@@ -403,10 +403,11 @@ void CGameFramework::CreateRenderBuffers()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandleBase = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dColorBufferRtvHandle;
-	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
+	
 
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 
+	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_COLOR_BUFFER * ::gnRtvDescriptorIncrementSize);
 	renderBuffers.emplace_back(RenderTarget());
 	renderBuffers[0].CreateRenderTarget(
 		m_pd3dDevice,
@@ -432,6 +433,17 @@ void CGameFramework::CreateRenderBuffers()
 	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_MATERIAL_BUFFER * ::gnRtvDescriptorIncrementSize);
 	renderBuffers.emplace_back(RenderTarget());
 	renderBuffers[2].CreateRenderTarget(
+		m_pd3dDevice,
+		m_nWndClientWidth,
+		m_nWndClientHeight,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
+		d3dColorBufferRtvHandle,
+		pfClearColor
+	);
+
+	d3dColorBufferRtvHandle.ptr = d3dColorBufferRtvHandleBase.ptr + (RtvSlot::RTV_SCREEN_BUFFER * ::gnRtvDescriptorIncrementSize);
+	renderBuffers.emplace_back(RenderTarget());
+	renderBuffers[3].CreateRenderTarget(
 		m_pd3dDevice,
 		m_nWndClientWidth,
 		m_nWndClientHeight,
@@ -899,102 +911,6 @@ void CGameFramework::ProcessInput()
 
 	bool bProcessedByScene = false;
 	if (GetKeyboardState(pKeysBuffer) && !m_pScene.empty() && m_pScene.back()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
-
-	/*if (!bProcessedByScene)
-	{
-		float cxDelta = 0.0f, cyDelta = 0.0f;
-		bool bInventoryOpen = false;
-
-		if (!m_pScene.empty() && m_pScene.back() && m_pScene.back()->GetInventoryManager())
-		{
-			bInventoryOpen = m_pScene.back()->GetInventoryManager()->IsAnyInventoryOpen();
-		}
-
-		bool bFreeMouseMode = mouseMove || bInventoryOpen;
-
-		if (bFreeMouseMode)
-		{
-			::ClipCursor(NULL);
-			::ShowCursor(TRUE);
-			::GetCursorPos(&m_ptOldCursorPos);
-			bGameplayCursorInitialized = false;
-		}
-		else
-		{
-			RECT rc;
-			::GetClientRect(m_hWnd, &rc);
-
-			int width = rc.right - rc.left;
-			int height = rc.bottom - rc.top;
-
-			if (width > 0 && height > 0)
-			{
-				int centerX = width / 2;
-				int centerY = height / 2;
-
-				POINT ptCursorPos;
-				::GetCursorPos(&ptCursorPos);
-
-				POINT ptClientCursor = ptCursorPos;
-				::ScreenToClient(m_hWnd, &ptClientCursor);
-
-				if (ptClientCursor.y < 0) ptClientCursor.y = 0;
-				if (ptClientCursor.y > centerY) ptClientCursor.y = centerY;
-
-				POINT ptFixedClientCursor = { centerX, ptClientCursor.y };
-				POINT ptFixedScreenCursor = ptFixedClientCursor;
-				::ClientToScreen(m_hWnd, &ptFixedScreenCursor);
-
-				if (!bGameplayCursorInitialized)
-				{
-					::ClipCursor(NULL);
-					::ShowCursor(TRUE);
-					::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
-					m_ptOldCursorPos = ptFixedScreenCursor;
-					bGameplayCursorInitialized = true;
-				}
-				else
-				{
-					cxDelta = (float)(ptCursorPos.x - m_ptOldCursorPos.x) / 3.0f;
-					cyDelta = (float)(ptFixedScreenCursor.y - m_ptOldCursorPos.y) / 3.0f;
-
-					::ClipCursor(NULL);
-					::ShowCursor(TRUE);
-					::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
-
-					m_ptOldCursorPos = ptFixedScreenCursor;
-				}
-			}
-		}
-
-		DWORD dwDirection = 0;
-		if (pKeysBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
-		if (pKeysBuffer[VK_LEFT] & 0xF0)  dwDirection |= DIR_LEFT;
-		if (pKeysBuffer[VK_UP] & 0xF0)    dwDirection |= DIR_FORWARD;
-		if (pKeysBuffer[VK_DOWN] & 0xF0)  dwDirection |= DIR_BACKWARD;
-
-		if (dwDirection && observing)
-		{
-			XMFLOAT3 move = XMFLOAT3(0, 0, 0);
-			if (dwDirection & DIR_RIGHT)    move.x += 1.0f;
-			if (dwDirection & DIR_LEFT)     move.x -= 1.0f;
-			if (dwDirection & DIR_FORWARD)  move.z += 1.0f;
-			if (dwDirection & DIR_BACKWARD) move.z -= 1.0f;
-			observer->Move(move);
-			observer->RegenerateViewMatrix();
-		}
-
-		if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
-		{
-			if (cxDelta || cyDelta)
-			{
-				if (pKeysBuffer[VK_RBUTTON] & 0xF0)
-					m_pPlayer->Rotate(cyDelta, 0.0f, -cxDelta);
-				else
-					m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
-			}
-		}
-	}*/
 }
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
@@ -1166,7 +1082,7 @@ void CGameFramework::PrepareMainRender()
 {
 	
 	array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> RtvCPUDescriptorHandles;
-	for (int i = 0; i < BufferName::BUFFER_SIZE; ++i)
+	for (int i = 0; i < 3; ++i)
 	{
 		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
@@ -1180,13 +1096,18 @@ void CGameFramework::PrepareMainRender()
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	m_pd3dCommandList->OMSetRenderTargets(BufferName::BUFFER_SIZE, RtvCPUDescriptorHandles.data(), TRUE, &d3dDsvCPUDescriptorHandle);
+	m_pd3dCommandList->OMSetRenderTargets(3, RtvCPUDescriptorHandles.data(), TRUE, &d3dDsvCPUDescriptorHandle);
 
 }
 
 void CGameFramework::PreparePostRender()
 {
-
+	array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> RtvCPUDescriptorHandles;
+	for (int i = 0; i < 3; ++i)
+	{
+		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	}
+	m_pd3dCommandList->SetGraphicsRootDescriptorTable(19, renderBuffers[0].GetSRV());
 }
 
 void CGameFramework::BlitToBackBuffer()

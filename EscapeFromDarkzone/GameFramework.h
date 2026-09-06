@@ -29,6 +29,7 @@ enum RtvSlot
 	RTV_COLOR_BUFFER,
 	RTV_NORMAL_BUFFER,
 	RTV_MATERIAL_BUFFER,
+	RTV_SCREEN_BUFFER,
 	
 	RTV_SLOT_COUNT
 };
@@ -36,8 +37,9 @@ enum BufferName {
 	COLOR = 0,
 	NORMAL,
 	MATRIAL,
+	RENDERBASE,
 
-	BUFFER_SIZE
+	//BUFFER_SIZE
 
 };
 class CGameFramework

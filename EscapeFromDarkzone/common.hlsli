@@ -129,6 +129,9 @@ Texture2D gtxtEmissionTexture : register(t10);
 Texture2D gtxtDetailAlbedoTexture : register(t11);
 Texture2D gtxtDetailNormalTexture : register(t12);
 Texture2D FullScreenTexture : register(t15);
+Texture2D ColorTexture : register(t16);
+Texture2D NormalTexture : register(t17);
+Texture2D MaterialTexutre : register(t18);
 SamplerState gssWrap : register(s0);
 
 

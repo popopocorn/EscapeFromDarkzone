@@ -5,6 +5,11 @@ class UIMesh;
 class CShader;
 class RenderTarget;
 
+//enum ShaderType {
+//	STANDARD,
+//	LIGHT,
+//};
+
 class FullScreenRenderer
 {
 public:
