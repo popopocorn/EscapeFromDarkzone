@@ -484,7 +484,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			}
 			break;
 
-		case 'O':
+		/*case 'O':
 			observing = !observing;
 			if (observing) {
 				m_pCamera = observer.get();
@@ -492,7 +492,8 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			else {
 				m_pCamera = m_pPlayer->GetCamera();
 			}
-			break;
+			break;*/
+
 		//갓 모드
 		case 'K':
 		{
@@ -533,8 +534,8 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 	case WM_RBUTTONUP:
 	case WM_MOUSEMOVE:
 	case WM_MOUSEWHEEL:
-		OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
-		break;
+		//OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
+		//break;
 	case WM_KEYDOWN:
 	case WM_KEYUP:
 		OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
