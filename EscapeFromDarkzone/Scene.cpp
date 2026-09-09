@@ -1270,7 +1270,6 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 	if (m_pPlayer->m_bIsDead)return;
 	if (not IsGameStart)return;
 	ClampGameplayCursorToAimLine(hWnd);
-	
 
 	switch (nMessageID)
 	{
@@ -1290,12 +1289,14 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 			{
 				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
 			}
+
 			if (m_pPlayer)m_pPlayer->SetFireHeld(false);
 
 			if (m_pEffectManager)
 			{
 				m_pEffectManager->HideLaser(0);
 			}
+
 			return;
 		}
 
@@ -1308,13 +1309,10 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 		if (!m_pPlayer)
 			return;
 
-
 		if (m_pPlayer)
 		{
 			m_pPlayer->SetFireHeld(true);
-
 		}
-
 
 		break;
 	}
@@ -1342,50 +1340,17 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 		if (m_pPlayer) m_pPlayer->SetFireHeld(false);
 
-		if (IsAnyInventoryOpen())
-		{
-			if (m_pInventoryManager)
-			{
-				m_pInventoryManager->ProcessClick(InputManager::Instance().GetMousePos());
-			}
-		}
 		if (uiManager)
 		{
 			uiManager->ProcessClick(InputManager::Instance().GetMousePos());
 		}
+
 		break;
 	}
 
 	case WM_MOUSEWHEEL:
 	{
-		ClampGameplayCursorToAimLine(hWnd);
-
-		if (m_bGrenadeAimMode)
-		{
-			return;
-		}
-
-		if (!m_pPlayer) return;
-		if (IsAnyInventoryOpen()) return;
-
-		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-
-		float currentDistX10 = round(m_pPlayer->cameraDistance * 10.0f);
-
-		if (zDelta > 0)
-			currentDistX10 -= 10.0f;
-		else
-			currentDistX10 += 10.0f;
-
-		m_pPlayer->cameraDistance = currentDistX10 / 10.0f;
-		m_pPlayer->cameraDistance = clamp(m_pPlayer->cameraDistance, 3.0f, 15.0f);
-
-		if (m_pPlayer->GetCamera())
-		{
-			m_pPlayer->GetCamera()->SetOffset(XMFLOAT3(0.0f, m_pPlayer->cameraDistance, -5.0f));
-		}
-
-		break;
+		return;
 	}
 
 	default:

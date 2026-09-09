@@ -537,6 +537,36 @@ void Inventory::SlotClicked(int slotidx)
 	}
 }
 
+void Inventory::SlotDoubleClicked(int slotidx)
+{
+	if (ID >= 0)
+		return;
+
+	if (slotidx < 0 || slotidx >= MAX_SLOTS)
+		return;
+
+	ItemSlot* pSlot = GetSlot(slotidx);
+	if (!pSlot || pSlot->count <= 0)
+		return;
+
+	switch (pSlot->item)
+	{
+	case ItemID::WEAPON_UPGRADE_2:
+	case ItemID::WEAPON_UPGRADE_3:
+	case ItemID::WEAPON_UPGRADE_4:
+	{
+		if (NetworkManager::Instance().IsConnected())
+		{
+			NetworkManager::Instance().SendWeaponUpgradeRequest(static_cast<short>(slotidx));
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
 bool Inventory::ProcessClick(POINT mouse)
 {
 	for (int i = 0; i < MAX_SLOTS; ++i)
@@ -546,12 +576,56 @@ bool Inventory::ProcessClick(POINT mouse)
 
 		if (hitBox->GetBox().Intersects(mouse))
 		{
-			hitBox->HandleClick();
-			return true; // UI 클릭 소비됨
+			if (ID >= 0)
+			{
+				hitBox->HandleClick();
+				return true;
+			}
+
+			ItemSlot* pSlot = GetSlot(i);
+			if (!pSlot)
+				return true;
+
+			bool bWeaponUpgradePart =
+				pSlot->item == ItemID::WEAPON_UPGRADE_2 ||
+				pSlot->item == ItemID::WEAPON_UPGRADE_3 ||
+				pSlot->item == ItemID::WEAPON_UPGRADE_4;
+
+			if (!bWeaponUpgradePart)
+			{
+				m_nLastClickedSlot = -1;
+				m_ullLastClickTime = 0;
+
+				hitBox->HandleClick();
+				return true;
+			}
+
+			ULONGLONG currentClickTime = GetTickCount64();
+			ULONGLONG doubleClickInterval = static_cast<ULONGLONG>(GetDoubleClickTime());
+
+			bool bDoubleClick =
+				m_nLastClickedSlot == i &&
+				m_ullLastClickTime != 0 &&
+				(currentClickTime - m_ullLastClickTime) <= doubleClickInterval;
+
+			if (bDoubleClick)
+			{
+				m_nLastClickedSlot = -1;
+				m_ullLastClickTime = 0;
+
+				SlotDoubleClicked(i);
+			}
+			else
+			{
+				m_nLastClickedSlot = i;
+				m_ullLastClickTime = currentClickTime;
+			}
+
+			return true;
 		}
 	}
 
-	return false; // UI 클릭 아님
+	return false;
 }
 
 void Inventory::SetPosition(float x, float y)
@@ -808,31 +882,34 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 
 	float BtnSize = 0.15f;
 	XMFLOAT3 scale = CalcPixelByRatio(1.0f);
+
 	UIs[ItemType::ARMOR_HELMET] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.38, 0.25, 0.5);
 	UIs[ItemType::ARMOR_HELMET]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_HELMET]->SetFunc([this]() {
 		ItemID i = this->helmet;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_HELMET_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_HELMET_01);
 			}
 			break;
+
 		case ItemID::ARMOR_HELMET_01:
 		case ItemID::ARMOR_HELMET_02:
 		case ItemID::ARMOR_HELMET_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_HELMET]->setAABB();
-
 
 	UIs[ItemType::ARMOR_BODY] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_BODY]->SetLocate(0.38, 0.08, 0.5);
@@ -840,25 +917,27 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
 		ItemID i = this->body;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_BODY_01);
 			}
 			break;
+
 		case ItemID::ARMOR_BODY_01:
 		case ItemID::ARMOR_BODY_02:
 		case ItemID::ARMOR_BODY_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_BODY]->setAABB();
-
 
 	UIs[ItemType::ARMOR_SHOES] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_SHOES]->SetLocate(0.38, -0.09, 0.5);
@@ -866,25 +945,27 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
 		ItemID i = this->shoes;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_SHOES_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_SHOES_01);
 			}
 			break;
+
 		case ItemID::ARMOR_SHOES_01:
 		case ItemID::ARMOR_SHOES_02:
 		case ItemID::ARMOR_SHOES_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_SHOES]->setAABB();
-
 }
 
 void EquipUI::EquipItem(ItemID item)

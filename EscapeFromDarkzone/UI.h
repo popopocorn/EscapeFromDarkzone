@@ -94,6 +94,9 @@ private:
 
 	int ID;
 
+	int m_nLastClickedSlot = -1;
+	ULONGLONG m_ullLastClickTime = 0;
+
 	UIMesh* m_pSharedMesh;
 	UIMesh* m_pSharedMiddleMesh;
 
@@ -106,6 +109,8 @@ private:
 	void UpdateSlotNameText(int slotIndex);
 	void UpdateSlotCountText(int slotIndex);
 	void UpdateSlotTexts(int slotIndex);
+
+	void SlotDoubleClicked(int slotidx);
 
 	static XMFLOAT2 ConvertNdcToPixel(float ndcX, float ndcY);
 public:

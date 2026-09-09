@@ -373,6 +373,16 @@ bool NetworkManager::SendCraftRequest(ItemID target)
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
 }
 
+bool NetworkManager::SendArmorUpgradeRequest(ItemID targetArmor)
+{
+	return SendCraftRequest(targetArmor);
+}
+
+bool NetworkManager::SendWeaponUpgradeRequest(short slotidx)
+{
+	return SendInventoryClick(INV_ACTION_WEAPON_UPGRADE, slotidx);
+}
+
 bool NetworkManager::SendRoundJoin()
 {
 	CS_ROUND_JOIN_PACKET pkt;

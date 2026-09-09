@@ -102,6 +102,7 @@ constexpr char MOVE_A = 0x04;
 constexpr char MOVE_D = 0x08;
 
 constexpr char INV_ACTION_CLICK = 0;
+constexpr char INV_ACTION_WEAPON_UPGRADE = 1;
 
 constexpr char PLAYER_STATE_IDLE = 0;
 constexpr char PLAYER_STATE_RUN = 1;
