@@ -1,4 +1,4 @@
-#ifndef NOMINMAX
+﻿#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
@@ -83,6 +83,21 @@ constexpr float NPC_SEARCH_WAIT_MIN			= 0.8f;	// 도착 후 대기 최소
 constexpr float NPC_SEARCH_WAIT_MAX			= 1.8f;	// 도착 후 대기 최대
 constexpr float NPC_SEARCH_RETRY_WAIT		= 0.5f;	// 지점/경로 실패 시 재시도 간격
 constexpr float NPC_SEARCH_REACH_DIST_SQ	= NPC_SEARCH_REACH_DIST * NPC_SEARCH_REACH_DIST;
+
+// 경로 탐색 정체 감지
+constexpr int   NPC_PATH_FAIL_LIMIT		= 3;		// 연속 실패를 이만큼 하면
+constexpr float NPC_PATH_FAIL_COOLDOWN	= 5.0f;		// 이 시간 동안 수색/조사를 쉰다
+
+// 청각(Hearing)
+#define NPC_SOUND_DEBUG_LOG 1	// 반경 튜닝이 끝나면 0으로
+
+constexpr float NPC_HEAR_GUNSHOT_RANGE		= 25.0f;	// 총성이 들리는 거리 (감지 20보다 커야 의미가 있다)
+constexpr float NPC_HEAR_EXPLOSION_RANGE	= 40.0f;	// 폭발음
+constexpr float NPC_SOUND_MEMORY_DURATION	= 4.0f;	// 들은 소리를 기억하는 시간
+
+constexpr float NPC_INVESTIGATE_REACH_DIST		= 1.2f;	// 소리 지점 도착 판정 (NPC_WAYPOINT_REACH_DIST=1.0 보다 커야 한다)
+constexpr float NPC_INVESTIGATE_LOOK_DURATION	= 1.5f;	// 도착 후 주변을 살피는 시간
+constexpr float NPC_INVESTIGATE_REACH_DIST_SQ	= NPC_INVESTIGATE_REACH_DIST * NPC_INVESTIGATE_REACH_DIST;
 
 constexpr float NPC_FIRE_SPREAD_RAD = 0.0f;    // 원뿔 탄퍼짐 반각(라디안). 지금 0 = 퍼짐 없음
 constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
@@ -541,6 +556,9 @@ static void init_room_npcs(Room& r)
 
 		npc.percep = NpcPerception{};
 		npc.search = NpcSearchMemory{};
+		npc.hearing = NpcHearingMemory{};
+		npc.path_fail_count = 0;
+		npc.path_fail_cooldown = 0.0f;
 		npc.state_hold_timer = 0.0f;
 		g_npc_bt.ResetNpc(npc);
 
@@ -1387,6 +1405,15 @@ static void OnEnterNpcState(SERVER_NPC& npc, char old_state, char new_state)
 		npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;   // 진입 즉시 A* 1회
 		break;
 
+	case NPC_STATE_INVESTIGATE:
+		npc.hearing.reached    = false;
+		npc.hearing.look_timer = 0.0f;
+
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+		npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;
+		break;
+
 	case NPC_STATE_SEARCH:
 		npc.search.has_target = false;
 		npc.search.wait_timer = 0.0f;
@@ -1596,6 +1623,71 @@ static void ApplyDamage(const Room& r, SERVER_NPC& npc, short damage, int attack
 	}
 }
 
+static const char* NpcSoundTypeName(NpcSoundType t)
+{
+	switch (t) {
+	case NpcSoundType::Footstep:  return "footstep";
+	case NpcSoundType::Gunshot:   return "gunshot";
+	case NpcSoundType::Explosion: return "explosion";
+	default:                      return "none";
+	}
+}
+
+// 한 룸 안에서 소리를 전파한다. npc_thread 안에서만 호출되므로 동기화가 필요 없다.
+static void ReportNpcSound(Room& r, const XMFLOAT3& pos, NpcSoundType type, float radius)
+{
+	const float radius_sq = radius * radius;
+
+#if NPC_SOUND_DEBUG_LOG
+	int         heard = 0;
+	std::string ids;
+#endif
+
+	for (auto& npc : r.npcs) {
+		if (!npc.alive) continue;
+		if (NPC_STATE_DIE == npc.state) continue;
+
+		// 1. 들리는 거리인가 — NPC 현재 위치 기준
+		const float dx = pos.x - npc.position.x;
+		const float dz = pos.z - npc.position.z;
+		if (dx * dx + dz * dz > radius_sq) continue;
+
+		// 2. 가서 확인할 수 있는 곳인가 — 스폰 기준 리시 안.
+		//    이걸 빼면 Investigate 진입 -> 리시 이탈 -> Return 을 무한 왕복한다.
+		const float sx = pos.x - npc.spawn_position.x;
+		const float sz = pos.z - npc.spawn_position.z;
+		if (sx * sx + sz * sz > NPC_LEASH_RANGE_SQ) continue;
+
+		// 3. 이미 플레이어를 보고 있으면 소리는 의미가 없다
+		if (npc.percep.can_see) continue;
+
+		// 최신 소리로 덮어쓴다
+		npc.hearing.has_sound  = true;
+		npc.hearing.type       = type;
+		npc.hearing.position   = pos;
+		npc.hearing.age        = 0.0f;
+		npc.hearing.reached    = false;   // 새 지점이므로 다시 가야 한다
+		npc.hearing.look_timer = 0.0f;
+
+#if NPC_SOUND_DEBUG_LOG
+		++heard;
+		if (heard <= 12) {
+			if (!ids.empty()) ids += ",";
+			ids += std::to_string(static_cast<int>(npc.id));
+		}
+#endif
+	}
+
+#if NPC_SOUND_DEBUG_LOG
+	if (heard > 0) {
+		std::cout << "[SOUND] " << NpcSoundTypeName(type)
+			<< " at (" << pos.x << ", " << pos.z << ") r=" << radius
+			<< " -> " << heard << " npc: " << ids << (heard > 12 ? " ..." : "") << "\n";
+	}
+#endif
+}
+
+
 static int AddInventoryItem(std::array<ItemSlot, INVENTORY_SIZE>& inv, ItemID item, int count);
 
 static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
@@ -1603,6 +1695,8 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 	switch (e.type) {
 	case NpcInputEvent::HIT:
 	{
+		ReportNpcSound(r, e.ray_origin, NpcSoundType::Gunshot, NPC_HEAR_GUNSHOT_RANGE);
+
 		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
 		XMVECTOR dir = XMVector3Normalize(XMVectorSet(e.ray_direction.x, e.ray_direction.y, e.ray_direction.z, 0.0f));
 
@@ -1788,6 +1882,8 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		const XMFLOAT3 C = e.explode_pos;
 		GrenadeSpec g = GetGrenadeSpec();
 
+		ReportNpcSound(r, C, NpcSoundType::Explosion, NPC_HEAR_EXPLOSION_RANGE);
+
 		// ---- 플레이어 피해 ----
 		for (int k = 0; k < ROOM_CAPACITY; ++k) {
 			int i = r.participants[k];
@@ -1889,9 +1985,23 @@ static void UpdateNpcPerception(const Room& r, SERVER_NPC& npc, float dt)
 		npc.return_ignore_timer -= dt;
 		if (npc.return_ignore_timer < 0.0f) npc.return_ignore_timer = 0.0f;
 	}
+	if (npc.path_fail_cooldown > 0.0f) {
+		npc.path_fail_cooldown -= dt;
+		if (npc.path_fail_cooldown < 0.0f) npc.path_fail_cooldown = 0.0f;
+	}
 
 	if (!p.can_see && npc.has_last_seen_player)
 		npc.lose_sight_timer += dt;
+
+	if (npc.hearing.has_sound) {
+		npc.hearing.age += dt;
+
+		if (NPC_STATE_INVESTIGATE != npc.state &&
+			npc.hearing.age >= NPC_SOUND_MEMORY_DURATION)
+		{
+			npc.hearing = NpcHearingMemory{};
+		}
+	}
 
 	p.outside_leash = IsOutsideLeashRange(npc);
 	p.near_spawn = IsNearSpawn(npc);
@@ -1919,8 +2029,10 @@ static void UpdateNpcPerception(const Room& r, SERVER_NPC& npc, float dt)
 	p.can_shoot = p.can_see && CanShootPlayer(npc, p.target_pos);
 	p.out_of_attack_range = IsPlayerOutOfAttackRange(npc, p.target_pos);
 
-	if (p.can_see)
+	if (p.can_see) {
 		RefreshLastSeenPlayer(npc, p.target_pos);
+		npc.hearing = NpcHearingMemory{};   // 직접 보고 있으면 소리는 의미가 없다
+	}
 
 	p.has_recent_sight = HasRecentLastSeenPlayer(npc);
 }
@@ -2014,6 +2126,14 @@ static void UpdateNpcReturn(const Room& r, SERVER_NPC& npc, float dt)
 
 	// 도착했으면 더 움직이지 않는다
 	if (npc.percep.near_spawn) {
+		if (npc.has_last_seen_player) {
+			npc.hp = npc.max_hp;
+
+			npc.has_last_seen_player = false;
+			npc.lose_sight_timer = 0.0f;
+			npc.return_ignore_timer = NPC_RETURN_IGNORE_DURATION;
+		}
+
 		npc.waypoints.clear();
 		npc.way_idx = 0;
 
@@ -2186,6 +2306,26 @@ static void UpdateNpcDie(const Room& r, SERVER_NPC& npc, float dt)
 	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
 }
 
+static void NotifyNpcPathFail(SERVER_NPC& npc)
+{
+	if (++npc.path_fail_count < NPC_PATH_FAIL_LIMIT)
+		return;
+
+	npc.path_fail_count    = 0;
+	npc.path_fail_cooldown = NPC_PATH_FAIL_COOLDOWN;
+
+	std::cout << "[NPC " << npc.id << "] path fail x" << NPC_PATH_FAIL_LIMIT
+		<< " - " << NPC_PATH_FAIL_COOLDOWN << "s 대기  pos=("
+		<< npc.position.x << ", " << npc.position.z
+		<< ")  polyID=" << g_astar.FindPolyID(npc.position) << "\n";
+}
+
+static void NotifyNpcPathSuccess(SERVER_NPC& npc)
+{
+	npc.path_fail_count = 0;
+}
+
+
 // NPC별 결정적 난수. 시드를 npc.id에서 뽑으므로 서버를 재시작해도 같은 순서로 돈다.
 static float NextNpcSearchRandom01(SERVER_NPC& npc)
 {
@@ -2208,6 +2348,7 @@ static bool BuildNpcSearchTarget(SERVER_NPC& npc)
 		// 후보가 없다 — 잠시 뒤 다시 시도
 		npc.search.has_target = false;
 		npc.search.wait_timer = NPC_SEARCH_RETRY_WAIT;
+		NotifyNpcPathFail(npc);
 		return false;
 	}
 
@@ -2218,11 +2359,6 @@ static bool BuildNpcSearchTarget(SERVER_NPC& npc)
 	npc.waypoints.clear();
 	npc.way_idx           = 0;
 	npc.path_update_timer = NPC_PATH_UPDATE_INTERVAL;   // 즉시 A* 1회
-
-	// 테스트용 로그
-	std::cout << "[NPC " << npc.id << "] search -> ("
-		<< point.x << ", " << point.z << ")\n";
-
 	return true;
 }
 
@@ -2268,8 +2404,10 @@ static void UpdateNpcSearch(const Room& r, SERVER_NPC& npc, float dt)
 
 	// 4. 주기적 A* 재탐색
 	npc.path_update_timer += dt;
-	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL) {
-		npc.path_update_timer -= NPC_PATH_UPDATE_INTERVAL;
+
+	// 경로가 비어 있으면 주기를 기다리지 않고 바로 계산한다.
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL || npc.waypoints.empty()) {
+		npc.path_update_timer = 0.0f;
 		npc.waypoints = g_astar.FindPath(npc.position, s.target);
 		npc.way_idx   = 0;
 
@@ -2277,11 +2415,14 @@ static void UpdateNpcSearch(const Room& r, SERVER_NPC& npc, float dt)
 		if (npc.waypoints.empty()) {
 			s.has_target = false;
 			s.wait_timer = NPC_SEARCH_RETRY_WAIT;
+			NotifyNpcPathFail(npc);
 
 			ApplyNpcSlide(npc, zero);
 			ResolveNpcCollision(npc, npc.yaw);
 			return;
 		}
+
+		NotifyNpcPathSuccess(npc);
 	}
 
 	// 5. waypoint 따라가기 (UpdateNpcRun과 동일 구조)
@@ -2313,6 +2454,115 @@ static void UpdateNpcSearch(const Room& r, SERVER_NPC& npc, float dt)
 	if (!is_moving) {
 		s.has_target = false;
 		s.wait_timer = NPC_SEARCH_RETRY_WAIT;
+		NotifyNpcPathFail(npc);
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	npc.yaw = std::atan2(look.x, look.z);
+
+	ApplyNpcSlide(npc, move_dir);
+	npc.position.x += move_dir.x * NPC_MOVE_SPEED * dt;
+	npc.position.z += move_dir.z * NPC_MOVE_SPEED * dt;
+	ResolveNpcCollision(npc, npc.yaw);
+}
+
+
+static void UpdateNpcInvestigate(const Room& r, SERVER_NPC& npc, float dt)
+{
+	(void)r;
+
+	NpcHearingMemory& hear = npc.hearing;
+
+	XMFLOAT3 zero = { 0.0f, 0.0f, 0.0f };
+
+	// 1. 기억이 이미 지워졌다 — BT가 다음 틱에 다른 브랜치로 보낸다
+	if (!hear.has_sound) {
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	// 2. 도착했다 — 잠시 주변을 살핀 뒤 기억을 버린다
+	if (hear.reached) {
+		hear.look_timer += dt;
+
+		if (hear.look_timer >= NPC_INVESTIGATE_LOOK_DURATION) {
+			hear = NpcHearingMemory{};
+
+			npc.waypoints.clear();
+			npc.way_idx = 0;
+		}
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	// 3. 도착 판정
+	float dx = hear.position.x - npc.position.x;
+	float dz = hear.position.z - npc.position.z;
+
+	if (dx * dx + dz * dz < NPC_INVESTIGATE_REACH_DIST_SQ) {
+		hear.reached    = true;
+		hear.look_timer = 0.0f;
+
+		npc.waypoints.clear();
+		npc.way_idx = 0;
+
+		ApplyNpcSlide(npc, zero);
+		ResolveNpcCollision(npc, npc.yaw);
+		return;
+	}
+
+	npc.path_update_timer += dt;
+
+	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL || npc.waypoints.empty()) {
+		npc.path_update_timer = 0.0f;
+		npc.waypoints = g_astar.FindPath(npc.position, hear.position);
+		npc.way_idx   = 0;
+
+		if (npc.waypoints.empty()) {
+			hear = NpcHearingMemory{};
+			NotifyNpcPathFail(npc);
+
+			ApplyNpcSlide(npc, zero);
+			ResolveNpcCollision(npc, npc.yaw);
+			return;
+		}
+
+		NotifyNpcPathSuccess(npc);
+	}
+
+	XMFLOAT3 look      = { 0.0f, 0.0f, 1.0f };
+	XMFLOAT3 move_dir  = { 0.0f, 0.0f, 0.0f };
+	bool     is_moving = false;
+
+	while (npc.way_idx < (int)npc.waypoints.size()) {
+		const XMFLOAT3& wp = npc.waypoints[npc.way_idx];
+		float wdx = wp.x - npc.position.x;
+		float wdz = wp.z - npc.position.z;
+		float wd_sq = wdx * wdx + wdz * wdz;
+
+		if (wd_sq < NPC_WAYPOINT_REACH_DIST_SQ) {
+			npc.way_idx++;
+		}
+		else {
+			float wd = std::sqrt(wd_sq);
+			look.x = wdx / wd;
+			look.y = 0.0f;
+			look.z = wdz / wd;
+			move_dir = look;
+			is_moving = true;
+			break;
+		}
+	}
+
+	if (!is_moving) {
+		hear = NpcHearingMemory{};
+		NotifyNpcPathFail(npc);
 
 		ApplyNpcSlide(npc, zero);
 		ResolveNpcCollision(npc, npc.yaw);
@@ -2338,6 +2588,7 @@ static void UpdateNpc(const Room& r, SERVER_NPC& npc, float dt)
 	case NPC_STATE_RUN:    UpdateNpcRun(r, npc, dt);    break;
 	case NPC_STATE_RETURN: UpdateNpcReturn(r, npc, dt); break;
 	case NPC_STATE_SEARCH: UpdateNpcSearch(r, npc, dt); break;
+	case NPC_STATE_INVESTIGATE: UpdateNpcInvestigate(r, npc, dt); break;
 	case NPC_STATE_ATTACK:
 	case NPC_STATE_RELOAD: UpdateNpcAttack(r, npc, dt); break;
 	case NPC_STATE_DIE:    UpdateNpcDie(r, npc, dt);    break;
@@ -3548,12 +3799,32 @@ static void spawn_room_npcs(Room& r)
 		npc.state = NPC_STATE_IDLE;
 		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;
+
+		if (g_astar.FindPolyID(npc.spawn_position) == -1) {
+			XMFLOAT3 snapped;
+			if (g_astar.FindNearestPointOnMesh(npc.spawn_position, snapped)) {
+				std::cout << "[SPAWN] NPC " << i << " 내비메시 밖 ("
+					<< npc.spawn_position.x << ", " << npc.spawn_position.z
+					<< ") -> (" << snapped.x << ", " << snapped.z << ") 스냅\n";
+
+				npc.spawn_position.x = snapped.x;
+				npc.spawn_position.z = snapped.z;
+				npc.position = npc.spawn_position;
+			}
+			else {
+				std::cout << "[SPAWN] NPC " << i
+					<< " 내비메시 밖인데 스냅 실패 (내비메시 미로드?)\n";
+			}
+		}
 		npc.yaw = 0.0f;
 		npc.current_ammo = GetNpcWeaponSpec(npc).magazineSize;
 		GenerateNpcLoot(npc);
 
 		npc.percep = NpcPerception{};
 		npc.search = NpcSearchMemory{};
+		npc.hearing = NpcHearingMemory{};
+		npc.path_fail_count = 0;
+		npc.path_fail_cooldown = 0.0f;
 		npc.state_hold_timer = 0.0f;
 		g_npc_bt.ResetNpc(npc);
 
@@ -3593,6 +3864,7 @@ int main()
 	*/
 
 	g_astar.LoadNavMeshFromFile("Model/NavMeshData.bin");
+	g_astar.DumpNavMeshDiagnostics();
 	std::cout << "NavMesh loaded from Model / NavMeshData.bin\n";
 
 	// ===== 룸 초기화 (룸 0 고정 생성) =====

@@ -28,6 +28,26 @@ struct NpcPerception
     bool     near_spawn = false;
 };
 
+enum class NpcSoundType : uint8_t
+{
+    None = 0,
+    Footstep,      // 4단계 예정
+    Gunshot,
+    Explosion
+};
+
+struct NpcHearingMemory
+{
+    bool         has_sound = false;
+    NpcSoundType type      = NpcSoundType::None;
+    XMFLOAT3     position  = { 0.0f, 0.0f, 0.0f };
+    float        age       = 0.0f;   // 들은 뒤 흐른 시간
+
+    // 조사 진행 상태 (UpdateNpcInvestigate가 소유)
+    bool         reached    = false;
+    float        look_timer = 0.0f;  // 도착 후 주변을 살핀 시간
+};
+
 // 수색(Search) 기억. UpdateNpcSearch()가 소유하고, BT는 읽지 않는다.
 struct NpcSearchMemory
 {
@@ -63,6 +83,11 @@ struct SERVER_NPC {
 
     NpcPerception percep;
     NpcSearchMemory search;
+    NpcHearingMemory hearing;
+
+    // 경로 탐색 정체 감지. 연속 실패가 쌓이면 한동안 시도를 멈춘다.
+    int   path_fail_count    = 0;
+    float path_fail_cooldown = 0.0f;
     std::array<uint8_t, NPC_BT_MAX_COMPOSITES> bt_running_child;
     float state_hold_timer;
 

@@ -424,3 +424,119 @@ bool AstarNavigation::FindSearchPointAround(const XMFLOAT3& center,
     outPoint = mesh[candidates[selectedIndex]].centroid;
     return true;
 }
+
+bool AstarNavigation::FindNearestPointOnMesh(const XMFLOAT3& pos, XMFLOAT3& outPoint) const
+{
+    if (mesh.empty())
+        return false;
+
+    int   bestIndex = -1;
+    float bestSq    = 0.0f;
+
+    for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+    {
+        const XMFLOAT3& c = mesh[i].centroid;
+
+        const float dx = c.x - pos.x;
+        const float dz = c.z - pos.z;
+        const float dsq = dx * dx + dz * dz;
+
+        if (bestIndex < 0 || dsq < bestSq)
+        {
+            bestIndex = i;
+            bestSq    = dsq;
+        }
+    }
+
+    if (bestIndex < 0)
+        return false;
+
+    outPoint = mesh[bestIndex].centroid;
+    return true;
+}
+
+void AstarNavigation::DumpNavMeshDiagnostics() const
+{
+    const int n = static_cast<int>(mesh.size());
+
+    std::cout << "[NAV] polygons = " << n << "\n";
+    if (n == 0) return;
+
+    int degCount[4] = { 0, 0, 0, 0 };
+    for (const auto& p : mesh)
+    {
+        int d = 0;
+        for (int k = 0; k < 3; ++k)
+            if (p.neighborIDs[k] >= 0) ++d;
+        ++degCount[d];
+    }
+    std::cout << "[NAV] 이웃 0개=" << degCount[0]
+        << "  1개=" << degCount[1]
+        << "  2개=" << degCount[2]
+        << "  3개=" << degCount[3] << "\n";
+
+    std::vector<int> comp(n, -1);
+    std::vector<int> sizes;
+    std::vector<int> stack;
+
+    for (int i = 0; i < n; ++i)
+    {
+        if (comp[i] != -1) continue;
+
+        const int cid = static_cast<int>(sizes.size());
+        int cnt = 0;
+
+        stack.clear();
+        stack.push_back(i);
+        comp[i] = cid;
+
+        while (!stack.empty())
+        {
+            const int cur = stack.back();
+            stack.pop_back();
+            ++cnt;
+
+            for (int k = 0; k < 3; ++k)
+            {
+                const int nb = mesh[cur].neighborIDs[k];
+                if (nb >= 0 && nb < n && comp[nb] == -1)
+                {
+                    comp[nb] = cid;
+                    stack.push_back(nb);
+                }
+            }
+        }
+        sizes.push_back(cnt);
+    }
+
+    std::vector<int> sorted = sizes;
+    std::sort(sorted.rbegin(), sorted.rend());
+
+    std::cout << "[NAV] 연결 성분 = " << sizes.size() << "개,  상위 10: ";
+    for (int i = 0; i < static_cast<int>(sorted.size()) && i < 10; ++i)
+        std::cout << sorted[i] << " ";
+    std::cout << "\n";
+
+    std::map<std::pair<int, int>, int> edgeCount;
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            const int v1 = mesh[i].vindex[j];
+            const int v2 = mesh[i].vindex[(j + 1) % 3];
+            ++edgeCount[{ std::min(v1, v2), std::max(v1, v2) }];
+        }
+    }
+
+    int e1 = 0, e2 = 0, e3 = 0;
+    for (const auto& e : edgeCount)
+    {
+        if (e.second == 1)      ++e1;
+        else if (e.second == 2) ++e2;
+        else                    ++e3;
+    }
+
+    std::cout << "[NAV] 엣지: 1폴리=" << e1 << " (경계)"
+        << "  2폴리=" << e2 << " (정상 연결)"
+        << "  3폴리이상=" << e3 << " (FindNeighbor가 버림)\n";
+}

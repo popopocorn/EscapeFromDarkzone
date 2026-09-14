@@ -43,6 +43,10 @@ public:
     bool              FindSearchPointAround(const XMFLOAT3& center,
                                             float minRadius, float maxRadius,
                                             float random01, XMFLOAT3& outPoint) const;
+
+    bool              FindNearestPointOnMesh(const XMFLOAT3& pos, XMFLOAT3& outPoint) const;
+
+    void              DumpNavMeshDiagnostics() const;
 };
 
 struct AStarNode {

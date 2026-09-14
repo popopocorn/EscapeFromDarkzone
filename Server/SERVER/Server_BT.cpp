@@ -190,11 +190,27 @@ static bool CondShouldChase(NpcBtContext& ctx)
     return n.percep.can_see || n.percep.has_recent_sight;
 }
 
+static bool CondShouldInvestigate(NpcBtContext& ctx)
+{
+    const SERVER_NPC& n = *ctx.npc;
+
+    if (!n.hearing.has_sound) return false;
+
+    if (n.path_fail_cooldown > 0.0f) return false;
+
+    return n.return_ignore_timer <= 0.0f;
+}
+
 static bool CondShouldSearch(NpcBtContext& ctx)
 {
+    const SERVER_NPC& n = *ctx.npc;
+
+    // 길을 못 찾는 상태라면 헛돌지 말고 쉰다 (Idle로 떨어진다)
+    if (n.path_fail_cooldown > 0.0f) return false;
+
     // 위 브랜치(Return / Reload / Attack / Chase)가 이미 다 걸러낸 뒤에 온다.
     // 남는 판단은 하나뿐 — 스폰 복귀 직후에는 잠깐 제자리에서 쉰다.
-    return ctx.npc->return_ignore_timer <= 0.0f;
+    return n.return_ignore_timer <= 0.0f;
 }
 
 template <char STATE> static BtStatus ActSelectState(NpcBtContext& ctx)
@@ -248,6 +264,10 @@ void NpcBehaviorTree::Build()
     root->AddChild(MakeBranch("ChaseBranch", AllocSlot(),
         "ShouldChase", &CondShouldChase,
         "SelectChase", &ActSelectState<NPC_STATE_RUN>));
+ 
+    root->AddChild(MakeBranch("InvestigateBranch", AllocSlot(),
+        "ShouldInvestigate", &CondShouldInvestigate,
+        "SelectInvestigate", &ActSelectState<NPC_STATE_INVESTIGATE>));
  
     root->AddChild(MakeBranch("SearchBranch", AllocSlot(),
         "ShouldSearch", &CondShouldSearch,
