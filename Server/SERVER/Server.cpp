@@ -309,6 +309,12 @@ public:
 	char  player_state;
 	short weapon_type;    // ItemType (기본 PISTOL)
 	short weapon_grade;   // ItemGrade (기본 GRADE_1)
+
+	// 방어구 장착 단계 (0 = 미착용, [1, 4] ).
+	short helmet_grade = 0;
+	short body_grade   = 0;
+	short shoes_grade  = 0;
+
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -617,6 +623,10 @@ static void start_new_round(Room& r)
 			clients[cid].hp = clients[cid].max_hp;
 			clients[cid].in_round.store(true);
 			clients[cid].init_combat_resources();
+
+			clients[cid].helmet_grade = 0;
+			clients[cid].body_grade   = 0;
+			clients[cid].shoes_grade  = 0;
 
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
 			clients[cid]._inventory.fill(ItemSlot{});
@@ -1254,6 +1264,11 @@ static void NpcFireAtPlayer(const Room& r, SERVER_NPC& npc, int target_id)
 			std::lock_guard<std::mutex> lk(clients[target_cid]._s_lock);
 			if (clients[target_cid]._state == ST_INGAME) {
 
+				// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+				dmg = ApplyArmorReduction(dmg,
+					clients[target_cid].helmet_grade,
+					clients[target_cid].body_grade);
+
 				if (clients[target_cid].godmode.load()) dmg = 0;		// 무적 모드 (디버그용)
 
 				clients[target_cid].hp -= dmg;
@@ -1671,6 +1686,11 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 				float dist = DistanceXZ(ppos, C);   // XZ 거리
 				short dmg = ComputeGrenadeDamage(g, dist);
 				if (dmg <= 0) continue;
+
+				// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+				dmg = ApplyArmorReduction(dmg,
+					clients[i].helmet_grade,
+					clients[i].body_grade);
 
 				if (clients[i].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
@@ -2611,13 +2631,15 @@ void process_packet(int c_id, char* packet)
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
 		if (false == clients[c_id].in_round.load()) break;
 
-		int sroom;
+		int   sroom;
+		short shoes_lv = 0;		// 신발 단계 (0 = 미착용)
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
 
 			sroom = clients[c_id].room_id;
+			shoes_lv = clients[c_id].shoes_grade;		// 같은 락 구간에서 같이 읽는다
 		}
 
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -2678,10 +2700,16 @@ void process_packet(int c_id, char* packet)
 
 		ApplySlide(c_id, dirX, dirZ);
 
-		// 이동 속도 (클라이언트와 동일하게 8.0f)
+		// 기본 이동 속도
 		constexpr float MOVE_SPEED = 5.0f;
-		clients[c_id].x += dirX * MOVE_SPEED * fDeltaTime;
-		clients[c_id].z += dirZ * MOVE_SPEED * fDeltaTime;
+
+		// 신발 장비 보정 (1~4단계 = 3 / 5 / 7 / 10% 증가). 미착용이면 1.0배.
+		if (shoes_lv < 0 || shoes_lv > 4) shoes_lv = 0;
+		const float move_speed = MOVE_SPEED *
+			(1.0f + SHOES_SPEED_PERCENT[shoes_lv] * 0.01f);
+
+		clients[c_id].x += dirX * move_speed * fDeltaTime;
+		clients[c_id].z += dirZ * move_speed * fDeltaTime;
 
 		// 충돌 처리: 위치 보정 + 노멀 누적
 		ResolvePlayerCollision(c_id, fYawRad);
@@ -2812,7 +2840,33 @@ void process_packet(int c_id, char* packet)
 			}
 		}
 
-		// 3) 결과물 장비 슬롯 통보
+		// 3) 서버 측 장착 상태 갱신
+		ArmorSlot armor_slot  = ArmorSlot::NONE;
+		int       armor_grade = 0;
+		if (ClassifyArmor(recipe->result, armor_slot, armor_grade)) {
+			switch (armor_slot) {
+			case ArmorSlot::HELMET:
+				clients[c_id].helmet_grade = static_cast<short>(armor_grade);
+				break;
+			case ArmorSlot::BODY:
+				clients[c_id].body_grade = static_cast<short>(armor_grade);
+				break;
+			case ArmorSlot::SHOES:
+				clients[c_id].shoes_grade = static_cast<short>(armor_grade);
+				break;
+			default:
+				break;
+			}
+
+			std::cout << "[EQUIP] id:" << c_id
+				<< " slot:" << static_cast<int>(armor_slot)
+				<< " grade:" << armor_grade
+				<< "  -> helmet:" << clients[c_id].helmet_grade
+				<< " body:" << clients[c_id].body_grade
+				<< " shoes:" << clients[c_id].shoes_grade << "\n";
+		}
+
+		// 4) 결과물 장비 슬롯 통보
 		clients[c_id].send_equipment_update_packet(recipe->result);
 
 		std::cout << "[CRAFT] id:" << c_id
@@ -2980,6 +3034,11 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
+
+					// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+					dmg = ApplyArmorReduction(dmg,
+						clients[best_id].helmet_grade,
+						clients[best_id].body_grade);
 
 					if (clients[best_id].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
@@ -3217,6 +3276,10 @@ void disconnect(int c_id)
 
 		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
 		clients[c_id].loot_dropped = false;
+
+		clients[c_id].helmet_grade = 0;					// 방어구 초기화
+		clients[c_id].body_grade   = 0;
+		clients[c_id].shoes_grade  = 0;
 
 		// 룸 바인딩 해제 표시. 
 		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.

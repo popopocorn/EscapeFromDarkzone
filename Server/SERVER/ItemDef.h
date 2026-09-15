@@ -254,3 +254,59 @@ inline const CraftRecipe* FindCraftRecipe(ItemID target) {
 	}
 	return nullptr;
 }
+
+constexpr int ARMOR_DR_PERCENT[5]    = { 0, 5, 7, 10, 15 };   // 헬멧 / 상의 공용 (합산 적용)
+constexpr int SHOES_SPEED_PERCENT[5] = { 0, 3, 5,  7, 10 };   // 신발 (합산 없음)
+
+enum class ArmorSlot : int {
+	NONE   = -1,
+	HELMET = 0,
+	BODY   = 1,
+	SHOES  = 2,
+};
+
+inline bool ClassifyArmor(ItemID id, ArmorSlot& outSlot, int& outGrade)
+{
+	const int v = static_cast<int>(id);
+
+	if (v >= static_cast<int>(ItemID::ARMOR_HELMET_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_HELMET_04)) {
+		outSlot  = ArmorSlot::HELMET;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_HELMET_01) + 1;
+		return true;
+	}
+
+	if (v >= static_cast<int>(ItemID::ARMOR_BODY_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_BODY_04)) {
+		outSlot  = ArmorSlot::BODY;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_BODY_01) + 1;
+		return true;
+	}
+
+	if (v >= static_cast<int>(ItemID::ARMOR_SHOES_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_SHOES_04)) {
+		outSlot  = ArmorSlot::SHOES;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_SHOES_01) + 1;
+		return true;
+	}
+
+	outSlot  = ArmorSlot::NONE;
+	outGrade = 0;
+	return false;
+}
+
+inline short ApplyArmorReduction(short dmg, int helmet_grade, int body_grade)
+{
+	if (dmg <= 0) return 0;
+
+	if (helmet_grade < 0 || helmet_grade > 4) helmet_grade = 0;
+	if (body_grade   < 0 || body_grade   > 4) body_grade   = 0;
+
+	int dr = ARMOR_DR_PERCENT[helmet_grade] + ARMOR_DR_PERCENT[body_grade];
+	if (dr > 100) dr = 100;
+
+	int result = (static_cast<int>(dmg) * (100 - dr)) / 100;
+	if (result < 1) result = 1;
+
+	return static_cast<short>(result);
+}
