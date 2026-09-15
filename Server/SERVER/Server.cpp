@@ -623,6 +623,7 @@ static void start_new_round(Room& r)
 			clients[cid].hp = clients[cid].max_hp;
 			clients[cid].in_round.store(true);
 			clients[cid].init_combat_resources();
+			clients[cid].player_state = PLAYER_STATE_IDLE;
 
 			clients[cid].helmet_grade = 0;
 			clients[cid].body_grade   = 0;
