@@ -334,6 +334,12 @@ public:
 	char  player_state;
 	short weapon_type;    // ItemType (기본 PISTOL)
 	short weapon_grade;   // ItemGrade (기본 GRADE_1)
+
+	// 방어구 장착 단계 (0 = 미착용, 1~4). _s_lock 보호 대상.
+	short helmet_grade = 0;
+	short body_grade   = 0;
+	short shoes_grade  = 0;
+
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -649,6 +655,7 @@ static void start_new_round(Room& r)
 			clients[cid].z = sp.z;
 			clients[cid].y = 0.1f;
 			clients[cid]._state = ST_INGAME;
+			clients[cid].player_state = PLAYER_STATE_IDLE;
 			clients[cid].escaped = false;
 			clients[cid].in_escape_zone = false;
 			clients[cid].dead = false;
@@ -657,11 +664,16 @@ static void start_new_round(Room& r)
 			clients[cid].in_round.store(true);
 			clients[cid].init_combat_resources();
 
+			// 방어구는 라운드마다 초기화 (획득 경로가 제작뿐이므로 이월시키지 않는다)
+			clients[cid].helmet_grade = 0;
+			clients[cid].body_grade   = 0;
+			clients[cid].shoes_grade  = 0;
+
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
 			clients[cid]._inventory.fill(ItemSlot{});
-			//clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
-			//clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
-			//clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+			clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+			clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+			clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			//clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
 		}
 
@@ -1292,6 +1304,11 @@ static void NpcFireAtPlayer(const Room& r, SERVER_NPC& npc, int target_id)
 			std::lock_guard<std::mutex> lk(clients[target_cid]._s_lock);
 			if (clients[target_cid]._state == ST_INGAME) {
 
+				// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+				dmg = ApplyArmorReduction(dmg,
+					clients[target_cid].helmet_grade,
+					clients[target_cid].body_grade);
+
 				if (clients[target_cid].godmode.load()) dmg = 0;		// 무적 모드 (디버그용)
 
 				clients[target_cid].hp -= dmg;
@@ -1415,6 +1432,7 @@ static void OnEnterNpcState(SERVER_NPC& npc, char old_state, char new_state)
 		break;
 
 	case NPC_STATE_SEARCH:
+		// seed는 보존한다. 지우면 매번 같은 지점만 돌게 된다.
 		npc.search.has_target = false;
 		npc.search.wait_timer = 0.0f;
 
@@ -1695,6 +1713,7 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 	switch (e.type) {
 	case NpcInputEvent::HIT:
 	{
+		// 총성 — 명중 여부와 무관하게 총구 위치에서 난다
 		ReportNpcSound(r, e.ray_origin, NpcSoundType::Gunshot, NPC_HEAR_GUNSHOT_RANGE);
 
 		XMVECTOR origin = XMVectorSet(e.ray_origin.x, e.ray_origin.y, e.ray_origin.z, 0.0f);
@@ -1903,6 +1922,11 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 				short dmg = ComputeGrenadeDamage(g, dist);
 				if (dmg <= 0) continue;
 
+				// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+				dmg = ApplyArmorReduction(dmg,
+					clients[i].helmet_grade,
+					clients[i].body_grade);
+
 				if (clients[i].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
 				clients[i].hp -= dmg;
@@ -1993,6 +2017,9 @@ static void UpdateNpcPerception(const Room& r, SERVER_NPC& npc, float dt)
 	if (!p.can_see && npc.has_last_seen_player)
 		npc.lose_sight_timer += dt;
 
+	// 청각 기억 노화.
+	// 조사하러 가는 중이라면 목적지에 닿을 때까지 기억을 붙잡는다.
+	// (안 그러면 가는 도중에 목적지를 잊는다)
 	if (npc.hearing.has_sound) {
 		npc.hearing.age += dt;
 
@@ -2126,6 +2153,13 @@ static void UpdateNpcReturn(const Room& r, SERVER_NPC& npc, float dt)
 
 	// 도착했으면 더 움직이지 않는다
 	if (npc.percep.near_spawn) {
+		// 복귀 완료 처리는 여기서 한 번만 한다.
+		//
+		// OnEnterNpcState(IDLE)에 맡기면 안 된다. 트리에서 Search 브랜치가
+		// Idle보다 위에 있어서, 복귀를 마친 NPC는 IDLE을 거치지 않고 곧장
+		// SEARCH로 간다. 그러면 has_last_seen_player가 영영 지워지지 않고
+		// CondShouldReturn의 마지막 조건이 계속 참이 되어
+		// RETURN <-> SEARCH 를 state_hold_timer 주기로 무한 왕복한다.
 		if (npc.has_last_seen_player) {
 			npc.hp = npc.max_hp;
 
@@ -2306,6 +2340,9 @@ static void UpdateNpcDie(const Room& r, SERVER_NPC& npc, float dt)
 	// 향후 NPC 리스폰이 도입되면 init 함수에서 다시 채워야 함.
 }
 
+// 경로 탐색 실패/성공 집계.
+// 내비메시 밖에 서 있는 NPC는 FindPath가 늘 빈 벡터를 돌려주므로,
+// 이걸 세지 않으면 목표 재설정과 상태 전이를 무한히 반복한다.
 static void NotifyNpcPathFail(SERVER_NPC& npc)
 {
 	if (++npc.path_fail_count < NPC_PATH_FAIL_LIMIT)
@@ -2470,6 +2507,8 @@ static void UpdateNpcSearch(const Room& r, SERVER_NPC& npc, float dt)
 }
 
 
+// 들린 소리 위치로 가서 주변을 살핀다. UpdateNpcSearch와 같은 골격이고,
+// 목표가 "랜덤 지점"이 아니라 "소리 위치"이며 확인이 끝나면 기억을 지운다는 점만 다르다.
 static void UpdateNpcInvestigate(const Room& r, SERVER_NPC& npc, float dt)
 {
 	(void)r;
@@ -2517,8 +2556,11 @@ static void UpdateNpcInvestigate(const Room& r, SERVER_NPC& npc, float dt)
 		return;
 	}
 
+	// 4. 주기적 A* 재탐색. 갈 수 없는 곳이면 조사를 포기한다.
 	npc.path_update_timer += dt;
 
+	// 경로가 비어 있으면 주기를 기다리지 않고 바로 계산한다.
+	// (기다리면 5번의 waypoint 루프가 빈 경로를 보고 곧장 포기해 버린다)
 	if (npc.path_update_timer >= NPC_PATH_UPDATE_INTERVAL || npc.waypoints.empty()) {
 		npc.path_update_timer = 0.0f;
 		npc.waypoints = g_astar.FindPath(npc.position, hear.position);
@@ -2536,6 +2578,7 @@ static void UpdateNpcInvestigate(const Room& r, SERVER_NPC& npc, float dt)
 		NotifyNpcPathSuccess(npc);
 	}
 
+	// 5. waypoint 따라가기
 	XMFLOAT3 look      = { 0.0f, 0.0f, 1.0f };
 	XMFLOAT3 move_dir  = { 0.0f, 0.0f, 0.0f };
 	bool     is_moving = false;
@@ -2560,6 +2603,7 @@ static void UpdateNpcInvestigate(const Room& r, SERVER_NPC& npc, float dt)
 		}
 	}
 
+	// 6. 경로를 다 소진했는데 못 닿았다 — 포기
 	if (!is_moving) {
 		hear = NpcHearingMemory{};
 		NotifyNpcPathFail(npc);
@@ -3029,13 +3073,15 @@ void process_packet(int c_id, char* packet)
 		// 라운드 시작 전에는 이동 무시 (서버 가드)
 		if (false == clients[c_id].in_round.load()) break;
 
-		int sroom;
+		int   sroom;
+		short shoes_lv = 0;		// 신발 단계 (0 = 미착용)
 		{ 
 			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
 			if (clients[c_id].dead) 
 				break; 
 
 			sroom = clients[c_id].room_id;
+			shoes_lv = clients[c_id].shoes_grade;		// 같은 락 구간에서 같이 읽는다
 		}
 
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
@@ -3096,10 +3142,16 @@ void process_packet(int c_id, char* packet)
 
 		ApplySlide(c_id, dirX, dirZ);
 
-		// 이동 속도 (클라이언트와 동일하게 8.0f)
+		// 기본 이동 속도. 클라이언트의 이동 속도와 반드시 같아야 한다.
 		constexpr float MOVE_SPEED = 5.0f;
-		clients[c_id].x += dirX * MOVE_SPEED * fDeltaTime;
-		clients[c_id].z += dirZ * MOVE_SPEED * fDeltaTime;
+
+		// 신발 장비 보정 (1~4단계 = 3 / 5 / 7 / 10% 증가). 미착용이면 1.0배.
+		if (shoes_lv < 0 || shoes_lv > 4) shoes_lv = 0;
+		const float move_speed = MOVE_SPEED *
+			(1.0f + SHOES_SPEED_PERCENT[shoes_lv] * 0.01f);
+
+		clients[c_id].x += dirX * move_speed * fDeltaTime;
+		clients[c_id].z += dirZ * move_speed * fDeltaTime;
 
 		// 충돌 처리: 위치 보정 + 노멀 누적
 		ResolvePlayerCollision(c_id, fYawRad);
@@ -3230,7 +3282,33 @@ void process_packet(int c_id, char* packet)
 			}
 		}
 
-		// 3) 결과물 장비 슬롯 통보
+		// 3) 결과물이 방어구면 서버 측 장착 상태 갱신 (_s_lock 보유 중)
+		ArmorSlot armor_slot  = ArmorSlot::NONE;
+		int       armor_grade = 0;
+		if (ClassifyArmor(recipe->result, armor_slot, armor_grade)) {
+			switch (armor_slot) {
+			case ArmorSlot::HELMET:
+				clients[c_id].helmet_grade = static_cast<short>(armor_grade);
+				break;
+			case ArmorSlot::BODY:
+				clients[c_id].body_grade = static_cast<short>(armor_grade);
+				break;
+			case ArmorSlot::SHOES:
+				clients[c_id].shoes_grade = static_cast<short>(armor_grade);
+				break;
+			default:
+				break;
+			}
+
+			std::cout << "[EQUIP] id:" << c_id
+				<< " slot:" << static_cast<int>(armor_slot)
+				<< " grade:" << armor_grade
+				<< "  -> helmet:" << clients[c_id].helmet_grade
+				<< " body:" << clients[c_id].body_grade
+				<< " shoes:" << clients[c_id].shoes_grade << "\n";
+		}
+
+		// 4) 결과물 장비 슬롯 통보
 		clients[c_id].send_equipment_update_packet(recipe->result);
 
 		std::cout << "[CRAFT] id:" << c_id
@@ -3397,6 +3475,11 @@ void process_packet(int c_id, char* packet)
 			{
 				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
 				if (clients[best_id]._state == ST_INGAME) {
+
+					// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
+					dmg = ApplyArmorReduction(dmg,
+						clients[best_id].helmet_grade,
+						clients[best_id].body_grade);
 
 					if (clients[best_id].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
 
@@ -3580,6 +3663,10 @@ void disconnect(int c_id)
 
 		clients[c_id]._inventory.fill(ItemSlot{});		// 인벤토리 초기화
 		clients[c_id].loot_dropped = false;
+
+		clients[c_id].helmet_grade = 0;					// 방어구 초기화
+		clients[c_id].body_grade   = 0;
+		clients[c_id].shoes_grade  = 0;
 
 		// 룸 바인딩 해제 표시. 
 		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.
@@ -3800,6 +3887,8 @@ static void spawn_room_npcs(Room& r)
 		npc.position = { main_npc_def[i].x, 0.0f, main_npc_def[i].z };
 		npc.spawn_position = npc.position;
 
+		// 스폰 좌표가 내비메시 밖이면 A*가 늘 실패해 그 NPC는 영영 못 움직인다.
+		// 가장 가까운 폴리곤 중심으로 끌어와 붙인다.
 		if (g_astar.FindPolyID(npc.spawn_position) == -1) {
 			XMFLOAT3 snapped;
 			if (g_astar.FindNearestPointOnMesh(npc.spawn_position, snapped)) {

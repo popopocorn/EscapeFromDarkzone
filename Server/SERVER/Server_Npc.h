@@ -28,6 +28,7 @@ struct NpcPerception
     bool     near_spawn = false;
 };
 
+// 소리 종류. 지금은 반경을 고르는 데만 쓴다.
 enum class NpcSoundType : uint8_t
 {
     None = 0,
@@ -36,6 +37,7 @@ enum class NpcSoundType : uint8_t
     Explosion
 };
 
+// 청각 기억. ReportNpcSound()가 쓰고, UpdateNpcPerception()이 나이를 먹인다.
 struct NpcHearingMemory
 {
     bool         has_sound = false;

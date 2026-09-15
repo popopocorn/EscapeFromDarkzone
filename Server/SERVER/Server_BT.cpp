@@ -196,8 +196,12 @@ static bool CondShouldInvestigate(NpcBtContext& ctx)
 
     if (!n.hearing.has_sound) return false;
 
+    // 길을 못 찾는 상태라면 잠시 쉰다.
+    // (조사 -> 경로 실패 -> 수색 을 초당 몇 번씩 왕복하는 것을 막는다)
     if (n.path_fail_cooldown > 0.0f) return false;
 
+    // 시야 관련 조건은 위 브랜치(Attack / Chase)가 이미 걸러냈다.
+    // 남는 건 복귀 직후 무시 시간뿐.
     return n.return_ignore_timer <= 0.0f;
 }
 
