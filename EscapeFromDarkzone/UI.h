@@ -143,6 +143,7 @@ public:
 	virtual ~UIPanel() = default;
 	virtual bool ProcessClick(POINT mouse) = 0;
 	virtual void SubmitToShader(UIObjectShader* shader) = 0;
+	virtual void SubmitText(TextRenderer* renderer) {};
 	virtual void ToggleOpen() { isOpen = !isOpen; }
 	virtual void Update(float fTimeElapsed) {};
 };
@@ -169,6 +170,7 @@ enum StatusType {
 	HP_BASE,
 	HP_MAIN,
 	MAG_BASE,
+	GRENADE_ICON,
 	WEAPON_SLOT_1,
 	WEAPON_SLOT_2,
 	WEAPON_SLOT_3,
@@ -183,7 +185,9 @@ public:
 	void StartEscape() { Escape = true; EscapeTime = 0; }
 	void ResetEscape() { Escape = false; EscapeTime = 0; }
 	void ResetForNewRound(short fullHp = 100);
+	void SetGrenadeCount(int count);
 
+	virtual void SubmitText(TextRenderer* renderer) override;
 	virtual void SubmitToShader(UIObjectShader* shader);
 	virtual void Update(float fTimeElapsed);
 
@@ -192,11 +196,17 @@ private:
 	short hp;
 	short FullHp;
 	int curammo = 0;
+	int grenadeCount = 3;
+
 	UIMesh* Rifle = NULL;
 	UIMesh* SMG = NULL;
 	UIMesh* Pistol = NULL;
 	UIMesh* Shotgun = NULL;
 	UIMesh* bullet = NULL;
+	UIMesh* Grenade = NULL;
+
+	unique_ptr<UIText> m_pGrenadeCountText;
+
 	bool Escape = false;
 	float EscapeTime = 0;
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;

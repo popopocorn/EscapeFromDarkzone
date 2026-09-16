@@ -1115,6 +1115,7 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	SMG = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SMG_BULLET);
 	Shotgun = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SHOTGUN_BULLET);
 	Pistol = ResourceManager::Instance().GetUIMesh(UIName::STATUS_PISTOL_BULLET);
+	Grenade = ResourceManager::Instance().GetUIMesh(UIName::STATUS_GRENADE);
 	bullet = ResourceManager::Instance().GetUIMesh(UIName::STATUS_BULLET_DOT);
 
 	curammo = player ? player->GetCurrentAmmo() : 0;
@@ -1138,12 +1139,35 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	UIs[HP_MAIN]->SetLocate(HEALTH_MAIN_CENTER_OFFSET_X, -0.9f, 0.5f);
 	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
 
-	UIs[MAG_BASE] = make_unique<UIObject>();
 	XMFLOAT3 r = CalcPixelByRatio(1.0f);
+
+	UIs[MAG_BASE] = make_unique<UIObject>();
 	float wr = 0.15f;
 	UIs[MAG_BASE]->SetScale(r.x * wr, r.y * wr, 1.0f);
 	UIs[MAG_BASE]->SetLocate(0.25f, -0.9f, 0.5f);
 	UIs[MAG_BASE]->SetUIMesh(Rifle);
+
+	UIs[GRENADE_ICON] = make_unique<UIObject>();
+	float grenadeSize = 0.10f;
+	UIs[GRENADE_ICON]->SetScale(r.x * grenadeSize, r.y * grenadeSize, 1.0f);
+	UIs[GRENADE_ICON]->SetLocate(0.25f, -0.72f, 0.5f);
+	UIs[GRENADE_ICON]->SetUIMesh(Grenade);
+
+	constexpr float GRENADE_TEXT_NDC_X = 0.31f;
+	constexpr float GRENADE_TEXT_NDC_Y = -0.72f;
+
+	float grenadeTextX = (GRENADE_TEXT_NDC_X + 1.0f) * 0.5f * static_cast<float>(FRAME_BUFFER_WIDTH);
+	float grenadeTextY = (1.0f - GRENADE_TEXT_NDC_Y) * 0.5f * static_cast<float>(FRAME_BUFFER_HEIGHT);
+
+	grenadeTextY -= 16.0f;
+
+	m_pGrenadeCountText = make_unique<UIText>(
+		L"x" + std::to_wstring(grenadeCount),
+		XMFLOAT2(grenadeTextX, grenadeTextY),
+		UITextAlign::LEFT
+	);
+
+	m_pGrenadeCountText->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 	XMFLOAT3 br = CalcPixelByRatio(30, 58);
 	float bwr = 0.05f;
@@ -1192,6 +1216,19 @@ void PlayerStatus::ResetForNewRound(short fullHp)
 	OutputDebugString(L"[RoundReset] PlayerStatus 초기화 완료\n");
 }
 
+void PlayerStatus::SetGrenadeCount(int count)
+{
+	if (count < 0)
+		count = 0;
+
+	grenadeCount = count;
+
+	if (m_pGrenadeCountText)
+	{
+		m_pGrenadeCountText->SetText(L"x" + std::to_wstring(grenadeCount));
+	}
+}
+
 bool PlayerStatus::ProcessClick(POINT mouse)
 {
 	for (auto& p : UIs)
@@ -1203,6 +1240,7 @@ bool PlayerStatus::ProcessClick(POINT mouse)
 	}
 	return false;
 }
+
 void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 {
 	for (auto& p : UIs)
@@ -1222,6 +1260,19 @@ void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 	}
 }
 
+void PlayerStatus::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	if (!isOpen)
+		return;
+
+	if (m_pGrenadeCountText)
+	{
+		renderer->SubmitText(m_pGrenadeCountText.get());
+	}
+}
 void PlayerStatus::Update(float fTimeElapsed)
 {
 	if (!player) return;
@@ -1382,5 +1433,13 @@ void HUDManager::SubmitText(TextRenderer* renderer)
 			continue;
 
 		renderer->SubmitText(text.get());
+	}
+
+	for (const auto& panel : panels)
+	{
+		if (!panel)
+			continue;
+
+		panel->SubmitText(renderer);
 	}
 }

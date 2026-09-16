@@ -706,6 +706,26 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 	}
 }
 
+void MainScene::SetGrenadeCount(int count)
+{
+	if (count < 0)
+		count = 0;
+
+	if (count > m_nGrenadeMaxCount)
+		count = m_nGrenadeMaxCount;
+
+	m_nGrenadeCount = count;
+
+	if (statusUI)
+	{
+		statusUI->SetGrenadeCount(m_nGrenadeCount);
+	}
+
+	wchar_t debugText[128];
+	swprintf_s(debugText, L"[Grenade] Server Count = %d / %d\n", m_nGrenadeCount, m_nGrenadeMaxCount);
+	OutputDebugStringW(debugText);
+}
+
 void MainScene::ReleaseGameplayCursor()
 {
 	::ClipCursor(NULL);
@@ -1030,9 +1050,10 @@ void MainScene::ThrowGrenade()
 		return;
 	}
 
-	if (!NetworkManager::Instance().IsConnected()) {
-		// 네트워크 연결 시에는 Setter로 서버에서 받아온 값으로 덮어씌우는 동작으로 대체 (NetPacketDispatcher.cpp 파일 SC_GRENADE_COUNT 참조)
-		m_nGrenadeCount--;
+	if (!NetworkManager::Instance().IsConnected())
+	{
+		// 네트워크 연결 시에는 서버에서 SC_GRENADE_COUNT로 받아온 값으로 갱신
+		SetGrenadeCount(m_nGrenadeCount - 1);
 	}
 
 	wchar_t grenadeDebugText[128];

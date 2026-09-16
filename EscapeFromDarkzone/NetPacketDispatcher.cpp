@@ -2,7 +2,7 @@
 #include "NetPacketDispatcher.h"
 #include "GameFramework.h"
 #include "NetEntityManager.h"
-
+#include "Scene.h"
 #include "InputManager.h"
 #include "EffectManager.h"
 #include "InventoryManager.h"
@@ -240,12 +240,20 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		//if (gf.m_pPlayer) ÃÑ¾Ë°³¼ö¸¦¹è¿­·Îµ¤¾î¾º¿ì´ÂÇÔ¼öÈ£Ãâ(p->ammo);
 		break;
 	}
-	case SC_GRENADE_COUNT: {
+	case SC_GRENADE_COUNT:
+	{
 		auto* p = reinterpret_cast<SC_GRENADE_COUNT_PACKET*>(packet.data());
-		if (!gf.m_pScene.empty()) {
-			//MainScene* s = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
-			//if (s) ¼ö·ùÅº°³¼ö¸¦µ¤¾î¾º¿ì´ÂÇÔ¼öÈ£Ãâ(p->grenade_count);
+
+		if (gf.m_pScene.empty())
+			break;
+
+		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
+
+		if (pMainScene)
+		{
+			pMainScene->SetGrenadeCount(p->grenade_count);
 		}
+
 		break;
 	}
 	case SC_INVENTORY_UPDATE:

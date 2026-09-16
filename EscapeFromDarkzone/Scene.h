@@ -268,6 +268,7 @@ private:
 	void LinkToPlayer();
 
 	void SetGrenadeAimMode(HWND hWnd, bool bEnable);
+
 	void ClampGameplayCursorToAimLine(HWND hWnd);
 	void ReleaseGameplayCursor();
 
@@ -283,7 +284,10 @@ private:
 	void UpdateGrenade(float fTimeElapsed);
 	void ExplodeGrenade();
 	bool CheckGrenadeMapCollision(const XMFLOAT3& prevPos, const XMFLOAT3& nextPos, XMFLOAT3& outHitPos, XMFLOAT3& outHitNormal);
+
 public:
+	void SetGrenadeCount(int count);
+	int GetGrenadeCount() const { return m_nGrenadeCount; }
 
 	//이펙트	재생용 함수
 	void PlayEffectFromServerLikeRequest(
@@ -303,8 +307,8 @@ public:
 
 	//인벤토리용 함수
 	bool IsAnyInventoryOpen() const;
-	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
-	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+	void CloseCorpseInventory();
+	void OpenLootContainer(CLootContainerObject* pLoot);
 
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
