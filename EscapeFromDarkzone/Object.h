@@ -346,6 +346,7 @@ public:
 	void SetSplitBodyTrackIndices(int nLowerBodyTrack, int nUpperBodyTrack);
 
 	void SetTrackAnimationSetIfChanged(int nAnimationTrack, int nAnimationSet);
+	void SetTrackAnimationSetImmediate(int nAnimationTrack, int nAnimationSet, bool bPreserveNormalizedPosition);
 
 	void SetTrackEnable(int nAnimationTrack, bool bEnable);
 	void SetTrackPosition(int nAnimationTrack, float fPosition);

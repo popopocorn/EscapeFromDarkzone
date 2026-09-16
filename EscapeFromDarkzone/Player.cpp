@@ -493,7 +493,7 @@ void CPlayer::RefreshAnimationTracksFromStates()
 	}
 
 	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+	pCtrl->SetTrackAnimationSetImmediate(0, lowerAnim, true);
 	pCtrl->SetTrackSpeed(0, lowerSpeed);
 	pCtrl->SetTrackEnable(0, true);
 	pCtrl->SetTrackWeight(0, 1.0f);
@@ -518,7 +518,7 @@ void CPlayer::RefreshAnimationTracksFromStates()
 	}
 
 	pCtrl->SetTrackType(1, upperType);
-	pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
+	pCtrl->SetTrackAnimationSetImmediate(1, upperAnim, false);
 	pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
 	pCtrl->SetTrackEnable(1, true);
 	pCtrl->SetTrackWeight(1, 1.0f);
