@@ -157,6 +157,8 @@ public:
 	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }
 
 	CCamera* GetLightCamera(int idx);
+	CCamera* GetCamera() { return m_pCamera; }
+
 
 	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
 	virtual void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
