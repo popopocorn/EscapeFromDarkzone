@@ -31,6 +31,10 @@ void ShaderManager::BuildShaders(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 
 	Shaders[ShaderType::FULLSCREEN] = make_unique<FullscreenShader>();
 	Shaders[ShaderType::FULLSCREEN]->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
+
+
+	Shaders[ShaderType::LIGHT] = make_unique<Lighting>();
+	Shaders[ShaderType::LIGHT]->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 }
 
 CShader* ShaderManager::GetShader(ShaderType type)

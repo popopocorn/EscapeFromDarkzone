@@ -79,8 +79,8 @@ PS_GBUFFER_OUTPUT PSStandard(VS_STANDARD_OUTPUT input) : SV_Target
     output.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
     
     float emissiveStrength = dot(cEmissionColor.rgb, float3(0.333f, 0.333f, 0.333f));
-    //output.Material = float4(specStrength, metalStrength, emissiveStrength, 1.0f);
-    output.Material = float4(input.position.zzz, 1.0f);
+    output.Material = float4(specStrength, metalStrength, emissiveStrength, 1.0f);
+    //output.Material = float4(input.position.zzz, 1.0f);
     return output;
 }
 
@@ -202,6 +202,49 @@ float4 PSFullScreen(VS_UI_OUTPUT input) :SV_Target
     cAlbedoColor = FullScreenTexture.Sample(gssWrap, input.uv);
     
     return cAlbedoColor;
+}
+
+float4 PSLighting(VS_UI_OUTPUT input):SV_Target
+{
+    float4 albedoSample = ColorTexture.Sample(gssWrap, input.uv);
+    float4 normalSample = NormalTexture.Sample(gssWrap, input.uv);
+    float4 materialSample = MaterialTexture.Sample(gssWrap, input.uv);
+    
+    float3 albedo = albedoSample.rgb;
+    float3 normalW = normalize(normalSample.xyz * 2.0f - 1.0f); // 0~1 ¡æ -1~1 µðÄÚµù
+
+    float specStrength = materialSample.r;
+    float metalStrength = materialSample.g;
+    float emissiveStrength = materialSample.b;
+
+    float3 lightAccum = float3(0.0f, 0.0f, 0.0f);
+
+    for (int i = 0; i < gnLights; i++)
+    {
+        if (!gLights[i].m_bEnable)
+            continue;
+
+        if (gLights[i].m_nType == DIRECTIONAL_LIGHT)
+        {
+            float3 lightDir = normalize(-gLights[i].m_vDirection);
+            float ndl = saturate(dot(normalW, lightDir));
+            lightAccum += gLights[i].m_cDiffuse.rgb * ndl;
+        }
+    }
+
+    float3 ambient = gcGlobalAmbientLight.rgb;
+    float3 lightingTerm = ambient + lightAccum;
+
+    float3 finalColor = albedo * lightingTerm;
+    finalColor += lightAccum * saturate(specStrength * 0.06f + metalStrength * 0.04f);
+
+ 
+    finalColor += albedo * emissiveStrength * 0.08f;
+
+    finalColor = finalColor / (finalColor + float3(0.65f, 0.65f, 0.65f));
+    finalColor *= 1.25f;
+
+    return float4(saturate(finalColor), 1.0f);
 }
 
 #endif // SHADERS_HLSL

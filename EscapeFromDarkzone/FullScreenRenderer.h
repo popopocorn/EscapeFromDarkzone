@@ -3,24 +3,28 @@
 
 class UIMesh;
 class CShader;
+class ShaderManager;
 class RenderTarget;
 
-//enum ShaderType {
-//	STANDARD,
-//	LIGHT,
-//};
+enum FShaderType {
+	FSTANDARD = 0,
+	FLIGHT,
+
+	FTypeEnd
+};
+
 
 class FullScreenRenderer
 {
 public:
 	FullScreenRenderer();
 	~FullScreenRenderer();
-	void init(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist, CShader* s);
-	void Render(ID3D12GraphicsCommandList* pd3dCommandList, RenderTarget& target);
+	void init(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist, ShaderManager* s);
+	void Render(ID3D12GraphicsCommandList* pd3dCommandList, RenderTarget* target, FShaderType type);
 
 
 private:
-	CShader* shader;
+	vector<CShader*> shaders;
 	unique_ptr<UIMesh>	mesh;
 
 

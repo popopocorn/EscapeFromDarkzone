@@ -79,6 +79,7 @@ public:
 
 	void ShadowRendering();
 	void MainRendering();
+	void LightRendering();
 	void EffectRendering();
 	void UIRendering();
 

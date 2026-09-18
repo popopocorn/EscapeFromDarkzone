@@ -7,6 +7,7 @@ enum class ShaderType {
 	UI,
 	PLAYER,
 	FULLSCREEN,
+	LIGHT,
 };
 
 class ShaderManager

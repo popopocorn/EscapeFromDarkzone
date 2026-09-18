@@ -686,7 +686,7 @@ void CGameFramework::BuildObjects()
 		root->GetRoot()
 	);
 
-	fscreenrenderer.init(m_pd3dDevice, m_pd3dCommandList, shadermanager->GetShader(ShaderType::FULLSCREEN));
+	fscreenrenderer.init(m_pd3dDevice, m_pd3dCommandList, shadermanager.get());
 	
 	m_pScene.push_back(make_unique<LobbyScene>(this));
 	//m_pScene.push_back(make_unique<MainScene>(this));
@@ -1020,8 +1020,9 @@ void CGameFramework::FrameAdvance()
 
 
 	EffectRendering();
-	
 
+	LightRendering();
+	
 	//compute pipline
 	PreparePostRender();
 
@@ -1102,12 +1103,7 @@ void CGameFramework::PrepareMainRender()
 
 void CGameFramework::PreparePostRender()
 {
-	array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> RtvCPUDescriptorHandles;
-	for (int i = 0; i < 3; ++i)
-	{
-		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-	}
-	m_pd3dCommandList->SetGraphicsRootDescriptorTable(19, renderBuffers[0].GetSRV());
+
 }
 
 void CGameFramework::BlitToBackBuffer()
@@ -1131,8 +1127,8 @@ void CGameFramework::BlitToBackBuffer()
 
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
 	//color->backbuffer
-	//fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[BufferName::COLOR]);
-	fscreenrenderer.Render(m_pd3dCommandList, renderBuffers[slot]);
+	fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[BufferName::RENDERBASE], FShaderType::FSTANDARD);
+	//fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[slot], FSTANDARD);
 
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -1168,6 +1164,26 @@ void CGameFramework::MainRendering()
 #endif
 
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
+
+}
+
+void CGameFramework::LightRendering()
+{
+	array<D3D12_CPU_DESCRIPTOR_HANDLE, 3> RtvCPUDescriptorHandles;
+	for (int i = 0; i < 3; ++i)
+	{
+		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	}
+
+	renderBuffers[BufferName::RENDERBASE].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	
+	D3D12_CPU_DESCRIPTOR_HANDLE colorRtv = renderBuffers[BufferName::RENDERBASE].GetRTV();
+	m_pd3dCommandList->OMSetRenderTargets(1, &colorRtv, FALSE, nullptr);
+	
+	//m_pd3dCommandList->SetGraphicsRootConstantBufferView(0, m_pScene.back()->m_pCamera->UpdateShaderVariables); // 실제 getter 이름은 프로젝트에 맞게
+	m_pd3dCommandList->SetGraphicsRootConstantBufferView(2, m_pScene.back()->m_pd3dcbLights->GetGPUVirtualAddress());
+
+	fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[0], FShaderType::FLIGHT);
 
 }
 
