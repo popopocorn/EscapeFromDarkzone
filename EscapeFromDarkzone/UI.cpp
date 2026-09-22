@@ -1147,28 +1147,6 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	UIs[MAG_BASE]->SetLocate(0.25f, -0.9f, 0.5f);
 	UIs[MAG_BASE]->SetUIMesh(Rifle);
 
-	UIs[GRENADE_ICON] = make_unique<UIObject>();
-	float grenadeSize = 0.10f;
-	UIs[GRENADE_ICON]->SetScale(r.x * grenadeSize, r.y * grenadeSize, 1.0f);
-	UIs[GRENADE_ICON]->SetLocate(0.25f, -0.72f, 0.5f);
-	UIs[GRENADE_ICON]->SetUIMesh(Grenade);
-
-	constexpr float GRENADE_TEXT_NDC_X = 0.31f;
-	constexpr float GRENADE_TEXT_NDC_Y = -0.72f;
-
-	float grenadeTextX = (GRENADE_TEXT_NDC_X + 1.0f) * 0.5f * static_cast<float>(FRAME_BUFFER_WIDTH);
-	float grenadeTextY = (1.0f - GRENADE_TEXT_NDC_Y) * 0.5f * static_cast<float>(FRAME_BUFFER_HEIGHT);
-
-	grenadeTextY -= 16.0f;
-
-	m_pGrenadeCountText = make_unique<UIText>(
-		L"x" + std::to_wstring(grenadeCount),
-		XMFLOAT2(grenadeTextX, grenadeTextY),
-		UITextAlign::LEFT
-	);
-
-	m_pGrenadeCountText->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-
 	XMFLOAT3 br = CalcPixelByRatio(30, 58);
 	float bwr = 0.05f;
 
@@ -1183,6 +1161,28 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
+
+	UIs[GRENADE_ICON] = make_unique<UIObject>();
+	float grenadeSize = 0.08f;
+	UIs[GRENADE_ICON]->SetScale(r.x * grenadeSize, r.y * grenadeSize, 1.0f);
+	UIs[GRENADE_ICON]->SetLocate(0.91f, -0.9f, 0.5f);
+	UIs[GRENADE_ICON]->SetUIMesh(Grenade);
+
+	constexpr float GRENADE_TEXT_NDC_X = 0.955f;
+	constexpr float GRENADE_TEXT_NDC_Y = -0.90f;
+
+	float grenadeTextX = (GRENADE_TEXT_NDC_X + 1.0f) * 0.5f * static_cast<float>(FRAME_BUFFER_WIDTH);
+	float grenadeTextY = (1.0f - GRENADE_TEXT_NDC_Y) * 0.5f * static_cast<float>(FRAME_BUFFER_HEIGHT);
+
+	grenadeTextY -= 16.0f;
+
+	m_pGrenadeCountText = make_unique<UIText>(
+		L"x" + std::to_wstring(grenadeCount),
+		XMFLOAT2(grenadeTextX, grenadeTextY),
+		UITextAlign::LEFT
+	);
+
+	m_pGrenadeCountText->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 	float prb = 0.05f;
 

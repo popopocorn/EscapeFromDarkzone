@@ -660,6 +660,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		if (!m_pPlayer) return;
 		if (IsAnyInventoryOpen()) return;
 		if (m_bGrenadeFlying) return;
+		if (m_bGrenadeThrowPending) return;
 
 		if (m_nGrenadeCount <= 0)
 		{
@@ -669,6 +670,9 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		}
 
 		m_bGrenadeAimMode = true;
+
+		m_pPlayer->SetFireHeld(false);
+
 		m_bSparkFireActive = false;
 		m_bLaserActive = false;
 		m_fSparkSpawnTimer = 0.0f;
@@ -686,6 +690,11 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 		m_fGrenadeAimDistance = m_fGrenadeAimMinDistance;
 
 		m_pPlayer->ApplyWeaponPose(WEAPON_POSE::GRENADE);
+
+		SoundManager::Instance()->Play(
+			SoundName::EQUIP_GRENADE,
+			m_pPlayer->GetPosition()
+		);
 
 		ClampGameplayCursorToAimLine(hWnd);
 
@@ -1439,14 +1448,14 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 
 		switch (wParam)
 		{
-		//case VK_F6:
-		//case VK_F7:
-		//{
-		//	if (wasDownBefore) return true;
+			//case VK_F6:
+			//case VK_F7:
+			//{
+			//	if (wasDownBefore) return true;
 
-		//	PlayTestEffectByKey(wParam);
-		//	return true;
-		//}
+			//	PlayTestEffectByKey(wParam);
+			//	return true;
+			//}
 
 		case 'E':
 		{
@@ -1487,8 +1496,14 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 		case 'G':
 		{
 			if (wasDownBefore) return true;
-			if (m_pPlayer->m_bIsDead)break;
+			if (m_pPlayer->m_bIsDead) break;
+
 			if (IsAnyInventoryOpen())
+			{
+				return true;
+			}
+
+			if (m_bGrenadeThrowPending)
 			{
 				return true;
 			}
@@ -1498,15 +1513,13 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 				return true;
 			}
 
-			if (m_pPlayer && m_pPlayer->IsGrenadeState())
+			if (m_pPlayer->IsGrenadeState())
 			{
 				return true;
 			}
 
-			SetGrenadeAimMode(hWnd, true);
-			ClampGameplayCursorToAimLine(hWnd);
+			SetGrenadeAimMode(hWnd, !m_bGrenadeAimMode);
 
-			OutputDebugString(L"[Grenade] Aim Mode Enter By G\n");
 			return true;
 		}
 
@@ -1541,23 +1554,23 @@ bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM w
 			DumpMapOOBBToCSV("map_oobb.csv");
 			break;
 
-		/*case '9':
-		{
-			if (wasDownBefore) return true;
-			if (NetworkManager::Instance().IsConnected()) {
-				NetSession::Instance().Craft(ItemID::WEAPON_RIFLE_01);
+			/*case '9':
+			{
+				if (wasDownBefore) return true;
+				if (NetworkManager::Instance().IsConnected()) {
+					NetSession::Instance().Craft(ItemID::WEAPON_RIFLE_01);
+				}
+				return true;
 			}
-			return true;
-		}
 
-		case '0':
-		{
-			if (wasDownBefore) return true;
-			if (NetworkManager::Instance().IsConnected()) {
-				NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
-			}
-			return true;
-		}*/
+			case '0':
+			{
+				if (wasDownBefore) return true;
+				if (NetworkManager::Instance().IsConnected()) {
+					NetSession::Instance().Craft(ItemID::ARMOR_BODY_01);
+				}
+				return true;
+			}*/
 
 		default:
 			break;

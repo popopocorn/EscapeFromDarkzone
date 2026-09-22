@@ -32,89 +32,96 @@ void SoundManager::Release()
 
 void SoundManager::BuildSound()
 {
-    LoadSound(
-        SoundName::FOOSTEP,
-        "Sound/footstep_Player.wav",
-        false,
-        false
-        );
+	LoadSound(
+		SoundName::FOOSTEP,
+		"Sound/footstep_Player.wav",
+		false,
+		false
+	);
 
-    LoadSound(
-        SoundName::ENEMY_FOOSTEP,
-        "Sound/footstep_Enemy.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::ENEMY_FOOSTEP,
+		"Sound/footstep_Enemy.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::FIRE_RIFLE,
-        "Sound/Fire_Rifle.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::FIRE_RIFLE,
+		"Sound/Fire_Rifle.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::FIRE_SMG,
-        "Sound/Fire_SMG.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::FIRE_SMG,
+		"Sound/Fire_SMG.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::FIRE_SHOTGUN,
-        "Sound/Fire_Shotgun.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::FIRE_SHOTGUN,
+		"Sound/Fire_Shotgun.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::FIRE_PISTOL,
-        "Sound/Fire_Pistol.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::FIRE_PISTOL,
+		"Sound/Fire_Pistol.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::DRY_RIFLE,
-        "Sound/rifle_smg_dry.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::DRY_RIFLE,
+		"Sound/rifle_smg_dry.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::RELOAD_PLAYER_RIFLE,
-        "Sound/Rifle_SMG_Reload.wav",
-        false,
-        false
-        );
+	LoadSound(
+		SoundName::RELOAD_PLAYER_RIFLE,
+		"Sound/Rifle_SMG_Reload.wav",
+		false,
+		false
+	);
 
-    LoadSound(
-        SoundName::RELOAD_ENEMY_RIFLE,
-        "Sound/Rifle_SMG_Reload.wav",
-        true,
-        false
-        );
+	LoadSound(
+		SoundName::RELOAD_ENEMY_RIFLE,
+		"Sound/Rifle_SMG_Reload.wav",
+		true,
+		false
+	);
 
-    LoadSound(
-        SoundName::EQUIP_WEAPON,
-        "Sound/Weapon_Select.wav",
-        false,
-        false
-        );
+	LoadSound(
+		SoundName::EQUIP_WEAPON,
+		"Sound/Weapon_Select.wav",
+		false,
+		false
+	);
 
-    LoadSound(
-        SoundName::GRAB_ITEM,
-        "Sound/loot.wav",
-        false,
-        false
-        );
+	LoadSound(
+		SoundName::EQUIP_GRENADE,
+		"Sound/Grenade_Equip.wav",
+		false,
+		false
+	);
 
-    LoadSound(
-        SoundName::GRANDEBOOM,
-        "Sound/GranadeBoom.wav",
-        false,
-        false
-        );
+	LoadSound(
+		SoundName::GRAB_ITEM,
+		"Sound/loot.wav",
+		false,
+		false
+	);
+
+	LoadSound(
+		SoundName::GRANDEBOOM,
+		"Sound/GranadeBoom.wav",
+		false,
+		false
+	);
 }
 
 void SoundManager::LoadSound(SoundName name, const string& path, bool is3D, bool loop)
