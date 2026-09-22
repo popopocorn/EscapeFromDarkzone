@@ -533,9 +533,13 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 	case WM_LBUTTONUP:
 	case WM_RBUTTONUP:
 	case WM_MOUSEMOVE:
+		OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
+		break;
+
 	case WM_MOUSEWHEEL:
-		//OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
-		//break;
+		// 마우스 휠 입력 차단
+		break;
+
 	case WM_KEYDOWN:
 	case WM_KEYUP:
 		OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam);
@@ -1168,7 +1172,7 @@ void CGameFramework::PushScene()
 	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 
-	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가 
 
 	nextScene = nullptr;
 }
