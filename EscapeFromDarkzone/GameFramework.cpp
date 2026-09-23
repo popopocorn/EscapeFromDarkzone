@@ -1180,7 +1180,7 @@ void CGameFramework::LightRendering()
 	D3D12_CPU_DESCRIPTOR_HANDLE colorRtv = renderBuffers[BufferName::RENDERBASE].GetRTV();
 	m_pd3dCommandList->OMSetRenderTargets(1, &colorRtv, FALSE, nullptr);
 	
-	m_pd3dCommandList->SetGraphicsRootConstantBufferView(0, m_pScene.back()->GetCamera()->GetCameraInfo()->GetGPUVirtualAddress());
+	m_pd3dCommandList->SetGraphicsRootConstantBufferView(0, m_pCamera->GetCameraInfo()->GetGPUVirtualAddress());
 	m_pd3dCommandList->SetGraphicsRootConstantBufferView(2, m_pScene.back()->m_pd3dcbLights->GetGPUVirtualAddress());
 
 	fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[0], FShaderType::FLIGHT);
