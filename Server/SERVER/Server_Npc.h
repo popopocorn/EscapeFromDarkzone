@@ -123,9 +123,9 @@ struct SERVER_NPC {
 };
 
 // NPC 단계(tier) 상수
-constexpr char NPC_TIER_1 = 1;   // PISTOL
-constexpr char NPC_TIER_2 = 2;   // SMG
-constexpr char NPC_TIER_3 = 3;   // RIFLE
+constexpr char NPC_TIER_1 = 0;   // PISTOL
+constexpr char NPC_TIER_2 = 1;   // SMG
+constexpr char NPC_TIER_3 = 2;   // RIFLE
 
 constexpr short NPC_TIER1_HP = 100;   // 2단계 x1.5=150, 3단계 x2=200
 
