@@ -1,6 +1,6 @@
 #pragma once
 
-//¾ÆÀÌÅÛ ¼±¾ğ
+//ì•„ì´í…œ ì„ ì–¸
 enum class ItemType {
 	PISTOL,
 	RIFLE,
@@ -25,7 +25,7 @@ enum class ItemGrade
 
 
 enum class ItemID : short {
-	//Àç·á
+	//ì¬ë£Œ
 	NONE = 0,
 	MAT_1_FIBER,
 	MAT_2_METAL_PLATE,
@@ -34,7 +34,7 @@ enum class ItemID : short {
 	WEAPON_UPGRADE_3,
 	WEAPON_UPGRADE_4,
 	ARMOR_PLATE,
-	//¿Ï¼ºÇ°
+	//ì™„ì„±í’ˆ
 	WEAPON_RIFLE_01,
 	WEAPON_RIFLE_02,
 	WEAPON_RIFLE_03,
@@ -90,8 +90,8 @@ struct CraftRecipe {
 };
 
 inline constexpr CraftRecipe g_craftRecipes[] = {
-	
-	// ¹«±â: ¶óÀÌÇÃ (±İ¼ÓÆÇ, º¼Æ®/³ÊÆ® Áß½É)
+
+	// ë¬´ê¸°: ë¼ì´í”Œ (ê¸ˆì†íŒ, ë³¼íŠ¸/ë„ˆíŠ¸ ì¤‘ì‹¬)
 	{ ItemID::WEAPON_RIFLE_01, 1, {
 		{ ItemID::MAT_2_METAL_PLATE, 3 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 3 },
@@ -115,8 +115,8 @@ inline constexpr CraftRecipe g_craftRecipes[] = {
 		{ ItemID::WEAPON_UPGRADE_4, 1 },
 		{ ItemID::NONE, 0 } } },
 
-	
-	// ¹«±â: SMG (¼¶À¯ Æ÷ÇÔ, ±İ¼Ó/º¼Æ® ¿ä±¸·® »ó´ëÀûÀ¸·Î ³·À½)
+
+	// ë¬´ê¸°: SMG (ì„¬ìœ  í¬í•¨, ê¸ˆì†/ë³¼íŠ¸ ìš”êµ¬ëŸ‰ ìƒëŒ€ì ìœ¼ë¡œ ë‚®ìŒ)
 	{ ItemID::WEAPON_SMG_01, 1, {
 		{ ItemID::MAT_1_FIBER, 2 },
 		{ ItemID::MAT_2_METAL_PLATE, 2 },
@@ -141,8 +141,8 @@ inline constexpr CraftRecipe g_craftRecipes[] = {
 		{ ItemID::MAT_3_BOLT_AND_NUT, 8 },
 		{ ItemID::WEAPON_UPGRADE_4, 1 } } },
 
-	
-	// ¹«±â: ¼¦°Ç (±İ¼ÓÆÇ ´Ù·® ¿ä±¸, º¼Æ®/³ÊÆ® ¾à°£)
+
+	// ë¬´ê¸°: ìƒ·ê±´ (ê¸ˆì†íŒ ë‹¤ëŸ‰ ìš”êµ¬, ë³¼íŠ¸/ë„ˆíŠ¸ ì•½ê°„)
 	{ ItemID::WEAPON_SHOTGUN_01, 1, {
 		{ ItemID::MAT_2_METAL_PLATE, 4 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 2 },
@@ -167,17 +167,17 @@ inline constexpr CraftRecipe g_craftRecipes[] = {
 		{ ItemID::NONE, 0 } } },
 
 
-	// ¹æ¾î±¸: Çï¸ä (¼¶À¯, ±İ¼ÓÆÇ Áß½É)
+	// ë°©ì–´êµ¬: í—¬ë©§ (ì„¬ìœ , ê¸ˆì†íŒ ì¤‘ì‹¬)
 	{ ItemID::ARMOR_HELMET_01, 1, {
 		{ ItemID::MAT_1_FIBER, 3 },
 		{ ItemID::MAT_2_METAL_PLATE, 3 },
-		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 },
 		{ ItemID::NONE, 0 } } },
 
 	{ ItemID::ARMOR_HELMET_02, 1, {
 		{ ItemID::MAT_1_FIBER, 5 },
 		{ ItemID::MAT_2_METAL_PLATE, 5 },
-		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 },
 		{ ItemID::NONE, 0 } } },
 
 	{ ItemID::ARMOR_HELMET_03, 1, {
@@ -193,8 +193,8 @@ inline constexpr CraftRecipe g_craftRecipes[] = {
 		{ ItemID::NONE, 0 } } },
 
 
-	
-	// ¹æ¾î±¸: ¹Ùµğ (°¡Àå ¸¹Àº Àç·á ¿ä±¸, 3Á¾·ù ¸ğµÎ °ñ°í·ç »ç¿ë)
+
+	// ë°©ì–´êµ¬: ë°”ë”” (ê°€ì¥ ë§ì€ ì¬ë£Œ ìš”êµ¬, 3ì¢…ë¥˜ ëª¨ë‘ ê³¨ê³ ë£¨ ì‚¬ìš©)
 	{ ItemID::ARMOR_BODY_01, 1, {
 		{ ItemID::MAT_1_FIBER, 3 },
 		{ ItemID::MAT_2_METAL_PLATE, 3 },
@@ -219,18 +219,18 @@ inline constexpr CraftRecipe g_craftRecipes[] = {
 		{ ItemID::MAT_3_BOLT_AND_NUT, 12 },
 		{ ItemID::NONE, 0 } } },
 
-	
-	// ¹æ¾î±¸: ½Å¹ß (¼¶À¯, º¼Æ®/³ÊÆ® Áß½É)
+
+	// ë°©ì–´êµ¬: ì‹ ë°œ (ì„¬ìœ , ë³¼íŠ¸/ë„ˆíŠ¸ ì¤‘ì‹¬)
 	{ ItemID::ARMOR_SHOES_01, 1, {
 		{ ItemID::MAT_1_FIBER, 3 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 3 },
-		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 },
 		{ ItemID::NONE, 0 } } },
 
 	{ ItemID::ARMOR_SHOES_02, 1, {
 		{ ItemID::MAT_1_FIBER, 5 },
 		{ ItemID::MAT_3_BOLT_AND_NUT, 5 },
-		{ ItemID::NONE, 0 }, 
+		{ ItemID::NONE, 0 },
 		{ ItemID::NONE, 0 } } },
 
 	{ ItemID::ARMOR_SHOES_03, 1, {
@@ -253,4 +253,66 @@ inline const CraftRecipe* FindCraftRecipe(ItemID target) {
 		if (g_craftRecipes[i].result == target) return &g_craftRecipes[i];
 	}
 	return nullptr;
+}
+
+
+// ===== ë°©ì–´êµ¬ =====
+// ì¸ë±ìŠ¤ 0 = ë¯¸ì°©ìš©, 1~4 = ì¥ë¹„ ë‹¨ê³„.
+constexpr int ARMOR_DR_PERCENT[5]    = { 0, 5, 7, 10, 15 };   // í—¬ë©§ / ìƒì˜ ê³µìš© (í•©ì‚° ì ìš©)
+constexpr int SHOES_SPEED_PERCENT[5] = { 0, 3, 5,  7, 10 };   // ì‹ ë°œ (í•©ì‚° ì—†ìŒ)
+
+enum class ArmorSlot : int {
+	NONE   = -1,
+	HELMET = 0,
+	BODY   = 1,
+	SHOES  = 2,
+};
+
+// ItemIDì—ì„œ ë¶€ìœ„ì™€ ë‹¨ê³„ë¥¼ ì—­ì‚°í•œë‹¤. ë°©ì–´êµ¬ê°€ ì•„ë‹ˆë©´ false.
+inline bool ClassifyArmor(ItemID id, ArmorSlot& outSlot, int& outGrade)
+{
+	const int v = static_cast<int>(id);
+
+	if (v >= static_cast<int>(ItemID::ARMOR_HELMET_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_HELMET_04)) {
+		outSlot  = ArmorSlot::HELMET;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_HELMET_01) + 1;
+		return true;
+	}
+
+	if (v >= static_cast<int>(ItemID::ARMOR_BODY_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_BODY_04)) {
+		outSlot  = ArmorSlot::BODY;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_BODY_01) + 1;
+		return true;
+	}
+
+	if (v >= static_cast<int>(ItemID::ARMOR_SHOES_01) &&
+		v <= static_cast<int>(ItemID::ARMOR_SHOES_04)) {
+		outSlot  = ArmorSlot::SHOES;
+		outGrade = v - static_cast<int>(ItemID::ARMOR_SHOES_01) + 1;
+		return true;
+	}
+
+	outSlot  = ArmorSlot::NONE;
+	outGrade = 0;
+	return false;
+}
+
+// ìµœì¢… í”¼í•´ = floor(dmg * (100 - í—¬ë©§ - ìƒì˜) / 100), ëª…ì¤‘ì´ë©´ ìµœì†Œ 1.
+// ì •ìˆ˜ ë‚˜ëˆ—ì…ˆì´ ê³§ ë²„ë¦¼ì´ë¯€ë¡œ ë¶€ë™ì†Œìˆ˜ë¥¼ ì“°ì§€ ì•ŠëŠ”ë‹¤.
+inline short ApplyArmorReduction(short dmg, int helmet_grade, int body_grade)
+{
+	if (dmg <= 0) return 0;   // ë¹—ë‚˜ê°ì„ ìµœì†Œ 1 ë³´ì •ìœ¼ë¡œ ëª…ì¤‘ì‹œí‚¤ì§€ ì•Šê¸° ìœ„í•œ ê°€ë“œ
+
+	if (helmet_grade < 0 || helmet_grade > 4) helmet_grade = 0;
+	if (body_grade   < 0 || body_grade   > 4) body_grade   = 0;
+
+	int dr = ARMOR_DR_PERCENT[helmet_grade] + ARMOR_DR_PERCENT[body_grade];
+	if (dr > 100) dr = 100;
+
+	int result = (static_cast<int>(dmg) * (100 - dr)) / 100;
+	if (result < 1) result = 1;
+
+	return static_cast<short>(result);
 }
