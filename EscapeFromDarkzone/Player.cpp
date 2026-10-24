@@ -2125,7 +2125,7 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 		m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
 		m_pCamera->SetTimeLag(0.0f);
 		m_pCamera->SetOffset(XMFLOAT3(0.0f, cameraDistance, -5.0f));
-		m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
+		m_pCamera->GenerateProjectionMatrix(0.1f, 5000.0f, ASPECT_RATIO, 60.0f);
 		m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
 		m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
 		break;
@@ -2238,7 +2238,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		{
 			m_bDeathResultRequested = true;
 			if (frame)
-				frame->nextScene = new ResultScene(frame, false);
+				frame->nextScene = std::make_unique<ResultScene>(frame, false);
 		}
 
 		CPlayer::Update(fTimeElapsed);

@@ -170,6 +170,8 @@ void CCamera::ReleaseShaderVariables()
 	{
 		m_pd3dcbCamera->Unmap(0, NULL);
 		m_pd3dcbCamera->Release();
+		m_pd3dcbCamera = nullptr;
+		m_pcbMappedCamera = nullptr;
 	}
 }
 
@@ -335,7 +337,18 @@ void CThirdPersonCamera::Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed)
 
 void CThirdPersonCamera::SetLookAt(const XMFLOAT3& xmf3LookAt)
 {
-	XMFLOAT4X4 mtxLookAt = Matrix4x4::LookAtLH(m_xmf3Position, xmf3LookAt, m_pPlayer->GetUpVector());
+	m_xmf3LookAtWorld = xmf3LookAt;
+	const XMVECTOR direction = XMVectorSubtract(XMLoadFloat3(&xmf3LookAt), XMLoadFloat3(&m_xmf3Position));
+	if (XMVectorGetX(XMVector3LengthSq(direction)) < 0.000001f) return;
+	XMFLOAT3 up = m_pPlayer ? m_pPlayer->GetUpVector() : XMFLOAT3(0.0f, 1.0f, 0.0f);
+	const XMVECTOR look = XMVector3Normalize(direction);
+	if (fabsf(XMVectorGetX(XMVector3Dot(look, XMLoadFloat3(&up)))) > 0.99f)
+	{
+		up = m_pPlayer ? m_pPlayer->GetLookVector() : XMFLOAT3(0.0f, 0.0f, 1.0f);
+		if (fabsf(XMVectorGetX(XMVector3Dot(look, XMLoadFloat3(&up)))) > 0.99f)
+			up = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	}
+	XMFLOAT4X4 mtxLookAt = Matrix4x4::LookAtLH(m_xmf3Position, xmf3LookAt, up);
 	m_xmf3Right = XMFLOAT3(mtxLookAt._11, mtxLookAt._21, mtxLookAt._31);
 	m_xmf3Up = XMFLOAT3(mtxLookAt._12, mtxLookAt._22, mtxLookAt._32);
 	m_xmf3Look = XMFLOAT3(mtxLookAt._13, mtxLookAt._23, mtxLookAt._33);
@@ -534,10 +547,13 @@ void LightCameraManager::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCo
 
 void LightCameraManager::ReleaseShaderVariables()
 {
+	for (auto& camera : cameras)
+		camera.ReleaseShaderVariables();
 	if (m_pd3dcbShadowInfo)
 	{
 		m_pd3dcbShadowInfo->Unmap(0, NULL);
 		m_pd3dcbShadowInfo->Release();
 		m_pd3dcbShadowInfo = nullptr;
+		m_pcbMappedShadowInfo = nullptr;
 	}
 }

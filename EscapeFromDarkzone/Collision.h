@@ -12,6 +12,12 @@ struct ColResult {
 
 class CollisionManager {
 public:
+	static XMFLOAT3 ConstrainBoundaryCameraPosition(
+		const XMFLOAT3& anchor,
+		const XMFLOAT3& desiredPosition,
+		const std::vector<const BoundingOrientedBox*>& boundaries,
+		float radius);
+
 	void DoCollision(
 		CGameObject* main,
 		std::vector<CGameObject*>* target

@@ -97,7 +97,6 @@ CGameFramework::CGameFramework()
 	m_nWndClientWidth = FRAME_BUFFER_WIDTH;
 	m_nWndClientHeight = FRAME_BUFFER_HEIGHT;
 
-	m_pPlayer = NULL;
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
 
@@ -126,7 +125,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 	CreateSwapChain();
 	CreateDepthStencilView();
 
-	CoInitialize(NULL);
+	m_comInitialized = SUCCEEDED(CoInitialize(nullptr));
 
 	shadowmap = std::make_unique<ShadowMap>();
 	shadowmap->Create(m_pd3dDevice);
@@ -556,6 +555,7 @@ void CGameFramework::OnDestroy()
 
 	WaitForGpuComplete();
 	ReleaseObjects();
+	SoundManager::Instance()->Release();
 	ResourceManager::Instance().ReleaseResources();
 
 	::CloseHandle(m_hFenceEvent);
@@ -588,11 +588,18 @@ void CGameFramework::OnDestroy()
 
 #if defined(_DEBUG)
 	IDXGIDebug1* pdxgiDebug = NULL;
-	DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), (void**)&pdxgiDebug);
-	HRESULT hResult = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, 
-		(DXGI_DEBUG_RLO_FLAGS)(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
-	pdxgiDebug->Release();
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), (void**)&pdxgiDebug)))
+	{
+		pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL,
+			(DXGI_DEBUG_RLO_FLAGS)(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+		pdxgiDebug->Release();
+	}
 #endif
+	if (m_comInitialized)
+	{
+		CoUninitialize();
+		m_comInitialized = false;
+	}
 }
 
 //#define _WITH_TERRAIN_PLAYER
@@ -644,7 +651,7 @@ void CGameFramework::BuildObjects()
 		shadermanager->GetShader(ShaderType::STANDARD)
 	);
 
-	CTerrainPlayer* pPlayer = new CTerrainPlayer(
+	auto pPlayer = std::make_unique<CTerrainPlayer>(
 		m_pd3dDevice,
 		m_pd3dCommandList,
 		root->GetRoot(),
@@ -662,8 +669,8 @@ void CGameFramework::BuildObjects()
 		nullptr
 	);
 
-	m_pPlayer = pPlayer;
-	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pPlayer = std::move(pPlayer);
+	m_pScene.back()->SetPlayer(m_pPlayer.get());
 
 	m_pCamera = m_pPlayer->GetCamera();
 
@@ -725,7 +732,7 @@ void CGameFramework::BuildObjects()
 		m_pd3dCommandList,
 		root->GetRoot(),
 		shadermanager.get(),
-		m_pPlayer
+		m_pPlayer.get()
 	);
 	m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());
 
@@ -819,8 +826,24 @@ void CGameFramework::RenderTextSystem()
 
 void CGameFramework::ReleaseObjects()
 {
-	
-	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->ReleaseObjects();
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(nullptr);
+	m_pPacketDispatcher.reset();
+	m_pNetEntityMgr.reset();
+	for (auto& scene : m_pScene)
+	{
+		if (scene) scene->ReleaseObjects();
+	}
+	m_pScene.clear();
+	nextScene.reset();
+	m_pTextRenderer.reset();
+	if (observer) observer->ReleaseShaderVariables();
+	observer.reset();
+	m_pCamera = nullptr;
+	m_pPlayer.reset();
+	if (shadowmap) shadowmap->Release();
+	shadowmap.reset();
+	shadermanager.reset();
+	root.reset();
 }
 
 void CGameFramework::ProcessInput()
@@ -937,7 +960,7 @@ void CGameFramework::AnimateObjects(float fTimeElapsed)
 
 	if (m_pPlayer->m_pSkinnedAnimationController)
 	{
-		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer);
+		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer.get());
 		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
 	}
 	else
@@ -1035,6 +1058,8 @@ void CGameFramework::FrameAdvance()
 		ProcessNetworkPackets();
 	}
 
+	if (!m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
 
 	ShadowRendering();
 	
@@ -1165,10 +1190,16 @@ void CGameFramework::ProcessNetworkPackets()
 
 void CGameFramework::PushScene()
 {
-	m_pScene.back()->ReleaseObjects();
-	m_pScene.push_back(unique_ptr<CScene>(nextScene));
+	if (!nextScene) return;
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(nullptr);
+	for (auto& scene : m_pScene)
+	{
+		if (scene) scene->ReleaseObjects();
+	}
+	m_pScene.clear();
+	m_pScene.push_back(std::move(nextScene));
 	m_pScene.back()->SetRoot(root->GetRoot());
-	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->SetPlayer(m_pPlayer.get());
 	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 
@@ -1179,10 +1210,12 @@ void CGameFramework::PushScene()
 
 void CGameFramework::PopScene()
 {
+	if (m_pScene.size() <= 1) return;
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(nullptr);
 	m_pScene.back()->ReleaseObjects();
 	m_pScene.pop_back();
 	m_pScene.back()->SetRoot(root->GetRoot());
-	m_pScene.back()->SetPlayer(m_pPlayer);
+	m_pScene.back()->SetPlayer(m_pPlayer.get());
 	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 

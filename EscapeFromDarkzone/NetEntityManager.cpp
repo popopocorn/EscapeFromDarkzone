@@ -192,8 +192,6 @@ void NetEntityManager::OnPlayerStateChange(const SC_PLAYER_STATE_CHANGE_PACKET* 
 
 static ModelName NpcModelFromTierOutfit(int tier, int outfit)
 {
-	return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1));
-
 	if (tier < 0 || tier > 2) tier = 0;
 	if (outfit < 0 || outfit > 2) outfit = 0;
 	switch (tier) {
@@ -204,7 +202,6 @@ static ModelName NpcModelFromTierOutfit(int tier, int outfit)
 	case 0:
 	default:
 		return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1) + outfit);
-		//return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1));
 	}
 }
 

@@ -126,6 +126,7 @@ void UIObject::SetScale(float x, float y, float z)
 	world._11 = x;
 	world._22 = y;
 	world._33 = z;
+	if (m_hasHitBox) setAABB();
 }
 
 void UIObject::SetLocate(float x, float y, float z)
@@ -133,6 +134,7 @@ void UIObject::SetLocate(float x, float y, float z)
 	world._41 = x;
 	world._42 = y;
 	world._43 = z;
+	if (m_hasHitBox) setAABB();
 }
 
 void UIObject::setAABB()
@@ -147,6 +149,7 @@ void UIObject::setAABB()
 	CollisionBox.maxX = cx + sx * 0.5f;
 	CollisionBox.minY = cy - sy * 0.5f;
 	CollisionBox.maxY = cy + sy * 0.5f;
+	m_hasHitBox = true;
 }
 
 void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
@@ -574,7 +577,7 @@ bool Inventory::ProcessClick(POINT mouse)
 		auto* hitBox = slotViews[i].hitBox.get();
 		if (!hitBox) continue;
 
-		if (hitBox->GetBox().Intersects(mouse))
+		if (hitBox->ContainsPoint(mouse))
 		{
 			if (ID >= 0)
 			{
@@ -1080,11 +1083,13 @@ void EquipUI::ResetForNewRound()
 
 bool EquipUI::ProcessClick(POINT mouse)
 {
+	if (!isOpen) return false;
 	for (auto& p : UIs)
 	{
-		if (p.second->GetBox().Intersects(mouse))
+		if (p.second->IsClickable() && p.second->ContainsPoint(mouse))
 		{
 			p.second->HandleClick();
+			return true;
 		}
 	}
 	return false;
@@ -1233,9 +1238,10 @@ bool PlayerStatus::ProcessClick(POINT mouse)
 {
 	for (auto& p : UIs)
 	{
-		if (p.second->GetBox().Intersects(mouse))
+		if (p.second->IsClickable() && p.second->ContainsPoint(mouse))
 		{
 			p.second->HandleClick();
+			return true;
 		}
 	}
 	return false;
@@ -1369,20 +1375,19 @@ void HUDManager::CloseUI(int idx)
 
 bool HUDManager::ProcessClick(POINT mouse)
 {
-	for (auto& o : objs)
+	// Panels are drawn after standalone objects, so test them first.
+	for (auto it = panels.rbegin(); it != panels.rend(); ++it)
 	{
-		if (o->GetBox().Intersects(mouse))
+		if ((*it)->isOpen && (*it)->ProcessClick(mouse))
+			return true;
+	}
+	for (auto it = objs.rbegin(); it != objs.rend(); ++it)
+	{
+		auto& o = *it;
+		if (o->IsClickable() && o->ContainsPoint(mouse))
 		{
 			o->HandleClick();
 			return true;
-		}
-	}
-	for (auto& o : panels)
-	{
-		if (o->isOpen)
-		{
-			o->ProcessClick(mouse);
-
 		}
 	}
 	return false;

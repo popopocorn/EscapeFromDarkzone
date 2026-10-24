@@ -2,6 +2,62 @@
 
 #include"Object.h"
 
+XMFLOAT3 CollisionManager::ConstrainBoundaryCameraPosition(
+	const XMFLOAT3& anchor,
+	const XMFLOAT3& desiredPosition,
+	const std::vector<const BoundingOrientedBox*>& boundaries,
+	float radius)
+{
+	// Only the horizontal arm contracts. Camera height is never lowered.
+	const XMVECTOR arm = XMVectorSet(desiredPosition.x - anchor.x, 0.0f,
+		desiredPosition.z - anchor.z, 0.0f);
+	const float armLength = XMVectorGetX(XMVector3Length(arm));
+	if (armLength < 0.0001f) return desiredPosition;
+
+	const XMVECTOR direction = XMVectorScale(arm, 1.0f / armLength);
+	float safeDistance = armLength;
+	const float padding = std::max(radius, 0.0f);
+	for (const BoundingOrientedBox* boundary : boundaries)
+	{
+		if (!boundary) continue;
+		// Boundary models are upright walls. Intersect their XZ footprint even
+		// when the camera is higher than the wall's visible mesh.
+		const XMVECTOR inverseRotation = XMQuaternionConjugate(XMLoadFloat4(&boundary->Orientation));
+		const XMVECTOR relativeOrigin = XMVectorSet(anchor.x - boundary->Center.x, 0.0f,
+			anchor.z - boundary->Center.z, 0.0f);
+		XMFLOAT3 localOrigin, localDirection;
+		XMStoreFloat3(&localOrigin, XMVector3Rotate(relativeOrigin, inverseRotation));
+		XMStoreFloat3(&localDirection, XMVector3Rotate(direction, inverseRotation));
+		const float origins[2] = { localOrigin.x, localOrigin.z };
+		const float directions[2] = { localDirection.x, localDirection.z };
+		const float extents[2] = { boundary->Extents.x + padding, boundary->Extents.z + padding };
+		float entry = 0.0f;
+		float exit = armLength;
+		bool intersects = true;
+		for (int axis = 0; axis < 2; ++axis)
+		{
+			if (fabsf(directions[axis]) < 0.000001f)
+			{
+				if (fabsf(origins[axis]) > extents[axis]) { intersects = false; break; }
+				continue;
+			}
+			float first = (-extents[axis] - origins[axis]) / directions[axis];
+			float second = (extents[axis] - origins[axis]) / directions[axis];
+			if (first > second) std::swap(first, second);
+			entry = std::max(entry, first);
+			exit = std::min(exit, second);
+			if (entry > exit) { intersects = false; break; }
+		}
+		if (intersects && entry <= safeDistance)
+			safeDistance = std::max(0.0f, entry - 0.02f);
+	}
+
+	XMFLOAT3 position;
+	XMStoreFloat3(&position, XMVectorMultiplyAdd(direction, XMVectorReplicate(safeDistance),
+		XMVectorSet(anchor.x, desiredPosition.y, anchor.z, 0.0f)));
+	return position;
+}
+
 void CollisionManager::DoCollision(
 	CGameObject* main, std::vector<CGameObject*>* target)
 {
