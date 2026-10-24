@@ -154,6 +154,9 @@
     <ClInclude Include="WICTextureLoader12.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="WeaponAttachment.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="d3dx12.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>

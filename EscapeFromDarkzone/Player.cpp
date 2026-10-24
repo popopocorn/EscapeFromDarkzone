@@ -18,6 +18,7 @@
 #include "Network.h"	// 03.27 추가
 #include "NetSession.h"
 #include "GameFramework.h"
+#include "WeaponAttachment.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -206,7 +207,7 @@ void CPlayer::Update(float fTimeElapsed)
 	}
 
 	//UpdateWeaponCombat(fTimeElapsed);
-	UpdateWeaponPose(fTimeElapsed);
+	// Weapon attachment is finalized after movement, snapshots and collision.
 
 	UpdateTransform(NULL);
 
@@ -632,21 +633,8 @@ void CPlayer::UpdateDirection()
 struct PlayerWeaponVisualConfig
 {
 	ModelName modelName;
-	ItemType itemType;
-
-	XMFLOAT3 idlePos;
-	XMFLOAT3 idleRot;
-
-	XMFLOAT3 runPos;
-	XMFLOAT3 runRot;
-
 	XMFLOAT3 grenadePos;
 	XMFLOAT3 grenadeRot;
-
-	XMFLOAT3 shootPos;
-	XMFLOAT3 shootRot;
-
-	XMFLOAT3 scale;
 };
 
 static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
@@ -669,139 +657,17 @@ static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
 }
 static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-	// Rifle 테스트값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.15f, 0.2f, 0.1f);
-	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.0f, 0.10f, -0.0f);
-	const XMFLOAT3 rifleShootPos = XMFLOAT3(-0.10f, 0.0f, -0.0f);
-
-	const XMFLOAT3 rifleIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 rifleShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
-
-	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-
-	// SMG 기준값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.10f, 0.16f);
-	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
-	const XMFLOAT3 smgShootPos = XMFLOAT3(0.20f, -0.10f, -0.20f);
-
-	const XMFLOAT3 smgIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
-
-	// Shotgun 테스트값
-	// x값 수정 시 좌+ 우-, y값 수정 시 앞+ 뒤-, z값 수정 시 위- 아래+
-	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.15f, 0.3f, 0.05f);
-	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 shotgunIdleRot = XMFLOAT3(180.0f, 0.0f, 90.0f);
-	const XMFLOAT3 shotgunRunRot = XMFLOAT3(0.0f, 0.0f, -0.50f);
-	const XMFLOAT3 shotgunShootRot = XMFLOAT3(0.40f, 0.0f, -0.0f);
-
-	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(0.0f, 0.10f, 0.0f);
-	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, -90.0f, 180.0f);
-
-	const XMFLOAT3 shotgunScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-
-	// 권총 테스트값
-	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 pistolIdlePos = XMFLOAT3(-0.0f, 0.3f, 0.05f);
-	const XMFLOAT3 pistolRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 pistolIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 pistolGrenadePos = XMFLOAT3(-0.0f, 0.f, 0.0f);
-	const XMFLOAT3 pistolGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
-
-
-	PlayerWeaponVisualConfig config{};
 	switch (weaponType)
 	{
-	case PlayerWeaponType::SMG:
-		config.modelName = ModelName::SMG;
-		config.itemType = ItemType::SMG;
-
-		config.idlePos = smgIdlePos;
-		config.idleRot = smgIdleRot;
-		config.runPos = smgRunPos;
-		config.runRot = smgRunRot;
-		config.grenadePos = smgGrenadePos;
-		config.grenadeRot = smgGrenadeRot;
-		config.shootPos = smgShootPos;
-		config.shootRot = smgShootRot;
-
-		config.scale = XMFLOAT3(
-			rifleScale.x * 0.90f,
-			rifleScale.y * 0.90f,
-			rifleScale.z * 0.90f
-		);
-		break;
-
-	case PlayerWeaponType::Shotgun:
-		config.modelName = ModelName::SHOTGUN;
-		config.itemType = ItemType::SHOTGUN;
-
-		config.idlePos = shotgunIdlePos;
-		config.idleRot = shotgunIdleRot;
-
-		config.runPos = shotgunRunPos;
-		config.runRot = shotgunRunRot;
-
-		config.grenadePos = shotgunGrenadePos;
-		config.grenadeRot = shotgunGrenadeRot;
-
-		config.shootPos = shotgunShootPos;
-		config.shootRot = shotgunShootRot;
-
-		config.scale = shotgunScale;
-
-		break;
-
 	case PlayerWeaponType::Pistol:
-		config.modelName = ModelName::PISTOL;
-		config.itemType = ItemType::PISTOL;
-
-		config.idlePos = pistolIdlePos;
-		config.idleRot = pistolIdleRot;
-		config.runPos = pistolRunPos;
-		config.runRot = pistolRunRot;
-		config.grenadePos = pistolGrenadePos;
-		config.grenadeRot = pistolGrenadeRot;
-		config.shootPos = pistolShootPos;
-		config.shootRot = pistolShootRot;
-		config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
-		break;
-
-	case PlayerWeaponType::Rifle:
+		return { ModelName::PISTOL, {0,0,0}, {180,0,110} };
+	case PlayerWeaponType::SMG:
+		return { ModelName::SMG, {0.01f,0.05f,0.01f}, {90,-90,90} };
+	case PlayerWeaponType::Shotgun:
+		return { ModelName::SHOTGUN, {0,0.10f,0}, {180,-90,180} };
 	default:
-		config.modelName = ModelName::RIFLE;
-		config.itemType = ItemType::RIFLE;
-
-		config.idlePos = rifleIdlePos;
-		config.idleRot = rifleIdleRot;
-		config.runPos = rifleRunPos;
-		config.runRot = rifleRunRot;
-		config.grenadePos = rifleGrenadePos;
-		config.grenadeRot = rifleGrenadeRot;
-		config.shootPos = rifleShootPos;
-		config.shootRot = rifleShootRot;
-		config.scale = rifleScale;
-		break;
+		return { ModelName::RIFLE, {0.01f,0.05f,0.01f}, {90,-90,90} };
 	}
-
-	return config;
 }
 void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 {
@@ -823,33 +689,16 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	//m_pWeaponSocket->m_pChild = m_pWeapon;
 
 	//XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, XMMatrixIdentity());
-	static std::unordered_map<CGameObject*, XMFLOAT4X4> s_originalTransformMap;
 
 	// 1. 이 무기가 최초로 장착되는 거라면, 오프셋이 묻지 않은 '순정 FBX 행렬'을 백업합니다.
-	if (s_originalTransformMap.find(m_pWeapon) == s_originalTransformMap.end())
+	if (m_weaponImportedTransforms.find(m_pWeapon) == m_weaponImportedTransforms.end())
 	{
-		s_originalTransformMap[m_pWeapon] = m_pWeapon->m_xmf4x4ToParent;
+		m_weaponImportedTransforms[m_pWeapon] = m_pWeapon->m_xmf4x4ToParent;
 	}
 
 	// 2. 무기를 장착할 때마다, 누적된 찌꺼기를 날리고 '순정 FBX 행렬'로 깨끗하게 복구합니다.
-	m_pWeapon->m_xmf4x4ToParent = s_originalTransformMap[m_pWeapon];
-	pWeapon->SetPosition(
-		m_xmf3WeaponIdlePos.x,
-		m_xmf3WeaponIdlePos.y,
-		m_xmf3WeaponIdlePos.z
-	);
-
-	pWeapon->SetScale(
-		m_xmf3WeaponScale.x,
-		m_xmf3WeaponScale.y,
-		m_xmf3WeaponScale.z
-	);
-
-	pWeapon->Rotate(
-		m_xmf3WeaponIdleRot.x,
-		m_xmf3WeaponIdleRot.y,
-		m_xmf3WeaponIdleRot.z
-	);
+	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(
+		m_weaponImportedTransforms[m_pWeapon], GetPlayerWeaponVisualConfig(GetCurrentPlayerWeaponType()).modelName);
 
 
 	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
@@ -898,51 +747,15 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 		return;
 
 	case WEAPON_POSE::RUN:
-		ApplyRunWeaponPose();
 		return;
 
 	case WEAPON_POSE::SHOOT:
-		ApplyShootWeaponPose();
 		return;
 
 	case WEAPON_POSE::GRENADE:
 		ApplyGrenadeWeaponPose();
 		return;
 	}
-}
-
-void CPlayer::ApplyRunWeaponPose()
-{
-	XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-	XMMATRIX mRunRot = XMMatrixRotationRollPitchYaw(
-		XMConvertToRadians(m_xmf3WeaponRunRot.x),
-		XMConvertToRadians(m_xmf3WeaponRunRot.y),
-		XMConvertToRadians(m_xmf3WeaponRunRot.z)
-	);
-
-	XMMATRIX mFinal = XMMatrixMultiply(mRunRot, mBase);
-	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
-
-	m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponRunPos.x;
-	m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponRunPos.y;
-	m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponRunPos.z;
-}
-
-void CPlayer::ApplyShootWeaponPose()
-{
-	XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-	XMMATRIX mShootRot = XMMatrixRotationRollPitchYaw(
-		XMConvertToRadians(m_xmf3WeaponShootRot.x),
-		XMConvertToRadians(m_xmf3WeaponShootRot.y),
-		XMConvertToRadians(m_xmf3WeaponShootRot.z)
-	);
-
-	XMMATRIX mFinal = XMMatrixMultiply(mShootRot, mBase);
-	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
-
-	m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponShootPos.x;
-	m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponShootPos.y;
-	m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponShootPos.z;
 }
 
 void CPlayer::ApplyGrenadeWeaponPose()
@@ -1105,6 +918,18 @@ void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 }
 
+void CPlayer::FinalizeWeaponPose(float fTimeElapsed)
+{
+	if (!m_pWeapon || !m_pWeaponSocket) return;
+	UpdateWeaponPose(fTimeElapsed);
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	// Let authored animations release the support hand for these actions.
+	if (m_bIsDead || IsGrenadeState() || IsReloading() ||
+		(GetCurrentPlayerWeaponType() == PlayerWeaponType::Shotgun && IsShootState())) return;
+	WeaponAttachment::SolveSupportHand(m_pLeftUpperArm,m_pLeftForeArm,m_pLeftHand,m_pLeftHandGrip,
+		GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
+}
+
 void CPlayer::BeginGrenadeWeaponPose()
 {
 	if (!m_pWeapon) return;
@@ -1138,21 +963,9 @@ void CPlayer::DetachCurrentWeapon()
 
 void CPlayer::ApplyWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-	PlayerWeaponVisualConfig config = GetPlayerWeaponVisualConfig(weaponType);
-
-	m_xmf3WeaponIdlePos = config.idlePos;
-	m_xmf3WeaponIdleRot = config.idleRot;
-
-	m_xmf3WeaponRunPos = config.runPos;
-	m_xmf3WeaponRunRot = config.runRot;
-
+	const auto config = GetPlayerWeaponVisualConfig(weaponType);
 	m_xmf3WeaponGrenadePos = config.grenadePos;
 	m_xmf3WeaponGrenadeRot = config.grenadeRot;
-
-	m_xmf3WeaponShootPos = config.shootPos;
-	m_xmf3WeaponShootRot = config.shootRot;
-
-	m_xmf3WeaponScale = config.scale;
 }
 
 //디버그용 무조건 장착 함수

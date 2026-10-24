@@ -1,4 +1,5 @@
 #include "OtherPlayer.h"
+#include "WeaponAttachment.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
 #include"Shader.h"
@@ -34,37 +35,6 @@ static ModelName GetOtherPlayerWeaponModelNameFromPacket(short weaponType)
 	case ItemType::RIFLE:
 	default:
 		return ModelName::RIFLE;
-	}
-}
-static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outPos, XMFLOAT3& outRot, XMFLOAT3& outScale)
-{
-	switch (modelName)
-	{
-		//권총은 애니메이션 추가된 후 추가 수정
-	case ModelName::PISTOL:
-		outPos = XMFLOAT3(-0.0f, 0.0f, 0.05f);
-		outRot = XMFLOAT3(180.0f, 180.0f, 0.0f);
-		outScale = XMFLOAT3(1.0f, 1.0f, 1.0f);
-		break;
-
-	case ModelName::SMG:
-		outPos = XMFLOAT3(0.1f, 0.10f, 0.16f);
-		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
-		outScale = XMFLOAT3(1.1f * 0.90f, 1.1f * 0.90f, 1.1f * 0.90f);
-		break;
-
-	case ModelName::SHOTGUN:
-		outPos = XMFLOAT3(-0.20f, 0.15f, 0.f);
-		outRot = XMFLOAT3(180.0f, 0.0f, 105.0f);
-		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-		break;
-
-	case ModelName::RIFLE:
-	default:
-		outPos = XMFLOAT3(-0.05f, 0.30f, 0.1f);
-		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
-		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-		break;
 	}
 }
 static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
@@ -201,6 +171,11 @@ void OtherPlayer::Update(float fTimeElapsed)
 
 	UpdateTransform(NULL);
 
+	// The shader calls OnLateUpdate after this frame's animation evaluation.
+}
+
+void OtherPlayer::OnLateUpdate()
+{
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
@@ -210,6 +185,12 @@ void OtherPlayer::Update(float fTimeElapsed)
 	{
 		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	}
+	if (!m_pWeapon || !m_pSkinnedAnimationController || m_pSkinnedAnimationController->m_nAnimationTracks < 2 || m_bDead) return;
+	const int animation = m_pSkinnedAnimationController->m_pAnimationTracks[1].m_nAnimationSet;
+	if (animation == GetGrenadeAnimationByWeapon() || animation == GetReloadAnimationByWeapon() ||
+		(m_eWeaponType == PlayerWeaponType::Shotgun && animation == GetShootAnimationByWeapon())) return;
+	WeaponAttachment::SolveSupportHand(FindFrame("mixamorig:LeftArm"),FindFrame("mixamorig:LeftForeArm"),
+		FindFrame("mixamorig:LeftHand"),m_pWeapon->FindFrame("LeftHandGrip"),m_eWeaponType == PlayerWeaponType::Pistol);
 }
 
 void OtherPlayer::Render(
@@ -758,15 +739,7 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();
 
 
-	XMFLOAT3 weaponPos;
-	XMFLOAT3 weaponRot;
-	XMFLOAT3 weaponScale;
-
-	GetOtherPlayerWeaponVisualConfig(modelName, weaponPos, weaponRot, weaponScale);
-
-	m_pWeapon->SetPosition(weaponPos.x, weaponPos.y, weaponPos.z);
-	m_pWeapon->SetScale(weaponScale.x, weaponScale.y, weaponScale.z);
-	m_pWeapon->Rotate(weaponRot.x, weaponRot.y, weaponRot.z);
+	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(m_pWeapon->m_xmf4x4ToParent,modelName);
 
 	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
 

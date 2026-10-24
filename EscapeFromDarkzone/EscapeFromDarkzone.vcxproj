@@ -192,6 +192,7 @@
     <ClInclude Include="UI.h" />
     <ClInclude Include="UIText.h" />
     <ClInclude Include="WICTextureLoader12.h" />
+    <ClInclude Include="WeaponAttachment.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AI.cpp" />

@@ -27,6 +27,7 @@ public:
 	virtual ~OtherPlayer();
 
 	virtual void Animate(float fTimeElapsed) override;
+	virtual void OnLateUpdate() override;
 	virtual void Update(float fTimeElapsed);
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL) override;
 

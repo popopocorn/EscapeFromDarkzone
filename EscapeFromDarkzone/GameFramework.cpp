@@ -961,7 +961,6 @@ void CGameFramework::AnimateObjects(float fTimeElapsed)
 	if (m_pPlayer->m_pSkinnedAnimationController)
 	{
 		m_pPlayer->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_pPlayer.get());
-		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
 	}
 	else
 	{
@@ -1060,6 +1059,10 @@ void CGameFramework::FrameAdvance()
 
 	if (!m_pScene.empty() && m_pScene.back())
 		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
+	// The standalone weapon must use this frame's final hand transforms.
+	m_pPlayer->FinalizeWeaponPose(fTimeElapsed);
+	if (m_pPlayer->m_pSkinnedAnimationController)
+		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
 
 	ShadowRendering();
 	

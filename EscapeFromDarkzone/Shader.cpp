@@ -571,6 +571,7 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 			{
 				m_ppObjects[i]->m_pSkinnedAnimationController->AdvanceTime(fTimeElapsed, m_ppObjects[i]);
 			}
+			m_ppObjects[i]->OnLateUpdate();
 		}
 	}
 }
