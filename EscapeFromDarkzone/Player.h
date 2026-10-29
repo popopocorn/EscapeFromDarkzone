@@ -261,7 +261,9 @@ public:
 	bool EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
-	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
+	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager, bool allowFire = true);
+	void ApplyServerAmmo(const short (&ammo)[4]);
+	void CancelWeaponCombat();
 	void FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
 
 	bool TryFireWeapon();

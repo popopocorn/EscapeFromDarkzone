@@ -142,5 +142,6 @@ private:
 	// 텍스트 렌더링
 	std::unique_ptr<TextRenderer> m_pTextRenderer;
 	bool m_comInitialized = false;
+	bool m_hadServerConnection = false;
 };
 

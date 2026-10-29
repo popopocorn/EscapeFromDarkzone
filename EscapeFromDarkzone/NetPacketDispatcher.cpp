@@ -248,11 +248,11 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		gf.m_pNetEntityMgr->OnNpcStateChange(&p);
 		break;
 	}
-	case SC_AMMO_STATE: {
+	case SC_AMMO_STATE:
+	{
 		const auto value = ReadPacket<SC_AMMO_STATE_PACKET>(packet);
-		const auto* p = &value;
-		//p->ammo : short[4] 형태의 배열
-		//if (gf.m_pPlayer) 총알개수를배열로덮어씌우는함수호출(p->ammo);
+		// 서버의 확정 탄약을 장착 무기뿐 아니라 보유 무기 전체에 반영한다.
+		if (gf.m_pPlayer) gf.m_pPlayer->ApplyServerAmmo(value.ammo);
 		break;
 	}
 	case SC_GRENADE_COUNT:

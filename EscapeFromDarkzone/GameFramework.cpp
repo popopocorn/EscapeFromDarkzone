@@ -549,9 +549,8 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
-	if (NetworkManager::Instance().IsConnected()) {
-		NetworkManager::Instance().Shutdown();
-	}
+	// 끊긴 소켓도 정리해야 하므로 연결 여부와 관계없이 종료한다.
+	NetworkManager::Instance().Shutdown();
 
 	WaitForGpuComplete();
 	ReleaseObjects();
@@ -1028,6 +1027,8 @@ void CGameFramework::FrameAdvance()
 
 	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
 	
+	// 연결 종료와 수신 상태를 입력보다 먼저 반영해 오프라인 사격이 한 프레임 더 실행되지 않게 한다.
+	ProcessNetworkPackets();
 	ChangeScene();
 	
 	ProcessInput();
@@ -1051,11 +1052,6 @@ void CGameFramework::FrameAdvance()
 	);
 	SoundManager::Instance()->Update();
 	
-	// 03.27 추가, 03.30 위치 변경
-	if (NetworkManager::Instance().IsConnected())
-	{
-		ProcessNetworkPackets();
-	}
 
 	if (!m_pScene.empty() && m_pScene.back())
 		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
@@ -1175,12 +1171,29 @@ void CGameFramework::TransparentRendering()
 // 03.27 추가
 void CGameFramework::ProcessNetworkPackets()
 {
-	if (!NetworkManager::Instance().IsConnected()) return;
+	auto& network = NetworkManager::Instance();
+	if (network.IsConnected())
+	{
+		m_hadServerConnection = true;
+		network.Recv();
+	}
+	if (!network.IsConnected())
+	{
+		if (!m_hadServerConnection) return; // 처음부터 선택한 로컬 테스트와 접속 중 끊김을 구분한다.
+		m_hadServerConnection = false;
+		network.Shutdown();
+		if (m_pPlayer) m_pPlayer->CancelWeaponCombat();
+		mouseMove = true;
+		observing = false;
+		::ClipCursor(NULL);
+		while (::ShowCursor(TRUE) < 0) {}
+		// 기존 씬 전환 예약 방식을 사용해 GPU 자원을 안전한 프레임 경계에서 정리한다.
+		nextScene = std::make_unique<LobbyScene>(this, L"서버와 연결이 끊어져 로비로 돌아왔습니다.");
+		return;
+	}
 
 	if (!m_pPacketDispatcher)
 		m_pPacketDispatcher = std::make_unique<NetPacketDispatcher>(this);
-
-	NetworkManager::Instance().Recv();
 
 	while (true)
 	{

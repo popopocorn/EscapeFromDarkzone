@@ -23,6 +23,7 @@
 #include "Decal.h"
 #include "Network.h"
 #include "NetSession.h"
+#include "UIText.h"
 #include"SoundManager.h"
 
 static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameObject*>& outBlockers)
@@ -2087,9 +2088,10 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	// 시야 객체 blocker 갱신 + 전장의 안개 렌더/그림자 표시 상태 갱신
 	UpdateFogShadowVisibility();
 
-	if (m_pPlayer && !IsAnyInventoryOpen())
+	if (m_pPlayer)
 	{
-		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager.get());
+		// 창을 열어도 진행 중인 재장전/쿨다운은 갱신하고 새 사격만 차단한다.
+		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager.get(), !IsAnyInventoryOpen());
 	}
 
 	UpdateGrenade(fTimeElapsed);
@@ -2850,7 +2852,7 @@ void MainScene::ResetForNewRound(short fullHp)
 	OutputDebugString(L"[RoundReset] MainScene 초기화 완료\n");
 }
 
-LobbyScene::LobbyScene(CGameFramework* game) : CScene(game)
+LobbyScene::LobbyScene(CGameFramework* game, const std::wstring& notice) : CScene(game), m_connectionNotice(notice)
 {
 	name = SceneName::LOBBY;
 
@@ -2902,6 +2904,16 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		});
 
 	uiManager->AddToManager(lobbybutton);
+
+	if (!m_connectionNotice.empty())
+	{
+		// 연결 종료 사유를 로비에 남겨 온라인 진행이 중단됐음을 분명히 알린다.
+		auto notice = std::make_unique<UIText>(m_connectionNotice,
+			XMFLOAT2(FRAME_BUFFER_WIDTH * 0.5f, FRAME_BUFFER_HEIGHT * 0.62f), UITextAlign::CENTER);
+		notice->SetColor(1.0f, 0.85f, 0.65f, 1.0f);
+		notice->SetMaxWidth(FRAME_BUFFER_WIDTH * 0.85f);
+		uiManager->AddText(std::move(notice));
+	}
 
 
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);

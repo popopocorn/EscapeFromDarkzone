@@ -1736,6 +1736,31 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 			}
 		}
 
+		// 기존 방 이벤트 큐에서 NPC와 같은 광선으로 플레이어도 검사한다.
+		// 한 발이 두 종류의 대상을 관통하지 않도록 가장 가까운 거리 하나만 유지한다.
+		short best_player_id = -1;
+		XMFLOAT3 best_player_pos{};
+		float best_player_yaw = 0.0f;
+		for (int cid : r.participants) {
+			if (cid < 0 || cid == e.attacker_client_id) continue;
+			XMFLOAT3 pos;
+			float yaw;
+			{
+				std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+				if (clients[cid]._state != ST_INGAME || clients[cid].room_id != r.id || clients[cid].hp <= 0) continue;
+				pos = { clients[cid].x, clients[cid].y, clients[cid].z };
+				yaw = clients[cid].yaw;
+			}
+			BoundingOrientedBox pbox = MakePlayerOOBB(pos, yaw);
+			float t;
+			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_player_id = static_cast<short>(cid);
+				best_player_pos = pos;
+				best_player_yaw = yaw;
+			}
+		}
+
 		// 벽 막힘 검사
 		int wall_idx = -1;
 		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
@@ -1744,20 +1769,62 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		float         trace_dist = max_range;
 		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
 
-		if (best_id >= 0 && best_t < wall_t) {
+		if ((best_id >= 0 || best_player_id >= 0) && best_t < wall_t) {
 			// 캐릭터 명중
 			hit_kind = 2;
 			trace_dist = best_t;
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
 			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
-			BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
-			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
-			if (dmg > 0) {
-				ApplyDamage(r, r.npcs[best_id], dmg, e.attacker_client_id);
+			if (best_player_id >= 0) {
+				BoundingOrientedBox pbox = MakePlayerOOBB(best_player_pos, best_player_yaw);
+				normal = GetOOBBHitNormal(pbox, hitPosC);
+				short new_hp;
+				bool just_died = false;
+				bool reset_prog = false;
+				{
+					// 기존 PvP와 동일하게 방어구, 무적, 사망 및 탈출 진행 리셋을 처리한다.
+					std::lock_guard<std::mutex> lk(clients[best_player_id]._s_lock);
+					auto& victim = clients[best_player_id];
+					if (victim._state != ST_INGAME || victim.room_id != r.id || victim.hp <= 0) break;
+					dmg = ApplyArmorReduction(dmg, victim.helmet_grade, victim.body_grade);
+					if (victim.godmode.load()) dmg = 0;
+					victim.hp = (std::max)(0, static_cast<int>(victim.hp) - dmg);
+					new_hp = victim.hp;
+					if (new_hp <= 0 && !victim.dead) {
+						victim.dead = true;
+						victim.player_state = PLAYER_STATE_DIE;
+						just_died = true;
+					}
+					if (victim.in_escape_zone) {
+						victim.last_hit_time = std::chrono::steady_clock::now();
+						reset_prog = true;
+					}
+				}
+				if (reset_prog) {
+					SC_ESCAPE_PROGRESS_PACKET pp;
+					pp.size = sizeof(pp);
+					pp.type = SC_ESCAPE_PROGRESS;
+					pp.event = ESCAPE_PROG_RESET;
+					clients[best_player_id].do_send(&pp);
+				}
+				SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+				hp_pkt.size = sizeof(hp_pkt);
+				hp_pkt.type = SC_PLAYER_HP_UPDATE;
+				hp_pkt.id = best_player_id;
+				hp_pkt.hp = new_hp;
+				clients[best_player_id].do_send(&hp_pkt);
+				if (just_died) BroadcastPlayerState(best_player_id);
+				std::cout << "[PvP] client " << e.attacker_client_id << " HIT player "
+					<< best_player_id << " (hp=" << new_hp << ")\n";
+			}
+			else {
+				BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
+				normal = GetOOBBHitNormal(nbox, hitPosC);
+				if (dmg > 0) ApplyDamage(r, r.npcs[best_id], dmg, e.attacker_client_id);
 			}
 		}
-		else if (wall_t < std::numeric_limits<float>::max()) {
+		else if (wall_t <= max_range) {
 			// 벽에 막힘
 			hit_kind = 1;
 			trace_dist = wall_t;
@@ -1769,6 +1836,8 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		XMFLOAT3 o3, d3;
 		XMStoreFloat3(&o3, origin);
 		XMStoreFloat3(&d3, dir);
+		// 예전 PvP 전용 요청에서 보내던 총구 효과도 통합 사격당 한 번만 전파한다.
+		BroadcastAttachedEffect(r, EffectID::SPARK, EffectEntityKind::PLAYER, static_cast<short>(e.attacker_client_id));
 		BroadcastFireTracer(r, 
 			(short)e.attacker_client_id, o3, d3,
 			(short)e.weapon_type, hit_kind, trace_dist, normal);
@@ -3316,6 +3385,7 @@ void process_packet(int c_id, char* packet)
 			<< " SUCCESS -> equip:" << static_cast<int>(recipe->result) << "\n";
 		break;
 	}
+	// 패킷 번호/구조와 방 큐는 유지한다. 새 클라이언트는 이 요청 하나로 PvE/PvP를 모두 처리한다.
 	case CS_HIT_NPC: {
 		if (false == clients[c_id].in_round.load()) break;
 		{ 

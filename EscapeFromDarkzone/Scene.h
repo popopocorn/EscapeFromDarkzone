@@ -168,7 +168,7 @@ public:
 
 class LobbyScene : public CScene {
 public:
-	LobbyScene(CGameFramework* game);
+	LobbyScene(CGameFramework* game, const std::wstring& notice = L"");
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
@@ -179,7 +179,7 @@ public:
 	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	
 private:
-
+	std::wstring m_connectionNotice;
 };
 
 

@@ -1171,7 +1171,7 @@ void CPlayer::InitializeWeaponAmmo()
 	OutputDebugStringW(debugBuf);
 }
 
-void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
+void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager, bool allowFire)
 {
 	if (m_fFireCooldown > 0.0f)
 	{
@@ -1179,9 +1179,10 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		if (m_fFireCooldown < 0.0f)
 			m_fFireCooldown = 0.0f;
 	}
-	if (m_bFireHeld)
+	// 인벤토리는 새 사격 입력만 막는다. 재장전과 쿨다운 시간은 계속 진행한다.
+	if (!allowFire) m_bFireHeld = false;
+	if (allowFire && m_bFireHeld && m_pEquippedWeaponItem)
 	{
-
 		if (m_fFireCooldown <= 0.0f)
 		{
 			FireOneShot(ppShaders, pEffectManager);
@@ -1192,7 +1193,7 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 			}
 		}
 	}
-	if (!m_bReloading)
+	if (!m_bReloading || !m_pEquippedWeaponItem)
 		return;
 
 	m_fReloadElapsed += fTimeElapsed;
@@ -1208,6 +1209,43 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		OutputDebugStringW(debugBuf);
 	}
 }
+// 서버 배열 순서는 권총/소총/SMG/샷건이며 PlayerWeaponType 선언 순서와 다르다.
+void CPlayer::ApplyServerAmmo(const short (&ammo)[4])
+{
+	constexpr PlayerWeaponType wireOrder[] = {
+		PlayerWeaponType::Pistol, PlayerWeaponType::Rifle,
+		PlayerWeaponType::SMG, PlayerWeaponType::Shotgun
+	};
+	for (size_t i = 0; i < 4; ++i)
+	{
+		auto found = PlayerOwnWeapons.find(wireOrder[i]);
+		if (found == PlayerOwnWeapons.end() || !found->second) continue;
+		WeaponItem& weapon = *found->second;
+		weapon.CurAmmo = std::clamp(static_cast<int>(ammo[i]), 0, weapon.maxAmmo);
+	}
+	if (!m_pEquippedWeaponItem) return;
+	if (m_pEquippedWeaponItem->CurAmmo == 0) m_bFireHeld = false;
+	// 서버가 먼저 재장전을 완료하면 로컬 애니메이션 예측 시간에 묶이지 않는다.
+	if (m_bReloading && m_pEquippedWeaponItem->CurAmmo >= m_pEquippedWeaponItem->maxAmmo)
+	{
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+	}
+}
+
+void CPlayer::CancelWeaponCombat()
+{
+	// 연결 종료 후 예약 입력이나 재장전 완료가 다음 씬에서 실행되지 않도록 비운다.
+	m_bFireHeld = false;
+	m_bShotAnimRequest = false;
+	m_bReloading = false;
+	m_fReloadElapsed = 0.0f;
+	m_fFireCooldown = 0.0f;
+	m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	while (!event_queue.empty()) event_queue.pop();
+}
+
 #include"SoundManager.h"
 void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
 {
@@ -1251,7 +1289,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	{
 		short wType = GetEquippedWeaponTypeForWire();
 		short wGrade = GetEquippedWeaponGradeForWire();
-		NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
+		// 한 발당 한 요청만 전송한다. 서버 방 스레드가 NPC/플레이어/벽을 함께 판정한다.
 		NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
 	}
 
