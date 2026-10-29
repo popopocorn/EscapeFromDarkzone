@@ -10,6 +10,7 @@ public:
 	}
 	void init(HWND hwnd);
 	void update();
+	void Reset();
 	bool KeyDown(INPUT_KEY key) { return GetState(key) == KEY_STATE::DOWN; }
 	bool KeyHold(INPUT_KEY key) { return GetState(key) == KEY_STATE::HOLD; }
 	bool KeyRelease(INPUT_KEY key) { return GetState(key) == KEY_STATE::UP; }

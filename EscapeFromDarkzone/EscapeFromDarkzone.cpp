@@ -111,6 +111,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	switch (message)
 	{
+	// 포커스 해제/복귀를 프레임워크에 전달해야 사격 입력과 커서 기준점이 정리된다.
+	case WM_ACTIVATE:
+		gGameFramework->OnProcessingWindowMessage(hWnd, message, wParam, lParam);
+		// 기본 활성화 처리의 키보드 포커스 설정도 유지한다.
+		return ::DefWindowProc(hWnd, message, wParam, lParam);
 	case WM_SIZE:
 	case WM_LBUTTONDOWN:
 	case WM_LBUTTONUP:

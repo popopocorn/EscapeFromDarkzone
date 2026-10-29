@@ -48,6 +48,8 @@ public:
 
     void ProcessInput();
     void AnimateObjects(float fTimeElapsed);
+	void FinalizeGameplayFrame(float fTimeElapsed);
+	bool IsWindowActive() const;
     void FrameAdvance();
 
 	void ShadowRendering();

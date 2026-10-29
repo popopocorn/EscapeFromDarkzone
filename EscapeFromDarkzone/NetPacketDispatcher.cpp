@@ -360,10 +360,9 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		const auto value = ReadPacket<SC_FIRE_TRACER_PACKET>(packet);
 		const auto* p = &value;
 
-		if (gf.m_pNetEntityMgr && p->shooter_id == gf.m_pNetEntityMgr->GetMyId())
-		{
-			break;
-		}
+		// 자기 사격도 서버 확정 명중은 반영하되 총성/궤적은 다시 재생하지 않는다.
+		const bool isLocalShooter = gf.m_pNetEntityMgr && p->shooter_id >= 0 &&
+			p->shooter_id == gf.m_pNetEntityMgr->GetMyId();
 
 		if (gf.m_pScene.empty()) break;
 
@@ -381,7 +380,7 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		XMFLOAT3 normal = XMFLOAT3(p->nx, p->ny, p->nz);
 		ItemType type = static_cast<ItemType>(p->weapon_type);
 
-		pMainScene->ProcessFireRequest(type, origin, dir, p->distance, p->hit_kind, normal);
+		pMainScene->ProcessFireRequest(type, origin, dir, p->distance, p->hit_kind, normal, isLocalShooter);
 
 		break;
 	}

@@ -8,6 +8,7 @@
 struct WeaponSpec
 {
 	float damage = 0.0f;
+	float range = 0.0f; // 서버 유효 사거리와 같은 범위에서 로컬 궤적을 예측한다.
 	float rpm = 0.0f;
 	float dps = 0.0f;
 

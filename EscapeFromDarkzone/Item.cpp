@@ -32,6 +32,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 	switch (category)
 	{
 	case ItemType::PISTOL:
+		spec.range = 10.0f;
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
 		spec.magazineSize = 15;
@@ -39,6 +40,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::RIFLE:
+		spec.range = 50.0f;
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
 		spec.magazineSize = 30;
@@ -64,6 +66,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::SMG:
+		spec.range = 50.0f;
 		spec.rpm = 900.0f;
 		spec.maxDistanceDamageReductionRatio = 0.50f;
 		spec.magazineSize = 35;
@@ -89,6 +92,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::SHOTGUN:
+		spec.range = 20.0f;
 		spec.rpm = 55.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
 		spec.magazineSize = 8;

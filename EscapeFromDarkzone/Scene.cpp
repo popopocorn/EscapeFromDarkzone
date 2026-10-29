@@ -204,49 +204,7 @@ static float RaycastFogShadowBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT
 }
 static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer, XMFLOAT3& outPos, XMFLOAT3& outLook, XMFLOAT3& outRight, XMFLOAT3& outUp)
 {
-	if (!pPlayer)
-		return false;
-
-	outLook = pPlayer->GetLookVector();
-	outRight = pPlayer->GetRightVector();
-	outUp = pPlayer->GetUpVector();
-
-	if (Vector3::Length(outLook) < 0.0001f)
-		outLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
-
-	if (Vector3::Length(outRight) < 0.0001f)
-		outRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
-
-	if (Vector3::Length(outUp) < 0.0001f)
-		outUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
-
-	outLook = Vector3::Normalize(outLook);
-	outRight = Vector3::Normalize(outRight);
-	outUp = Vector3::Normalize(outUp);
-
-	CGameObject* pMuzzle = pPlayer->GetWeaponMuzzleSocket();
-
-	if (pMuzzle)
-	{
-		pPlayer->UpdateTransform(NULL);
-
-		outPos = pMuzzle->GetPosition();
-
-		outPos.x += outLook.x * 0.05f;
-		outPos.y += outLook.y * 0.05f;
-		outPos.z += outLook.z * 0.05f;
-
-		return true;
-	}
-
-	// Socket_Muzzle이 없을 때 fallback
-	outPos = pPlayer->GetPosition();
-
-	outPos.x += outLook.x * 0.8f + outRight.x * 0.25f + outUp.x * 1.2f;
-	outPos.y += outLook.y * 0.8f + outRight.y * 0.25f + outUp.y * 1.2f;
-	outPos.z += outLook.z * 0.8f + outRight.z * 0.25f + outUp.z * 1.2f;
-
-	return false;
+	return pPlayer && pPlayer->GetWeaponMuzzlePose(outPos, outLook, outRight, outUp);
 }
 static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
 {
@@ -747,7 +705,7 @@ void MainScene::ReleaseGameplayCursor()
 
 void MainScene::ClampGameplayCursorToAimLine(HWND hWnd)
 {
-	if (!hWnd) return;
+	if (!hWnd || ::GetForegroundWindow() != hWnd || ::GetFocus() != hWnd) return;
 
 	if (IsAnyInventoryOpen())
 	{
@@ -835,7 +793,7 @@ void MainScene::UpdateCrosshairUI(HWND hWnd)
 	if (!m_pCrosshairUI)
 		return;
 
-	if (!hWnd || IsAnyInventoryOpen())
+	if (!hWnd || ::GetForegroundWindow() != hWnd || ::GetFocus() != hWnd || IsAnyInventoryOpen())
 	{
 		HideCrosshairUI();
 		return;
@@ -1301,6 +1259,7 @@ void MainScene::ExplodeGrenade()
 
 void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!frame || !frame->IsWindowActive()) return;
 	if (m_pPlayer->m_bIsDead)return;
 	if (not IsGameStart)return;
 	ClampGameplayCursorToAimLine(hWnd);
@@ -1394,6 +1353,7 @@ void MainScene::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wPar
 
 bool MainScene::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!frame || !frame->IsWindowActive()) return false;
 	if (!m_pPlayer) return false;
 
 	auto SendPlayerKeyEvent = [this](WPARAM keyCode, KEY_STATE state) -> bool
@@ -1911,11 +1871,23 @@ void MainScene::ReleaseObjects()
 	m_pLights.clear();
 }
 
+void MainScene::OnWindowActivationChanged(bool active)
+{
+	// 복귀 첫 프레임은 마우스 기준점만 다시 잡아 큰 회전이 발생하지 않게 한다.
+	m_bGameplayCursorInitialized = false;
+	if (!active)
+	{
+		m_bGrenadeAimMode = false;
+		m_bLaserActive = false;
+		ReleaseGameplayCursor();
+	}
+}
+
 bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
 {
+	if (!frame || !frame->IsWindowActive()) return false;
 	float cxDelta = 0.0f, cyDelta = 0.0f;
 	bool bInventoryOpen = false;
-	static bool bGameplayCursorInitialized = false;
 	if (m_pInventoryManager)
 	{
 		bInventoryOpen = m_pInventoryManager->IsAnyInventoryOpen();
@@ -1928,7 +1900,7 @@ bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
 		::ClipCursor(NULL);
 		::ShowCursor(TRUE);
 		::GetCursorPos(&frame->m_ptOldCursorPos);
-		bGameplayCursorInitialized = false;
+		m_bGameplayCursorInitialized = false;
 	}
 	else
 	{
@@ -1956,13 +1928,13 @@ bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
 			POINT ptFixedScreenCursor = ptFixedClientCursor;
 			::ClientToScreen(frame->GetHWND(), &ptFixedScreenCursor);
 
-			if (!bGameplayCursorInitialized)
+			if (!m_bGameplayCursorInitialized)
 			{
 				::ClipCursor(NULL);
 				::ShowCursor(TRUE);
 				::SetCursorPos(ptFixedScreenCursor.x, ptFixedScreenCursor.y);
 				frame->m_ptOldCursorPos = ptFixedScreenCursor;
-				bGameplayCursorInitialized = true;
+				m_bGameplayCursorInitialized = true;
 			}
 			else
 			{
@@ -2088,13 +2060,17 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	// 시야 객체 blocker 갱신 + 전장의 안개 렌더/그림자 표시 상태 갱신
 	UpdateFogShadowVisibility();
 
-	if (m_pPlayer)
-	{
-		// 창을 열어도 진행 중인 재장전/쿨다운은 갱신하고 새 사격만 차단한다.
-		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager.get(), !IsAnyInventoryOpen());
-	}
-
 	UpdateGrenade(fTimeElapsed);
+
+
+}
+
+void MainScene::FinalizeFrame(float fTimeElapsed)
+{
+	// 이동, 충돌, 손 애니메이션과 무기 부착을 확정한 뒤 같은 총구로 사격/이펙트를 만든다.
+	if (m_pPlayer)
+		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager.get(),
+			IsGameStart && !IsAnyInventoryOpen() && frame && frame->IsWindowActive());
 
 	if (m_pEffectManager)
 	{
@@ -2678,8 +2654,12 @@ void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
 	}
 }
 
-void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind, XMFLOAT3 hitNormal)
+void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 direction, float distance, unsigned char hitKind, XMFLOAT3 hitNormal, bool isLocalShooter)
 {
+	if (!std::isfinite(distance) || distance < 0.0f) return;
+	const float maxRange = WeaponItem::BuildSpec(weapon, ItemGrade::GRADE_1).range;
+	if (maxRange <= 0.0f) return;
+	if (distance > maxRange) { distance = maxRange; hitKind = 0; }
 	if (Vector3::Length(direction) < 0.0001f)
 		direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
 
@@ -2710,6 +2690,13 @@ void MainScene::ProcessFireRequest(ItemType weapon, XMFLOAT3 start, XMFLOAT3 dir
 		DecalManager::Instance()->SpawnBloodDecalOnFloor(hitPos, mapObjects);
 	}
 
+	if (isLocalShooter)
+	{
+		// 자기 사격은 총성과 궤적을 이미 예측했다. 서버 결과에서는 명중 자국만 확정한다.
+		if (decalInfo.enable)
+			DecalManager::Instance()->SpawnBulletDecal(Vector3::Add(start, direction, distance), decalInfo.normal);
+		return;
+	}
 	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, start, direction, distance, decalInfo);
 
 	switch (weapon)

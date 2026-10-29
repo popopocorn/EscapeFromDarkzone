@@ -1235,15 +1235,41 @@ void CPlayer::ApplyServerAmmo(const short (&ammo)[4])
 
 void CPlayer::CancelWeaponCombat()
 {
-	// 연결 종료 후 예약 입력이나 재장전 완료가 다음 씬에서 실행되지 않도록 비운다.
-	m_bFireHeld = false;
-	m_bShotAnimRequest = false;
+	ReleaseGameplayInput();
 	m_bReloading = false;
 	m_fReloadElapsed = 0.0f;
 	m_fFireCooldown = 0.0f;
+}
+
+void CPlayer::ReleaseGameplayInput()
+{
+	// 창 전환 시 놓친 버튼 해제를 대신한다. 진행 중인 재장전은 취소하지 않는다.
+	m_bFireHeld = false;
+	m_bShotAnimRequest = false;
 	m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	while (!event_queue.empty()) event_queue.pop();
+}
+
+bool CPlayer::GetWeaponMuzzlePose(XMFLOAT3& position, XMFLOAT3& look, XMFLOAT3& right, XMFLOAT3& up) const
+{
+	look = GetLookVector();
+	right = GetRightVector();
+	up = GetUpVector();
+	if (Vector3::Length(look) < 0.0001f) look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	if (Vector3::Length(right) < 0.0001f) right = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	if (Vector3::Length(up) < 0.0001f) up = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	look = Vector3::Normalize(look);
+	right = Vector3::Normalize(right);
+	up = Vector3::Normalize(up);
+	// 이 프레임의 충돌 보정과 무기 부착을 마친 월드 변환을 읽기만 한다.
+	// 여기서 플레이어 변환을 다시 갱신하면 확정한 손/총구 자세와 시점이 달라진다.
+	position = m_pWeaponMuzzleSocket ? m_pWeaponMuzzleSocket->GetPosition() : GetPosition();
+	if (m_pWeaponMuzzleSocket)
+		position = Vector3::Add(position, look, 0.05f);
+	else
+		position = Vector3::Add(position, up, 1.2f);
+	return true;
 }
 
 #include"SoundManager.h"
@@ -1259,33 +1285,10 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	NotifyWeaponFired();
 
 	XMFLOAT3 muzzlePos, muzzleLook, muzzleRight, muzzleUp;
-	muzzleLook = GetLookVector();
-	muzzleRight = GetRightVector();
-	muzzleUp = GetUpVector();
+	GetWeaponMuzzlePose(muzzlePos, muzzleLook, muzzleRight, muzzleUp);
+	const bool isOnline = NetworkManager::Instance().IsConnected();
 
-	if (Vector3::Length(muzzleLook) < 0.0001f) muzzleLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	if (Vector3::Length(muzzleRight) < 0.0001f) muzzleRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
-	if (Vector3::Length(muzzleUp) < 0.0001f) muzzleUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
-
-	muzzleLook = Vector3::Normalize(muzzleLook);
-	muzzleRight = Vector3::Normalize(muzzleRight);
-	muzzleUp = Vector3::Normalize(muzzleUp);
-
-	if (m_pWeaponMuzzleSocket)
-	{
-		UpdateTransform(NULL);
-		muzzlePos = m_pWeaponMuzzleSocket->GetPosition();
-		muzzlePos.x += muzzleLook.x * 0.05f;
-		muzzlePos.y += muzzleLook.y * 0.05f;
-		muzzlePos.z += muzzleLook.z * 0.05f;
-	}
-	else
-	{
-		muzzlePos = GetPosition();
-		muzzlePos.y += 1.2f;
-	}
-
-	if (NetworkManager::Instance().IsConnected())
+	if (isOnline)
 	{
 		short wType = GetEquippedWeaponTypeForWire();
 		short wGrade = GetEquippedWeaponGradeForWire();
@@ -1322,7 +1325,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
 	}
 
-	float maxRange = 100.0f;
+	const float maxRange = m_pEquippedWeaponItem->GetSpec().range;
 
 	float enemyDistance = maxRange;
 	float mapDistance = maxRange;
@@ -1427,7 +1430,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		decalInfo.decalType = 0;
 		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-		DecalManager::Instance()->SpawnBloodDecalOnFloor(hitEnemyPos, mapObjects);
+		// 온라인 혈흔은 서버 확정 결과에서만 만든다. 오프라인 연습은 로컬 판정을 쓴다.
+		if (!isOnline) DecalManager::Instance()->SpawnBloodDecalOnFloor(hitEnemyPos, mapObjects);
 	}
 	else if (hitMap)
 	{
@@ -1442,6 +1446,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	}
 
+	// 총성과 궤적은 즉시 예측하되 온라인 벽 탄흔은 서버의 명중 결과를 기다린다.
+	if (isOnline) decalInfo.enable = false;
 	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, muzzleLook, hitDistance, decalInfo);
 }
 

@@ -95,6 +95,8 @@ public:
 	virtual bool ProcessInput(UCHAR *pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed) {};
 	virtual void ResolvePlayerCamera(float fTimeElapsed) {};
+	virtual void FinalizeFrame(float fTimeElapsed) {};
+	virtual void OnWindowActivationChanged(bool active) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
@@ -198,6 +200,8 @@ public:
 	virtual bool ProcessInput(UCHAR* pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void ResolvePlayerCamera(float fTimeElapsed) override;
+	virtual void FinalizeFrame(float fTimeElapsed) override;
+	virtual void OnWindowActivationChanged(bool active) override;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL);
@@ -267,6 +271,7 @@ private:
 
 	float m_fLootInteractDistance = 3.0f;
 	bool	IsGameStart = false;
+	bool m_bGameplayCursorInitialized = false;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 	void LinkToPlayer();
@@ -322,7 +327,8 @@ public:
 		XMFLOAT3 direction,
 		float distance,
 		unsigned char hitKind = 0,
-		XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f)
+		XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f),
+		bool isLocalShooter = false
 	);
 
 	void ResetForNewRound(short fullHp = 100);

@@ -264,6 +264,8 @@ public:
 	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager, bool allowFire = true);
 	void ApplyServerAmmo(const short (&ammo)[4]);
 	void CancelWeaponCombat();
+	void ReleaseGameplayInput();
+	bool GetWeaponMuzzlePose(XMFLOAT3& position, XMFLOAT3& look, XMFLOAT3& right, XMFLOAT3& up) const;
 	void FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
 
 	bool TryFireWeapon();

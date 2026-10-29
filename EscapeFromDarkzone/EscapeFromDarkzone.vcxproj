@@ -160,6 +160,7 @@
     <ClInclude Include="FontResource.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
+    <ClInclude Include="Interpolation.h" />
     <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemDef.h" />

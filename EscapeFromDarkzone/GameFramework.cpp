@@ -422,6 +422,7 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!IsWindowActive()) return;
 	if (!m_pScene.empty() && m_pScene.back())
 	{
 		m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
@@ -447,6 +448,7 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!IsWindowActive()) return;
 	if (!m_pScene.empty() && m_pScene.back())
 	{
 		if (m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam))
@@ -519,10 +521,19 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 	{
 	case WM_ACTIVATE:
 	{
-		if (LOWORD(wParam) == WA_INACTIVE)
+		const bool active = LOWORD(wParam) != WA_INACTIVE;
+		if (!active)
+		{
 			m_GameTimer.Stop();
+			InputManager::Instance().Reset();
+			if (m_pPlayer) m_pPlayer->ReleaseGameplayInput();
+			if (hWnd && ::GetCapture() == hWnd) ::ReleaseCapture();
+			::ClipCursor(NULL);
+		}
 		else
 			m_GameTimer.Start();
+		if (!m_pScene.empty() && m_pScene.back())
+			m_pScene.back()->OnWindowActivationChanged(active);
 		break;
 	}
 	case WM_SIZE:
@@ -845,8 +856,15 @@ void CGameFramework::ReleaseObjects()
 	root.reset();
 }
 
+bool CGameFramework::IsWindowActive() const
+{
+	return m_hWnd && ::GetForegroundWindow() == m_hWnd && ::GetFocus() == m_hWnd;
+}
+
 void CGameFramework::ProcessInput()
 {
+	// 비활성 게임이 전역 키 상태를 읽거나 사용자의 커서를 되돌리지 않게 한다.
+	if (!IsWindowActive()) return;
 	static UCHAR pKeysBuffer[256];
 	static bool bGameplayCursorInitialized = false;
 
@@ -1016,6 +1034,16 @@ void CGameFramework::MoveToNextFrame()
 
 //#define _WITH_PLAYER_TOP
 
+void CGameFramework::FinalizeGameplayFrame(float fTimeElapsed)
+{
+	// 사격 패킷, 궤적, 총구 효과가 렌더링과 동일한 최종 무기 변환을 사용한다.
+	if (!m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
+	if (m_pPlayer) m_pPlayer->FinalizeWeaponPose(fTimeElapsed);
+	if (!m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->FinalizeFrame(fTimeElapsed);
+}
+
 void CGameFramework::FrameAdvance()
 {
 	InputManager::Instance().update();
@@ -1045,18 +1073,10 @@ void CGameFramework::FrameAdvance()
 
 	
 	AnimateObjects(fTimeElapsed);
+	FinalizeGameplayFrame(fTimeElapsed);
 	SoundManager::Instance()->UpdateListener(
-		m_pPlayer->GetPosition(),
-		m_pPlayer->GetLookVector(),
-		m_pPlayer->GetUpVector()
-	);
+		m_pPlayer->GetPosition(), m_pPlayer->GetLookVector(), m_pPlayer->GetUpVector());
 	SoundManager::Instance()->Update();
-	
-
-	if (!m_pScene.empty() && m_pScene.back())
-		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
-	// The standalone weapon must use this frame's final hand transforms.
-	m_pPlayer->FinalizeWeaponPose(fTimeElapsed);
 	if (m_pPlayer->m_pSkinnedAnimationController)
 		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
 

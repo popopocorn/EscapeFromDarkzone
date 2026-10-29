@@ -1,4 +1,5 @@
 #include "OtherPlayer.h"
+#include "Interpolation.h"
 #include "WeaponAttachment.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
@@ -156,11 +157,12 @@ void OtherPlayer::Update(float fTimeElapsed)
 
 	if (m_bUseServerLerp)
 	{
-		constexpr float ALPHA = 0.08f;
+		// 프레임 수 대신 실제 경과 시간으로 보간해 30/60/144FPS에서 같은 지연을 유지한다.
+		const float alpha = ServerPositionBlend(fTimeElapsed);
 		XMFLOAT3 cur = GetPosition();
-		cur.x += (m_xmf3ServerPosition.x - cur.x) * ALPHA;
-		cur.y += (m_xmf3ServerPosition.y - cur.y) * ALPHA;
-		cur.z += (m_xmf3ServerPosition.z - cur.z) * ALPHA;
+		cur.x += (m_xmf3ServerPosition.x - cur.x) * alpha;
+		cur.y += (m_xmf3ServerPosition.y - cur.y) * alpha;
+		cur.z += (m_xmf3ServerPosition.z - cur.z) * alpha;
 		SetPosition(cur);
 
 		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fServerYawDeg, 0.0f);
