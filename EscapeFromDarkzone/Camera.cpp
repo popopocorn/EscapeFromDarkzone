@@ -74,7 +74,7 @@ CCamera::CCamera(CCamera *pCamera)
 }
 
 CCamera::~CCamera()
-{ 
+{
 }
 
 void CCamera::SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ, float fMaxZ)
@@ -98,8 +98,7 @@ void CCamera::SetScissorRect(LONG xLeft, LONG yTop, LONG xRight, LONG yBottom)
 void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle)
 {
 	m_xmf4x4Projection = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(fFOVAngle), fAspectRatio, fNearPlaneDistance, fFarPlaneDistance);
-//	XMMATRIX xmmtxProjection = XMMatrixPerspectiveFovLH(XMConvertToRadians(fFOVAngle), fAspectRatio, fNearPlaneDistance, fFarPlaneDistance);
-//	XMStoreFloat4x4(&m_xmf4x4Projection, xmmtxProjection);
+
 	m_fNear = fNearPlaneDistance;
 	m_fFar = fFarPlaneDistance;
 	m_fAspect = fAspectRatio;
@@ -181,7 +180,6 @@ void CCamera::SetViewportsAndScissorRects(ID3D12GraphicsCommandList *pd3dCommand
 	pd3dCommandList->RSSetScissorRects(1, &m_d3dScissorRect);
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CSpaceShipCamera
 
 CSpaceShipCamera::CSpaceShipCamera(CCamera *pCamera) : CCamera(pCamera)
@@ -226,7 +224,6 @@ void CSpaceShipCamera::Rotate(float x, float y, float z)
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CFirstPersonCamera
 
 CFirstPersonCamera::CFirstPersonCamera(CCamera *pCamera) : CCamera(pCamera)
@@ -275,7 +272,6 @@ void CFirstPersonCamera::Rotate(float x, float y, float z)
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CThirdPersonCamera
 
 CThirdPersonCamera::CThirdPersonCamera(CCamera *pCamera) : CCamera(pCamera)
@@ -312,10 +308,8 @@ void CThirdPersonCamera::Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed)
 		float fLength = Vector3::Length(xmf3Direction);
 		xmf3Direction = Vector3::Normalize(xmf3Direction);
 
-
 		float fTimeLagScale = (m_fTimeLag) ? fTimeElapsed * (1.0f / m_fTimeLag) : 1.0f;
 		float fDistance = fLength * fTimeLagScale;
-
 
 		if (fDistance > fLength) fDistance = fLength;
 		if (fLength < 0.01f) fDistance = fLength;
@@ -331,7 +325,7 @@ void CThirdPersonCamera::Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed)
 		XMFLOAT3 xmf3NewLookAt = Vector3::Add(xmf3PlayerPos, Vector3::ScalarProduct(xmf3PlayerLook, fLookAtOffsetDistance));
 
 		SetLookAt(xmf3NewLookAt);
-		//SetLookAt(m_pPlayer->GetPosition());
+
 	}
 }
 

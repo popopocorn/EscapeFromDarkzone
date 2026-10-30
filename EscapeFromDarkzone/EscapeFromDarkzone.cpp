@@ -1,10 +1,8 @@
 ﻿// LabProject08-1-3.cpp : 응용 프로그램에 대한 진입점을 정의합니다.
-//
 
 #include "stdafx.h"
 #include "EscapeFromDarkzone.h"
 #include "GameFramework.h"
-
 
 #define MAX_LOADSTRING 100
 
@@ -105,7 +103,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	int wmId, wmEvent;
+	int wmId;
 	PAINTSTRUCT ps;
 	HDC hdc;
 
@@ -129,7 +127,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_COMMAND:
 		wmId = LOWORD(wParam);
-		wmEvent = HIWORD(wParam);
 		switch (wmId)
 		{
 		case IDM_ABOUT:

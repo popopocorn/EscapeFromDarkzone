@@ -65,9 +65,6 @@ public:
 	void RefreshBaseAnimationByServerState();
 
 	void TriggerShootAnim();
-	void TriggerReloadAnim();
-	void TriggerGrenadeAnim();
-	void TriggerDieAnim();
 
 	void EquipDefaultPistol();
 	void EquipWeaponModel(ModelName modelName);

@@ -1,7 +1,6 @@
 // stdafx.h : 자주 사용하지만 자주 변경되지는 않는
 // 표준 시스템 포함 파일 및 프로젝트 관련 포함 파일이
 // 들어 있는 포함 파일입니다.
-//
 
 #pragma once
 
@@ -29,8 +28,6 @@
 #include<map>
 #include <unordered_map>
 
-
-
 using namespace std;
 
 #include <d3d12.h>
@@ -42,7 +39,7 @@ using namespace std;
 #include <DirectXCollision.h>
 
 #include <Mmsystem.h>
-//#define _DEBUG
+
 #ifdef _DEBUG
 #include <dxgidebug.h>
 #endif
@@ -54,16 +51,11 @@ using Microsoft::WRL::ComPtr;
 
 extern HINSTANCE						ghAppInstance;
 
-//#define _WITH_SWAPCHAIN_FULLSCREEN_STATE
-
 extern int FRAME_BUFFER_WIDTH;
 extern int FRAME_BUFFER_HEIGHT;
 const int CASCADE_COUNT = 4;
 static const UINT SHADOW_MAP_SIZE = 2048;
 
-
-
-//#define _WITH_ANIMATION_SRT
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -90,9 +82,6 @@ extern BYTE ReadStringFromFile(FILE* pInFile, char* pstrToken, int nBufferSize);
 extern int ReadIntegerFromFile(FILE *pInFile);
 extern float ReadFloatFromFile(FILE *pInFile);
 
-
-//extern ColResult GetCollisionNormal(const BoundingOrientedBox& a, const BoundingOrientedBox& b);
-
 #define RANDOM_COLOR			XMFLOAT4(rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX), rand() / float(RAND_MAX))
 
 #define EPSILON					1.0e-10f
@@ -109,7 +98,6 @@ inline void Swap(float *pfS, float *pfT) { float fTemp = *pfS; *pfS = *pfT; *pfT
 #define ANIMATION_TYPE_PINGPONG			2
 
 #define ANIMATION_CALLBACK_EPSILON		0.00165f
-
 
 namespace Vector3
 {
@@ -278,15 +266,7 @@ namespace Matrix4x4
 	{
 		XMFLOAT4X4 xmf4x4Result;
 		XMStoreFloat4x4(&xmf4x4Result, XMLoadFloat4x4(&xmf4x4Matrix) * fScale);
-/*
-		XMVECTOR S, R, T;
-		XMMatrixDecompose(&S, &R, &T, XMLoadFloat4x4(&xmf4x4Matrix));
-		S = XMVectorScale(S, fScale);
-		T = XMVectorScale(T, fScale);
-		R = XMVectorScale(R, fScale);
-		//R = XMQuaternionMultiply(R, XMVectorSet(0, 0, 0, fScale));
-		XMStoreFloat4x4(&xmf4x4Result, XMMatrixAffineTransformation(S, XMVectorZero(), R, T));
-*/
+
 		return(xmf4x4Result);
 	}
 
@@ -439,4 +419,3 @@ enum RENDERINGPASS : int {
 	SHADOW = 1,
 	THROUGH =2,
 };
-

@@ -1,8 +1,5 @@
 #pragma once
 
-//#define FRAME_BUFFER_WIDTH		640
-//#define FRAME_BUFFER_HEIGHT		480
-
 #include "Timer.h"
 #include "Player.h"
 #include "Scene.h"
@@ -27,7 +24,6 @@ class CGameFramework
 public:
 	CGameFramework();
 	~CGameFramework();
-
 
 	bool OnCreate(HINSTANCE hInstance, HWND hMainWnd);
 	void OnDestroy();
@@ -70,23 +66,19 @@ public:
 	std::unique_ptr<CScene>      nextScene;
 	void PushScene();
 	void PopScene();
-	void PopScene(SceneName name);
 	void ChangeScene();
 	bool						mouseMove = false;
-	bool						observing = false;
 	ShaderManager* GetShaderManager() { return shadermanager.get(); }
 	POINT						m_ptOldCursorPos;
 	HWND GetHWND() { return m_hWnd; }
-	CCamera* GetObserver() { return observer.get(); }
-	void CreatePopSceneRequest(SceneName target);
 
 private:
 	HINSTANCE					m_hInstance;
-	HWND						m_hWnd; 
+	HWND						m_hWnd;
 
 	int							m_nWndClientWidth;
 	int							m_nWndClientHeight;
-        
+
 	IDXGIFactory4				*m_pdxgiFactory = NULL;
 	IDXGISwapChain3				*m_pdxgiSwapChain = NULL;
 	ID3D12Device				*m_pd3dDevice = NULL;
@@ -104,7 +96,6 @@ private:
 	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
 	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
 
-	//ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
 	ID3D12CommandAllocator*		m_pd3dCommandAllocators[m_nSwapChainBuffers];
 	ID3D12CommandQueue			*m_pd3dCommandQueue = NULL;
 	ID3D12GraphicsCommandList	*m_pd3dCommandList = NULL;
@@ -124,16 +115,11 @@ private:
 	CGameTimer					m_GameTimer;
 
 	vector<unique_ptr<CScene>>	m_pScene;
-	
+
 	std::unique_ptr<CPlayer>     m_pPlayer;
 	CCamera						*m_pCamera = NULL;	// 참조용
-	unique_ptr<CCamera>			observer;
 	unique_ptr<ShadowMap>		shadowmap;
 	unique_ptr<ShaderManager>	shadermanager;
-	
-	
-
-	
 
 	_TCHAR						m_pszFrameRate[70];
 
@@ -146,4 +132,3 @@ private:
 	bool m_comInitialized = false;
 	bool m_hadServerConnection = false;
 };
-

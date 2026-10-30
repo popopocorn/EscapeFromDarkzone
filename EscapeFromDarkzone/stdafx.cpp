@@ -73,9 +73,9 @@ ID3D12Resource* CreateTextureResource(ID3D12Device* pd3dDevice, ID3D12GraphicsCo
 	switch (d3dHeapType)
 	{
 	case D3D12_HEAP_TYPE_DEFAULT:
-	{		
+	{
 		D3D12_RESOURCE_STATES d3dResourceInitialStates = (ppd3dUploadBuffer && pData) ? D3D12_RESOURCE_STATE_COMMON : d3dResourceStates;
-//		D3D12_RESOURCE_STATES d3dResourceInitialStates = (ppd3dUploadBuffer && pData) ? D3D12_RESOURCE_STATE_COPY_DEST : d3dResourceStates;
+
 		HRESULT hResult = pd3dDevice->CreateCommittedResource(&d3dHeapPropertiesDesc, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, d3dResourceInitialStates, NULL, __uuidof(ID3D12Resource), (void**)&pd3dBuffer);
 		if (ppd3dUploadBuffer && pData)
 		{
@@ -165,8 +165,7 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 	DDS_ALPHA_MODE ddsAlphaMode = DDS_ALPHA_MODE_UNKNOWN;
 	bool bIsCubeMap = false;
 	HRESULT hResult = DirectX::LoadDDSTextureFromFileEx(pd3dDevice, pszFileName, 0, D3D12_RESOURCE_FLAG_NONE, DDS_LOADER_DEFAULT, &pd3dTexture, ddsData, vSubresources, &ddsAlphaMode, &bIsCubeMap);
-	
-	
+
 	if (FAILED(hResult) || !pd3dTexture || vSubresources.empty())
 	{
 		wchar_t pstrDebug[512] = { 0 };
@@ -177,7 +176,6 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 		return NULL;
 	}
 
-
 	D3D12_HEAP_PROPERTIES d3dHeapPropertiesDesc;
 	::ZeroMemory(&d3dHeapPropertiesDesc, sizeof(D3D12_HEAP_PROPERTIES));
 	d3dHeapPropertiesDesc.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -186,11 +184,8 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 	d3dHeapPropertiesDesc.CreationNodeMask = 1;
 	d3dHeapPropertiesDesc.VisibleNodeMask = 1;
 
-	//D3D12_RESOURCE_DESC d3dTextureResourceDesc = pd3dTexture->GetDesc();
-	//UINT nSubResources = d3dTextureResourceDesc.DepthOrArraySize * d3dTextureResourceDesc.MipLevels;
 	UINT nSubResources = (UINT)vSubresources.size();
-	//UINT64 nBytes = 0;
-	//pd3dDevice->GetCopyableFootprints(&d3dResourceDesc, 0, nSubResources, 0, NULL, NULL, NULL, &nBytes);
+
 	UINT64 nBytes = GetRequiredIntermediateSize(pd3dTexture, 0, nSubResources);
 
 	D3D12_RESOURCE_DESC d3dUploadResourceDesc;
@@ -209,11 +204,6 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 
 	pd3dDevice->CreateCommittedResource(&d3dHeapPropertiesDesc, D3D12_HEAP_FLAG_NONE, &d3dUploadResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), (void**)ppd3dUploadBuffer);
 
-	//UINT nSubResources = (UINT)vSubresources.size();
-	//D3D12_SUBRESOURCE_DATA *pd3dSubResourceData = new D3D12_SUBRESOURCE_DATA[nSubResources];
-	//for (UINT i = 0; i < nSubResources; i++) pd3dSubResourceData[i] = vSubresources.at(i);
-
-	//	std::vector<D3D12_SUBRESOURCE_DATA>::pointer ptr = &vSubresources[0];
 	::UpdateSubresources(pd3dCommandList, pd3dTexture, *ppd3dUploadBuffer, 0, 0, nSubResources, &vSubresources[0]);
 
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
@@ -226,7 +216,6 @@ ID3D12Resource* CreateTextureResourceFromDDSFile(ID3D12Device* pd3dDevice, ID3D1
 	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-	//	delete[] pd3dSubResourceData;
 	pd3dTexture->SetName(pszFileName);
 	(*ppd3dUploadBuffer)->SetName(pszFileName);
 	return(pd3dTexture);

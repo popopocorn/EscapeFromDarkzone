@@ -50,9 +50,7 @@ class Inventory;
 class Equip;
 class CGameFramework;
 
-
 class EffectManager;
-
 
 class CPlayer : public CGameObject
 {
@@ -111,7 +109,7 @@ protected:
 	float m_fWeaponBlendDuration = 0.25f;
 	XMFLOAT4X4 m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
 
-	// grenade 
+	// grenade
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
 	CGameObject* m_pLeftHand = nullptr;
@@ -124,7 +122,6 @@ protected:
 
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
-	//    
 	WeaponItem* m_pEquippedWeaponItem = nullptr;
 	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
@@ -166,7 +163,6 @@ public:
 			xmf3Position.z - m_xmf3Position.z
 		), false);
 	}
-
 
 	void SetScale(const XMFLOAT3& xmf3Scale) { m_xmf3Scale = xmf3Scale; }
 
@@ -226,7 +222,6 @@ public:
 	void FinalizeWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 
-	//bool EquipDebugWeapon(PlayerWeaponType weaponType);
 	void ApplyWeaponVisualConfig(PlayerWeaponType weaponType);
 	void DetachCurrentWeapon();
 
@@ -277,6 +272,7 @@ public:
 	int GetMaxAmmo() const;
 
 	float GetWeaponShotInterval() const;
+	// 추후 무기 능력치 UI에서 사용할 클라이언트 무기 데이터 조회다.
 	float GetWeaponDamage() const;
 
 	void SetFireHeld(bool bHeld) { m_bFireHeld = bHeld; }

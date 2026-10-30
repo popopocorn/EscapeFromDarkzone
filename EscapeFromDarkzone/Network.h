@@ -7,12 +7,9 @@
 #include <vector>
 #include "protocol.h"
 
-
 #pragma comment(lib, "WS2_32.lib")
 
 constexpr char SERVER_ADDR[] = "127.0.0.1";
-//constexpr char SERVER_ADDR[] = "58.124.82.168";
-
 
 // 패킷 큐 최대 크기
 constexpr int MAX_PACKET_QUEUE_SIZE = 100;
@@ -54,7 +51,6 @@ public:
     bool SendMove(char inputs, float yaw, unsigned int move_time);
     bool SendInventoryClick(char action, short slotidx);
     bool SendHitNpc(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
-    bool SendHitPlayer(const DirectX::XMFLOAT3& rayOrigin, const DirectX::XMFLOAT3& rayDirection, short weaponType, short weaponGrade);
     bool SendChangeWeapon(short weaponType, short weaponGrade);
     bool SendReloadRequest(short weaponType);
     bool SendChangeState(char state);
@@ -63,7 +59,7 @@ public:
     bool SendLootPickup(short box_id, short slotidx);
     bool SendCraftRequest(ItemID target);
 
-	bool SendArmorUpgradeRequest(ItemID targetArmor);       //업그레이드 요청  
+	bool SendArmorUpgradeRequest(ItemID targetArmor);       //업그레이드 요청
     bool SendWeaponUpgradeRequest(short slotidx);
 
     bool SendRoundJoin();

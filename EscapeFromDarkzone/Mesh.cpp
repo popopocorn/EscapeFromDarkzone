@@ -1,7 +1,3 @@
-//-----------------------------------------------------------------------------
-// File: CGameObject.cpp
-//-----------------------------------------------------------------------------
-
 #include "stdafx.h"
 #include "Mesh.h"
 #include "Object.h"
@@ -137,8 +133,6 @@ void CMesh::OnPostRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pCont
 {
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CSkyBoxMesh::CSkyBoxMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, float fWidth, float fHeight, float fDepth) : CMesh(pd3dDevice, pd3dCommandList)
 {
 	m_nVertices = 36;
@@ -154,35 +148,35 @@ CSkyBoxMesh::CSkyBoxMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd
 	m_pxmf3Positions[3] = XMFLOAT3(-fx, -fx, +fx);
 	m_pxmf3Positions[4] = XMFLOAT3(+fx, +fx, +fx);
 	m_pxmf3Positions[5] = XMFLOAT3(+fx, -fx, +fx);
-	// Back Quad										
+	// Back Quad
 	m_pxmf3Positions[6] = XMFLOAT3(+fx, +fx, -fx);
 	m_pxmf3Positions[7] = XMFLOAT3(-fx, +fx, -fx);
 	m_pxmf3Positions[8] = XMFLOAT3(+fx, -fx, -fx);
 	m_pxmf3Positions[9] = XMFLOAT3(+fx, -fx, -fx);
 	m_pxmf3Positions[10] = XMFLOAT3(-fx, +fx, -fx);
 	m_pxmf3Positions[11] = XMFLOAT3(-fx, -fx, -fx);
-	// Left Quad										
+	// Left Quad
 	m_pxmf3Positions[12] = XMFLOAT3(-fx, +fx, -fx);
 	m_pxmf3Positions[13] = XMFLOAT3(-fx, +fx, +fx);
 	m_pxmf3Positions[14] = XMFLOAT3(-fx, -fx, -fx);
 	m_pxmf3Positions[15] = XMFLOAT3(-fx, -fx, -fx);
 	m_pxmf3Positions[16] = XMFLOAT3(-fx, +fx, +fx);
 	m_pxmf3Positions[17] = XMFLOAT3(-fx, -fx, +fx);
-	// Right Quad										
+	// Right Quad
 	m_pxmf3Positions[18] = XMFLOAT3(+fx, +fx, +fx);
 	m_pxmf3Positions[19] = XMFLOAT3(+fx, +fx, -fx);
 	m_pxmf3Positions[20] = XMFLOAT3(+fx, -fx, +fx);
 	m_pxmf3Positions[21] = XMFLOAT3(+fx, -fx, +fx);
 	m_pxmf3Positions[22] = XMFLOAT3(+fx, +fx, -fx);
 	m_pxmf3Positions[23] = XMFLOAT3(+fx, -fx, -fx);
-	// Top Quad											
+	// Top Quad
 	m_pxmf3Positions[24] = XMFLOAT3(-fx, +fx, -fx);
 	m_pxmf3Positions[25] = XMFLOAT3(+fx, +fx, -fx);
 	m_pxmf3Positions[26] = XMFLOAT3(-fx, +fx, +fx);
 	m_pxmf3Positions[27] = XMFLOAT3(-fx, +fx, +fx);
 	m_pxmf3Positions[28] = XMFLOAT3(+fx, +fx, -fx);
 	m_pxmf3Positions[29] = XMFLOAT3(+fx, +fx, +fx);
-	// Bottom Quad										
+	// Bottom Quad
 	m_pxmf3Positions[30] = XMFLOAT3(-fx, -fx, +fx);
 	m_pxmf3Positions[31] = XMFLOAT3(+fx, -fx, +fx);
 	m_pxmf3Positions[32] = XMFLOAT3(-fx, -fx, -fx);
@@ -201,8 +195,6 @@ CSkyBoxMesh::~CSkyBoxMesh()
 {
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CStandardMesh::CStandardMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
 {
 }
@@ -229,10 +221,9 @@ void CStandardMesh::ReleaseUploadBuffers()
 
 	if (m_pd3dTextureCoord0UploadBuffer) m_pd3dTextureCoord0UploadBuffer->Release();
 	m_pd3dTextureCoord0UploadBuffer = NULL;
-	
+
 	if (m_pd3dTextureCoord1UploadBuffer) m_pd3dTextureCoord1UploadBuffer->Release();
 	m_pd3dTextureCoord1UploadBuffer = NULL;
-
 
 	if (m_pd3dNormalUploadBuffer) m_pd3dNormalUploadBuffer->Release();
 	m_pd3dNormalUploadBuffer = NULL;
@@ -366,7 +357,7 @@ void CStandardMesh::LoadMeshFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCom
 				m_d3dBiTangentBufferView.SizeInBytes = sizeof(XMFLOAT3) * m_nVertices;
 			}
 		}
-		
+
 		else if (!strcmp(pstrToken, "<SubMeshes>:"))
 		{
 			nReads = (UINT)::fread(&(m_nSubMeshes), sizeof(int), 1, pInFile);
@@ -456,8 +447,6 @@ void CStandardMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 5, pVertexBufferViews);
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CSkinnedMesh::CSkinnedMesh(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList) : CStandardMesh(pd3dDevice, pd3dCommandList)
 {
 
@@ -468,7 +457,6 @@ CSkinnedMesh::~CSkinnedMesh()
 	if (m_pxmn4BoneIndices) delete[] m_pxmn4BoneIndices;
 	if (m_pxmf4BoneWeights) delete[] m_pxmf4BoneWeights;
 
-	
 	if (m_ppstrSkinningBoneNames) delete[] m_ppstrSkinningBoneNames;
 
 	if (m_pxmf4x4BindPoseBoneOffsets) delete[] m_pxmf4x4BindPoseBoneOffsets;
@@ -538,7 +526,7 @@ void CSkinnedMesh::LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12Graphics
 		else if (!strcmp(pstrToken, "<BoneNames>:"))
 		{
 			m_nSkinningBones = ::ReadIntegerFromFile(pInFile);
-			if (m_nSkinningBones > 0) 
+			if (m_nSkinningBones > 0)
 			{
 				m_ppstrSkinningBoneNames = new char[m_nSkinningBones][260];
 				m_ppSkinningBoneFrameCaches = new CGameObject*[m_nSkinningBones];
@@ -650,8 +638,6 @@ void CSkinnedMesh::OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void 
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 7, pVertexBufferViews);
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CLaserMesh::CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList) : CMesh(pd3dDevice, pd3dCommandList)
 {
 	m_nVertices = 8;
@@ -685,8 +671,6 @@ CLaserMesh::CLaserMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3d
 	m_pd3dSubSetIndexBufferViews[0].SizeInBytes = sizeof(UINT) * 36;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CViewCircleMesh::CViewCircleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, float fRadius, int nSlices)
 	: CMesh(pd3dDevice, pd3dCommandList)
 {
@@ -880,7 +864,7 @@ void CViewCircleMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, const std::
 			localDir.z * hitDist
 		);
 	}
-	//OutputDebugString(L"circlecip\n");
+
 }
 
 void CViewConeMesh::UpdateClippedMesh(const XMFLOAT3& worldOrigin, float fYaw, const std::vector<CGameObject*>& blockers)

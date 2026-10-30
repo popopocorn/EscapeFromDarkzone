@@ -8,7 +8,7 @@ class TextRenderer;
 class UIMesh {
 private:
 	D3D12_PRIMITIVE_TOPOLOGY		m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	
+
 	vector<XMFLOAT3>				m_pxmf3Positions;
 	vector<XMFLOAT2>				UVs;
 
@@ -19,7 +19,7 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW		m_d3dPositionBufferView;
 	D3D12_VERTEX_BUFFER_VIEW		UVBufferView;
 	unique_ptr<CTexture>			texture;
-public:	
+public:
 	UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist);
 	~UIMesh();
 	virtual void ReleaseUploadBuffers();
@@ -47,7 +47,6 @@ struct CheckBox {
 	}
 };
 
-
 class UIObject {
 protected:
 	UIMesh*					object = nullptr;
@@ -72,7 +71,6 @@ public:
 	bool isopen = true;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
 };
-
 
 const int MAX_SLOTS = 10;
 
@@ -128,7 +126,6 @@ public:
 	void SlotClicked(int slotidx);
 	bool ProcessClick(POINT mouse);
 	//드래그 앤 드롭 처리 함수 추가
-	bool AddItem(ItemID item, int count = 1);
 	ItemSlot* GetSlot(int idx);
 
 	bool ApplyServerSlotUpdate(int slotIndex, ItemID itemId, int count);
@@ -136,8 +133,8 @@ public:
 	void ClearItems();                    // 인벤토리 슬롯 내용 초기화
 	void SetPosition(float x, float y);   // 인벤토리 전체 위치 이동
 	void SetId(int x) { ID = x; }
+	// 추후 제작 재료 UI에서 보유 수량을 조회할 때 사용한다.
 	int GetItemCnt(ItemID id)const;
-	void ConsumeItem(ItemID id, int cnt);
 
 	bool isOpen = false;
 };
@@ -161,7 +158,7 @@ private:
 	unordered_map<ItemType, unique_ptr<UIObject>> UIs;
 	unique_ptr<UIObject>base;
 public:
-	//EquipUI() = default;
+
 	EquipUI(CPlayer* player);
 	void Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	void EquipItem(ItemID item);
@@ -256,8 +253,6 @@ public:
 	}
 
 	UIText* AddText(unique_ptr<UIText> text);
-	void RemoveText(UIText* text);
-	void ClearTexts();
 
 	vector<unique_ptr<UIPanel>>* GetPanels()
 	{

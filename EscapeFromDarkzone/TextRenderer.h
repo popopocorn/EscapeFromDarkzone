@@ -48,8 +48,6 @@ public:
 
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList);
 
-	void SetScreenSize(UINT nScreenWidth, UINT nScreenHeight);
-
 	UINT GetScreenWidth() const
 	{
 		return m_nScreenWidth;

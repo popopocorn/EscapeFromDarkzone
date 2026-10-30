@@ -82,10 +82,7 @@ void NetEntityManager::RemoveNpc(short id)
 // ─────────────────────────────────────────────────────────────
 void NetEntityManager::OnLoginInfo(const SC_LOGIN_INFO_PACKET* p)
 {
-	//if (m_pPlayer) {
-	//	m_pPlayer->SetPosition(XMFLOAT3(p->x, p->y, p->z));
-	//	m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
-	//}
+
 	m_myId = p->id;
 }
 
@@ -103,7 +100,7 @@ void NetEntityManager::OnRoundReset()
 	for (auto& s : m_otherPlayers) { s.id = -1; s.pPlayer = nullptr; }
 	for (auto& s : m_npcs) { s.id = -1; s.pNpc = nullptr; }
 
-	// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함. 
+	// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함.
 }
 
 void NetEntityManager::OnAddPlayer(const SC_ADD_PLAYER_PACKET* p)
@@ -295,19 +292,13 @@ void NetEntityManager::OnNpcStateChange(const SC_NPC_STATE_CHANGE_PACKET* p)
 			break;
 		// 08.13 한준수 추가(행동트리)
 		case NPC_STATE_SEARCH:
-			//pNpc->ChangeState(std::make_unique<EnemyRun>());
+
 			pNpc->ChangeState(std::make_unique<EnemySearch>());
 			break;
 		case NPC_STATE_INVESTIGATE:
 			pNpc->ChangeState(std::make_unique<EnemyRun>());
 			break;
 		}
-		
+
 	}
-}
-
-void NetEntityManager::OnApplyEquip(const SC_EQUIPMENT_UPDATE_PACKET* p)
-{
-
-	m_pActiveScene->equipUI->EquipItem(p->equip_id);
 }

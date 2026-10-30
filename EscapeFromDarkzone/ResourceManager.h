@@ -115,7 +115,6 @@ enum class ModelName
 
 	MAP_ROAD,
 
-
 	MODEL_TYPE_END
 };
 
@@ -217,7 +216,6 @@ enum class UIName {
 	PANEL_001,
 	DIVIDER_001,
 
-
 	ICON_FIBER,
 	ICON_NEEDLE,
 	ICON_METAL,
@@ -261,7 +259,6 @@ class CGameObject;
 class CTexture;
 class ShadowMap;
 class CShader;
-//class UIMesh;
 
 class ResourceManager{
 private:
@@ -347,13 +344,6 @@ public:
 		int nShaderResourceViews
 	);
 
-	D3D12_GPU_DESCRIPTOR_HANDLE CreateConstantBufferViews(
-		ID3D12Device* pd3dDevice,
-		int nConstantBufferViews,
-		ID3D12Resource* pd3dConstantBuffers,
-		UINT nStride
-	);
-
 	void CreateShaderResourceViews(
 		ID3D12Device* pd3dDevice,
 		CTexture* pTexture,
@@ -402,14 +392,12 @@ public:
 		CShader* SkinnedShader
 	);
 
-	//static mesh object load
 	void BuildModelPrototypes(
 		ID3D12Device* pd3dDevice,
 		ID3D12GraphicsCommandList* pd3dCommandList,
 		ID3D12RootSignature* pd3dGraphicsRootSignature,
 		CShader* StandardShader
 	);
-
 
 	//ui object load
 	void BuildUIMesh(
@@ -434,11 +422,9 @@ public:
 	// 스킨드 모델 인스턴스 생성
 	ModelInstance* CreateSkinnedModelInstance(ModelName key);
 
-
 	UIMesh* GetUIMesh(UIName name);
 	void SaveTexture(string name, CTexture* tex);
 	CTexture* GetTexture(string name);
-
 
 private:
 		static void LoadMaterialsFromFile(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ModelResource* pParent, FILE* pInFile, CShader* pShader);

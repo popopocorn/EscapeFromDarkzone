@@ -1,8 +1,4 @@
-﻿//-----------------------------------------------------------------------------
-// File: CScene.cpp
-//-----------------------------------------------------------------------------
-
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "Scene.h"
 #include "Player.h"
 #include "EnemyObject.h"
@@ -39,30 +35,7 @@ static void GatherVisionBlockersFromShader(CShader* pShader, std::vector<CGameOb
 		outBlockers.push_back(obj);
 	}
 }
-static void GatherVisionBlockersNearPlayer(CShader* pShader, const XMFLOAT3& playerPos, float maxDistance, std::vector<CGameObject*>& outBlockers)
-{
-	if (!pShader) return;
 
-	auto* objs = pShader->GetObj();
-	if (!objs) return;
-
-	const float maxDistSq = maxDistance * maxDistance;
-
-	for (auto& obj : *objs)
-	{
-		if (!obj) continue;
-
-		XMFLOAT3 objPos = obj->GetPosition();
-		float dx = objPos.x - playerPos.x;
-		float dz = objPos.z - playerPos.z;
-		float distSq = dx * dx + dz * dz;
-
-		if (distSq <= maxDistSq)
-		{
-			outBlockers.push_back(obj);
-		}
-	}
-}
 static bool IntersectsVisionQueryRect2D(BoundingOrientedBox* pOOBB, const XMFLOAT3& playerPos, float halfExtent)
 {
 	if (!pOOBB) return false;
@@ -105,68 +78,7 @@ static void GatherVisionMapBlockersInRectFromList(const std::vector<CGameObject*
 		}
 	}
 }
-static float RaycastFogVisibilityBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT3& worldDir, float maxDistance, const std::vector<CGameObject*>& blockers)
-{
-	float nearest = maxDistance;
 
-	XMVECTOR rayOrigin = XMLoadFloat3(&worldOrigin);
-	XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&worldDir));
-
-	for (CGameObject* pObj : blockers)
-	{
-		if (!pObj) continue;
-
-		const auto& oobbs = pObj->GetOOBB();
-
-		for (BoundingOrientedBox* pOOBB : oobbs)
-		{
-			if (!pOOBB) continue;
-
-			if (pOOBB->Extents.y < 0.3f)
-				continue;
-
-			float hitDist = 0.0f;
-
-			if (pOOBB->Intersects(rayOrigin, rayDir, hitDist))
-			{
-				float clipDist = hitDist - 0.05f;
-
-				if (clipDist < 0.05f) clipDist = 0.05f;
-				if (clipDist < nearest) nearest = clipDist;
-			}
-		}
-	}
-
-	if (nearest > maxDistance) nearest = maxDistance;
-	if (nearest < 0.05f) nearest = 0.05f;
-
-	return nearest;
-}
-static void ApplyFogRenderState(CGameObject* pObject, bool bVisible)
-{
-	if (!pObject) return;
-
-	if (pObject->IsRenderEnabled() != bVisible)
-	{
-		pObject->SetRenderEnabled(bVisible, true);
-	}
-
-	if (pObject->CanCastShadow() != bVisible)
-	{
-		pObject->SetCastShadow(bVisible, true);
-	}
-}
-static XMFLOAT3 RotateVectorYLocal(const XMFLOAT3& v, float yaw)
-{
-	float c = cosf(yaw);
-	float s = sinf(yaw);
-
-	return XMFLOAT3(
-		v.x * c + v.z * s,
-		0.0f,
-		-v.x * s + v.z * c
-	);
-}
 static float RaycastFogShadowBlockers(const XMFLOAT3& worldOrigin, const XMFLOAT3& worldDir, float maxDistance, const std::vector<CGameObject*>& blockers)
 {
 	float nearest = maxDistance;
@@ -206,22 +118,7 @@ static bool GetCurrentPlayerMuzzleInfo(CPlayer* pPlayer, XMFLOAT3& outPos, XMFLO
 {
 	return pPlayer && pPlayer->GetWeaponMuzzlePose(outPos, outLook, outRight, outUp);
 }
-static EFFECT_TYPE GetSparkEffectTypeByWeapon(PlayerWeaponType weaponType)
-{
-	switch (weaponType)
-	{
-	case PlayerWeaponType::Shotgun:
-		return EFFECT_SPARK_SHOTGUN;
 
-	case PlayerWeaponType::Pistol:
-		return EFFECT_SPARK_PISTOL;
-
-	case PlayerWeaponType::Rifle:
-	case PlayerWeaponType::SMG:
-	default:
-		return EFFECT_SPARK_RIFLE_SMG;
-	}
-}
 static EFFECT_TYPE GetSparkEffectTypeByEnemyWeapon(EnemyWeaponType weaponType)
 {
 	switch (weaponType)
@@ -434,14 +331,11 @@ static XMFLOAT3 ReflectVelocityByNormal(const XMFLOAT3& velocity, const XMFLOAT3
 CScene::CScene(CGameFramework* game)
 {
 
-
 	m_pPlayer = nullptr;
 
 	m_pd3dGraphicsRootSignature = nullptr;
 	m_pd3dcbLights = nullptr;
 	m_pcbMappedLights = nullptr;
-
-	//m_pSkyBox = nullptr;
 
 	UIShader = make_unique<UIObjectShader>();
 
@@ -457,7 +351,6 @@ CScene::~CScene()
 {
 	ReleaseShaderVariables();
 }
-
 
 void CScene::BuildDefaultLightsAndMaterials()
 {
@@ -517,7 +410,6 @@ void CScene::DeleteTrash(UINT64 Fence)
 		shader->ProcessingGarbageQueue(Fence);
 	}
 }
-
 
 void CScene::DumpMapOOBBToCSV(const char* filename)
 {
@@ -585,9 +477,6 @@ MainScene::MainScene(CGameFramework* game) : CScene(game)
 	m_pInventoryManager = nullptr;
 
 	m_bLaserActive = false;
-	m_bSparkFireActive = false;
-	m_fSparkSpawnTimer = 0.0f;
-	m_fSparkSpawnInterval = 0.03f;
 	m_fLaserLength = 15.0f;
 
 	m_bGrenadeAimMode = false;
@@ -635,9 +524,7 @@ void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
 
 		m_pPlayer->SetFireHeld(false);
 
-		m_bSparkFireActive = false;
 		m_bLaserActive = false;
-		m_fSparkSpawnTimer = 0.0f;
 
 		if (m_pEffectManager)
 		{
@@ -1610,73 +1497,10 @@ void MainScene::PlayEffectFromServerLikeRequest(
 	m_pEffectManager->PlayEffectByID(desc);
 }
 
-void MainScene::PlayTestEffectByKey(WPARAM keyCode)
-{
-	if (!m_pPlayer)
-		return;
-
-	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-	XMFLOAT3 look = m_pPlayer->GetLookVector();
-	XMFLOAT3 up = m_pPlayer->GetUpVector();
-
-	if (Vector3::Length(look) < 0.0001f)
-	{
-		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	}
-
-	look = Vector3::Normalize(look);
-
-	XMFLOAT3 effectPos;
-	effectPos.x = playerPos.x + look.x * 3.0f;
-	effectPos.y = playerPos.y + 1.0f + look.y * 3.0f;
-	effectPos.z = playerPos.z + look.z * 3.0f;
-
-	XMFLOAT3 effectDir = look;
-
-	switch (keyCode)
-	{
-	case VK_F6:
-	{
-		PlayEffectFromServerLikeRequest(
-			EffectID::SPARK,
-			effectPos,
-			effectDir,
-			1,
-			0.0f
-		);
-
-		OutputDebugString(L"[Effect Test] SPARK\n");
-		break;
-	}
-
-	case VK_F7:
-	{
-		XMFLOAT3 explosionPos = effectPos;
-		explosionPos.y = playerPos.y + 0.3f;
-
-		PlayEffectFromServerLikeRequest(
-			EffectID::GRENADE_EXPLOSION,
-			explosionPos,
-			XMFLOAT3(0.0f, 1.0f, 0.0f),
-			1,
-			0.0f
-		);
-
-		OutputDebugString(L"[Effect Test] GRENADE_EXPLOSION\n");
-		break;
-	}
-
-	default:
-		break;
-	}
-}
-
 void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	BuildDefaultLightsAndMaterials();
 	frame->mouseMove = false;
-	//m_pSkyBox = std::make_unique<CSkyBox>(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
-
 
 	UIShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
@@ -1818,8 +1642,6 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 	uiManager->AddToManager(waitMassage);
 
-
-
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 
 	CreateShaderVariables(pd3dDevice, pd3dCommandList);
@@ -1865,7 +1687,6 @@ void MainScene::ReleaseObjects()
 	GameObjects.clear();
 	if (m_pd3dGraphicsRootSignature) m_pd3dGraphicsRootSignature = nullptr;
 
-	//ResourceManager::Instance().ReleaseModelPrototypes();
 	ReleaseShaderVariables();
 	ShadowCameraManager->ReleaseShaderVariables();
 	m_pLights.clear();
@@ -1950,32 +1771,12 @@ bool MainScene::ProcessInput(UCHAR* pKeysBuffer)
 		}
 	}
 
-	DWORD dwDirection = 0;
-	if (pKeysBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
-	if (pKeysBuffer[VK_LEFT] & 0xF0)  dwDirection |= DIR_LEFT;
-	if (pKeysBuffer[VK_UP] & 0xF0)    dwDirection |= DIR_FORWARD;
-	if (pKeysBuffer[VK_DOWN] & 0xF0)  dwDirection |= DIR_BACKWARD;
-
-	if (dwDirection && frame->observing)
+	if (cxDelta || cyDelta)
 	{
-		XMFLOAT3 move = XMFLOAT3(0, 0, 0);
-		if (dwDirection & DIR_RIGHT)    move.x += 1.0f;
-		if (dwDirection & DIR_LEFT)     move.x -= 1.0f;
-		if (dwDirection & DIR_FORWARD)  move.z += 1.0f;
-		if (dwDirection & DIR_BACKWARD) move.z -= 1.0f;
-		frame->GetObserver()->Move(move);
-		frame->GetObserver()->RegenerateViewMatrix();
-	}
-
-	if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
-	{
-		if (cxDelta || cyDelta)
-		{
-			if (pKeysBuffer[VK_RBUTTON] & 0xF0)
-				m_pPlayer->Rotate(cyDelta, 0.0f, -cxDelta);
-			else
-				m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
-		}
+		if (pKeysBuffer[VK_RBUTTON] & 0xF0)
+			m_pPlayer->Rotate(cyDelta, 0.0f, -cxDelta);
+		else
+			m_pPlayer->Rotate(cyDelta, cxDelta, 0.0f);
 	}
 	return true;
 }
@@ -2061,7 +1862,6 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	UpdateFogShadowVisibility();
 
 	UpdateGrenade(fTimeElapsed);
-
 
 }
 
@@ -2346,133 +2146,6 @@ void MainScene::BuildVisionBlockersForCurrentFrame(float fHalfExtent, std::vecto
 	}
 }
 
-//bool MainScene::IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGameObject*>& blockers)
-//{
-//	if (!m_pPlayer) return true;
-//	if (!pObject) return false;
-//	if (!pObject->IsAlive()) return false;
-//
-//	constexpr float VIEW_CIRCLE_RADIUS = 3.0f;
-//	constexpr float VIEW_CONE_RADIUS = 20.0f;
-//	constexpr float VIEW_CONE_ANGLE_DEG = 75.0f;
-//	constexpr float VISIBILITY_MARGIN = 0.35f;
-//
-//	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
-//	XMFLOAT3 targetPos = pObject->GetPosition();
-//
-//	XMFLOAT3 toTarget = XMFLOAT3(
-//		targetPos.x - playerPos.x,
-//		0.0f,
-//		targetPos.z - playerPos.z
-//	);
-//
-//	float distSq = toTarget.x * toTarget.x + toTarget.z * toTarget.z;
-//
-//	if (distSq < 0.000001f)
-//		return true;
-//
-//	float dist = sqrtf(distSq);
-//
-//	if (dist > VIEW_CONE_RADIUS)
-//		return false;
-//
-//	XMFLOAT3 dir = XMFLOAT3(toTarget.x / dist, 0.0f, toTarget.z / dist);
-//
-//	XMFLOAT3 rayOrigin = playerPos;
-//	rayOrigin.y += 0.5f;
-//
-//	auto HasLineOfSight = [&]() -> bool
-//		{
-//			float visibleDistance = RaycastFogVisibilityBlockers(rayOrigin, dir, dist + VISIBILITY_MARGIN, blockers);
-//			return visibleDistance + VISIBILITY_MARGIN >= dist;
-//		};
-//
-//	if (dist <= VIEW_CIRCLE_RADIUS)
-//	{
-//		return HasLineOfSight();
-//	}
-//
-//	XMFLOAT3 look = m_pPlayer->GetLookVector();
-//
-//	if (m_pPlayer->GetCamera())
-//		look = m_pPlayer->GetCamera()->GetLookVector();
-//
-//	look.y = 0.0f;
-//
-//	float lookLenSq = look.x * look.x + look.z * look.z;
-//
-//	if (lookLenSq < 0.000001f)
-//	{
-//		look = XMFLOAT3(0.0f, 0.0f, 1.0f);
-//	}
-//	else
-//	{
-//		float lookLen = sqrtf(lookLenSq);
-//		look.x /= lookLen;
-//		look.z /= lookLen;
-//	}
-//
-//	float dot = look.x * dir.x + look.z * dir.z;
-//	dot = max(-1.0f, min(1.0f, dot));
-//
-//	float angleDeg = XMConvertToDegrees(acosf(dot));
-//
-//	if (angleDeg > VIEW_CONE_ANGLE_DEG * 0.5f)
-//		return false;
-//
-//	return HasLineOfSight();
-//}
-//
-
-//void MainScene::UpdateFogShadowVisibility()
-//{
-//	if (!m_pPlayer)
-//		return;
-//
-//	constexpr float VIEW_BLOCKER_QUERY_EXTENT = 20.0f;
-//
-//	BuildVisionBlockersForCurrentFrame(VIEW_BLOCKER_QUERY_EXTENT, m_vFrameVisionBlockers);
-//
-//	if (m_ppShaders.size() > SHADERIDX::VIEW && m_ppShaders[SHADERIDX::VIEW])
-//	{
-//		auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
-//
-//		if (viewObjs && !viewObjs->empty())
-//		{
-//			ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
-//
-//			if (pViewObj)
-//			{
-//				pViewObj->UpdateClippedMeshes(m_vFrameVisionBlockers);
-//			}
-//		}
-//	}
-//
-//	if (m_ppShaders.size() <= SHADERIDX::ENEMY) return;
-//	if (!m_ppShaders[SHADERIDX::ENEMY]) return;
-//
-//	auto* enemyObjects = m_ppShaders[SHADERIDX::ENEMY]->GetObj();
-//	if (!enemyObjects) return;
-//
-//	for (CGameObject* pObject : *enemyObjects)
-//	{
-//		if (!pObject) continue;
-//
-//		bool bVisible = IsObjectVisibleByFog(pObject, m_vFrameVisionBlockers);
-//
-//		ApplyFogRenderState(pObject, bVisible);
-//
-//		if (CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(pObject))
-//		{
-//			ApplyFogRenderState(pEnemy->GetRenderWeapon(), bVisible);
-//		}
-//		else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pObject))
-//		{
-//			ApplyFogRenderState(pOther->GetRenderWeapon(), bVisible);
-//		}
-//	}
-//}
-
 void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
 {
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
@@ -2506,7 +2179,6 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		return;
 	}
 
-	
 	for (int i = 0; i < m_ppShaders.size(); i++)
 	{
 
@@ -2581,7 +2253,6 @@ void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamer
 
 void MainScene::ReleaseUploadBuffers()
 {
-	//if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
 	for (int i = 0; i < m_ppShaders.size(); i++)
 	{
@@ -2636,14 +2307,6 @@ void MainScene::LinkToPlayer()
 bool MainScene::IsAnyInventoryOpen() const
 {
 	return (m_pInventoryManager) ? m_pInventoryManager->IsAnyInventoryOpen() : false;
-}
-
-void MainScene::CloseCorpseInventory()
-{
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->CloseLootInventory();
-	}
 }
 
 void MainScene::OpenLootContainer(CLootContainerObject* pLoot)
@@ -2729,7 +2392,6 @@ void MainScene::StartGame()
 
 	if (frame)
 	{
-		frame->observing = false;
 		frame->mouseMove = false;
 	}
 
@@ -2758,9 +2420,6 @@ void MainScene::ResetForNewRound(short fullHp)
 	// 레이저와 연속 발사 이펙트 상태 초기화
 	m_bLaserActive = false;
 	m_fLaserLength = 15.0f;
-
-	m_bSparkFireActive = false;
-	m_fSparkSpawnTimer = 0.0f;
 
 	if (m_pEffectManager)
 	{
@@ -2827,10 +2486,9 @@ void MainScene::ResetForNewRound(short fullHp)
 		statusUI->ResetForNewRound(fullHp);
 	}
 
-	// 이전 사망 상태에서 활성화된 관전자와 자유 마우스 상태 정리
+	// 이전 사망 상태에서 사용한 자유 마우스 상태 정리
 	if (frame)
 	{
-		frame->observing = false;
 		frame->mouseMove = true;
 	}
 
@@ -2902,10 +2560,8 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		uiManager->AddText(std::move(notice));
 	}
 
-
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
 
 }
 
@@ -2929,7 +2585,7 @@ void LobbyScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelin
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	
+
 }
 
 void LobbyScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -3006,10 +2662,8 @@ void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 	uiManager->AddToManager(lobbybutton);
 
-
 	ShadowCameraManager->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	CScene::CreateShaderVariables(pd3dDevice, pd3dCommandList);
-
 
 }
 
@@ -3022,7 +2676,7 @@ void ResultScene::ReleaseObjects()
 
 void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipelineState, CCamera * pCamera)
 {
-	
+
 	if (m_pd3dGraphicsRootSignature) pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature);
 	ID3D12DescriptorHeap* heap = ResourceManager::Instance().GetDescriptorHeap();
 	pd3dCommandList->SetDescriptorHeaps(1, &heap);
@@ -3033,7 +2687,7 @@ void ResultScene::Render(ID3D12GraphicsCommandList * pd3dCommandList, int nPipel
 
 	D3D12_GPU_VIRTUAL_ADDRESS d3dcbLightsGpuVirtualAddress = m_pd3dcbLights->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(2, d3dcbLightsGpuVirtualAddress);
-	
+
 }
 
 void ResultScene::TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)

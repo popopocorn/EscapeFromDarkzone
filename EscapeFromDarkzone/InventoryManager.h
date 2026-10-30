@@ -44,8 +44,6 @@ public:
 
 	void RenderLootWorld(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
 
-	/*void ProcessEnemyLootSpawnRequests(CShader* pEnemyShader);*/
-
 	void SubmitToShader(UIObjectShader* shader);
 	void SubmitText(TextRenderer* renderer);
 
@@ -56,14 +54,11 @@ public:
 
 	void OpenPlayerInventory();
 	void ClosePlayerInventory();
-	void TogglePlayerInventory();
 
 	void OpenLootContainer(CLootContainerObject* pLoot);
 	void CloseLootInventory();
 
-	void OpenCraftInventory();
 	void CloseCraftInventory();
-	void ToggleCraftInventory();
 
 	void HandleIKeyToggle(float fLootInteractDistance);
 

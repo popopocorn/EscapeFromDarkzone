@@ -67,15 +67,6 @@ void UIText::SetColor(const DirectX::XMFLOAT4& color)
 	SetColor(color.x, color.y, color.z, color.w);
 }
 
-void UIText::SetAlign(UITextAlign align)
-{
-	if (m_eAlign == align)
-		return;
-
-	m_eAlign = align;
-	m_bDirty = true;
-}
-
 void UIText::SetMaxWidth(float maxWidth)
 {
 	if (maxWidth < 0.0f)
@@ -85,18 +76,6 @@ void UIText::SetMaxWidth(float maxWidth)
 		return;
 
 	m_fMaxWidth = maxWidth;
-	m_bDirty = true;
-}
-
-void UIText::SetLineSpacing(float lineSpacing)
-{
-	if (lineSpacing < 0.0f)
-		lineSpacing = 0.0f;
-
-	if (m_fLineSpacing == lineSpacing)
-		return;
-
-	m_fLineSpacing = lineSpacing;
 	m_bDirty = true;
 }
 

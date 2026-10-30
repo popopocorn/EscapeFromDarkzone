@@ -88,14 +88,7 @@ public:
 	void SetMoveDir(const XMFLOAT3& dir) { m_xmf3MoveDir = dir; }
 	XMFLOAT3 GetMoveDir() const { return m_xmf3MoveDir; }
 
-	void HandleHP(float value);
-
-	void RegisterDamageEvent(const EnemyDamageEvent& damageEvent);
-	void RegisterSoundEvent(const EnemySoundEvent& soundEvent);
-
-	bool ConsumeDeadRemovalRequest();
 	bool ConsumeLootSpawnRequest();		// 루팅 오브젝트 생성 요청을 1회 소비			// 서버 권위 구조로 바꾸면서 안씀
-	void MarkDeadForRemoval();			// death 연출 종료 후 삭제 대상으로 표시
 
 	void setNav(AstarNavigation* nav) { AStarNav = nav; }
 	AstarNavigation* GetNav() { return AStarNav; }
@@ -140,11 +133,8 @@ public:
 	float m_fLeashRange = 25.0f;
 	float m_fReturnStopDistance = 0.5f;
 
-	float m_fThinkInterval = 0.2f;
-
 	float m_fAimTimer = 0.0f;
 	float m_fAimDelay = 0.35f;
-	float m_fAttackInterval = 1.0f;
 
 	float m_fAttackCooldown = 0.0f;
 
@@ -371,12 +361,12 @@ public:
 	virtual ~CLootContainerObject() = default;
 
 	void UpdateLifetime(float fTimeElapsed);							// 남은 유지 시간 갱신 후 만료 시 삭제 처리
-	//bool AddLoot(unique_ptr<Item> item, int count = 1);					// 루팅 슬롯에 아이템 추가
+
 	void FillInventoryUI(Inventory* pInventory) const;					// 시체 인벤토리 UI에 현재 루팅 아이템 복사
 
 	float GetDistanceSq(const XMFLOAT3& pos);							// 플레이어와의 거리 제곱값 계산
 
-	// 루팅 박스 서버화 
+	// 루팅 박스 서버화
 	void SetBoxId(short id) { m_npc_id = id; };
 	short GetBoxId() const { return m_npc_id; };
 	void SetSlotData(int idx, ItemID item, int count);

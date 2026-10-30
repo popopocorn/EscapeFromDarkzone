@@ -1,7 +1,3 @@
-//-----------------------------------------------------------------------------
-// File: Shader.cpp
-//-----------------------------------------------------------------------------
-
 #include "stdafx.h"
 #include "Shader.h"
 #include "Object.h"
@@ -76,7 +72,6 @@ D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, L
 }
 
 #define _WITH_WFOPEN
-//#define _WITH_STD_STREAM
 
 #ifdef _WITH_STD_STREAM
 #include <iostream>
@@ -84,47 +79,6 @@ D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, L
 #include <vector>
 #include <sstream>
 #endif
-
-D3D12_SHADER_BYTECODE CShader::ReadCompiledShaderFromFile(const WCHAR *pszFileName, ID3DBlob **ppd3dShaderBlob)
-{
-	UINT nReadBytes = 0;
-#ifdef _WITH_WFOPEN
-	FILE *pFile = NULL;
-	::_wfopen_s(&pFile, pszFileName, L"rb");
-	::fseek(pFile, 0, SEEK_END);
-	int nFileSize = ::ftell(pFile);
-	BYTE *pByteCode = new BYTE[nFileSize];
-	::rewind(pFile);
-	nReadBytes = (UINT)::fread(pByteCode, sizeof(BYTE), nFileSize, pFile);
-	::fclose(pFile);
-#endif
-#ifdef _WITH_STD_STREAM
-	std::ifstream ifsFile;
-	ifsFile.open(pszFileName, std::ios::in | std::ios::ate | std::ios::binary);
-	nReadBytes = (int)ifsFile.tellg();
-	BYTE *pByteCode = new BYTE[*pnReadBytes];
-	ifsFile.seekg(0);
-	ifsFile.read((char *)pByteCode, nReadBytes);
-	ifsFile.close();
-#endif
-
-	D3D12_SHADER_BYTECODE d3dShaderByteCode;
-	if (ppd3dShaderBlob)
-	{
-		*ppd3dShaderBlob = NULL;
-		HRESULT hResult = D3DCreateBlob(nReadBytes, ppd3dShaderBlob);
-		memcpy((*ppd3dShaderBlob)->GetBufferPointer(), pByteCode, nReadBytes);
-		d3dShaderByteCode.BytecodeLength = (*ppd3dShaderBlob)->GetBufferSize();
-		d3dShaderByteCode.pShaderBytecode = (*ppd3dShaderBlob)->GetBufferPointer();
-	}
-	else
-	{
-		d3dShaderByteCode.BytecodeLength = nReadBytes;
-		d3dShaderByteCode.pShaderBytecode = pByteCode;
-	}
-
-	return(d3dShaderByteCode);
-}
 
 D3D12_INPUT_LAYOUT_DESC CShader::CreateInputLayout()
 {
@@ -139,7 +93,7 @@ D3D12_RASTERIZER_DESC CShader::CreateRasterizerState()
 {
 	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
 	::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
-	//	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+
 	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
 	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
@@ -276,9 +230,6 @@ void CShader::Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamer
 	OnPrepareRender(pd3dCommandList, nPipelineState);
 }
 
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CSkyBoxShader::CSkyBoxShader()
 {
 }
@@ -332,8 +283,6 @@ D3D12_SHADER_BYTECODE CSkyBoxShader::CreatePixelShader()
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSSkyBox", "ps_5_1", &m_pd3dPixelShaderBlob));
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CStandardShader::CStandardShader()
 {
 }
@@ -370,8 +319,6 @@ D3D12_SHADER_BYTECODE CStandardShader::CreatePixelShader()
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSStandard", "ps_5_1", &m_pd3dPixelShaderBlob));
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CSkinnedAnimationStandardShader::CSkinnedAnimationStandardShader()
 {
 }
@@ -405,8 +352,6 @@ D3D12_SHADER_BYTECODE CSkinnedAnimationStandardShader::CreateVertexShader()
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSSkinnedAnimationStandard", "vs_5_1", &m_pd3dVertexShaderBlob));
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 CStandardObjectsShader::CStandardObjectsShader()
 {
 }
@@ -424,7 +369,6 @@ void CStandardObjectsShader::ReleaseObjects()
 	m_ppObjects.clear();
 }
 
-
 void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 {
 	m_fElapsedTime = fTimeElapsed;
@@ -432,7 +376,7 @@ void CStandardObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CStandardObjectsShader::ReleaseUploadBuffers()
 {
-	//for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+
 }
 
 void CStandardObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
@@ -536,8 +480,7 @@ D3D12_SHADER_BYTECODE CLaserShader::CreatePixelShader()
 {
 	return(CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSLaser", "ps_5_1", &m_pd3dPixelShaderBlob));
 }
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
+
 CSkinnedAnimationObjectsShader::CSkinnedAnimationObjectsShader()
 {
 }
@@ -578,7 +521,7 @@ void CSkinnedAnimationObjectsShader::AnimateObjects(float fTimeElapsed)
 
 void CSkinnedAnimationObjectsShader::ReleaseUploadBuffers()
 {
-	//for (int j = 0; j < m_ppObjects.size(); j++) if (m_ppObjects[j]) m_ppObjects[j]->ReleaseUploadBuffers();
+
 }
 
 D3D12_DEPTH_STENCIL_DESC CSkinnedAnimationObjectsShader::CreateDepthStencilState()
@@ -640,7 +583,7 @@ void CSkinnedAnimationObjectsShader::DeleteObject(UINT64 fence)
 
 void CSkinnedAnimationObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 {
-	while (!GarbageQueue.empty()) 
+	while (!GarbageQueue.empty())
 	{
 		auto& garbage = GarbageQueue.front();
 		if (completed >= garbage.FenceValue)
@@ -653,9 +596,6 @@ void CSkinnedAnimationObjectsShader::ProcessingGarbageQueue(UINT64 completed)
 		}
 	}
 }
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 
 ViewShader::ViewShader()
 {
@@ -795,7 +735,7 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 	{
 		if (m_ppObjects[j])
 		{
-			
+
 			m_ppObjects[j]->Animate(m_fElapsedTime);
 			m_ppObjects[j]->UpdateTransform(NULL);
 		}
@@ -805,7 +745,7 @@ void ViewShader::AnimateObjects(float fTimeElapsed)
 void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState)
 {
 	CStandardShader::Render(pd3dCommandList, pCamera, batch, nPipelineState);
-	
+
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
@@ -814,7 +754,7 @@ void ViewShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCa
 		}
 	}
 }
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 //디버그 쉐이더 생성
 CBoundingBoxShader::CBoundingBoxShader(
 	ID3D12Device* pd3dDevice,
@@ -1029,9 +969,6 @@ void CBoundingBoxShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCam
 			m_pDebugObject->Render(pd3dCommandList);
 	}
 }
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-
 
 PlayerShader::PlayerShader()
 {
@@ -1161,10 +1098,6 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 {
 	OnPrepareRender(pd3dCommandList, nPipelineState);
 
-	/*wchar_t buf[256];
-	swprintf_s(buf, L"UI 렌더 큐 사이즈: %d\n", m_ppObjects.size());
-	OutputDebugString(buf);*/
-
 	for (int j = 0; j < m_ppObjects.size(); j++)
 	{
 		if (m_ppObjects[j])
@@ -1176,8 +1109,6 @@ void UIObjectShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 	m_ppObjects.clear();
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 D3D12_INPUT_LAYOUT_DESC CFogOverlayShader::CreateInputLayout()
 {
 	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;

@@ -15,9 +15,6 @@ const wchar_t* GetItemDisplayName(ItemID itemId)
 	case ItemID::MAT_3_BOLT_AND_NUT:
 		return L"볼트와 너트";
 
-	/*case ItemID::WEAPON_UPGRADE_1:
-		return L"무기 강화 부품 1";*/
-
 	case ItemID::WEAPON_UPGRADE_2:
 		return L"무기 강화 부품 2";
 

@@ -61,7 +61,6 @@ static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
 static constexpr float OTHER_PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float OTHER_PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 
-
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, short playerID)
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
@@ -80,7 +79,6 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		break;
 	}
 
-
 	if (!pPlayerModel)
 	{
 		return;
@@ -91,8 +89,6 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		delete pPlayerModel;
 		return;
 	}
-
-
 
 	m_pRenderWeapon = make_unique<CGameObject>();
 	m_pRenderWeapon->SetOOBB(NULL);
@@ -398,27 +394,6 @@ void OtherPlayer::TriggerShootAnim()
 		return;
 
 	ChangeUpperState(std::make_unique<OtherPlayerUpperShoot>(), true);
-}
-
-void OtherPlayer::TriggerReloadAnim()
-{
-	if (m_bDead)
-		return;
-
-	ChangeUpperState(std::make_unique<OtherPlayerUpperReload>(), true);
-}
-
-void OtherPlayer::TriggerGrenadeAnim()
-{
-	if (m_bDead)
-		return;
-
-	ChangeUpperState(std::make_unique<OtherPlayerUpperGrenade>(), true);
-}
-
-void OtherPlayer::TriggerDieAnim()
-{
-	MarkDeadFromServer();
 }
 
 void OtherPlayer::MarkDeadFromServer()
@@ -739,7 +714,6 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 
 	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();
-
 
 	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(m_pWeapon->m_xmf4x4ToParent,modelName);
 

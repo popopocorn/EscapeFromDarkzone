@@ -31,7 +31,6 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 
 	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-
 	m_pd3dPositionBuffer = ::CreateBufferResource(
 		device,
 		commandlist,
@@ -59,11 +58,6 @@ UIMesh::UIMesh(ID3D12Device* device, ID3D12GraphicsCommandList* commandlist)
 	UVBufferView.StrideInBytes = sizeof(XMFLOAT2);
 	UVBufferView.SizeInBytes = sizeof(XMFLOAT2) * UVs.size();
 
-	/*m_pd3dPositionBuffer->SetName(L"uivbuffer");
-	m_pd3dPositionBuffer->SetName(L"uivupuffer");
-	UVBuffer->SetName(L"uiuvbuffer");
-	UVUploadBuffer->SetName(L"uiuvupbuffer");*/
-	//LoadTexture(device, commandlist, L"./Model/Textures/Asphalt_texture1.dds");
 }
 
 UIMesh::~UIMesh()
@@ -114,8 +108,6 @@ void UIMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nSubSet, int
 	pd3dCommandList->DrawInstanced(m_pxmf3Positions.size(), nInstances, 0, 0);
 }
 
-
-
 UIObject::UIObject()
 {
 	XMStoreFloat4x4(&world, XMMatrixIdentity());
@@ -160,7 +152,6 @@ void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, in
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4World, 0);
 	object->Render(pd3dCommandList, 0, 1);
 }
-
 
 Inventory::Inventory(
 	ID3D12Device* pd3dDevice,
@@ -225,21 +216,21 @@ void Inventory::BuildSlotViews()
 		if (!slotViews[i].iconCell)
 		{
 			slotViews[i].iconCell = std::make_unique<UIObject>();
-			//slotViews[i].iconCell->SetUIMesh(m_pSharedMesh);
+
 			slotViews[i].iconCell->SetScale(iconRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].textCell)
 		{
 			slotViews[i].textCell = std::make_unique<UIObject>();
-			//slotViews[i].textCell->SetUIMesh(m_pSharedMiddleMesh);
+
 			slotViews[i].textCell->SetScale(textRenderW, renderH, 1.0f);
 		}
 
 		if (!slotViews[i].countCell)
 		{
 			slotViews[i].countCell = std::make_unique<UIObject>();
-			//slotViews[i].countCell->SetUIMesh(m_pSharedMesh);
+
 			slotViews[i].countCell->SetScale(countRenderW, renderH, 1.0f);
 		}
 	}
@@ -520,9 +511,6 @@ void Inventory::SubmitText(TextRenderer* renderer)
 
 void Inventory::SlotClicked(int slotidx)
 {
-	/*wchar_t debugBuf[256];
-	swprintf_s(debugBuf, L"Slot %d clicked\n", slotidx);
-	OutputDebugStringW(debugBuf);*/
 
 	if (false == NetworkManager::Instance().IsConnected()) {
 		return;
@@ -650,98 +638,6 @@ int Inventory::GetItemCnt(ItemID id) const
 	}
 
 	return 0;
-}
-
-void Inventory::ConsumeItem(ItemID id, int cnt)
-{
-	if (id == ItemID::NONE ||
-		cnt <= 0)
-	{
-		return;
-	}
-
-	for (int i = 0; i < MAX_SLOTS; ++i)
-	{
-		ItemSlot& slot =
-			slots[i];
-
-		if (slot.item == ItemID::NONE ||
-			slot.item != id)
-		{
-			continue;
-		}
-
-		slot.count -= cnt;
-
-		if (slot.count <= 0)
-		{
-			slot.item = ItemID::NONE;
-			slot.count = 0;
-
-			if (slotViews[i].iconCell)
-			{
-				slotViews[i].iconCell->SetUIMesh(
-					nullptr
-				);
-			}
-		}
-
-		UpdateSlotTexts(i);
-
-		break;
-	}
-}
-
-bool Inventory::AddItem(ItemID item, int count)
-{
-	if (item == ItemID::NONE ||
-		count <= 0)
-	{
-		return false;
-	}
-
-	for (int i = 0; i < MAX_SLOTS; ++i)
-	{
-		if (slots[i].item != ItemID::NONE &&
-			slots[i].item == item)
-		{
-			slots[i].count += count;
-
-			UpdateSlotTexts(i);
-
-			return true;
-		}
-	}
-
-	for (int i = 0; i < MAX_SLOTS; ++i)
-	{
-		if (slots[i].item != ItemID::NONE)
-			continue;
-
-		slots[i].item = item;
-		slots[i].count = count;
-
-		UIName uiName =
-			MapItemIDToUIName(item);
-
-		UIMesh* pMesh =
-			ResourceManager::Instance().GetUIMesh(
-				uiName
-			);
-
-		if (slotViews[i].iconCell)
-		{
-			slotViews[i].iconCell->SetUIMesh(
-				pMesh
-			);
-		}
-
-		UpdateSlotTexts(i);
-
-		return true;
-	}
-
-	return false;
 }
 
 void Inventory::ClearItems()
@@ -1106,7 +1002,6 @@ void EquipUI::SubmitToShader(UIObjectShader* shader)
 
 }
 
-
 PlayerStatus::PlayerStatus(CPlayer* p)
 {
 	player = p;
@@ -1259,7 +1154,7 @@ void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 	}
 	int idx = (int)EscapeTime;
 	idx = min(idx, 10);
-	//OutputDebugStringW(to_wstring(idx).c_str());
+
 	for (int i = 0; i < idx; ++i)
 	{
 		shader->addObjects(ProgressBar[i].get());
@@ -1366,7 +1261,6 @@ void HUDManager::Update(float fTimeElapsed)
 	}
 }
 
-
 void HUDManager::CloseUI(int idx)
 {
 	if (idx >= objs.size())return;
@@ -1403,28 +1297,6 @@ UIText* HUDManager::AddText(unique_ptr<UIText> text)
 	texts.push_back(std::move(text));
 
 	return pText;
-}
-
-void HUDManager::RemoveText(UIText* text)
-{
-	if (!text)
-		return;
-
-	auto removeBegin = std::remove_if(
-		texts.begin(),
-		texts.end(),
-		[text](const unique_ptr<UIText>& ownedText)
-		{
-			return ownedText.get() == text;
-		}
-	);
-
-	texts.erase(removeBegin, texts.end());
-}
-
-void HUDManager::ClearTexts()
-{
-	texts.clear();
 }
 
 void HUDManager::SubmitText(TextRenderer* renderer)

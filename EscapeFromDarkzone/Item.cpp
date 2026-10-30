@@ -7,14 +7,6 @@
 #include"Player.h"
 #include"ResourceManager.h"
 
-
-
-//CGameObject* Item::CreateModelInstance() const
-//{
-//	if (!model) return nullptr;
-//	return CGameObject::CreateModelInstance(model);
-//}
-
 WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)
 {
@@ -123,43 +115,6 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 
 	return spec;
 }
-std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pPrototype)
-{
-	if (!pPrototype) return nullptr;
-
-	auto pItem = std::make_shared<WeaponItem>(
-		ItemGrade::GRADE_1,
-		ItemType::RIFLE
-	);
-
-	pItem->SetModelPrototype(pPrototype);
-	return pItem;
-}
-
-//void CraftBox::Init()
-//{
-//
-//}
-//
-//bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
-//{
-//	auto it = recipeTable.find(target);
-//	if (it == recipeTable.end())return false;
-//
-//	const Recipe& r = it->second;
-//
-//	for (const auto& req : r.ingredients)
-//	{
-//		if (playerinventory->GetItemCnt(req.itemID) < req.reuireCnt)
-//			return false;
-//	}
-//	for (const auto& req : r.ingredients)
-//	{
-//		playerinventory->ConsumeItem(req.itemID, req.reuireCnt);
-//	}
-//	//playerinventory 아이템 추가
-//	return true;
-//}
 
 Equip::Equip()
 {
