@@ -65,7 +65,7 @@ public:
 
 	NetEntityManager* GetNetEntityManager() { return m_pNetEntityMgr.get(); }	// 06.07 추가
 
-	CScene*						nextScene;
+	std::unique_ptr<CScene>      nextScene;
 	void PushScene();
 	void PopScene();
 	void PopScene(SceneName name);
@@ -123,7 +123,7 @@ private:
 
 	vector<unique_ptr<CScene>>	m_pScene;
 	
-	CPlayer						*m_pPlayer = NULL;	//소유용
+	std::unique_ptr<CPlayer>     m_pPlayer;
 	CCamera						*m_pCamera = NULL;	// 참조용
 	unique_ptr<CCamera>			observer;
 	unique_ptr<ShadowMap>		shadowmap;
@@ -141,5 +141,6 @@ private:
 
 	// 텍스트 렌더링
 	std::unique_ptr<TextRenderer> m_pTextRenderer;
+	bool m_comInitialized = false;
 };
 

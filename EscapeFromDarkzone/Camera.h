@@ -116,7 +116,7 @@ public:
 	virtual void Move(const XMFLOAT3& xmf3Shift) { m_xmf3Position.x += xmf3Shift.x; m_xmf3Position.y += xmf3Shift.y; m_xmf3Position.z += xmf3Shift.z; }
 	virtual void Rotate(float fPitch = 0.0f, float fYaw = 0.0f, float fRoll = 0.0f) { }
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed) { }
-	virtual void SetLookAt(XMFLOAT3& xmf3LookAt) { }
+	virtual void SetLookAt(const XMFLOAT3& xmf3LookAt) { }
 
 	float GetNear()     const { return m_fNear; }
 	float GetFar()      const { return m_fFar; }
@@ -149,7 +149,7 @@ public:
 	virtual ~CThirdPersonCamera() { }
 
 	virtual void Update(XMFLOAT3& xmf3LookAt, float fTimeElapsed);
-	virtual void SetLookAt(const XMFLOAT3& vLookAt);
+	virtual void SetLookAt(const XMFLOAT3& vLookAt) override;
 };
 
 
@@ -180,6 +180,7 @@ struct VS_CB_SHADOW_INFO
 
 class LightCameraManager {
 public:
+	~LightCameraManager() { ReleaseShaderVariables(); }
 	void SetPlayer(CCamera* p) { player = p; }
 	void SetDir(const XMFLOAT3& dir) { lightDir = dir; }
 	void Update();

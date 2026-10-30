@@ -64,9 +64,9 @@ static bool GetAttachedEffectMuzzleInfo(
 	return true;
 }
 
-void NetPacketDispatcher::Handle(std::vector<char>& packet)
+void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 {
-	if (packet.size() < 2)
+	if (!m_pFramework || !IsValidPacket(packet))
 		return;
 
 	CGameFramework& gf = *m_pFramework;
@@ -77,7 +77,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	case SC_LOGIN_INFO:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnLoginInfo(reinterpret_cast<SC_LOGIN_INFO_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_LOGIN_INFO_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnLoginInfo(&p);
 
 		// 임시 코드, 라운드 시작 패킷 전송 위치 확정되면 그 때 수정 및 제거 필요
 		NetSession::Instance().RoundJoin();
@@ -87,30 +88,35 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	case SC_ADD_PLAYER:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnAddPlayer(reinterpret_cast<SC_ADD_PLAYER_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_ADD_PLAYER_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnAddPlayer(&p);
 		break;
 	}
 	case SC_REMOVE_PLAYER:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnRemovePlayer(reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_REMOVE_PLAYER_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnRemovePlayer(&p);
 		break;
 	}
 	case SC_MOVE_PLAYER:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnMovePlayer(reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_MOVE_PLAYER_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnMovePlayer(&p);
 		break;
 	}
 	case SC_PLAYER_STATE_CHANGE:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnPlayerStateChange(reinterpret_cast<SC_PLAYER_STATE_CHANGE_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_PLAYER_STATE_CHANGE_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnPlayerStateChange(&p);
 		break;
 	}
 	case SC_CHANGE_WEAPON:
 	{
-		SC_CHANGE_WEAPON_PACKET* p = reinterpret_cast<SC_CHANGE_WEAPON_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_CHANGE_WEAPON_PACKET>(packet);
+		const auto* p = &value;
 
 		wchar_t buf[256];
 		swprintf_s(buf, L"[SC_CHANGE_WEAPON] recv id=%d weapon_type=%d weapon_grade=%d\n", p->id, p->weapon_type, p->weapon_grade);
@@ -141,9 +147,11 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		OutputDebugString(L"[ROUND] SC_ROUND_START received\n");
 
 		if (gf.m_pNetEntityMgr) {
-			gf.m_pNetEntityMgr->OnRoundStart(reinterpret_cast<SC_ROUND_START_PACKET*>(packet.data()));
+			const auto p = ReadPacket<SC_ROUND_START_PACKET>(packet);
+			gf.m_pNetEntityMgr->OnRoundStart(&p);
 		}
 
+		if (gf.m_pScene.empty()) break;
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
 		if (not pMainScene)break;
 		pMainScene->ResetForNewRound(100);
@@ -152,23 +160,25 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_ESCAPE_SUCCESS:
 	{
-		SC_ESCAPE_SUCCESS_PACKET* p =
-			reinterpret_cast<SC_ESCAPE_SUCCESS_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_ESCAPE_SUCCESS_PACKET>(packet);
+		const auto* p = &value;
 		wchar_t buf[128];
 		swprintf_s(buf, L"[ESCAPE] success! time=%.2fs\n", p->escape_time_sec);
 		OutputDebugStringW(buf);
 		// TODO: 탈출 성공 UI 표시 (된다면)
+		if (gf.m_pScene.empty()) break;
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
 		if (not pMainScene)break;
-		pMainScene->frame->nextScene = new ResultScene(pMainScene->frame, true);
+		pMainScene->frame->nextScene = std::make_unique<ResultScene>(pMainScene->frame, true);
 		break;
 	}
 	case SC_ESCAPE_PROGRESS:
 	{
-		SC_ESCAPE_PROGRESS_PACKET* p =
-			reinterpret_cast<SC_ESCAPE_PROGRESS_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_ESCAPE_PROGRESS_PACKET>(packet);
+		const auto* p = &value;
+		if (gf.m_pScene.empty()) break;
 		MainScene* pMainScene = dynamic_cast<MainScene*>(gf.m_pScene.back().get());
-		if (not pMainScene)break;
+		if (!pMainScene || !pMainScene->statusUI) break;
 		switch (p->event)
 		{
 		case ESCAPE_PROG_START:
@@ -213,36 +223,42 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	case SC_ADD_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnAddNpc(reinterpret_cast<SC_ADD_NPC_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_ADD_NPC_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnAddNpc(&p);
 		break;
 	}
 	case SC_REMOVE_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnRemoveNpc(reinterpret_cast<SC_REMOVE_NPC_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_REMOVE_NPC_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnRemoveNpc(&p);
 		break;
 	}
 	case SC_MOVE_NPC:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnMoveNpc(reinterpret_cast<SC_MOVE_NPC_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_MOVE_NPC_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnMoveNpc(&p);
 		break;
 	}
 	case SC_NPC_STATE_CHANGE:
 	{
 		if (!gf.m_pNetEntityMgr) break;
-		gf.m_pNetEntityMgr->OnNpcStateChange(reinterpret_cast<SC_NPC_STATE_CHANGE_PACKET*>(packet.data()));
+		const auto p = ReadPacket<SC_NPC_STATE_CHANGE_PACKET>(packet);
+		gf.m_pNetEntityMgr->OnNpcStateChange(&p);
 		break;
 	}
 	case SC_AMMO_STATE: {
-		auto* p = reinterpret_cast<SC_AMMO_STATE_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_AMMO_STATE_PACKET>(packet);
+		const auto* p = &value;
 		//p->ammo : short[4] 형태의 배열
 		//if (gf.m_pPlayer) 총알개수를배열로덮어씌우는함수호출(p->ammo);
 		break;
 	}
 	case SC_GRENADE_COUNT:
 	{
-		auto* p = reinterpret_cast<SC_GRENADE_COUNT_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_GRENADE_COUNT_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pScene.empty())
 			break;
@@ -258,7 +274,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_INVENTORY_UPDATE:
 	{
-		SC_INVENTORY_UPDATE_PACKET* p = reinterpret_cast<SC_INVENTORY_UPDATE_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_INVENTORY_UPDATE_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pScene.empty()) break;
 
@@ -270,8 +287,9 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 		break;
 	}
 	case SC_EQUIPMENT_UPDATE: {
-		SC_EQUIPMENT_UPDATE_PACKET* p =
-			reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_EQUIPMENT_UPDATE_PACKET>(packet);
+		const auto* p = &value;
+		if (gf.m_pScene.empty() || !gf.m_pScene.back()->equipUI) break;
 		
 		// 장비 시스템 미구현 - 현재는 콘솔 출력만
 		//gf.m_pNetEntityMgr->OnApplyEquip(reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data()));
@@ -285,7 +303,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_ADD_LOOT_BOX:
 	{
-		SC_ADD_LOOT_BOX_PACKET* p = reinterpret_cast<SC_ADD_LOOT_BOX_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_ADD_LOOT_BOX_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pScene.empty()) break;
 
@@ -298,7 +317,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_LOOT_BOX_SLOT_UPDATE:
 	{
-		SC_LOOT_BOX_SLOT_UPDATE_PACKET* p = reinterpret_cast<SC_LOOT_BOX_SLOT_UPDATE_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_LOOT_BOX_SLOT_UPDATE_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pScene.empty()) break;
 
@@ -311,7 +331,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_DEACTIVATE_LOOT_BOX:
 	{
-		SC_DEACTIVATE_LOOT_BOX_PACKET* p = reinterpret_cast<SC_DEACTIVATE_LOOT_BOX_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_DEACTIVATE_LOOT_BOX_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pScene.empty()) break;
 
@@ -324,7 +345,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_PLAYER_HP_UPDATE:
 	{
-		SC_PLAYER_HP_UPDATE_PACKET* p = reinterpret_cast<SC_PLAYER_HP_UPDATE_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_PLAYER_HP_UPDATE_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pPlayer)
 		{
@@ -335,10 +357,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_FIRE_TRACER:
 	{
-		if (packet.size() < sizeof(SC_FIRE_TRACER_PACKET))
-			break;
-
-		SC_FIRE_TRACER_PACKET* p = reinterpret_cast<SC_FIRE_TRACER_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_FIRE_TRACER_PACKET>(packet);
+		const auto* p = &value;
 
 		if (gf.m_pNetEntityMgr && p->shooter_id == gf.m_pNetEntityMgr->GetMyId())
 		{
@@ -367,7 +387,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_PLAY_EFFECT_ATTACHED:
 	{
-		SC_PLAY_EFFECT_ATTACHED_PACKET* p = reinterpret_cast<SC_PLAY_EFFECT_ATTACHED_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_PLAY_EFFECT_ATTACHED_PACKET>(packet);
+		const auto* p = &value;
 
 		if (!gf.m_pNetEntityMgr)
 		{
@@ -440,7 +461,8 @@ void NetPacketDispatcher::Handle(std::vector<char>& packet)
 	}
 	case SC_PLAY_EFFECT_WORLD:
 	{
-		SC_PLAY_EFFECT_WORLD_PACKET* p = reinterpret_cast<SC_PLAY_EFFECT_WORLD_PACKET*>(packet.data());
+		const auto value = ReadPacket<SC_PLAY_EFFECT_WORLD_PACKET>(packet);
+		const auto* p = &value;
 
 		EffectID effectId = static_cast<EffectID>(p->effect_id);
 		XMFLOAT3 pos = { p->x, p->y, p->z };

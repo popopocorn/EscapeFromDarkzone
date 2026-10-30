@@ -489,13 +489,14 @@ CScene::CScene(CGameFramework* game)
 	m_nLights = 0;
 	m_fElapsedTime = 0.0f;
 	frame = game;
-	ShadowCameraManager = new LightCameraManager();
+	ShadowCameraManager = std::make_unique<LightCameraManager>();
 	uiManager = make_unique<HUDManager>();
 	shadermanager = game->GetShaderManager();
 }
 
 CScene::~CScene()
 {
+	ReleaseShaderVariables();
 }
 
 
@@ -534,6 +535,8 @@ void CScene::ReleaseShaderVariables()
 	{
 		m_pd3dcbLights->Unmap(0, NULL);
 		m_pd3dcbLights->Release();
+		m_pd3dcbLights = nullptr;
+		m_pcbMappedLights = nullptr;
 	}
 }
 
@@ -648,7 +651,7 @@ MainScene::MainScene(CGameFramework* game) : CScene(game)
 
 MainScene::~MainScene()
 {
-
+	ReleaseObjects();
 }
 
 void MainScene::SetGrenadeAimMode(HWND hWnd, bool bEnable)
@@ -1719,7 +1722,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	m_pFogOverlayShader = std::make_unique<CFogOverlayShader>();
 	m_pFogOverlayShader->CreateShader(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
-	m_pInventoryManager = new InventoryManager();
+	m_pInventoryManager = std::make_unique<InventoryManager>();
 	m_pInventoryManager->Initialize(
 		pd3dDevice,
 		pd3dCommandList,
@@ -1731,6 +1734,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	CShader* stdshader = shadermanager->GetShader(ShaderType::STANDARD);
 	m_vVisionMapChunks.clear();
 	m_vVisionMapChunks.reserve(70);
+	m_vCameraBoundaryChunks.clear();
+	m_vCameraBoundaryChunks.reserve(4);
 	ModelName name = ModelName::MAP_FLOOR;
 	for (int i = 0; i < s_mapFiles.size(); ++i)
 	{
@@ -1740,6 +1745,8 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 		map->SetPosition(-150, 0.1f, -150);
 		map->SetOOBB(NULL);
 		m_vVisionMapChunks.push_back(map);
+		if (name >= ModelName::MAP_BOUNDARY_1 && name <= ModelName::MAP_BOUNDARY_4)
+			m_vCameraBoundaryChunks.push_back(map);
 		GameObjects.push_back(unique_ptr<CGameObject>(map));
 		stdshader->addObjects(map);
 		++name;
@@ -1808,7 +1815,7 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	}
 
 	// EffectManager 생성
-	m_pEffectManager = new EffectManager();
+	m_pEffectManager = std::make_unique<EffectManager>();
 	m_pEffectManager->Initialize(pd3dDevice, pd3dCommandList, m_pd3dGraphicsRootSignature);
 
 	for (const auto& shader : m_ppShaders)
@@ -1879,24 +1886,17 @@ void MainScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 
 void MainScene::ReleaseObjects()
 {
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->Release();
-		delete m_pInventoryManager;
-		m_pInventoryManager = nullptr;
-	}
-
-	if (m_pEffectManager)
-	{
-		m_pEffectManager->Release();
-		delete m_pEffectManager;
-		m_pEffectManager = nullptr;
-	}
+	m_pInventoryManager.reset();
+	m_pEffectManager.reset();
+	if (uiManager) uiManager->Release();
+	equipUI = nullptr;
+	statusUI = nullptr;
 	for (auto& s : m_ppShaders)
 	{
-		s->ReleaseObjects();
+		if (s) s->ReleaseObjects();
 	}
 	m_ppShaders.clear();
+	m_vCameraBoundaryChunks.clear();
 	for (auto& obj : GameObjects)
 	{
 		obj.reset();
@@ -2089,7 +2089,7 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 
 	if (m_pPlayer && !IsAnyInventoryOpen())
 	{
-		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager);
+		m_pPlayer->UpdateWeaponCombat(fTimeElapsed, m_ppShaders, m_pEffectManager.get());
 	}
 
 	UpdateGrenade(fTimeElapsed);
@@ -2115,8 +2115,6 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 		m_pEffectManager->HideLaser(0);
 	}
 
-	ShadowCameraManager->Update();
-
 	if (m_pInventoryManager)
 	{
 		m_pInventoryManager->SubmitToShader(UIShader.get());
@@ -2126,7 +2124,70 @@ void MainScene::AnimateObjects(float fTimeElapsed)
 	DecalManager::Instance()->Update(fTimeElapsed);
 	uiManager->Update(fTimeElapsed);
 
-	colManager->DoCollision(m_pPlayer, m_ppShaders[SHADERIDX::MAP]->GetObj());	// 서버 충돌처리 확인을 위한 주석처리
+}
+
+void MainScene::ResolvePlayerCamera(float fTimeElapsed)
+{
+	if (!m_pPlayer || m_ppShaders.size() <= SHADERIDX::MAP || !m_ppShaders[SHADERIDX::MAP])
+		return;
+	auto* mapObjects = m_ppShaders[SHADERIDX::MAP]->GetObj();
+	if (!mapObjects) return;
+
+	// Run after movement and incoming snapshots, before rendering this frame.
+	m_pPlayer->OnPrepareRender();
+	m_pPlayer->UpdateTransform(nullptr);
+	colManager->DoCollision(m_pPlayer, mapObjects);
+	m_pPlayer->OnPrepareRender();
+	m_pPlayer->UpdateTransform(nullptr);
+	CCamera* camera = m_pPlayer->GetCamera();
+	if (!camera) return;
+	if (camera->GetMode() == THIRD_PERSON_CAMERA)
+	{
+		XMFLOAT3 playerPosition = m_pPlayer->GetPosition();
+		camera->Update(playerPosition, fTimeElapsed);
+		const XMFLOAT3 desiredPosition = camera->GetPosition();
+		const XMFLOAT3 lookAtPosition = camera->GetLookAtPosition();
+
+		std::vector<const BoundingOrientedBox*> boundaries;
+		for (CGameObject* object : m_vCameraBoundaryChunks)
+		{
+			if (!object || !object->isColl) continue;
+			for (const BoundingOrientedBox* box : object->GetOOBB())
+				if (box) boundaries.push_back(box);
+		}
+
+		// The whole near plane must fit inside the camera's collision sphere.
+		const float nearDistance = camera->GetNear();
+		const float halfHeight = nearDistance * tanf(XMConvertToRadians(camera->GetFOVAngle()) * 0.5f);
+		const float halfWidth = halfHeight * camera->GetAspect();
+		const float radius = std::max(0.20f,
+			sqrtf(nearDistance * nearDistance + halfHeight * halfHeight + halfWidth * halfWidth) + 0.03f);
+		const XMFLOAT3 safePosition = CollisionManager::ConstrainBoundaryCameraPosition(playerPosition, desiredPosition, boundaries, radius);
+		const XMVECTOR arm = XMVectorSet(desiredPosition.x - playerPosition.x, 0.0f,
+			desiredPosition.z - playerPosition.z, 0.0f);
+		const float armLength = XMVectorGetX(XMVector3Length(arm));
+		const float safeDistance = sqrtf(
+			(safePosition.x - playerPosition.x) * (safePosition.x - playerPosition.x) +
+			(safePosition.z - playerPosition.z) * (safePosition.z - playerPosition.z));
+
+		// Preserve height and tilt toward the forward focus, rather than zooming
+		// down into the player's head. Only outer-boundary walls constrain the arm.
+		if (m_fCameraBoundaryDistance < 0.0f || safeDistance <= m_fCameraBoundaryDistance)
+			m_fCameraBoundaryDistance = safeDistance;
+		else
+			m_fCameraBoundaryDistance += (safeDistance - m_fCameraBoundaryDistance)
+				* (1.0f - expf(-10.0f * std::max(fTimeElapsed, 0.0f)));
+
+		const XMFLOAT3 anchor(playerPosition.x, desiredPosition.y, playerPosition.z);
+		XMFLOAT3 finalPosition = anchor;
+		if (armLength > 0.0001f)
+			XMStoreFloat3(&finalPosition, XMVectorMultiplyAdd(arm,
+				XMVectorReplicate(m_fCameraBoundaryDistance / armLength), XMLoadFloat3(&anchor)));
+		camera->SetPosition(finalPosition);
+		camera->SetLookAt(lookAtPosition);
+		camera->RegenerateViewMatrix();
+	}
+	ShadowCameraManager->Update();
 }
 
 bool MainScene::IsObjectVisibleByFog(CGameObject* pObject, const std::vector<CGameObject*>& blockers)
@@ -2242,9 +2303,9 @@ void MainScene::UpdateFogShadowVisibility()
 		bool bAlive = pObject->IsAlive();
 		bool bVisible = bAlive && IsObjectVisibleByFog(pObject, blockers);
 
-		if (pObject->IsRenderEnabled() != bAlive)
+		if (pObject->IsRenderEnabled() != bVisible)
 		{
-			pObject->SetRenderEnabled(bAlive, true);
+			pObject->SetRenderEnabled(bVisible, true);
 		}
 
 		if (pObject->CanCastShadow() != bVisible)
@@ -2285,15 +2346,6 @@ void MainScene::UpdateFogShadowVisibility()
 					pWeapon->SetCastShadow(bVisible, true);
 				}
 			}
-		}
-	}
-	auto* viewObjs = m_ppShaders[SHADERIDX::VIEW]->GetObj();
-	if (viewObjs && !viewObjs->empty())
-	{
-		ViewObject* pViewObj = dynamic_cast<ViewObject*>(viewObjs->at(0));
-		if (pViewObj)
-		{
-			pViewObj->UpdateClippedMeshes(blockers);
 		}
 	}
 }
@@ -2709,6 +2761,7 @@ void MainScene::StartGame()
 
 void MainScene::ResetForNewRound(short fullHp)
 {
+	m_fCameraBoundaryDistance = -1.0f;
 	// 초기화가 끝날 때까지 게임 입력 정지
 	IsGameStart = false;
 	m_fElapsedTime = 0.0f;
@@ -2845,7 +2898,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 		{
 			NetSession::Instance().RoundJoin();
 		}
-		this->frame->nextScene = new MainScene(frame);
+		this->frame->nextScene = std::make_unique<MainScene>(frame);
 		});
 
 	uiManager->AddToManager(lobbybutton);
@@ -2859,6 +2912,7 @@ void LobbyScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 
 void LobbyScene::ReleaseObjects()
 {
+	uiManager->Release();
 	ShadowCameraManager->ReleaseShaderVariables();
 	ReleaseShaderVariables();
 }
@@ -2948,7 +3002,7 @@ void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 		{
 			NetSession::Instance().RoundLeave();
 		}
-		this->frame->nextScene = new LobbyScene(frame);
+		this->frame->nextScene = std::make_unique<LobbyScene>(frame);
 		});
 
 	uiManager->AddToManager(lobbybutton);
@@ -2962,6 +3016,7 @@ void ResultScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 
 void ResultScene::ReleaseObjects()
 {
+	uiManager->Release();
 	ShadowCameraManager->ReleaseShaderVariables();
 	ReleaseShaderVariables();
 }

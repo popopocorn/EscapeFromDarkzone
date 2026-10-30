@@ -94,6 +94,7 @@ public:
 
 	virtual bool ProcessInput(UCHAR *pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed) {};
+	virtual void ResolvePlayerCamera(float fTimeElapsed) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
@@ -115,7 +116,7 @@ protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera*							m_pCamera = nullptr;	
 	
-	LightCameraManager*					ShadowCameraManager;
+	std::unique_ptr<LightCameraManager>   ShadowCameraManager;
 	
 	unique_ptr<HUDManager>				uiManager;
 	
@@ -157,7 +158,7 @@ public:
 
 	CCamera* GetLightCamera(int idx);
 
-	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager.get(); }
 	virtual void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	virtual void DeleteDeadObject(UINT64 Fence);
 	virtual void DeleteTrash(UINT64 Fence);
@@ -196,6 +197,7 @@ public:
 
 	virtual bool ProcessInput(UCHAR* pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed);
+	virtual void ResolvePlayerCamera(float fTimeElapsed) override;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void TransparentRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL);
@@ -209,8 +211,8 @@ public:
 	CBoundingBoxShader* GetLootBoxShader() { return m_pLootBoxShader.get(); }
 
 	// 이펙트/레이저 렌더링은 EffectManager가 담당
-	EffectManager* m_pEffectManager = nullptr;
-	virtual EffectManager* GetEffectManager() { return m_pEffectManager; }
+	std::unique_ptr<EffectManager> m_pEffectManager;
+	virtual EffectManager* GetEffectManager() { return m_pEffectManager.get(); }
 
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
@@ -251,10 +253,12 @@ public:
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 	std::vector<CGameObject*> m_vFrameVisionBlockers;
+	std::vector<CGameObject*> m_vCameraBoundaryChunks;
 private:
 	unique_ptr<CollisionManager> colManager;
+	float m_fCameraBoundaryDistance = -1.0f;
 
-	InventoryManager* m_pInventoryManager = nullptr;
+	std::unique_ptr<InventoryManager> m_pInventoryManager;
 	//InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
 	Inventory* inventory = nullptr;
@@ -300,7 +304,7 @@ public:
 
 	void PlayTestEffectByKey(WPARAM keyCode);
 
-	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager.get(); }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence) {};
 	void DeleteTrash(UINT64 Fence) {};
@@ -310,7 +314,7 @@ public:
 	void CloseCorpseInventory();
 	void OpenLootContainer(CLootContainerObject* pLoot);
 
-	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
+	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager.get(); }
 
 	void ProcessFireRequest(
 		ItemType weapon,

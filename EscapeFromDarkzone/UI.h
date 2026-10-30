@@ -30,11 +30,11 @@ public:
 };
 
 struct CheckBox {
-	float minX;
-	float minY;
-	float maxX;
-	float maxY;
-	bool Intersects(POINT p)
+	float minX = 0.0f;
+	float minY = 0.0f;
+	float maxX = 0.0f;
+	float maxY = 0.0f;
+	bool Intersects(POINT p) const
 	{
 		float ndcX = (2.0f * static_cast<float>(p.x)) / FRAME_BUFFER_WIDTH - 1.0f;
 		float ndcY = 1.0f - (2.0f * static_cast<float>(p.y)) / FRAME_BUFFER_HEIGHT; // DirectX 기준 Y축 상하 반전
@@ -50,12 +50,14 @@ struct CheckBox {
 
 class UIObject {
 protected:
-	UIMesh*					object;
+	UIMesh*					object = nullptr;
 	XMFLOAT4X4				world;
 	std::function<void()>	Task = nullptr;
-	CheckBox				CollisionBox;
+	CheckBox				CollisionBox{};
+	bool                    m_hasHitBox = false;
 public:
 	UIObject();
+	virtual ~UIObject() = default;
 
 	void SetUIMesh(UIMesh* mesh) { object = mesh; }
 	void SetScale(float x, float y, float z);
@@ -64,6 +66,8 @@ public:
 	void SetFunc(std::function<void()> func) { Task = func; }
 	void setAABB();
 	CheckBox GetBox() { return CollisionBox; }
+	bool ContainsPoint(POINT mouse) const { return isopen && m_hasHitBox && CollisionBox.Intersects(mouse); }
+	bool IsClickable() const { return isopen && m_hasHitBox && static_cast<bool>(Task); }
 
 	bool isopen = true;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
