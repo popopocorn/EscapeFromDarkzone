@@ -8,9 +8,9 @@
 #include "protocol.h"
 #include "Server_Npc.h"
 
-// ===== ·ë »ó¼ö =====
-constexpr int MAX_ROOMS = 100;      // ¹è¿­ ¿ë·®. 
-constexpr int ROOM_CAPACITY = 8;    // ·ë Á¤¿ø
+// ===== ë£¸ ìƒìˆ˜ =====
+constexpr int MAX_ROOMS = 100;      // ë°°ì—´ ìš©ëŸ‰. 
+constexpr int ROOM_CAPACITY = 8;    // ë£¸ ì •ì›
 
 enum RoomState : int {
     ROOM_WAITING = 0,
@@ -18,10 +18,10 @@ enum RoomState : int {
     ROOM_FINISHED = 2,
 };
 
-// ÇÃ·¹ÀÌ¾î À§Ä¡ ½º³À¼¦.
+// í”Œë ˆì´ì–´ ìœ„ì¹˜ ìŠ¤ëƒ…ìƒ·.
 struct PlayerSnapshot {
     bool  in_game;
-    int   client_id = -1;           // Àü¿ª clients[] ÀÎµ¦½º. -1 = ¾øÀ½
+    int   client_id = -1;           // ì „ì—­ clients[] ì¸ë±ìŠ¤. -1 = ì—†ìŒ
     float x, y, z;
     float yaw;
     short hp;
@@ -30,9 +30,9 @@ struct PlayerSnapshot {
 };
 
 struct Room {
-    int      id = -1;               // ¹è¿­ ÀÎµ¦½º. ±âµ¿ ½Ã 1È¸ ¼³Á¤
+    int      id = -1;               // ë°°ì—´ ì¸ë±ìŠ¤. ê¸°ë™ ì‹œ 1íšŒ ì„¤ì •
     bool     alive = false;
-    uint32_t generation = 0;        // ·ë ½½·Ô Àç»ç¿ë¸¶´Ù +1
+    uint32_t generation = 0;        // ë£¸ ìŠ¬ë¡¯ ì¬ì‚¬ìš©ë§ˆë‹¤ +1
     bool     game_over_sent = false;
 
     std::chrono::steady_clock::time_point start_time;
@@ -50,4 +50,4 @@ struct Room {
     }
 };
 
-extern std::array<Room, MAX_ROOMS> g_rooms;
+extern std::array<Room, MAX_ROOMS> g_rooms; 

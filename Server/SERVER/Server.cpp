@@ -60,7 +60,7 @@ constexpr float NPC_BURST_REST_DURATION		= 1.0f;
 
 // 스트레이프 / 재장전
 constexpr float NPC_STRAFE_DURATION = 1.2f;
-// 탄창 / 재장전시간은 무기 테이블로 
+// 탄창 / 재장전시간은 무기 테이블로
 
 // 시야각
 constexpr float NPC_VIEW_ANGLE_DEG			= 120.0f;
@@ -296,6 +296,17 @@ static bool HasRecentLastSeenPlayer(const SERVER_NPC& npc)
 		&& (npc.lose_sight_timer < NPC_LOSE_SIGHT_DURATION);
 }
 
+// ===== 하체(이동) 방향 =====
+#define PLAYER_LOWER_YAW_DEBUG_LOG 1	// 검증이 끝나면 0으로
+
+// 하체 방향 갱신 결과
+enum class LowerYawUpdate : char {
+	UPDATED      = 0,	// 이동함 — 슬라이드 적용 후 실제 이동 방향으로 갱신
+	KEPT_IDLE    = 1,	// 정지(입력 없음 또는 W+S / A+D 상쇄) — 유지
+	KEPT_BLOCKED = 2,	// 입력은 있으나 벽 슬라이드 결과 이동량 0 — 유지
+};
+// ===========================
+
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 class OVER_EXP {
 public:
@@ -330,7 +341,8 @@ public:
 	int _id;
 	SOCKET _socket;
 	float x, y, z;
-	float yaw;
+	float yaw;			// 상체(바라보는) 방향. 라디안 [0, 2π). CS_MOVE마다 갱신
+	float lower_yaw;	// 하체(이동) 방향. 라디안 [0, 2π). 실제로 이동한 CS_MOVE에서만 갱신
 	char  player_state;
 	short weapon_type;    // ItemType (기본 PISTOL)
 	short weapon_grade;   // ItemGrade (기본 GRADE_1)
@@ -374,6 +386,10 @@ public:
 	// 서버 측 deltaTime 계산용 - 마지막 CS_MOVE 수신 시각
 	std::chrono::steady_clock::time_point _last_move_recv_time;
 
+	// lower_yaw 디버그 로그용 (CS_MOVE 워커 경로에서만 접근)
+	char _lower_yaw_last_kind = -1;									// 직전 처리 결과 (LowerYawUpdate)
+	std::chrono::steady_clock::time_point _lower_yaw_log_time{};	// 마지막 출력 시각
+
 	std::atomic<bool> godmode{ false };		// 디버그용 무적 모드
 
 public:
@@ -384,6 +400,7 @@ public:
 		x = z = 0.0f;
 		y = 0.1f;
 		yaw = 0.0f;
+		lower_yaw = yaw;		// 초기값은 yaw 복제
 		player_state = PLAYER_STATE_IDLE;
 		weapon_type = static_cast<short>(ItemType::PISTOL);
 		weapon_grade = static_cast<short>(ItemGrade::BASIC);
@@ -503,7 +520,7 @@ public:
 std::array<SESSION, MAX_USER> clients;
 std::array<Room, MAX_ROOMS>   g_rooms;
 
-void disconnect(int c_id); 
+void disconnect(int c_id);
 
 static void init_room_npcs(Room& r)
 {
@@ -640,9 +657,9 @@ static void start_new_round(Room& r)
 			std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
 			lobby = (clients[cid]._state == ST_LOBBY);
 		}
-		if (!lobby) { 
-			g_ready_players.erase(g_ready_players.begin() + idx); 
-			continue; 
+		if (!lobby) {
+			g_ready_players.erase(g_ready_players.begin() + idx);
+			continue;
 		}
 		if (!BindClientToRoom(r, cid)) break;   // 정원 초과 (비정상)
 
@@ -654,6 +671,13 @@ static void start_new_round(Room& r)
 			clients[cid].x = sp.x;
 			clients[cid].z = sp.z;
 			clients[cid].y = 0.1f;
+
+			// 방향 초기화. 클라 ResetForNewRound(m_fYaw = 0)와 맞춘다.
+			// in_round.store(true)보다 먼저 둔다 — CS_MOVE는 in_round가 true일 때만 yaw를 쓴다.
+			clients[cid].yaw = 0.0f;
+			clients[cid].lower_yaw = clients[cid].yaw;		// 초기값은 yaw 복제
+			clients[cid]._lower_yaw_last_kind = -1;
+
 			clients[cid]._state = ST_INGAME;
 			clients[cid].player_state = PLAYER_STATE_IDLE;
 			clients[cid].escaped = false;
@@ -854,9 +878,9 @@ void SESSION::send_grenade_count(int c_id) {
 static void BroadcastPlayerState(int c_id)
 {
 	int sroom;
-	{ 
-		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-		sroom = clients[c_id].room_id; 
+	{
+		std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+		sroom = clients[c_id].room_id;
 	}
 
 	for (auto& cl : clients) {
@@ -990,14 +1014,92 @@ void ApplySlide(int c_id, float& dirX, float& dirZ)
 		currentDirVec = XMVectorZero();
 	}
 
-	// 결과 추출 
+	// 결과 추출
 	XMFLOAT3 result;
 	XMStoreFloat3(&result, currentDirVec);
 	dirX = result.x;
 	dirZ = result.z;
 
-	// 이번 패킷에서 한 번 사용했으니 누적 노멀 클리어 
+	// 이번 패킷에서 한 번 사용했으니 누적 노멀 클리어
 	normals.clear();
+}
+
+// 라디안 각도를 [0, 2π)로 정규화. yaw와 lower_yaw의 범위를 맞추는 데 쓴다.
+static float NormalizeRad0To2Pi(float rad)
+{
+	constexpr float TWO_PI = 6.28318530718f;
+
+	rad = std::fmod(rad, TWO_PI);
+	if (rad < 0.0f)    rad += TWO_PI;
+	if (rad >= TWO_PI) rad -= TWO_PI;	// 아주 작은 음수 + 2π 가 반올림으로 2π가 되는 경우 대비
+	return rad;
+}
+
+static void LogPlayerLowerYaw(SESSION& s, LowerYawUpdate kind)
+{
+#if PLAYER_LOWER_YAW_DEBUG_LOG
+	// 이동 중 CS_MOVE는 매 프레임 오므로 0.5초 간격으로만 찍는다.
+	// 단, 정지로 바뀌는 순간(KEPT_IDLE 진입)은 검증 핵심이라 간격과 무관하게 즉시 찍는다.
+	constexpr float LOG_INTERVAL_SEC = 0.5f;
+
+	const bool idle_enter =
+		(kind == LowerYawUpdate::KEPT_IDLE) &&
+		(s._lower_yaw_last_kind != static_cast<char>(LowerYawUpdate::KEPT_IDLE));
+	s._lower_yaw_last_kind = static_cast<char>(kind);
+
+	const auto now = std::chrono::steady_clock::now();
+	const bool interval_passed =
+		std::chrono::duration<float>(now - s._lower_yaw_log_time).count() >= LOG_INTERVAL_SEC;
+
+	if (!idle_enter && !interval_passed) return;
+	s._lower_yaw_log_time = now;
+
+	const char* kind_name = "UPDATED";
+	if (kind == LowerYawUpdate::KEPT_IDLE)    kind_name = "KEPT_IDLE";
+	if (kind == LowerYawUpdate::KEPT_BLOCKED) kind_name = "KEPT_BLOCKED";
+
+	constexpr float RAD2DEG = 180.0f / 3.14159265f;
+	const float yaw_deg   = s.yaw * RAD2DEG;
+	const float lower_deg = s.lower_yaw * RAD2DEG;
+	const float rel_deg   = NormalizeAngleDeg(lower_deg - yaw_deg);	// -180 ~ 180
+
+	std::cout << "[LOWER_YAW] id:" << s._id
+		<< " " << kind_name
+		<< " yaw:" << yaw_deg
+		<< " lower:" << lower_deg
+		<< " rel:" << rel_deg << "\n";
+#else
+	(void)s;
+	(void)kind;
+#endif
+}
+
+// 하체 방향 갱신 규칙의 단일 지점. CS_MOVE 처리(해당 세션 워커)에서만 호출한다.
+//   - 실제로 이동한 경우에만 갱신한다. 기준은 벽 슬라이드 적용 후 방향.
+//   - 정지 중에는 갱신하지 않는다. yaw만 바뀌고 lower_yaw는 마지막 이동 방향을 유지한다.
+//     (제자리에서 바라보는 방향만 바꿀 때, 다른 클라이언트가 그 동작을
+//      하체는 그대로 두고 상체만 도는 애니메이션으로 재생할 수 있게 하기 위함)
+static void UpdatePlayerLowerYaw(SESSION& s, bool has_move_input, float moveX, float moveZ)
+{
+	LowerYawUpdate result;
+
+	if (!has_move_input) {
+		// [정지] 의도적으로 lower_yaw를 갱신하지 않는다.
+		result = LowerYawUpdate::KEPT_IDLE;
+	}
+	else if (moveX == 0.0f && moveZ == 0.0f) {
+		// [막힘] 입력은 있으나 ApplySlide가 이동 방향을 0으로 만들었다.
+		//        실제로 움직이지 않았으므로 정지와 같게 유지한다.
+		result = LowerYawUpdate::KEPT_BLOCKED;
+	}
+	else {
+		// [이동] yaw와 같은 규약: forward = (sin θ, cos θ) → θ = atan2(x, z).
+		//        슬라이드 후 벡터는 길이가 1보다 작을 수 있지만 atan2는 방향만 본다.
+		s.lower_yaw = NormalizeRad0To2Pi(std::atan2(moveX, moveZ));
+		result = LowerYawUpdate::UPDATED;
+	}
+
+	LogPlayerLowerYaw(s, result);
 }
 
 int get_new_client_id()
@@ -1137,7 +1239,7 @@ static void BroadcastAttachedEffectNoSnapshot(int room_id, EffectID id, EffectEn
 
 // 스냅샷 없이 (IOCP 워커 경로: PvP)
 static void BroadcastFireTracerNoSnapshot(
-	int room_id, 
+	int room_id,
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
 	const XMFLOAT3& normal)
@@ -1182,7 +1284,7 @@ static void BroadcastAttachedEffect(const Room& r, EffectID id, EffectEntityKind
 
 // 스냅샷 기반 (NPC 스레드 경로: PvE, NPC-->플레이어)
 static void BroadcastFireTracer(
-	const Room& r, 
+	const Room& r,
 	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
 	short weapon_type, unsigned char hit_kind, float distance,
 	const XMFLOAT3& normal)
@@ -1769,7 +1871,7 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		XMFLOAT3 o3, d3;
 		XMStoreFloat3(&o3, origin);
 		XMStoreFloat3(&d3, dir);
-		BroadcastFireTracer(r, 
+		BroadcastFireTracer(r,
 			(short)e.attacker_client_id, o3, d3,
 			(short)e.weapon_type, hit_kind, trace_dist, normal);
 	}
@@ -1806,9 +1908,9 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		// 이 룸의 참가자인지 확인
 		int slot = -1;
 		for (int k = 0; k < ROOM_CAPACITY; ++k) {
-			if (r.participants[k] == cid) { 
-				slot = k; 
-				break; 
+			if (r.participants[k] == cid) {
+				slot = k;
+				break;
 			}
 		}
 		if (slot < 0) break;
@@ -2863,7 +2965,7 @@ static void npc_thread(int widx)
 				if (completed) clients[i].send_ammo_state(i);
 			}
 
-			// 루팅박스 
+			// 루팅박스
 			for (auto& npc : r.npcs) {
 				if (false == npc.loot_active) continue;
 				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - npc.death_time).count();
@@ -3075,10 +3177,10 @@ void process_packet(int c_id, char* packet)
 
 		int   sroom;
 		short shoes_lv = 0;		// 신발 단계 (0 = 미착용)
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 
 			sroom = clients[c_id].room_id;
 			shoes_lv = clients[c_id].shoes_grade;		// 같은 락 구간에서 같이 읽는다
@@ -3099,9 +3201,9 @@ void process_packet(int c_id, char* packet)
 		// deltaTime 상한 (프레임 스파이크 방지 - 최대 100ms)
 		if (fDeltaTime > 0.1f) fDeltaTime = 0.1f;
 
-		// yaw(도) → 라디안 변환 후 Look/Right 벡터 계산
-		float fYawRad = p->yaw * (3.14159265f / 180.0f);
-		clients[c_id].yaw = fYawRad;
+		// yaw(도) → 라디안 변환 후 [0, 2π)로 정규화 (lower_yaw와 범위 통일)
+		float fYawRad = NormalizeRad0To2Pi(p->yaw * (3.14159265f / 180.0f));
+		clients[c_id].yaw = fYawRad;		// 상체(바라보는) 방향 — 정지 중에도 항상 갱신
 
 		float lookX = sinf(fYawRad);
 		float lookZ = cosf(fYawRad);
@@ -3127,6 +3229,10 @@ void process_packet(int c_id, char* packet)
 
 		// 이동이 없으면 중계만 하고 종료
 		if (dirX == 0.0f && dirZ == 0.0f) {
+			// [하체 방향] 정지 (입력 없음 또는 W+S / A+D 상쇄)
+			//   lower_yaw는 의도적으로 갱신하지 않는다. 위에서 yaw만 갱신됐다.
+			UpdatePlayerLowerYaw(clients[c_id], false, 0.0f, 0.0f);
+
 			for (auto& cl : clients) {
 				if (cl._state != ST_INGAME) continue;
 				if (cl.room_id != sroom) continue;
@@ -3141,6 +3247,10 @@ void process_packet(int c_id, char* packet)
 		dirZ /= len;
 
 		ApplySlide(c_id, dirX, dirZ);
+
+		// [하체 방향] 이동 — 슬라이드 적용 후 실제 이동 방향으로 갱신.
+		//   슬라이드 결과가 0(벽에 막힘)이면 함수 안에서 유지 처리한다.
+		UpdatePlayerLowerYaw(clients[c_id], true, dirX, dirZ);
 
 		// 기본 이동 속도. 클라이언트의 이동 속도와 반드시 같아야 한다.
 		constexpr float MOVE_SPEED = 5.0f;
@@ -3180,10 +3290,10 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_CHANGE_WEAPON: {
 		int sroom;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 
 			sroom = clients[c_id].room_id;
 		}
@@ -3229,9 +3339,9 @@ void process_packet(int c_id, char* packet)
 	case CS_CRAFT_REQUEST: {
 		if (false == clients[c_id].in_round.load()) break;
 		{
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 		}
 
 		CS_CRAFT_REQUEST_PACKET* p =
@@ -3318,10 +3428,10 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_HIT_NPC: {
 		if (false == clients[c_id].in_round.load()) break;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 		}
 
 		CS_HIT_NPC_PACKET* p =
@@ -3369,8 +3479,8 @@ void process_packet(int c_id, char* packet)
 		if (false == clients[c_id].in_round.load()) break;
 
 		int sroom;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
 
 			if (clients[c_id].dead)
 				break;
@@ -3468,7 +3578,7 @@ void process_packet(int c_id, char* packet)
 			short new_hp = 0;
 			bool  just_died = false;
 
-			XMFLOAT3 tpos2{}; 
+			XMFLOAT3 tpos2{};
 			float tyaw2 = 0.0f;
 
 			bool reset_prog = false;
@@ -3545,10 +3655,10 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_LOOT_PICKUP: {
 		if (false == clients[c_id].in_round.load()) break;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 		}
 
 		CS_LOOT_PICKUP_PACKET* p = reinterpret_cast<CS_LOOT_PICKUP_PACKET*>(packet);
@@ -3567,10 +3677,10 @@ void process_packet(int c_id, char* packet)
 	}
 	case CS_GRENADE_EXPLODE: {
 		if (false == clients[c_id].in_round.load()) break;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			if (clients[c_id].dead) 
-				break; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			if (clients[c_id].dead)
+				break;
 		}
 
 		bool can_throw = false;
@@ -3606,9 +3716,9 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].player_state = p->state;
 
 		int sroom;
-		{ 
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock); 
-			sroom = clients[c_id].room_id; 
+		{
+			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
+			sroom = clients[c_id].room_id;
 		}
 
 		for (auto& cl : clients) {
@@ -3668,7 +3778,7 @@ void disconnect(int c_id)
 		clients[c_id].body_grade   = 0;
 		clients[c_id].shoes_grade  = 0;
 
-		// 룸 바인딩 해제 표시. 
+		// 룸 바인딩 해제 표시.
 		// Room::participants[]는 NPC 스레드가 ReconcileRoomParticipants에서 정리한다.
 		leaving_room = clients[c_id].room_id;			// 캡처
 		clients[c_id].room_id = -1;
@@ -3732,6 +3842,9 @@ void worker_thread(HANDLE h_iocp)
 				clients[client_id].x = 0.0f;
 				clients[client_id].y = 0.1f;
 				clients[client_id].z = 0.0f;
+				clients[client_id].yaw = 0.0f;								// 슬롯 재사용 시 이전 접속자 값 제거
+				clients[client_id].lower_yaw = clients[client_id].yaw;		// 초기값은 yaw 복제
+				clients[client_id]._lower_yaw_last_kind = -1;				// 디버그 로그 상태 초기화
 				clients[client_id]._id = client_id;
 				clients[client_id]._name[0] = 0;
 				clients[client_id]._prev_remain = 0;
@@ -3838,12 +3951,12 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 		ItemID upgradeItem = ItemID::NONE;
 
 		switch (npc.kind) {
-		case NPC_TIER_3: 
+		case NPC_TIER_3:
 			upgradeItem = ItemID::WEAPON_UPGRADE_4;
 			break;
-		case NPC_TIER_2: 
+		case NPC_TIER_2:
 			upgradeItem = (rand() % 100 < 70) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3; break;
-		case NPC_TIER_1: 
+		case NPC_TIER_1:
 		default:
 			upgradeItem = ItemID::WEAPON_UPGRADE_2;
 			break;
