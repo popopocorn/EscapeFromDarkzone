@@ -9,7 +9,10 @@ class OtherPlayer : public CGameObject
 {
 private:
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	float    m_fServerYawDeg = 0.0f;
+	float    m_fServerYawDeg = 0.0f;			// 서버가 보낸 상체 방향 — 보간이 따라갈 값
+	float    m_fServerLowerYawDeg = 0.0f;		// 서버가 보낸 하체 방향 — 보간이 따라갈 값
+	float    m_fRenderYawDeg = 0.0f;			// 화면에 보이는 상체 방향 — 보간이 적용된 값
+	float    m_fRenderLowerYawDeg = 0.0f;		// 화면에 보이는 하체 방향 — 보간이 적용된 값 (아직안쓰이는중)
 	bool     m_bUseServerLerp = false;
 	bool     m_bServerMoving = false;
 	bool     m_bDead = false;
@@ -38,12 +41,12 @@ public:
 
 	void ChangeLowerState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false);
 	void ChangeUpperState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false);
-	void ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false); // ���� ��Ʈ��ũ ȣ�� ȣȯ��
+	void ChangeState(std::unique_ptr<State<OtherPlayer>> pNewState, bool bForce = false); // 기존 네트워크 호출 호환용
 
 	static OtherPlayer* Create(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, float x, float y, float z, short playerID);
 
 	void UpdatePosition(float x, float y, float z);
-	void SetServerYaw(float yawRad);
+	void SetServerYaw(float yawRad, float lowerYawRad, bool bSnap = false);
 	void Kill() { CGameObject::Kill(); }
 
 	void SetServerMoving(bool bMoving) { if (m_bDead && bMoving) return; m_bServerMoving = bMoving; }

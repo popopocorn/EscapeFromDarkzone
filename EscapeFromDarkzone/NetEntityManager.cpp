@@ -114,7 +114,7 @@ void NetEntityManager::OnAddPlayer(const SC_ADD_PLAYER_PACKET* p)
 	if (FindOtherPlayer(p->id)) return;
 
 	OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pRootSignature, p->x, p->y, p->z, p->id);
-	pOther->SetServerYaw(p->yaw);
+	pOther->SetServerYaw(p->yaw, p->lower_yaw, true);	// 생성 시에는 보간 없이 바로 맞춘다
 
 	switch (p->state) {
 	case PLAYER_STATE_IDLE:
@@ -152,7 +152,7 @@ void NetEntityManager::OnMovePlayer(const SC_MOVE_PLAYER_PACKET* p)
 
 	if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
 		pOther->UpdatePosition(p->x, p->y, p->z);
-		pOther->SetServerYaw(p->yaw);
+		pOther->SetServerYaw(p->yaw, p->lower_yaw);
 	}
 }
 
