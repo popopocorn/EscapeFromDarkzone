@@ -1,4 +1,4 @@
-#ifndef NOMINMAX
+﻿#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
@@ -104,7 +104,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 2;					// default: 8
+constexpr int ROUND_MIN_PLAYERS = 1;					// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 
@@ -1220,54 +1220,6 @@ static bool UpdateNpcReload(SERVER_NPC& npc, float dt)
 	return false;
 }
 
-static void BroadcastAttachedEffectNoSnapshot(int room_id, EffectID id, EffectEntityKind kind, short entity_id)
-{
-	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
-	ep.size = sizeof(ep);
-	ep.type = SC_PLAY_EFFECT_ATTACHED;
-	ep.effect_id = static_cast<unsigned char>(id);
-	ep.entity_kind = static_cast<unsigned char>(kind);
-	ep.entity_id = entity_id;
-
-	for (int i = 0; i < MAX_USER; ++i) {
-		{
-			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-			if (clients[i]._state != ST_INGAME) continue;
-			if (clients[i].room_id != room_id) continue;
-		}
-		clients[i].do_send(&ep);
-	}
-}
-
-// 스냅샷 없이 (IOCP 워커 경로: PvP)
-static void BroadcastFireTracerNoSnapshot(
-	int room_id,
-	short shooter_id, const XMFLOAT3& origin, const XMFLOAT3& dir,
-	short weapon_type, unsigned char hit_kind, float distance,
-	const XMFLOAT3& normal)
-{
-	SC_FIRE_TRACER_PACKET tp;
-	tp.size = sizeof(tp);
-	tp.type = SC_FIRE_TRACER;
-	tp.shooter_id = shooter_id;
-	tp.ox = origin.x; tp.oy = origin.y; tp.oz = origin.z;
-	tp.dx = dir.x;    tp.dy = dir.y;    tp.dz = dir.z;
-	tp.weapon_type = weapon_type;
-	tp.hit_kind = hit_kind;
-	tp.distance = distance;
-	tp.nx = normal.x; tp.ny = normal.y; tp.nz = normal.z;
-
-	for (int i = 0; i < MAX_USER; ++i) {
-		if (shooter_id == i) continue;   // 발사자 본인 제외
-		{
-			std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-			if (clients[i]._state != ST_INGAME) continue;
-			if (clients[i].room_id != room_id) continue;
-		}
-		clients[i].do_send(&tp);
-	}
-}
-
 static void BroadcastAttachedEffect(const Room& r, EffectID id, EffectEntityKind kind, short entity_id)
 {
 	SC_PLAY_EFFECT_ATTACHED_PACKET ep;
@@ -1457,7 +1409,7 @@ static void NpcFireAtPlayer(const Room& r, SERVER_NPC& npc, int target_id)
 			npc.lose_sight_timer = 0.0f;
 		}
 	}
-	else if (wall_t < std::numeric_limits<float>::max()) {
+	else if (wall_t <= spec.range) {		// 사거리 밖 벽은 허공 처리 (HIT 경로와 동일 규칙)
 		// 벽에 막힘
 		hit_kind = 1;
 		trace_dist = wall_t;
@@ -1840,6 +1792,32 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 			}
 		}
 
+		// 기존 방 이벤트 큐에서 NPC와 같은 광선으로 플레이어도 검사한다.
+		// 한 발이 두 종류의 대상을 관통하지 않도록 가장 가까운 거리 하나만 유지한다.
+		short best_player_id = -1;
+		XMFLOAT3 best_player_pos{};
+		float best_player_yaw = 0.0f;
+		for (int cid : r.participants) {
+			if (cid < 0 || cid == e.attacker_client_id) continue;
+			XMFLOAT3 pos;
+			float yaw;
+			{
+				std::lock_guard<std::mutex> lk(clients[cid]._s_lock);
+				if (clients[cid]._state != ST_INGAME || clients[cid].room_id != r.id ||
+					clients[cid].hp <= 0 || clients[cid].escaped) continue;		// 탈출자는 판정에서 제외 (NPC 표적 규칙과 동일)
+				pos = { clients[cid].x, clients[cid].y, clients[cid].z };
+				yaw = clients[cid].yaw;
+			}
+			BoundingOrientedBox pbox = MakePlayerOOBB(pos, yaw);
+			float t;
+			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
+				best_t = t;
+				best_player_id = static_cast<short>(cid);
+				best_player_pos = pos;
+				best_player_yaw = yaw;
+			}
+		}
+
 		// 벽 막힘 검사
 		int wall_idx = -1;
 		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
@@ -1848,20 +1826,71 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		float         trace_dist = max_range;
 		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
 
-		if (best_id >= 0 && best_t < wall_t) {
+		if ((best_id >= 0 || best_player_id >= 0) && best_t < wall_t) {
 			// 캐릭터 명중
 			hit_kind = 2;
 			trace_dist = best_t;
 			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
 			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
-			BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
-			normal = GetOOBBHitNormal(nbox, hitPosC);
 			short dmg = ComputeDamage(spec, best_t);
-			if (dmg > 0) {
-				ApplyDamage(r, r.npcs[best_id], dmg, e.attacker_client_id);
+			if (best_player_id >= 0) {
+				BoundingOrientedBox pbox = MakePlayerOOBB(best_player_pos, best_player_yaw);
+				normal = GetOOBBHitNormal(pbox, hitPosC);
+				short new_hp = 0;
+				bool just_died = false;
+				bool reset_prog = false;
+				bool applied = false;
+				{
+					// 스캔 후 락을 풀었으므로 그 사이 사망/이탈/탈출했을 수 있다 - 재검증.
+					// 실패해도 break하지 않는다 (아래 SPARK/트레이서는 항상 보내야 한다).
+					std::lock_guard<std::mutex> lk(clients[best_player_id]._s_lock);
+					auto& victim = clients[best_player_id];
+					if (victim._state == ST_INGAME && victim.room_id == r.id &&
+						victim.hp > 0 && !victim.escaped)
+					{
+						applied = true;
+						// 기존 PvP와 동일: 방어구 -> 무적 순서 (최소 1 보정이 dmg = 0을 되살리면 안 된다)
+						dmg = ApplyArmorReduction(dmg, victim.helmet_grade, victim.body_grade);
+						if (victim.godmode.load()) dmg = 0;
+						victim.hp = static_cast<short>((std::max)(0, static_cast<int>(victim.hp) - dmg));
+						new_hp = victim.hp;
+						if (new_hp <= 0 && !victim.dead) {
+							victim.dead = true;
+							victim.player_state = PLAYER_STATE_DIE;
+							just_died = true;
+						}
+						if (victim.in_escape_zone) {
+							victim.last_hit_time = std::chrono::steady_clock::now();
+							reset_prog = true;
+						}
+					}
+				}
+				if (applied) {
+					if (reset_prog) {
+						SC_ESCAPE_PROGRESS_PACKET pp;
+						pp.size = sizeof(pp);
+						pp.type = SC_ESCAPE_PROGRESS;
+						pp.event = ESCAPE_PROG_RESET;
+						clients[best_player_id].do_send(&pp);
+					}
+					SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
+					hp_pkt.size = sizeof(hp_pkt);
+					hp_pkt.type = SC_PLAYER_HP_UPDATE;
+					hp_pkt.id = best_player_id;
+					hp_pkt.hp = new_hp;
+					clients[best_player_id].do_send(&hp_pkt);
+					if (just_died) BroadcastPlayerState(best_player_id);
+					std::cout << "[PvP] client " << e.attacker_client_id << " HIT player "
+						<< best_player_id << " (hp=" << new_hp << ")\n";
+				}
+			}
+			else {
+				BoundingOrientedBox nbox = MakeNpcOOBB(r.npcs[best_id].position, r.npcs[best_id].yaw);
+				normal = GetOOBBHitNormal(nbox, hitPosC);
+				if (dmg > 0) ApplyDamage(r, r.npcs[best_id], dmg, e.attacker_client_id);
 			}
 		}
-		else if (wall_t < std::numeric_limits<float>::max()) {
+		else if (wall_t <= max_range) {
 			// 벽에 막힘
 			hit_kind = 1;
 			trace_dist = wall_t;
@@ -1873,6 +1902,8 @@ static void HandleNpcEvent(Room& r, const NpcInputEvent& e)
 		XMFLOAT3 o3, d3;
 		XMStoreFloat3(&o3, origin);
 		XMStoreFloat3(&d3, dir);
+		// 예전 PvP 전용 요청에서 보내던 총구 효과도 통합 사격당 한 번만 전파한다.
+		BroadcastAttachedEffect(r, EffectID::SPARK, EffectEntityKind::PLAYER, static_cast<short>(e.attacker_client_id));
 		BroadcastFireTracer(r,
 			(short)e.attacker_client_id, o3, d3,
 			(short)e.weapon_type, hit_kind, trace_dist, normal);
@@ -3428,6 +3459,7 @@ void process_packet(int c_id, char* packet)
 			<< " SUCCESS -> equip:" << static_cast<int>(recipe->result) << "\n";
 		break;
 	}
+	// 패킷 번호/구조와 방 큐는 유지한다. 새 클라이언트는 이 요청 하나로 PvE/PvP를 모두 처리한다.
 	case CS_HIT_NPC: {
 		if (false == clients[c_id].in_round.load()) break;
 		{
@@ -3478,181 +3510,9 @@ void process_packet(int c_id, char* packet)
 		break;
 	}
 	case CS_HIT_PLAYER: {
-		if (false == clients[c_id].in_round.load()) break;
-
-		int sroom;
-		{
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
-
-			if (clients[c_id].dead)
-				break;
-
-			sroom = clients[c_id].room_id;
-		}
-
-		CS_HIT_PLAYER_PACKET* p =
-			reinterpret_cast<CS_HIT_PLAYER_PACKET*>(packet);
-
-		short wtype = p->weapon_type;
-		bool blocked = false;
-		{
-			std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
-			if (clients[c_id].reloading && clients[c_id].reload_weapon == wtype) {
-				blocked = true;							// 재장전 중 발사 무효 (push 안 함)
-			}
-			else if (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0) {
-				blocked = true;							// 탄약 0: 무효 + 교정 필요
-			}
-			else {
-				clients[c_id].ammo[wtype]--;			// 정상: 내부 차감만
-			}
-		}
-		if (blocked) {
-			bool need_sync = false;
-			{
-				std::lock_guard<std::mutex> lk(clients[c_id]._s_lock);
-				if (!clients[c_id].reloading && (wtype < 0 || wtype >= 4 || clients[c_id].ammo[wtype] <= 0))
-					need_sync = true;
-			}
-			if (need_sync) clients[c_id].send_ammo_state(c_id);
-			break;										// 데미지, 이펙트 등 전부 안 보냄
-		}
-
-		XMVECTOR origin = XMVectorSet(p->ray_ox, p->ray_oy, p->ray_oz, 0.0f);
-		XMVECTOR dir = XMVector3Normalize(
-			XMVectorSet(p->ray_dx, p->ray_dy, p->ray_dz, 0.0f));
-
-		// 공격자 무기 spec (PvE HIT_NPC와 동일 테이블 공유)
-		WeaponSpec spec = LookupWeaponSpec(
-			static_cast<WeaponType>(p->weapon_type),
-			static_cast<WeaponGrade>(p->weapon_grade));
-
-		/*
-		{
-			std::cout << "[debug pvp weapon type]: " << static_cast<int>(p->weapon_type)
-				<< " grade:" << static_cast<int>(p->weapon_grade)
-				<< " range:" << spec.range
-				<< " damage:" << spec.damage
-				<< "\n";
-		}
-		*/
-
-		// 락 잡아서 후보만 스냅샷
-		short  best_id = -1;
-		float  best_t = spec.range;
-
-		for (int i = 0; i < MAX_USER; ++i) {
-			if (i == c_id) continue;   // 자기 자신 제외
-
-			XMFLOAT3 tpos;
-			float    tyaw;
-			{
-				std::lock_guard<std::mutex> lk(clients[i]._s_lock);
-				if (clients[i]._state != ST_INGAME) continue;
-				if (clients[i].room_id != sroom) continue;
-				if (clients[i].hp <= 0) continue;     // 이미 사망
-				tpos = { clients[i].x, clients[i].y, clients[i].z };
-				tyaw = clients[i].yaw;
-			}   // 좌표 복사 끝, 락 해제
-
-			BoundingOrientedBox pbox = MakePlayerOOBB(tpos, tyaw);
-			float t;
-			if (pbox.Intersects(origin, dir, t) && t >= 0.0f && t < best_t) {
-				best_t = t;
-				best_id = (short)i;
-			}
-		}
-
-		// 벽 막힘 판정
-		int wall_idx = -1;
-		float wall_t = NearestWallHit(origin, dir, g_mapOOBBs, &wall_idx);
-
-		unsigned char hit_kind = 0;		// 0 = 허공
-		float         trace_dist = spec.range;
-		XMFLOAT3      normal = { 0.0f, 0.0f, 0.0f };
-
-		if (best_id >= 0 && best_t < wall_t) {
-			// 캐릭터 명중
-			hit_kind = 2;
-			trace_dist = best_t;
-
-			short dmg = ComputeDamage(spec, best_t);
-			short new_hp = 0;
-			bool  just_died = false;
-
-			XMFLOAT3 tpos2{};
-			float tyaw2 = 0.0f;
-
-			bool reset_prog = false;
-			{
-				std::lock_guard<std::mutex> lk(clients[best_id]._s_lock);
-				if (clients[best_id]._state == ST_INGAME) {
-
-					// 방어구 피해 감소. godmode보다 먼저 — 최소 1 보정이 dmg = 0을 되살리면 안 된다.
-					dmg = ApplyArmorReduction(dmg,
-						clients[best_id].helmet_grade,
-						clients[best_id].body_grade);
-
-					if (clients[best_id].godmode.load()) dmg = 0;   // 무적 모드 (디버그용)
-
-					clients[best_id].hp -= dmg;
-					if (clients[best_id].hp < 0) {
-						clients[best_id].hp = 0;
-					}
-					new_hp = clients[best_id].hp;
-					if (new_hp <= 0 && !clients[best_id].dead) {
-						clients[best_id].dead = true;
-						clients[best_id].player_state = PLAYER_STATE_DIE;
-						just_died = true;
-					}
-					if (clients[best_id].in_escape_zone) {
-						clients[best_id].last_hit_time = std::chrono::steady_clock::now();
-						reset_prog = true;
-					}
-				}
-			}
-			if (reset_prog) {
-				SC_ESCAPE_PROGRESS_PACKET pp;
-				pp.size = sizeof(pp);
-				pp.type = SC_ESCAPE_PROGRESS;
-				pp.event = ESCAPE_PROG_RESET;
-				clients[best_id].do_send(&pp);
-			}
-
-			XMVECTOR vHitC = XMVectorMultiplyAdd(dir, XMVectorReplicate(best_t), origin);
-			XMFLOAT3 hitPosC; XMStoreFloat3(&hitPosC, vHitC);
-			BoundingOrientedBox pbox2 = MakePlayerOOBB(tpos2, tyaw2);
-			normal = GetOOBBHitNormal(pbox2, hitPosC);
-
-			std::cout << "[PvP] client " << c_id << " HIT player "
-				<< best_id << " (hp=" << new_hp << ")\n";
-
-			SC_PLAYER_HP_UPDATE_PACKET hp_pkt;
-			hp_pkt.size = sizeof(hp_pkt);
-			hp_pkt.type = SC_PLAYER_HP_UPDATE;
-			hp_pkt.id = best_id;
-			hp_pkt.hp = new_hp;
-			clients[best_id].do_send(&hp_pkt);
-			if (just_died) BroadcastPlayerState(best_id);
-		}
-		else if (wall_t < std::numeric_limits<float>::max()) {
-			// 벽에 막힘
-			hit_kind = 1;
-			trace_dist = wall_t;
-			XMVECTOR vHit = XMVectorMultiplyAdd(dir, XMVectorReplicate(wall_t), origin);
-			XMFLOAT3 hitPos; XMStoreFloat3(&hitPos, vHit);
-			normal = GetOOBBHitNormal(g_mapOOBBs[wall_idx], hitPos);
-		}
-
-		// 머즐 플래시 전체 브로드캐스트
-		BroadcastAttachedEffectNoSnapshot(sroom, EffectID::SPARK, EffectEntityKind::PLAYER, (short)c_id);
-
-		BroadcastFireTracerNoSnapshot(
-			sroom, (short)c_id,
-			{ p->ray_ox, p->ray_oy, p->ray_oz },
-			{ p->ray_dx, p->ray_dy, p->ray_dz },
-			p->weapon_type, hit_kind, trace_dist, normal);
-
+		// 폐기됨. PvP 판정은 CS_HIT_NPC -> HandleNpcEvent(HIT)에서 NPC와 함께 처리한다.
+		// 여기서 처리하면 한 발에 피해/트레이서/탄약 차감이 두 번 일어나므로 아무것도 하지 않는다.
+		// (패킷 번호는 protocol.h에서 그대로 유지 - 구버전 클라가 보내도 무시된다)
 		break;
 	}
 	case CS_LOOT_PICKUP: {
