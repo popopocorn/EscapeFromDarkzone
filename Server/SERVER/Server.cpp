@@ -1,4 +1,4 @@
-﻿#ifndef NOMINMAX
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
@@ -104,7 +104,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 1;					// default: 8
+constexpr int ROUND_MIN_PLAYERS = 2;					// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 

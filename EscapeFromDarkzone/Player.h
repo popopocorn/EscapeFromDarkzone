@@ -138,6 +138,12 @@ protected:
 
 	bool m_bWasMoving = false;
 
+	// CS_MOVE ì†¡ì‹  ê¸°ë¡ (P4: ì •ì§€ ì¤‘ íšŒì „ ì†¡ì‹ )
+	DWORD m_dwLastMoveSendTick  = 0;		// ë§ˆì§€ë§‰ CS_MOVE ì†¡ì‹  ì‹œê° (GetTickCount)
+	float m_fLastSentYaw        = 0.0f;		// ë§ˆì§€ë§‰ CS_MOVEì— ì‹¤ì€ yaw (ë„)
+	float m_fPrevFrameYaw       = 0.0f;		// ì§ì „ í”„ë ˆì„ yaw (ë„) â€” íšŒì „ ì¤‘ì¸ì§€ íŒë‹¨
+	DWORD m_dwLastYawChangeTick = 0;		// yawê°€ ë§ˆì§€ë§‰ìœ¼ë¡œ ë°”ë€ ì‹œê° (GetTickCount)
+
 	short m_hp = 100;
 
 	std::unique_ptr<Inventory>	m_pInventory;
@@ -206,7 +212,7 @@ public:
 
 	void ChangeLowerState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
 	void ChangeUpperState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
-	void ChangeState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false); // ±âÁ¸ ¿ÜºÎ È£Ãâ È£È¯¿ë
+	void ChangeState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false); // ê¸°ì¡´ ì™¸ë¶€ í˜¸ì¶œ í˜¸í™˜ìš©
 	void EnterDeadState();
 	void ReportStateToServer(bool bForce = false);
 	void RefreshAnimationTracksFromStates();
@@ -435,14 +441,14 @@ public:
 	virtual void Exit(CPlayer* Player) override;
 };
 
-// ±âÁ¸ ÄÚµå¿Í ¿ÜºÎ È£ÃâÀ» ÇÑ ¹ø¿¡ ±úÁö ¾Ê±â À§ÇÑ È£È¯ º°Äª.
+// ê¸°ì¡´ ì½”ë“œì™€ ì™¸ë¶€ í˜¸ì¶œì„ í•œ ë²ˆì— ê¹¨ì§€ ì•Šê¸° ìœ„í•œ í˜¸í™˜ ë³„ì¹­.
 using PlayerIdle = PlayerLowerIdle;
 using PlayerRun = PlayerLowerRun;
 using PlayerGrenade = PlayerUpperGrenade;
 using PlayerShoot = PlayerUpperShoot;
 using PlayerReload = PlayerUpperReload;
 
-// ±âÁ¸ PlayerDie »ı¼º È£ÃâÀÌ ³²¾Æ ÀÖ¾îµµ ÄÄÆÄÀÏµÇµµ·Ï µÎ´Â È£È¯ ¸¶Ä¿.
+// ê¸°ì¡´ PlayerDie ìƒì„± í˜¸ì¶œì´ ë‚¨ì•„ ìˆì–´ë„ ì»´íŒŒì¼ë˜ë„ë¡ ë‘ëŠ” í˜¸í™˜ ë§ˆì»¤.
 class PlayerDie : public State<CPlayer>
 {
 };
