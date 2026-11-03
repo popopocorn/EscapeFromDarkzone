@@ -806,6 +806,7 @@ void SESSION::send_move_packet(int c_id)
 	p.z = clients[c_id].z;
 	p.yaw = clients[c_id].yaw;
 	p.move_time = clients[c_id]._last_move_time;
+	p.lower_yaw = clients[c_id].lower_yaw;		// 정지 패킷이면 마지막 이동 방향 그대로
 	do_send(&p);
 }
 
@@ -821,6 +822,7 @@ void SESSION::send_add_player_packet(int c_id)
 	add_packet.z = clients[c_id].z;
 	add_packet.yaw = clients[c_id].yaw;
 	add_packet.state = clients[c_id].player_state;
+	add_packet.lower_yaw = clients[c_id].lower_yaw;
 	do_send(&add_packet);
 }
 
