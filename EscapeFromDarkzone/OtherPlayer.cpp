@@ -61,6 +61,33 @@ static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
 static constexpr float OTHER_PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float OTHER_PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 
+// 상/하체 방향 보간
+static constexpr float OTHER_PLAYER_YAW_LERP_SPEED = 15.0f;	// 보간 보정치 (클수록 휙휙 돌아감)
+
+// 서버 라디안을 도 단위로
+static float Radian2Deg(float deg)
+{
+	deg = fmodf(deg, 360.0f);
+	if (deg < 0.0f)    deg += 360.0f;
+	if (deg >= 360.0f) deg -= 360.0f;
+	return deg;
+}
+
+// 최소 회전량 계산
+static float ShortestDeltaDeg(float from, float to)
+{
+	float d = fmodf(to - from, 360.0f);
+	if (d > 180.0f)  d -= 360.0f;
+	if (d < -180.0f) d += 360.0f;
+	return d;
+}
+
+// cur를 target 쪽으로 t(0~1) 비율만큼 최단 방향으로 회전
+static float LerpAngle(float cur, float target, float t)
+{
+	return Radian2Deg(cur + ShortestDeltaDeg(cur, target) * t);
+}
+
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, short playerID)
 {
 	UNREFERENCED_PARAMETER(pd3dGraphicsRootSignature);
@@ -161,7 +188,13 @@ void OtherPlayer::Update(float fTimeElapsed)
 		cur.z += (m_xmf3ServerPosition.z - cur.z) * alpha;
 		SetPosition(cur);
 
-		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fServerYawDeg, 0.0f);
+		// 방향 보간
+		const float t = 1.0f - expf(-OTHER_PLAYER_YAW_LERP_SPEED * fTimeElapsed);
+		m_fRenderYawDeg      = LerpAngle(m_fRenderYawDeg, m_fServerYawDeg, t);
+		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerLowerYawDeg, t);
+
+		// 상체 기준으로 방향 적용
+		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderYawDeg, 0.0f);
 		m_xmf4x4ToParent._41 = cur.x;
 		m_xmf4x4ToParent._42 = cur.y;
 		m_xmf4x4ToParent._43 = cur.z;
@@ -664,12 +697,21 @@ void OtherPlayer::UpdatePosition(float x, float y, float z)
 	}
 }
 
-void OtherPlayer::SetServerYaw(float yawRad)
+// 서버가 보낸 상체/하체 방향 저장 (보간 목표값으로)
+// bSnap: 보간 없이 바로 그 방향으로 (생성 직후 사용)
+void OtherPlayer::SetServerYaw(float yawRad, float lowerYawRad, bool bSnap)
 {
 	if (m_bDead)
 		return;
 
-	m_fServerYawDeg = XMConvertToDegrees(yawRad);
+	m_fServerYawDeg      = Radian2Deg(XMConvertToDegrees(yawRad));			// 보간 목표(상체)
+	m_fServerLowerYawDeg = Radian2Deg(XMConvertToDegrees(lowerYawRad));		// 보간 목표(하체)
+
+	if (bSnap)
+	{
+		m_fRenderYawDeg      = m_fServerYawDeg;
+		m_fRenderLowerYawDeg = m_fServerLowerYawDeg;
+	}
 }
 
 void OtherPlayer::EquipDefaultPistol()

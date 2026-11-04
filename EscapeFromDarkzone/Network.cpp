@@ -360,7 +360,7 @@ bool NetworkManager::SendArmorUpgradeRequest(ItemID targetArmor)
 
 bool NetworkManager::SendWeaponUpgradeRequest(short slotidx)
 {
-	return SendInventoryClick(INV_ACTION_WEAPON_UPGRADE, slotidx);
+	return SendInventoryClick(INV_ACTION_CLICK, slotidx);
 }
 
 bool NetworkManager::SendRoundJoin()

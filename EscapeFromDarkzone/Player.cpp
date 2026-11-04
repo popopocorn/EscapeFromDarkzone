@@ -21,6 +21,21 @@ static constexpr float PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 static constexpr float PLAYER_RUN_FOOTSTEP_INTERVAL = 0.5f / PLAYER_RUN_ANIM_SPEED;
 
+// 회전 송신
+static constexpr float PLAYER_ROTATE_SEND_THRESHOLD_DEG = 1.0f;	// 이만큼 달라지면 보내기
+static constexpr DWORD PLAYER_ROTATE_SEND_INTERVAL_MS   = 50;	// 회전 패킷 최소 간격
+
+// yaw 차 계산 함수
+static float CalYawDelta(float a, float b)
+{
+	float d = fmodf(a - b, 360.0f);
+	if (d < 0.0f)   d += 360.0f;
+	if (d > 180.0f) d = 360.0f - d;
+	return d;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 CPlayer::CPlayer()
 {
 	m_pCamera = NULL;
@@ -232,21 +247,46 @@ void CPlayer::Update(float fTimeElapsed)
 
 		bool bHasInput = (inputs != 0);
 
+		// 기준 시각
+		const DWORD dwNow = GetTickCount();
+
+		// yaw가 마지막으로 바뀐 시각을 기록 (회전이 멈췄는지 판단용)
+		if (m_fYaw != m_fPrevFrameYaw) {
+			m_fPrevFrameYaw = m_fYaw;
+			m_dwLastYawChangeTick = dwNow;
+		}
+
+		bool bSend = false;
+
 		if (bHasInput) {
-			NetSession::Instance().Move(inputs, m_fYaw,
-				static_cast<unsigned int>(GetTickCount()));
-			//NetworkManager::Instance().SendMove(
-			//	inputs, m_fYaw,
-			//	static_cast<unsigned int>(GetTickCount())
-			//);
+			// 움직이면
+			bSend = true;
 		}
 		else if (m_bWasMoving) {
-			NetSession::Instance().Move(0, m_fYaw,
-				static_cast<unsigned int>(GetTickCount()));
-			//NetworkManager::Instance().SendMove(
-			//	0, m_fYaw,
-			//	static_cast<unsigned int>(GetTickCount())
-			//);
+			// 움직였으면
+			bSend = true;
+		}
+		else if (!m_bIsDead) {
+			// 카메라만 돌린 케이스 체크
+			const float fDelta = CalYawDelta(m_fYaw, m_fLastSentYaw);
+			const bool bDTimeSendOK = (dwNow - m_dwLastMoveSendTick >= PLAYER_ROTATE_SEND_INTERVAL_MS);
+
+			if (fDelta != 0.0f && bDTimeSendOK) {
+				// 카메라 회전 임계값 체크
+				if (fDelta >= PLAYER_ROTATE_SEND_THRESHOLD_DEG) {
+					bSend = true;
+				}
+				// 카메라 돌리고 나서 시간 경과 체크 (마지막 1번 보정)
+				else if (dwNow - m_dwLastYawChangeTick >= PLAYER_ROTATE_SEND_INTERVAL_MS) {
+					bSend = true;
+				}
+			}
+		}
+
+		if (bSend) {
+			NetSession::Instance().Move(bHasInput ? inputs : 0, m_fYaw, static_cast<unsigned int>(dwNow));
+			m_dwLastMoveSendTick = dwNow;
+			m_fLastSentYaw = m_fYaw;
 		}
 
 		m_bWasMoving = bHasInput;
@@ -1648,6 +1688,12 @@ void CPlayer::ResetForNewRound(short fullHp)
 	m_fPitch = 0.0f;
 	m_fYaw = 0.0f;
 	m_fRoll = 0.0f;
+
+	// 서버 송신 기록 초기화 (서버도 라운드 시작 시 yaw = 0으로 맞춘다)
+	m_dwLastMoveSendTick = 0;
+	m_fLastSentYaw = m_fYaw;
+	m_fPrevFrameYaw = m_fYaw;
+	m_dwLastYawChangeTick = 0;
 
 	// 소유 중인 모든 무기의 탄창을 최대치로 초기화
 	for (auto& weaponPair : PlayerOwnWeapons)
