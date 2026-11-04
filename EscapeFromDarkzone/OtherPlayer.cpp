@@ -1,6 +1,7 @@
 #include "OtherPlayer.h"
 #include "Interpolation.h"
 #include "WeaponAttachment.h"
+#include "BodyYaw.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
 #include"Shader.h"
@@ -131,6 +132,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 			pPlayerModel
 		);
 	SetChild(pPlayerModel->m_pRootObject.release(), true);
+	CacheUpperBodyYawBones();
 	if (m_pSkinnedAnimationController)
 	{
 		m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
@@ -172,6 +174,7 @@ void OtherPlayer::Animate(float fTimeElapsed)
 
 void OtherPlayer::Update(float fTimeElapsed)
 {
+	m_fTurnFrameElapsed = fTimeElapsed;
 	if (!m_bDead)
 	{
 		m_LowerStateMachine.Update(this, fTimeElapsed);
@@ -191,10 +194,14 @@ void OtherPlayer::Update(float fTimeElapsed)
 		// 방향 보간
 		const float t = 1.0f - expf(-OTHER_PLAYER_YAW_LERP_SPEED * fTimeElapsed);
 		m_fRenderYawDeg      = LerpAngle(m_fRenderYawDeg, m_fServerYawDeg, t);
-		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerLowerYawDeg, t);
+		// 이동 중에는 기존 달리기 방향으로 복귀하고, 정지하면 서버의 하체 방향을 따른다.
+		const float lowerTarget = m_bServerMoving ? m_fServerYawDeg : m_fServerLowerYawDeg;
+		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, lowerTarget, t);
+		// 패킷 도착 간격이나 180도 경계에서도 허리가 한계를 넘지 않게 한다.
+		m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fRenderYawDeg, m_fRenderLowerYawDeg);
 
-		// 상체 기준으로 방향 적용
-		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderYawDeg, 0.0f);
+		// 골반과 발은 하체 방향으로 회전하고 상체 각도 차이는 본에 따로 적용한다.
+		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderLowerYawDeg, 0.0f);
 		m_xmf4x4ToParent._41 = cur.x;
 		m_xmf4x4ToParent._42 = cur.y;
 		m_xmf4x4ToParent._43 = cur.z;
@@ -205,8 +212,23 @@ void OtherPlayer::Update(float fTimeElapsed)
 	// The shader calls OnLateUpdate after this frame's animation evaluation.
 }
 
+void OtherPlayer::CacheUpperBodyYawBones()
+{
+	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
+	m_turnFeet.Cache(this);
+}
+
+void OtherPlayer::ApplyUpperBodyYaw()
+{
+	if (!m_bDead)
+		BodyYaw::ApplyTorsoYaw(m_pUpperBodyYawBones, m_fRenderYawDeg, m_fRenderLowerYawDeg);
+}
+
 void OtherPlayer::OnLateUpdate()
 {
+	// 본 애니메이션을 평가한 뒤 회전해야 다음 평가에서 누적되지 않는다.
+	ApplyUpperBodyYaw();
+	m_turnFeet.Update(m_fTurnFrameElapsed, m_fRenderLowerYawDeg, !m_bDead && !m_bServerMoving);
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
@@ -710,7 +732,7 @@ void OtherPlayer::SetServerYaw(float yawRad, float lowerYawRad, bool bSnap)
 	if (bSnap)
 	{
 		m_fRenderYawDeg      = m_fServerYawDeg;
-		m_fRenderLowerYawDeg = m_fServerLowerYawDeg;
+		m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fServerYawDeg, m_fServerLowerYawDeg);
 	}
 }
 

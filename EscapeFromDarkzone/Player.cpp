@@ -16,6 +16,7 @@
 #include "NetSession.h"
 #include "GameFramework.h"
 #include "WeaponAttachment.h"
+#include "BodyYaw.h"
 
 static constexpr float PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float PLAYER_NORMAL_ANIM_SPEED = 1.0f;
@@ -291,6 +292,7 @@ void CPlayer::Update(float fTimeElapsed)
 
 		m_bWasMoving = bHasInput;
 	}
+	UpdateBodyYaw(fTimeElapsed);
 	if (m_pWeaponSocket)
 	{
 		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
@@ -342,6 +344,35 @@ CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
 	return pNewCamera;
 }
 
+void CPlayer::CacheUpperBodyYawBones()
+{
+	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
+	m_turnFeet.Cache(this);
+}
+
+void CPlayer::ApplyServerLowerBodyYaw(float lowerYawRad)
+{
+	if (m_bIsDead || !std::isfinite(lowerYawRad)) return;
+	m_fLowerBodyYawTarget = BodyYaw::NormalizeDegrees(XMConvertToDegrees(lowerYawRad));
+}
+
+void CPlayer::UpdateBodyYaw(float fTimeElapsed)
+{
+	if (m_bIsDead || !m_pUpperBodyYawBones[0]) return;
+	if (m_pCamera && m_pCamera->GetMode() == SPACESHIP_CAMERA)
+	{
+		m_fLowerBodyYawTarget = m_fRenderLowerBodyYaw = m_fYaw;
+		return;
+	}
+	const bool moving = MoveDir.x * MoveDir.x + MoveDir.z * MoveDir.z > 0.000001f;
+	// 이동 시 기존 달리기 방향으로 복귀하고, 정지 시에는 한계를 넘을 때만 발을 돌린다.
+	m_fLowerBodyYawTarget = moving ? m_fYaw : BodyYaw::ConstrainLowerYaw(m_fYaw, m_fLowerBodyYawTarget);
+	const float blend = 1.0f - expf(-15.0f * std::max(fTimeElapsed, 0.0f));
+	m_fRenderLowerBodyYaw = BodyYaw::NormalizeDegrees(m_fRenderLowerBodyYaw +
+		BodyYaw::ShortestDeltaDegrees(m_fRenderLowerBodyYaw, m_fLowerBodyYawTarget) * blend);
+	m_fRenderLowerBodyYaw = BodyYaw::ConstrainLowerYaw(m_fYaw, m_fRenderLowerBodyYaw);
+}
+
 void CPlayer::OnPrepareRender()
 {
 	m_xmf4x4ToParent._11 = m_xmf3Right.x; m_xmf4x4ToParent._12 = m_xmf3Right.y; m_xmf4x4ToParent._13 = m_xmf3Right.z;
@@ -355,6 +386,16 @@ void CPlayer::OnPrepareRender()
 		XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z),
 		m_xmf4x4ToParent
 	);
+	if (m_pUpperBodyYawBones[0] && (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA))
+	{
+		// 카메라와 이동 벡터는 조준 방향을 유지하고 모델의 기준 회전만 하체에 맞춘다.
+		XMMATRIX world = XMLoadFloat4x4(&m_xmf4x4ToParent);
+		const XMVECTOR position = world.r[3];
+		world.r[3] = XMVectorSet(0, 0, 0, 1);
+		world = world * XMMatrixRotationY(XMConvertToRadians(BodyYaw::ShortestDeltaDegrees(m_fYaw, m_fRenderLowerBodyYaw)));
+		world.r[3] = position;
+		XMStoreFloat4x4(&m_xmf4x4ToParent, world);
+	}
 }
 
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -935,6 +976,12 @@ void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 
 void CPlayer::FinalizeWeaponPose(float fTimeElapsed)
 {
+	// 최종 이동/충돌과 애니메이션을 반영한 뒤 상체를 돌리고 무기/손을 보정한다.
+	if (!m_bIsDead && (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA))
+		BodyYaw::ApplyTorsoYaw(m_pUpperBodyYawBones, m_fYaw, m_fRenderLowerBodyYaw);
+	const bool standing = !m_bIsDead && MoveDir.x * MoveDir.x + MoveDir.z * MoveDir.z < 0.000001f
+		&& (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA);
+	m_turnFeet.Update(fTimeElapsed, m_fRenderLowerBodyYaw, standing);
 	if (!m_pWeapon || !m_pWeaponSocket) return;
 	UpdateWeaponPose(fTimeElapsed);
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
@@ -1688,6 +1735,8 @@ void CPlayer::ResetForNewRound(short fullHp)
 	m_fPitch = 0.0f;
 	m_fYaw = 0.0f;
 	m_fRoll = 0.0f;
+	m_fLowerBodyYawTarget = m_fRenderLowerBodyYaw = m_fYaw;
+	CacheUpperBodyYawBones();
 
 	// 서버 송신 기록 초기화 (서버도 라운드 시작 시 yaw = 0으로 맞춘다)
 	m_dwLastMoveSendTick = 0;
@@ -1817,6 +1866,7 @@ CTerrainPlayer::CTerrainPlayer(
 		this
 	);
 	SetChild(pPlayerModel->m_pRootObject.release(), true);
+	CacheUpperBodyYawBones();
 
 	BoundingOrientedBox playerBox;
 	playerBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);

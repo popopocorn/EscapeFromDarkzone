@@ -1,6 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include "Object.h"
+#include "TurnInPlace.h"
 #include "State.h"
 #include "Player.h"
 #include "ResourceManager.h"
@@ -12,12 +13,19 @@ private:
 	float    m_fServerYawDeg = 0.0f;			// 서버가 보낸 상체 방향 — 보간이 따라갈 값
 	float    m_fServerLowerYawDeg = 0.0f;		// 서버가 보낸 하체 방향 — 보간이 따라갈 값
 	float    m_fRenderYawDeg = 0.0f;			// 화면에 보이는 상체 방향 — 보간이 적용된 값
-	float    m_fRenderLowerYawDeg = 0.0f;		// 화면에 보이는 하체 방향 — 보간이 적용된 값 (아직안쓰이는중)
+	float    m_fRenderLowerYawDeg = 0.0f;		// 화면에 보이는 하체 방향 — 전체 모델의 기준 회전
 	bool     m_bUseServerLerp = false;
 	bool     m_bServerMoving = false;
 	bool     m_bDead = false;
 
 private:
+	// 애니메이션 평가 뒤 허리부터 가슴까지 분산해서 회전한다.
+	std::array<CGameObject*, 3> m_pUpperBodyYawBones{};
+	BodyYaw::TurnInPlace m_turnFeet;
+	void CacheUpperBodyYawBones();
+	void ApplyUpperBodyYaw();
+	float m_fTurnFrameElapsed = 0.0f;
+
 	CGameObject* m_pWeapon = nullptr;
 	CGameObject* m_pWeaponSocket = nullptr;
 	CGameObject* m_pWeaponMuzzleSocket = nullptr;

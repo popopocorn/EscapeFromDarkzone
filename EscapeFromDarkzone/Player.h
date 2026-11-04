@@ -10,6 +10,7 @@
 
 #include "stdafx.h"
 #include "Object.h"
+#include "TurnInPlace.h"
 #include "Camera.h"
 #include "State.h"
 
@@ -65,6 +66,14 @@ protected:
 	float						m_fPitch = 0.0f;
 	float						m_fYaw = 0.0f;
 	float						m_fRoll = 0.0f;
+
+	// 조준/이동 방향과 하체 방향을 분리한다. 서버와 같은 왼쪽 55도/오른쪽 70도 한계다.
+	float m_fLowerBodyYawTarget = 0.0f;
+	float m_fRenderLowerBodyYaw = 0.0f;
+	std::array<CGameObject*, 3> m_pUpperBodyYawBones{};
+	BodyYaw::TurnInPlace m_turnFeet;
+	void CacheUpperBodyYawBones();
+	void UpdateBodyYaw(float fTimeElapsed);
 
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3					m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -226,6 +235,7 @@ public:
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
 	void UpdateWeaponPose(float fTimeElapsed);
 	void FinalizeWeaponPose(float fTimeElapsed);
+	void ApplyServerLowerBodyYaw(float lowerYawRad);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 
 	void ApplyWeaponVisualConfig(PlayerWeaponType weaponType);

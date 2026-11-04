@@ -143,7 +143,11 @@ void NetEntityManager::OnRemovePlayer(const SC_REMOVE_PLAYER_PACKET* p)
 void NetEntityManager::OnMovePlayer(const SC_MOVE_PLAYER_PACKET* p)
 {
 	if (p->id == m_myId) {
-		if (m_pPlayer) m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z)); // 보간용 서버 위치
+		if (m_pPlayer) {
+			m_pPlayer->SetServerPosition(XMFLOAT3(p->x, p->y, p->z));
+			// 조준 yaw는 로컬 입력을 유지하고 하체 기준만 서버와 맞춘다.
+			m_pPlayer->ApplyServerLowerBodyYaw(p->lower_yaw);
+		}
 		return;
 	}
 
