@@ -194,11 +194,17 @@ void OtherPlayer::Update(float fTimeElapsed)
 		// 방향 보간
 		const float t = 1.0f - expf(-OTHER_PLAYER_YAW_LERP_SPEED * fTimeElapsed);
 		m_fRenderYawDeg      = LerpAngle(m_fRenderYawDeg, m_fServerYawDeg, t);
-		// 이동 중에는 기존 달리기 방향으로 복귀하고, 정지하면 서버의 하체 방향을 따른다.
-		const float lowerTarget = m_bServerMoving ? m_fServerYawDeg : m_fServerLowerYawDeg;
-		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, lowerTarget, t);
-		// 패킷 도착 간격이나 180도 경계에서도 허리가 한계를 넘지 않게 한다.
-		m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fRenderYawDeg, m_fRenderLowerYawDeg);
+		if (m_bServerMoving)
+		{
+			m_standingTurn.Reset(m_fServerYawDeg);
+			m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerYawDeg, t);
+			m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fRenderYawDeg, m_fRenderLowerYawDeg);
+		}
+		else
+		{
+			// 서버 상체 방향으로 같은 제자리 회전을 재현하되, 패킷마다 발 디딤을 되돌리지 않는다.
+			m_fRenderLowerYawDeg = m_standingTurn.Update(m_fRenderYawDeg, m_fRenderLowerYawDeg, fTimeElapsed);
+		}
 
 		// 골반과 발은 하체 방향으로 회전하고 상체 각도 차이는 본에 따로 적용한다.
 		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderLowerYawDeg, 0.0f);
@@ -216,6 +222,7 @@ void OtherPlayer::CacheUpperBodyYawBones()
 {
 	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
 	m_turnFeet.Cache(this);
+	m_standingTurn.Reset(m_fRenderLowerYawDeg);
 }
 
 void OtherPlayer::ApplyUpperBodyYaw()
@@ -733,6 +740,8 @@ void OtherPlayer::SetServerYaw(float yawRad, float lowerYawRad, bool bSnap)
 	{
 		m_fRenderYawDeg      = m_fServerYawDeg;
 		m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fServerYawDeg, m_fServerLowerYawDeg);
+		m_standingTurn.Reset(m_fRenderLowerYawDeg);
+		m_turnFeet.Reset();
 	}
 }
 

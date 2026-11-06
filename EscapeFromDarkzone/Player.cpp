@@ -348,6 +348,7 @@ void CPlayer::CacheUpperBodyYawBones()
 {
 	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
 	m_turnFeet.Cache(this);
+	m_standingTurn.Reset(m_fRenderLowerBodyYaw);
 }
 
 void CPlayer::ApplyServerLowerBodyYaw(float lowerYawRad)
@@ -362,15 +363,24 @@ void CPlayer::UpdateBodyYaw(float fTimeElapsed)
 	if (m_pCamera && m_pCamera->GetMode() == SPACESHIP_CAMERA)
 	{
 		m_fLowerBodyYawTarget = m_fRenderLowerBodyYaw = m_fYaw;
+		m_standingTurn.Reset(m_fYaw);
 		return;
 	}
 	const bool moving = MoveDir.x * MoveDir.x + MoveDir.z * MoveDir.z > 0.000001f;
-	// 이동 시 기존 달리기 방향으로 복귀하고, 정지 시에는 한계를 넘을 때만 발을 돌린다.
-	m_fLowerBodyYawTarget = moving ? m_fYaw : BodyYaw::ConstrainLowerYaw(m_fYaw, m_fLowerBodyYawTarget);
-	const float blend = 1.0f - expf(-15.0f * std::max(fTimeElapsed, 0.0f));
-	m_fRenderLowerBodyYaw = BodyYaw::NormalizeDegrees(m_fRenderLowerBodyYaw +
-		BodyYaw::ShortestDeltaDegrees(m_fRenderLowerBodyYaw, m_fLowerBodyYawTarget) * blend);
-	m_fRenderLowerBodyYaw = BodyYaw::ConstrainLowerYaw(m_fYaw, m_fRenderLowerBodyYaw);
+	if (moving)
+	{
+		m_fLowerBodyYawTarget = m_fYaw;
+		m_standingTurn.Reset(m_fYaw);
+		const float blend = 1.0f - expf(-BodyYaw::LOWER_BODY_YAW_RESPONSE * std::max(fTimeElapsed, 0.0f));
+		m_fRenderLowerBodyYaw = BodyYaw::NormalizeDegrees(m_fRenderLowerBodyYaw +
+			BodyYaw::ShortestDeltaDegrees(m_fRenderLowerBodyYaw, m_fYaw) * blend);
+		m_fRenderLowerBodyYaw = BodyYaw::ConstrainLowerYaw(m_fYaw, m_fRenderLowerBodyYaw);
+	}
+	else
+	{
+		// 서버 패킷마다 회전 목표를 덮지 않아, 시작한 발 디딤을 끝까지 마친다.
+		m_fRenderLowerBodyYaw = m_standingTurn.Update(m_fYaw, m_fRenderLowerBodyYaw, fTimeElapsed);
+	}
 }
 
 void CPlayer::OnPrepareRender()

@@ -82,7 +82,7 @@ namespace BodyYaw
             {
                 const XMVECTOR difference = Position(authored[side]) - Position(m_planted[side]);
                 const float distance = XMVectorGetX(XMVector3LengthSq(XMVectorSetY(difference, 0)));
-                needsStep[side] = fabsf(ShortestDeltaDegrees(m_plantedYaw[side], lowerYaw)) > 12.0f
+                needsStep[side] = fabsf(ShortestDeltaDegrees(m_plantedYaw[side], lowerYaw)) > 4.0f
                     || distance > m_legLength * m_legLength * 0.0036f;
             }
             if (m_stepping < 0 && (needsStep[0] || needsStep[1]))
@@ -91,7 +91,8 @@ namespace BodyYaw
                 m_start = m_planted[m_stepping];
                 m_progress = 0.0f;
                 const float turnSize = fabsf(ShortestDeltaDegrees(m_plantedYaw[m_stepping], lowerYaw));
-                m_duration = 0.22f + 0.08f * std::min(turnSize / 90.0f, 1.0f);
+                // 낮고 짧게 디뎌 발이 공중에 오래 남지 않게 한다.
+                m_duration = 0.14f + 0.04f * std::min(turnSize / 90.0f, 1.0f);
             }
 
             m_display = m_planted;
@@ -103,7 +104,7 @@ namespace BodyYaw
                 XMMatrixDecompose(&startScale, &startRotation, &startPosition, XMLoadFloat4x4(&m_start));
                 XMMatrixDecompose(&endScale, &endRotation, &endPosition, XMLoadFloat4x4(&authored[m_stepping]));
                 XMVECTOR position = XMVectorLerp(startPosition, endPosition, t);
-                const float lift = sinf(XM_PI * m_progress) * m_legLength * 0.075f;
+                const float lift = sinf(XM_PI * m_progress) * m_legLength * 0.05f;
                 position = XMVectorSetY(position, XMVectorGetY(position) + std::max(lift, 0.0f));
                 XMStoreFloat4x4(&m_display[m_stepping], XMMatrixAffineTransformation(endScale,
                     XMVectorZero(), XMQuaternionSlerp(startRotation, endRotation, t), position));
@@ -243,7 +244,7 @@ namespace BodyYaw
         std::array<float, 2> m_plantedYaw{};
         XMFLOAT4X4 m_start{};
         XMFLOAT3 m_origin{};
-        float m_lastYaw = 0.0f, m_legLength = 0.0f, m_progress = 0.0f, m_duration = 0.26f;
+        float m_lastYaw = 0.0f, m_legLength = 0.0f, m_progress = 0.0f, m_duration = 0.16f;
         float m_pelvisDrop = 0.0f;
         int m_stepping = -1, m_nextFoot = 0;
         bool m_initialized = false, m_engaged = false;

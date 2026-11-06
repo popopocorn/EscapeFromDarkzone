@@ -22,6 +22,7 @@ private:
 	// 애니메이션 평가 뒤 허리부터 가슴까지 분산해서 회전한다.
 	std::array<CGameObject*, 3> m_pUpperBodyYawBones{};
 	BodyYaw::TurnInPlace m_turnFeet;
+	BodyYaw::StandingTurn m_standingTurn;
 	void CacheUpperBodyYawBones();
 	void ApplyUpperBodyYaw();
 	float m_fTurnFrameElapsed = 0.0f;

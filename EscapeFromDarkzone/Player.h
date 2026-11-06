@@ -67,11 +67,12 @@ protected:
 	float						m_fYaw = 0.0f;
 	float						m_fRoll = 0.0f;
 
-	// 조준/이동 방향과 하체 방향을 분리한다. 서버와 같은 왼쪽 55도/오른쪽 70도 한계다.
+	// 조준/이동 방향과 표시용 하체 방향을 분리한다. 최대 비틀림은 서버와 같다.
 	float m_fLowerBodyYawTarget = 0.0f;
 	float m_fRenderLowerBodyYaw = 0.0f;
 	std::array<CGameObject*, 3> m_pUpperBodyYawBones{};
 	BodyYaw::TurnInPlace m_turnFeet;
+	BodyYaw::StandingTurn m_standingTurn;
 	void CacheUpperBodyYawBones();
 	void UpdateBodyYaw(float fTimeElapsed);
 
