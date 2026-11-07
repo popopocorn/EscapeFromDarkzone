@@ -1,8 +1,4 @@
-﻿//-----------------------------------------------------------------------------
-// File: CGameFramework.cpp
-//-----------------------------------------------------------------------------
-
-#include "NetPacketDispatcher.h"
+﻿#include "NetPacketDispatcher.h"
 #include "NetEntityManager.h"
 #include "NetSession.h"
 
@@ -26,60 +22,6 @@
 int FRAME_BUFFER_WIDTH = 1392;
 int FRAME_BUFFER_HEIGHT = 738;
 
-
-static XMFLOAT3 SafeNormalizeOrDefault(XMFLOAT3 v, XMFLOAT3 fallback)
-{
-	if (Vector3::Length(v) < 0.0001f)
-		return fallback;
-
-	return Vector3::Normalize(v);
-}
-static bool GetAttachedEffectMuzzleInfo(
-	CGameObject* pTarget,
-	XMFLOAT3& outPos,
-	XMFLOAT3& outDir)
-{
-	if (!pTarget)
-		return false;
-
-	pTarget->UpdateTransform(NULL);
-
-	CGameObject* pMuzzle = nullptr;
-
-	if (CEnemyObject* pNpc = dynamic_cast<CEnemyObject*>(pTarget))
-	{
-		pMuzzle = pNpc->GetWeaponMuzzleSocket();
-	}
-	else if (OtherPlayer* pOther = dynamic_cast<OtherPlayer*>(pTarget))
-	{
-		pMuzzle = pOther->GetWeaponMuzzleSocket();
-	}
-
-	if (!pMuzzle)
-	{
-		pMuzzle = pTarget->FindFrame("Socket_Muzzle");
-	}
-
-	if (!pMuzzle)
-	{
-		OutputDebugString(L"[Effect] Socket_Muzzle not found. attached effect skipped.\n");
-		return false;
-	}
-
-	outPos = pMuzzle->GetPosition();
-
-	outDir = pTarget->GetLook();
-	outDir = SafeNormalizeOrDefault(outDir, XMFLOAT3(0.0f, 0.0f, 1.0f));
-
-	outPos.x += outDir.x * 0.05f;
-	outPos.y += outDir.y * 0.05f;
-	outPos.z += outDir.z * 0.05f;
-
-	return true;
-}
-
-
-
 CGameFramework::CGameFramework()
 {
 	m_pdxgiFactory = NULL;
@@ -102,7 +44,6 @@ CGameFramework::CGameFramework()
 
 	m_nWndClientWidth = FRAME_BUFFER_WIDTH;
 	m_nWndClientHeight = FRAME_BUFFER_HEIGHT;
-
 
 	_tcscpy_s(m_pszFrameRate, _T("LabProject ("));
 
@@ -157,23 +98,6 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 		0,
 		0
 	);
-
-	observer = make_unique<CCamera>();
-	observer->CreateShaderVariables(m_pd3dDevice, m_pd3dCommandList);
-	observer->GenerateViewMatrix(
-		XMFLOAT3(0.0f, 100.0f, 0.0f),
-		XMFLOAT3(0.0f, -1.0f, 0.0f),
-		XMFLOAT3(0.0f, 0.0f, 1.0f)
-	);
-	observer->GenerateProjectionMatrix(m_pPlayer->GetCamera()->GetProjectionMatrix());
-	observer->SetViewport(m_pPlayer->GetCamera()->GetViewport());
-	observer->SetScissorRect(m_pPlayer->GetCamera()->GetScissorRect());
-
-	//// 03.27 추가: 네트워크 초기화 및 연결
-	//if (!NetworkManager::Instance().Init("Player"))
-	//{
-	//	OutputDebugString(L"DEBUG: Server Connect Fail.\n");
-	//}
 
 	return true;
 }
@@ -278,7 +202,6 @@ void CGameFramework::CreateDirect3DDevice()
 		m_pdxgiFactory->EnumWarpAdapter(_uuidof(IDXGIFactory4), (void**)&pd3dAdapter);
 		hResult = D3D12CreateDevice(pd3dAdapter, D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), (void**)&m_pd3dDevice);
 	}
-	
 
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
 	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -303,18 +226,7 @@ void CGameFramework::CreateDirect3DDevice()
 
 void CGameFramework::CreateCommandQueueAndList()
 {
-	/*HRESULT hResult;
 
-	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
-	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
-	d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	d3dCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	hResult = m_pd3dDevice->CreateCommandQueue(&d3dCommandQueueDesc, _uuidof(ID3D12CommandQueue), (void**)&m_pd3dCommandQueue);
-
-	hResult = m_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&m_pd3dCommandAllocator);
-
-	hResult = m_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pd3dCommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), (void**)&m_pd3dCommandList);
-	hResult = m_pd3dCommandList->Close();*/
 	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
 	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
 	d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -485,6 +397,7 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!IsWindowActive()) return;
 	if (!m_pScene.empty() && m_pScene.back())
 	{
 		m_pScene.back()->OnProcessingMouseMessage(hWnd, nMessageID, wParam, lParam);
@@ -510,6 +423,7 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 
 void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	if (!IsWindowActive()) return;
 	if (!m_pScene.empty() && m_pScene.back())
 	{
 		if (m_pScene.back()->OnProcessingKeyboardMessage(hWnd, nMessageID, wParam, lParam))
@@ -546,16 +460,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			}
 			break;
 
-		/*case 'O':
-			observing = !observing;
-			if (observing) {
-				m_pCamera = observer.get();
-			}
-			else {
-				m_pCamera = m_pPlayer->GetCamera();
-			}
-			break;*/
-
 		//갓 모드
 		case 'K':
 		{
@@ -579,15 +483,24 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 
 LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
-	
+
 	switch (nMessageID)
 	{
 	case WM_ACTIVATE:
 	{
-		if (LOWORD(wParam) == WA_INACTIVE)
+		const bool active = LOWORD(wParam) != WA_INACTIVE;
+		if (!active)
+		{
 			m_GameTimer.Stop();
+			InputManager::Instance().Reset();
+			if (m_pPlayer) m_pPlayer->ReleaseGameplayInput();
+			if (hWnd && ::GetCapture() == hWnd) ::ReleaseCapture();
+			::ClipCursor(NULL);
+		}
 		else
 			m_GameTimer.Start();
+		if (!m_pScene.empty() && m_pScene.back())
+			m_pScene.back()->OnWindowActivationChanged(active);
 		break;
 	}
 	case WM_SIZE:
@@ -614,9 +527,8 @@ LRESULT CALLBACK CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMess
 
 void CGameFramework::OnDestroy()
 {
-	if (NetworkManager::Instance().IsConnected()) {
-		NetworkManager::Instance().Shutdown();
-	}
+	// 끊긴 소켓도 정리해야 하므로 연결 여부와 관계없이 종료한다.
+	NetworkManager::Instance().Shutdown();
 
 	WaitForGpuComplete();
 	ReleaseObjects();
@@ -634,18 +546,16 @@ void CGameFramework::OnDestroy()
 	{
 		if (m_pd3dCommandAllocators[i]) m_pd3dCommandAllocators[i]->Release();
 	}
-	
 
 	for (int i = 0; i < m_nSwapChainBuffers; i++) if (m_ppd3dSwapChainBackBuffers[i]) m_ppd3dSwapChainBackBuffers[i]->Release();
 	if (m_pd3dRtvDescriptorHeap) m_pd3dRtvDescriptorHeap->Release();
 
-	if (m_pdxgiSwapChain) 
+	if (m_pdxgiSwapChain)
 	{
 		m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
 		m_pdxgiSwapChain->Release();
 	}
 
-	
 	if (m_pd3dDevice) m_pd3dDevice->Release();
 	if (m_pdxgiFactory) m_pdxgiFactory->Release();
 
@@ -667,8 +577,6 @@ void CGameFramework::OnDestroy()
 	}
 }
 
-//#define _WITH_TERRAIN_PLAYER
-
 void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[0], NULL);
@@ -682,7 +590,7 @@ void CGameFramework::BuildObjects()
 	fscreenrenderer.init(m_pd3dDevice, m_pd3dCommandList, shadermanager.get());
 	
 	m_pScene.push_back(make_unique<LobbyScene>(this));
-	//m_pScene.push_back(make_unique<MainScene>(this));
+
 	m_pScene.back()->SetRoot(root->GetRoot());
 
 	CMaterial::PrepareShaders(
@@ -789,8 +697,6 @@ void CGameFramework::BuildObjects()
 	{
 		m_pScene.back()->ReleaseUploadBuffers(); //포인팅 구조 변경 이후 사용X
 	}
-
-	//if (m_pPlayer) m_pPlayer->ReleaseUploadBuffers();
 
 	// 06.07 추가
 	m_pNetEntityMgr = std::make_unique<NetEntityManager>();
@@ -903,8 +809,6 @@ void CGameFramework::ReleaseObjects()
 	m_pScene.clear();
 	nextScene.reset();
 	m_pTextRenderer.reset();
-	if (observer) observer->ReleaseShaderVariables();
-	observer.reset();
 	m_pCamera = nullptr;
 	m_pPlayer.reset();
 	if (shadowmap) shadowmap->Release();
@@ -913,19 +817,22 @@ void CGameFramework::ReleaseObjects()
 	root.reset();
 }
 
+bool CGameFramework::IsWindowActive() const
+{
+	return m_hWnd && ::GetForegroundWindow() == m_hWnd && ::GetFocus() == m_hWnd;
+}
+
 void CGameFramework::ProcessInput()
 {
-	static UCHAR pKeysBuffer[256];
-	static bool bGameplayCursorInitialized = false;
-
-	bool bProcessedByScene = false;
-	if (GetKeyboardState(pKeysBuffer) && !m_pScene.empty() && m_pScene.back()) bProcessedByScene = m_pScene.back()->ProcessInput(pKeysBuffer);
+	if (!IsWindowActive()) return;
+	UCHAR keys[256]{};
+	if (GetKeyboardState(keys) && !m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->ProcessInput(keys);
 }
 
 void CGameFramework::AnimateObjects(float fTimeElapsed)
 {
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->AnimateObjects(fTimeElapsed);
-
 
 	m_pPlayer->OnPrepareRender();
 
@@ -941,7 +848,6 @@ void CGameFramework::AnimateObjects(float fTimeElapsed)
 
 	m_pPlayer->Update(m_GameTimer.GetTimeElapsed());
 	m_pPlayer->UpdateTransform(NULL);
-
 
 }
 
@@ -986,7 +892,15 @@ void CGameFramework::MoveToNextFrame()
 	}
 }
 
-//#define _WITH_PLAYER_TOP
+void CGameFramework::FinalizeGameplayFrame(float fTimeElapsed)
+{
+	// 사격 패킷, 궤적, 총구 효과가 렌더링과 동일한 최종 무기 변환을 사용한다.
+	if (!m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
+	if (m_pPlayer) m_pPlayer->FinalizeWeaponPose(fTimeElapsed);
+	if (!m_pScene.empty() && m_pScene.back())
+		m_pScene.back()->FinalizeFrame(fTimeElapsed);
+}
 
 void CGameFramework::FrameAdvance()
 {
@@ -994,36 +908,22 @@ void CGameFramework::FrameAdvance()
 	m_GameTimer.Tick(0);
 	float fTimeElapsed = m_GameTimer.GetTimeElapsed();
 
-	HRESULT hResult = m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
-	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
+	m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
+	m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 
-	//if (m_pScene && m_pPlayer)m_pScene->DoCollision(m_pPlayer, 0);
-	
+	// 연결 종료와 수신 상태를 입력보다 먼저 반영해 오프라인 사격이 한 프레임 더 실행되지 않게 한다.
+	ProcessNetworkPackets();
 	ChangeScene();
-	
+
 	ProcessInput();
 
 	
 
-	
 	AnimateObjects(fTimeElapsed);
+	FinalizeGameplayFrame(fTimeElapsed);
 	SoundManager::Instance()->UpdateListener(
-		m_pPlayer->GetPosition(),
-		m_pPlayer->GetLookVector(),
-		m_pPlayer->GetUpVector()
-	);
+		m_pPlayer->GetPosition(), m_pPlayer->GetLookVector(), m_pPlayer->GetUpVector());
 	SoundManager::Instance()->Update();
-	
-	// 03.27 추가, 03.30 위치 변경
-	if (NetworkManager::Instance().IsConnected())
-	{
-		ProcessNetworkPackets();
-	}
-
-	if (!m_pScene.empty() && m_pScene.back())
-		m_pScene.back()->ResolvePlayerCamera(fTimeElapsed);
-	// The standalone weapon must use this frame's final hand transforms.
-	m_pPlayer->FinalizeWeaponPose(fTimeElapsed);
 	if (m_pPlayer->m_pSkinnedAnimationController)
 		m_pPlayer->m_pSkinnedAnimationController->UpdateShaderVariables(m_pd3dCommandList);
 
@@ -1049,11 +949,10 @@ void CGameFramework::FrameAdvance()
 	
 
 
-	hResult = m_pd3dCommandList->Close();
+	m_pd3dCommandList->Close();
 
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
-
 
 #ifdef _WITH_PRESENT_PARAMETERS
 	DXGI_PRESENT_PARAMETERS dxgiPresentParameters;
@@ -1075,16 +974,13 @@ void CGameFramework::FrameAdvance()
 	{
 		if (m_nFenceValues[i] > targetFence) targetFence = m_nFenceValues[i];
 	}
-	targetFence++; 
+	targetFence++;
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->DeleteDeadObject(targetFence);
 
-	
 	MoveToNextFrame();
 
 	UINT64 done = m_pd3dFence->GetCompletedValue();
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->DeleteTrash(done);
-
-
 
 	m_GameTimer.GetFrameRate(m_pszFrameRate + 12, 37);
 	size_t nLength = _tcslen(m_pszFrameRate);
@@ -1222,16 +1118,31 @@ void CGameFramework::UIRendering()
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->UIRender(m_pd3dCommandList, MAIN, m_pCamera);
 }
 
-
 // 03.27 추가
 void CGameFramework::ProcessNetworkPackets()
 {
-	if (!NetworkManager::Instance().IsConnected()) return;
+	auto& network = NetworkManager::Instance();
+	if (network.IsConnected())
+	{
+		m_hadServerConnection = true;
+		network.Recv();
+	}
+	if (!network.IsConnected())
+	{
+		if (!m_hadServerConnection) return; // 처음부터 선택한 로컬 테스트와 접속 중 끊김을 구분한다.
+		m_hadServerConnection = false;
+		network.Shutdown();
+		if (m_pPlayer) m_pPlayer->CancelWeaponCombat();
+		mouseMove = true;
+		::ClipCursor(NULL);
+		while (::ShowCursor(TRUE) < 0) {}
+		// 기존 씬 전환 예약 방식을 사용해 GPU 자원을 안전한 프레임 경계에서 정리한다.
+		nextScene = std::make_unique<LobbyScene>(this, L"서버와 연결이 끊어져 로비로 돌아왔습니다.");
+		return;
+	}
 
 	if (!m_pPacketDispatcher)
 		m_pPacketDispatcher = std::make_unique<NetPacketDispatcher>(this);
-
-	NetworkManager::Instance().Recv();
 
 	while (true)
 	{
@@ -1257,7 +1168,7 @@ void CGameFramework::PushScene()
 	m_pScene.back()->BuildObjects(m_pd3dDevice, m_pd3dCommandList);
 	m_pScene.back()->SetCamera(m_pCamera);
 
-	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가 
+	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
 
 	nextScene = nullptr;
 }
@@ -1276,22 +1187,17 @@ void CGameFramework::PopScene()
 	if (m_pNetEntityMgr) m_pNetEntityMgr->SetActiveScene(m_pScene.back().get());	// 06.07 추가
 }
 
-void CGameFramework::PopScene(SceneName name)
-{
-	
-}
-
 void CGameFramework::ChangeScene()
 {
 	if (nextScene)
 	{
 		WaitForGpuComplete();
 		PushScene();
-		m_pd3dCommandList->Close(); 
+		m_pd3dCommandList->Close();
 		ID3D12CommandList* ppCommandLists[] = { m_pd3dCommandList };
-		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists); 
-		WaitForGpuComplete(); 
-		
+		m_pd3dCommandQueue->ExecuteCommandLists(1, ppCommandLists);
+		WaitForGpuComplete();
+
 		m_pd3dCommandAllocators[m_nSwapChainBufferIndex]->Reset();
 		m_pd3dCommandList->Reset(m_pd3dCommandAllocators[m_nSwapChainBufferIndex], NULL);
 	}

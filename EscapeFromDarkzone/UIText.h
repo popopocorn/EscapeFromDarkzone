@@ -54,8 +54,6 @@ public:
 		return m_xmf4Color;
 	}
 
-	void SetAlign(UITextAlign align);
-
 	UITextAlign GetAlign() const
 	{
 		return m_eAlign;
@@ -67,8 +65,6 @@ public:
 	{
 		return m_fMaxWidth;
 	}
-
-	void SetLineSpacing(float lineSpacing);
 
 	float GetLineSpacing() const
 	{

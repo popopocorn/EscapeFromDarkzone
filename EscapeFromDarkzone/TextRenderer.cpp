@@ -401,17 +401,6 @@ void TextRenderer::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 	m_TextVertices.clear();
 }
 
-void TextRenderer::SetScreenSize(
-	UINT nScreenWidth,
-	UINT nScreenHeight)
-{
-	if (nScreenWidth == 0 || nScreenHeight == 0)
-		return;
-
-	m_nScreenWidth = nScreenWidth;
-	m_nScreenHeight = nScreenHeight;
-}
-
 bool TextRenderer::CreatePipelineState(
 	ID3D12Device* pd3dDevice,
 	ID3D12RootSignature* pd3dRootSignature,

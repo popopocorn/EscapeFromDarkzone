@@ -1,13 +1,7 @@
-//------------------------------------------------------- ----------------------
-// File: Mesh.h
-//-----------------------------------------------------------------------------
-
 #pragma once
 
 class CGameObject;
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 #define VERTEXT_POSITION				0x0001
 #define VERTEXT_COLOR					0x0002
 #define VERTEXT_NORMAL					0x0004
@@ -24,8 +18,6 @@ class CGameObject;
 #define VERTEXT_NORMAL_DETAIL			(VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TEXTURE_COORD0 | VERTEXT_TEXTURE_COORD1)
 #define VERTEXT_NORMAL_TANGENT__DETAIL	(VERTEXT_POSITION | VERTEXT_NORMAL | VERTEXT_TANGENT | VERTEXT_TEXTURE_COORD0 | VERTEXT_TEXTURE_COORD1)
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 class CMesh
 {
 public:
@@ -39,7 +31,6 @@ public:
 	void AddRef() { m_nReferences++; }
 	void Release() { if (--m_nReferences <= 0) delete this; }
 
-
 	XMFLOAT3						GetAABBCenter() const { return m_xmf3AABBCenter; }
 	XMFLOAT3						GetAABBExtents() const { return m_xmf3AABBExtents; }
 public:
@@ -51,14 +42,12 @@ protected:
 	XMFLOAT3						m_xmf3AABBCenter = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3						m_xmf3AABBExtents = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-
 	D3D12_PRIMITIVE_TOPOLOGY		m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	UINT							m_nSlot = 0;
 	UINT							m_nOffset = 0;
 
 protected:
 	int								m_nVertices = 0;
-	XMFLOAT3						m_nStrides = {};
 
 	XMFLOAT3						*m_pxmf3Positions = NULL;
 
@@ -90,8 +79,6 @@ public:
 	XMFLOAT3 GetAABBExtents() { return m_xmf3AABBExtents; }
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 class CSkyBoxMesh : public CMesh
 {
 public:
@@ -99,8 +86,6 @@ public:
 	virtual ~CSkyBoxMesh();
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 class CStandardMesh : public CMesh
 {
 public:
@@ -144,8 +129,6 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 #define SKINNED_ANIMATION_BONES		256
 
 class CSkinnedMesh : public CStandardMesh
@@ -170,7 +153,7 @@ public:	// Skinning Info
 	XMFLOAT4*						m_pxmf4BoneWeights = NULL;
 
 public:
-	int								m_nSkinningBones = 0; 
+	int								m_nSkinningBones = 0;
 
 	char							(*m_ppstrSkinningBoneNames)[260]; //[m_nSkinningBones]
 	CGameObject						**m_ppSkinningBoneFrameCaches = NULL; //[m_nSkinningBones]
@@ -184,7 +167,7 @@ public:
 	XMFLOAT4X4						*m_pcbxmf4x4MappedSkinningBoneTransforms = NULL; //[m_nSkinningBones]
 
 public:
-	
+
 	void LoadSkinInfoFromFile(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, FILE *pInFile, const char* pstrFileName);
 
 	virtual void CreateShaderVariables(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList);
@@ -196,8 +179,6 @@ public:
 	virtual void OnPreRender(ID3D12GraphicsCommandList *pd3dCommandList, void *pContext);
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 class CLaserMesh : public CMesh
 {
 public:
@@ -205,9 +186,6 @@ public:
 	virtual ~CLaserMesh() {}
 };
 
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
 class CViewCircleMesh : public CMesh
 {
 public:

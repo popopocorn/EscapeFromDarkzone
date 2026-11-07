@@ -159,25 +159,6 @@ void InventoryManager::RenderLootWorld(ID3D12GraphicsCommandList* pd3dCommandLis
 		loot->Render(pd3dCommandList, true, 0, pCamera);
 	}
 }
-/*void InventoryManager::ProcessEnemyLootSpawnRequests(CShader* pEnemyShader)
-{
-	if (!pEnemyShader) return;
-
-	auto* enemyObjs = pEnemyShader->GetObj();
-	if (!enemyObjs) return;
-
-	for (auto& obj : *enemyObjs)
-	{
-		CEnemyObject* pEnemy = dynamic_cast<CEnemyObject*>(obj.get());
-		if (!pEnemy) continue;
-
-		if (pEnemy->ConsumeLootSpawnRequest())
-		{
-			SpawnLootContainerFromEnemy(pEnemy);
-			pEnemy->MarkDeadForRemoval();
-		}
-	}
-}*/
 
 Inventory* InventoryManager::GetPlayerInventoryPtr() const
 {
@@ -269,14 +250,6 @@ void InventoryManager::ClosePlayerInventory()
 		pPlayerInventory->isOpen = false;
 }
 
-void InventoryManager::TogglePlayerInventory()
-{
-	Inventory* pPlayerInventory = GetPlayerInventoryPtr();
-	if (!pPlayerInventory) return;
-
-	pPlayerInventory->isOpen = !pPlayerInventory->isOpen;
-}
-
 void InventoryManager::OpenLootContainer(CLootContainerObject* pLoot)
 {
 	if (!pLoot || !m_pLootInventory) return;
@@ -300,12 +273,6 @@ void InventoryManager::CloseLootInventory()
 	m_pOpenedLoot = nullptr;
 }
 
-void InventoryManager::OpenCraftInventory()
-{
-	if (m_pCraftInventory)
-		m_pCraftInventory->isOpen = true;
-}
-
 void InventoryManager::CloseCraftInventory()
 {
 	if (m_pCraftInventory)
@@ -314,12 +281,6 @@ void InventoryManager::CloseCraftInventory()
 		m_pCraftInventory->ClearItems();
 		m_pCraftInventory->SetId(-1);
 	}
-}
-
-void InventoryManager::ToggleCraftInventory()
-{
-	if (!m_pCraftInventory) return;
-	m_pCraftInventory->isOpen = !m_pCraftInventory->isOpen;
 }
 
 CLootContainerObject* InventoryManager::FindNearestLootContainer(float fMaxDistance) const
@@ -381,7 +342,7 @@ void InventoryManager::SpawnLootContainer(short npc_id, const XMFLOAT3& pos, con
 		pLoot->SetVisualModel(pLootBoxModel);
 
 	}
-	
+
 	if (pLoot->GetOOBB().empty())
 	{
 		BoundingOrientedBox obb;

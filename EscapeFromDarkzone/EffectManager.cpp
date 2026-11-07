@@ -6,7 +6,6 @@
 #include "ParticleResource.h"
 #include "EffectManager.h"
 
-
 EffectManager::EffectManager()
 {
 	m_PendingParticleSpawnRequests.reserve(MAX_PARTICLE_SPAWN_REQUESTS);
@@ -1115,8 +1114,6 @@ bool EffectManager::CreateParticleDescriptors(ID3D12Device* pd3dDevice)
 	return true;
 }
 
-
-
 bool EffectManager::QueueParticleEffect(const EffectSpawnDesc& desc)
 {
 	if (!m_bParticleSystemResourcesReady || !m_pMappedParticleSpawnRequests)
@@ -1579,18 +1576,6 @@ void EffectManager::Initialize(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 	m_pLaserShader->CreateShaderVariables(pd3dDevice, pd3dCommandList);
 	m_pLaserShader->CreateShader(pd3dDevice, pd3dCommandList, pd3dGraphicsRootSignature);
 
-	//{
-	//	CGameObject* pLaserObject = new CGameObject();
-	//	pLaserObject->SetMesh(new CLaserMesh(pd3dDevice, pd3dCommandList));
-	//	//pLaserObject->SetShader(m_pLaserShader);
-	//
-	//	m_pLaserShader->addObjects(pLaserObject);
-	//
-	//	XMStoreFloat4x4(&pLaserObject->m_xmf4x4ToParent, XMMatrixScaling(0.0f, 0.0f, 0.0f));
-	//	pLaserObject->UpdateTransform(NULL);
-	//
-	//	m_LaserObjects.emplace(0, pLaserObject);
-	//}
 }
 
 void EffectManager::Release()

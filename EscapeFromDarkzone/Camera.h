@@ -68,7 +68,7 @@ public:
 	void RegenerateViewMatrix();
 
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
-	void GenerateProjectionMatrix(XMFLOAT4X4 mat) { 
+	void GenerateProjectionMatrix(XMFLOAT4X4 mat) {
 		m_xmf4x4Projection = mat;
 		BoundingFrustum::CreateFromMatrix(cameraFrustumLocal, XMLoadFloat4x4(&m_xmf4x4Projection));
 		cameraFrustum = cameraFrustumLocal;
@@ -103,7 +103,7 @@ public:
 
 
 	void SetOffset(XMFLOAT3 xmf3Offset) { m_xmf3Offset = xmf3Offset; }
-//	void SetOffset(XMFLOAT3 xmf3Offset) { m_xmf3Offset = xmf3Offset; m_xmf3Position.x += xmf3Offset.x; m_xmf3Position.y += xmf3Offset.y; m_xmf3Position.z += xmf3Offset.z; }
+
 	XMFLOAT3& GetOffset() { return(m_xmf3Offset); }
 
 	void SetTimeLag(float fTimeLag) { m_fTimeLag = fTimeLag; }
@@ -157,7 +157,6 @@ public:
 	virtual void SetLookAt(const XMFLOAT3& vLookAt) override;
 };
 
-
 class LightCamera : public CCamera {
 private:
 	float lightNear;
@@ -174,7 +173,6 @@ public:
 
 	void update(const CCamera* playerCamera, const XMFLOAT3& lightDir);
 };
-
 
 struct VS_CB_SHADOW_INFO
 {
@@ -204,5 +202,4 @@ private:
 	XMFLOAT3 lightDir;
 	static void ComputeCascadeSplits(float fNear, float fFar, float outSplits[CASCADE_COUNT + 1]);
 
-	
 };

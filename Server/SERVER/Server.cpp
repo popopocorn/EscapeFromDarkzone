@@ -104,7 +104,7 @@ constexpr float NPC_FIRE_ORIGIN_Y = 0.90f;   // 발사 높이 (고정)
 
 
 // ===== 라운드 상태 =====
-constexpr int ROUND_MIN_PLAYERS = 1;					// default: 8
+constexpr int ROUND_MIN_PLAYERS = 2;					// default: 8
 
 enum RoundState : int { ROUND_WAITING = 0, ROUND_IN_PROGRESS = 1 };
 
@@ -304,6 +304,7 @@ enum class LowerYawUpdate : char {
 	UPDATED      = 0,	// 이동함 — 슬라이드 적용 후 실제 이동 방향으로 갱신
 	KEPT_IDLE    = 1,	// 정지(입력 없음 또는 W+S / A+D 상쇄) — 유지
 	KEPT_BLOCKED = 2,	// 입력은 있으나 벽 슬라이드 결과 이동량 0 — 유지
+	TURNED_IDLE  = 3,	// 정지 중 상체 회전 한계를 넘어 하체가 따라옴
 };
 // ===========================
 
@@ -342,7 +343,7 @@ public:
 	SOCKET _socket;
 	float x, y, z;
 	float yaw;			// 상체(바라보는) 방향. 라디안 [0, 2π). CS_MOVE마다 갱신
-	float lower_yaw;	// 하체(이동) 방향. 라디안 [0, 2π). 실제로 이동한 CS_MOVE에서만 갱신
+	float lower_yaw;	// 하체 방향. 이동 시 이동 방향, 정지 시 상체 회전 한계에 맞춰 갱신
 	char  player_state;
 	short weapon_type;    // ItemType (기본 PISTOL)
 	short weapon_grade;   // ItemGrade (기본 GRADE_1)
@@ -1059,6 +1060,7 @@ static void LogPlayerLowerYaw(SESSION& s, LowerYawUpdate kind)
 	const char* kind_name = "UPDATED";
 	if (kind == LowerYawUpdate::KEPT_IDLE)    kind_name = "KEPT_IDLE";
 	if (kind == LowerYawUpdate::KEPT_BLOCKED) kind_name = "KEPT_BLOCKED";
+	if (kind == LowerYawUpdate::TURNED_IDLE)  kind_name = "TURNED_IDLE";
 
 	constexpr float RAD2DEG = 180.0f / 3.14159265f;
 	const float yaw_deg   = s.yaw * RAD2DEG;
@@ -1076,23 +1078,29 @@ static void LogPlayerLowerYaw(SESSION& s, LowerYawUpdate kind)
 #endif
 }
 
-// 하체 방향 갱신 규칙의 단일 지점. CS_MOVE 처리(해당 세션 워커)에서만 호출한다.
-//   - 실제로 이동한 경우에만 갱신한다. 기준은 벽 슬라이드 적용 후 방향.
-//   - 정지 중에는 갱신하지 않는다. yaw만 바뀌고 lower_yaw는 마지막 이동 방향을 유지한다.
-//     (제자리에서 바라보는 방향만 바꿀 때, 다른 클라이언트가 그 동작을
-//      하체는 그대로 두고 상체만 도는 애니메이션으로 재생할 수 있게 하기 위함)
+// 클라이언트 BodyYaw와 같은 한계다. 오른손 총기 자세에 맞춰 왼쪽 회전을 더 일찍 제한한다.
+static constexpr float PLAYER_MAX_UPPER_BODY_LEFT_YAW_DEG = 55.0f;
+static constexpr float PLAYER_MAX_UPPER_BODY_RIGHT_YAW_DEG = 70.0f;
+
+// 기존 CS_MOVE 워커에서만 갱신한다. 이동 시에는 실제 이동 방향을 사용하고,
+// 정지/벽 막힘 중에는 상체가 좌우 한계를 넘을 때만 하체 방향을 따라 돌린다.
 static void UpdatePlayerLowerYaw(SESSION& s, bool has_move_input, float moveX, float moveZ)
 {
 	LowerYawUpdate result;
 
-	if (!has_move_input) {
-		// [정지] 의도적으로 lower_yaw를 갱신하지 않는다.
-		result = LowerYawUpdate::KEPT_IDLE;
-	}
-	else if (moveX == 0.0f && moveZ == 0.0f) {
-		// [막힘] 입력은 있으나 ApplySlide가 이동 방향을 0으로 만들었다.
-		//        실제로 움직이지 않았으므로 정지와 같게 유지한다.
-		result = LowerYawUpdate::KEPT_BLOCKED;
+	if (!has_move_input || (moveX == 0.0f && moveZ == 0.0f)) {
+		const float relative_deg = NormalizeAngleDeg((s.yaw - s.lower_yaw) * 180.0f / 3.14159265f);
+		const float limit_deg = relative_deg < 0.0f
+			? PLAYER_MAX_UPPER_BODY_LEFT_YAW_DEG : PLAYER_MAX_UPPER_BODY_RIGHT_YAW_DEG;
+		if (std::abs(relative_deg) > limit_deg) {
+			const float limited_deg = relative_deg > 0.0f ? limit_deg : -limit_deg;
+			// 화면의 보간은 클라이언트가 맡고 서버는 같은 하체 기준을 모든 관전자에게 보낸다.
+			s.lower_yaw = NormalizeRad0To2Pi(s.yaw - limited_deg * 3.14159265f / 180.0f);
+			result = LowerYawUpdate::TURNED_IDLE;
+		}
+		else {
+			result = has_move_input ? LowerYawUpdate::KEPT_BLOCKED : LowerYawUpdate::KEPT_IDLE;
+		}
 	}
 	else {
 		// [이동] yaw와 같은 규약: forward = (sin θ, cos θ) → θ = atan2(x, z).
@@ -3263,7 +3271,7 @@ void process_packet(int c_id, char* packet)
 		// 이동이 없으면 중계만 하고 종료
 		if (dirX == 0.0f && dirZ == 0.0f) {
 			// [하체 방향] 정지 (입력 없음 또는 W+S / A+D 상쇄)
-			//   lower_yaw는 의도적으로 갱신하지 않는다. 위에서 yaw만 갱신됐다.
+			//   허리 회전 한계 안에서는 하체를 고정하고, 한계를 넘으면 따라 돌린다.
 			UpdatePlayerLowerYaw(clients[c_id], false, 0.0f, 0.0f);
 
 			for (auto& cl : clients) {

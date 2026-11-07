@@ -247,102 +247,13 @@ void CEnemyObject::ChangeState(std::unique_ptr<State<CEnemyObject>> pNewState)
 	m_StateMachine.ChangeState(this, std::move(pNewState));
 }
 
-void CEnemyObject::HandleHP(float value)
-{
-	if (m_bDying) return;
-	if (value <= 0.0f) return;
-
-	hp -= value;
-
-	if (hp <= 0.0f)
-	{
-		hp = 0.0f;
-		m_bDying = true;
-		m_bLootSpawnRequested = true;				// 서버 권위 구조로 바꾸면서 안씀
-		m_bDeadRemoveRequested = false;
-		m_fDieElapsed = 0.0f;
-
-		ChangeState(std::make_unique<EnemyDie>());
-		OutputDebugString(L"Enemy Die Start\n");
-	}
-}
-
-void CEnemyObject::RegisterDamageEvent(const EnemyDamageEvent& damageEvent)
-{
-	if (m_bDying)
-		return;
-
-	// 온라인 NPC의 Damage Memory와 행동 판단은 서버에서 담당한다.
-	if (NetworkManager::Instance().IsConnected())
-		return;
-
-	if (damageEvent.eType == EnemyDamageType::None)
-		return;
-
-	if (damageEvent.fDamage <= 0.0f)
-		return;
-
-	EnemyDamageMemory& damage = m_Blackboard.Damage;
-
-	damage.bHasDamage = true;
-	damage.eDamageType = damageEvent.eType;
-	damage.nAttackerId = damageEvent.nAttackerId;
-
-	damage.xmf3SourcePosition = damageEvent.xmf3SourcePosition;
-	damage.xmf3IncomingDirection = NormalizeXZ(damageEvent.xmf3IncomingDirection);
-
-	damage.fDamage = damageEvent.fDamage;
-	damage.fDamageAge = 0.0f;
-
-	// 서버에서는 검증이 끝나 실제 피해가 적용되는 순간 동일한 정보를 Blackboard에 기록한다.
-}
-
 //새로운	사운드 이벤트를 등록하는 함수
-void CEnemyObject::RegisterSoundEvent(const EnemySoundEvent& soundEvent)
-{
-	if (m_bDying)
-		return;
-
-	if (NetworkManager::Instance().IsConnected())
-		return;
-
-	if (soundEvent.eType == EnemySoundType::None)
-		return;
-
-	if (soundEvent.fRadius <= 0.0f)
-		return;
-
-	float distance = DistanceXZ(m_xmf3Position, soundEvent.xmf3Position);
-
-	if (distance > soundEvent.fRadius)
-		return;
-
-	EnemyHearingMemory& hearing = m_Blackboard.Hearing;
-
-	hearing.bHasSound = true;
-	hearing.eSoundType = soundEvent.eType;
-	hearing.xmf3SoundPosition = soundEvent.xmf3Position;
-	hearing.fSoundStrength = soundEvent.fStrength;
-	hearing.fSoundAge = 0.0f;
-}
-
-bool CEnemyObject::ConsumeDeadRemovalRequest()
-{
-	if (!m_bDeadRemoveRequested) return false;
-	m_bDeadRemoveRequested = false;
-	return true;
-}
 
 bool CEnemyObject::ConsumeLootSpawnRequest()		// 서버 권위 구조로 바꾸면서 안씀
 {
 	if (!m_bLootSpawnRequested) return false;
 	m_bLootSpawnRequested = false;
 	return true;
-}
-
-void CEnemyObject::MarkDeadForRemoval()
-{
-	Kill();
 }
 
 void CEnemyObject::Animate(float fTimeElapsed)
@@ -624,7 +535,6 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 		return;
 	}
 
-
 	if (!pWeaponInstance)
 	{
 		OutputDebugString(L"[Enemy] weapon instance create failed.\n");
@@ -654,12 +564,11 @@ void CEnemyObject::EquipWeaponModel(ModelName modelName)
 	}
 	m_pWeaponSocket = pRightHand;
 
-	pWeaponInstance->m_pParent = m_pRenderWeapon.get();   
-	pWeaponInstance->m_pSibling.reset();                  
+	pWeaponInstance->m_pParent = m_pRenderWeapon.get();
+	pWeaponInstance->m_pSibling.reset();
 
 	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();
-
 
 	m_pRenderWeapon->SetOOBB(NULL);
 	m_pRenderWeapon->isColl = false;
@@ -1899,23 +1808,6 @@ void CLootContainerObject::UpdateLifetime(float fTimeElapsed)		// 서버 권위 구조
 	}
 }
 
-/*bool CLootContainerObject::AddLoot(unique_ptr<Item> item, int count)
-{
-	if (!item || count <= 0) return false;
-
-	for (int i = 0; i < MAX_LOOT_SLOTS; ++i)
-	{
-		if (!m_LootItems[i])
-		{
-			m_LootItems[i] = move(item);
-			m_LootCounts[i] = count;
-			return true;
-		}
-	}
-
-	return false;
-}*/
-
 void CLootContainerObject::SetSlotData(int idx, ItemID item, int count)
 {
 	if (idx < 0 || idx >= MAX_LOOT_SLOTS) return;
@@ -1934,21 +1826,6 @@ void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
 		}
 	}
 }
-
-/*void CLootContainerObject::FillInventoryUI(Inventory* pInventory) const
-{
-	if (!pInventory) return;
-
-	pInventory->ClearItems();
-
-	for (int i = 0; i < MAX_LOOT_SLOTS; ++i)
-	{
-		if (m_LootItems[i] && m_LootCounts[i] > 0)
-		{
-			//pInventory->AddItem(std::move(m_LootItems[i]), m_LootCounts[i]);
-		}
-	}
-}*/
 
 float CLootContainerObject::GetDistanceSq(const XMFLOAT3& pos)
 {

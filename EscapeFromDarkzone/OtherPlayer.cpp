@@ -1,5 +1,7 @@
 #include "OtherPlayer.h"
+#include "Interpolation.h"
 #include "WeaponAttachment.h"
+#include "BodyYaw.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
 #include"Shader.h"
@@ -105,7 +107,6 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		break;
 	}
 
-
 	if (!pPlayerModel)
 	{
 		return;
@@ -116,8 +117,6 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 		delete pPlayerModel;
 		return;
 	}
-
-
 
 	m_pRenderWeapon = make_unique<CGameObject>();
 	m_pRenderWeapon->SetOOBB(NULL);
@@ -133,6 +132,7 @@ OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd
 			pPlayerModel
 		);
 	SetChild(pPlayerModel->m_pRootObject.release(), true);
+	CacheUpperBodyYawBones();
 	if (m_pSkinnedAnimationController)
 	{
 		m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
@@ -174,6 +174,7 @@ void OtherPlayer::Animate(float fTimeElapsed)
 
 void OtherPlayer::Update(float fTimeElapsed)
 {
+	m_fTurnFrameElapsed = fTimeElapsed;
 	if (!m_bDead)
 	{
 		m_LowerStateMachine.Update(this, fTimeElapsed);
@@ -182,20 +183,31 @@ void OtherPlayer::Update(float fTimeElapsed)
 
 	if (m_bUseServerLerp)
 	{
-		constexpr float ALPHA = 0.08f;
+		// 프레임 수 대신 실제 경과 시간으로 보간해 30/60/144FPS에서 같은 지연을 유지한다.
+		const float alpha = ServerPositionBlend(fTimeElapsed);
 		XMFLOAT3 cur = GetPosition();
-		cur.x += (m_xmf3ServerPosition.x - cur.x) * ALPHA;
-		cur.y += (m_xmf3ServerPosition.y - cur.y) * ALPHA;
-		cur.z += (m_xmf3ServerPosition.z - cur.z) * ALPHA;
+		cur.x += (m_xmf3ServerPosition.x - cur.x) * alpha;
+		cur.y += (m_xmf3ServerPosition.y - cur.y) * alpha;
+		cur.z += (m_xmf3ServerPosition.z - cur.z) * alpha;
 		SetPosition(cur);
 
 		// 방향 보간
 		const float t = 1.0f - expf(-OTHER_PLAYER_YAW_LERP_SPEED * fTimeElapsed);
 		m_fRenderYawDeg      = LerpAngle(m_fRenderYawDeg, m_fServerYawDeg, t);
-		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerLowerYawDeg, t);
+		if (m_bServerMoving)
+		{
+			m_standingTurn.Reset(m_fServerYawDeg);
+			m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerYawDeg, t);
+			m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fRenderYawDeg, m_fRenderLowerYawDeg);
+		}
+		else
+		{
+			// 서버 상체 방향으로 같은 제자리 회전을 재현하되, 패킷마다 발 디딤을 되돌리지 않는다.
+			m_fRenderLowerYawDeg = m_standingTurn.Update(m_fRenderYawDeg, m_fRenderLowerYawDeg, fTimeElapsed);
+		}
 
-		// 상체 기준으로 방향 적용
-		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderYawDeg, 0.0f);
+		// 골반과 발은 하체 방향으로 회전하고 상체 각도 차이는 본에 따로 적용한다.
+		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderLowerYawDeg, 0.0f);
 		m_xmf4x4ToParent._41 = cur.x;
 		m_xmf4x4ToParent._42 = cur.y;
 		m_xmf4x4ToParent._43 = cur.z;
@@ -206,8 +218,24 @@ void OtherPlayer::Update(float fTimeElapsed)
 	// The shader calls OnLateUpdate after this frame's animation evaluation.
 }
 
+void OtherPlayer::CacheUpperBodyYawBones()
+{
+	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
+	m_turnFeet.Cache(this);
+	m_standingTurn.Reset(m_fRenderLowerYawDeg);
+}
+
+void OtherPlayer::ApplyUpperBodyYaw()
+{
+	if (!m_bDead)
+		BodyYaw::ApplyTorsoYaw(m_pUpperBodyYawBones, m_fRenderYawDeg, m_fRenderLowerYawDeg);
+}
+
 void OtherPlayer::OnLateUpdate()
 {
+	// 본 애니메이션을 평가한 뒤 회전해야 다음 평가에서 누적되지 않는다.
+	ApplyUpperBodyYaw();
+	m_turnFeet.Update(m_fTurnFrameElapsed, m_fRenderLowerYawDeg, !m_bDead && !m_bServerMoving);
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
@@ -428,27 +456,6 @@ void OtherPlayer::TriggerShootAnim()
 		return;
 
 	ChangeUpperState(std::make_unique<OtherPlayerUpperShoot>(), true);
-}
-
-void OtherPlayer::TriggerReloadAnim()
-{
-	if (m_bDead)
-		return;
-
-	ChangeUpperState(std::make_unique<OtherPlayerUpperReload>(), true);
-}
-
-void OtherPlayer::TriggerGrenadeAnim()
-{
-	if (m_bDead)
-		return;
-
-	ChangeUpperState(std::make_unique<OtherPlayerUpperGrenade>(), true);
-}
-
-void OtherPlayer::TriggerDieAnim()
-{
-	MarkDeadFromServer();
 }
 
 void OtherPlayer::MarkDeadFromServer()
@@ -732,7 +739,9 @@ void OtherPlayer::SetServerYaw(float yawRad, float lowerYawRad, bool bSnap)
 	if (bSnap)
 	{
 		m_fRenderYawDeg      = m_fServerYawDeg;
-		m_fRenderLowerYawDeg = m_fServerLowerYawDeg;
+		m_fRenderLowerYawDeg = BodyYaw::ConstrainLowerYaw(m_fServerYawDeg, m_fServerLowerYawDeg);
+		m_standingTurn.Reset(m_fRenderLowerYawDeg);
+		m_turnFeet.Reset();
 	}
 }
 
@@ -778,7 +787,6 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 
 	m_pRenderWeapon->m_pChild = unique_ptr<CGameObject>(pWeaponInstance);
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();
-
 
 	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(m_pWeapon->m_xmf4x4ToParent,modelName);
 

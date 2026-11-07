@@ -10,6 +10,7 @@
 
 #include "stdafx.h"
 #include "Object.h"
+#include "TurnInPlace.h"
 #include "Camera.h"
 #include "State.h"
 
@@ -50,9 +51,7 @@ class Inventory;
 class Equip;
 class CGameFramework;
 
-
 class EffectManager;
-
 
 class CPlayer : public CGameObject
 {
@@ -67,6 +66,15 @@ protected:
 	float						m_fPitch = 0.0f;
 	float						m_fYaw = 0.0f;
 	float						m_fRoll = 0.0f;
+
+	// Ï°∞Ï§Ä/Ïù¥Îèô Î∞©Ìñ•Í≥º ÌëúÏãúÏö© ÌïòÏ≤¥ Î∞©Ìñ•ÏùÑ Î∂ÑÎ¶¨ÌïúÎã§. ÏµúÎåÄ ÎπÑÌãÄÎ¶ºÏùÄ ÏÑúÎ≤ÑÏôÄ Í∞ôÎã§.
+	float m_fLowerBodyYawTarget = 0.0f;
+	float m_fRenderLowerBodyYaw = 0.0f;
+	std::array<CGameObject*, 3> m_pUpperBodyYawBones{};
+	BodyYaw::TurnInPlace m_turnFeet;
+	BodyYaw::StandingTurn m_standingTurn;
+	void CacheUpperBodyYawBones();
+	void UpdateBodyYaw(float fTimeElapsed);
 
 	XMFLOAT3					m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	XMFLOAT3					m_xmf3Gravity = XMFLOAT3(0.0f, 0.0f, 0.0f);
@@ -111,7 +119,7 @@ protected:
 	float m_fWeaponBlendDuration = 0.25f;
 	XMFLOAT4X4 m_xmf4x4WeaponBlendStartWorld = Matrix4x4::Identity();
 
-	// grenade 
+	// grenade
 	CGameObject* m_pLeftUpperArm = nullptr;
 	CGameObject* m_pLeftForeArm = nullptr;
 	CGameObject* m_pLeftHand = nullptr;
@@ -124,7 +132,6 @@ protected:
 
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
-	//    
 	WeaponItem* m_pEquippedWeaponItem = nullptr;
 	unordered_map<PlayerWeaponType, unique_ptr<WeaponItem>> PlayerOwnWeapons;
 	PlayerWeaponType m_eCurrentWeaponType = PlayerWeaponType::Rifle;
@@ -172,7 +179,6 @@ public:
 			xmf3Position.z - m_xmf3Position.z
 		), false);
 	}
-
 
 	void SetScale(const XMFLOAT3& xmf3Scale) { m_xmf3Scale = xmf3Scale; }
 
@@ -230,9 +236,9 @@ public:
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
 	void UpdateWeaponPose(float fTimeElapsed);
 	void FinalizeWeaponPose(float fTimeElapsed);
+	void ApplyServerLowerBodyYaw(float lowerYawRad);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 
-	//bool EquipDebugWeapon(PlayerWeaponType weaponType);
 	void ApplyWeaponVisualConfig(PlayerWeaponType weaponType);
 	void DetachCurrentWeapon();
 
@@ -267,7 +273,11 @@ public:
 	bool EquipWeaponItem(PlayerWeaponType type, const char* pstrSocketName);
 
 	void InitializeWeaponAmmo();
-	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
+	void UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager, bool allowFire = true);
+	void ApplyServerAmmo(const short (&ammo)[4]);
+	void CancelWeaponCombat();
+	void ReleaseGameplayInput();
+	bool GetWeaponMuzzlePose(XMFLOAT3& position, XMFLOAT3& look, XMFLOAT3& right, XMFLOAT3& up) const;
 	void FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager);
 
 	bool TryFireWeapon();
@@ -279,6 +289,7 @@ public:
 	int GetMaxAmmo() const;
 
 	float GetWeaponShotInterval() const;
+	// √ﬂ»ƒ π´±‚ ¥…∑¬ƒ° UIø°º≠ ªÁøÎ«“ ≈¨∂Û¿Ãæ∆Æ π´±‚ µ•¿Ã≈Õ ¡∂»∏¥Ÿ.
 	float GetWeaponDamage() const;
 
 	void SetFireHeld(bool bHeld) { m_bFireHeld = bHeld; }

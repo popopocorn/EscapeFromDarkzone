@@ -7,14 +7,6 @@
 #include"Player.h"
 #include"ResourceManager.h"
 
-
-
-//CGameObject* Item::CreateModelInstance() const
-//{
-//	if (!model) return nullptr;
-//	return CGameObject::CreateModelInstance(model);
-//}
-
 WeaponItem::WeaponItem(ItemGrade grade, ItemType category)
 	: m_Grade(grade), m_Category(category)
 {
@@ -32,6 +24,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 	switch (category)
 	{
 	case ItemType::PISTOL:
+		spec.range = 10.0f;
 		spec.damage = 7.0f;
 		spec.rpm = 550.0f;
 		spec.magazineSize = 15;
@@ -39,6 +32,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::RIFLE:
+		spec.range = 50.0f;
 		spec.rpm = 700.0f;
 		spec.maxDistanceDamageReductionRatio = 0.10f;
 		spec.magazineSize = 30;
@@ -64,6 +58,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::SMG:
+		spec.range = 50.0f;
 		spec.rpm = 900.0f;
 		spec.maxDistanceDamageReductionRatio = 0.50f;
 		spec.magazineSize = 35;
@@ -89,6 +84,7 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 		break;
 
 	case ItemType::SHOTGUN:
+		spec.range = 20.0f;
 		spec.rpm = 55.0f;
 		spec.zeroDamageBeyondDistance = 20.0f;
 		spec.magazineSize = 8;
@@ -119,43 +115,6 @@ WeaponSpec WeaponItem::BuildSpec(ItemType category, ItemGrade grade)
 
 	return spec;
 }
-std::shared_ptr<WeaponItem> WeaponItem::CreateDefaultPlayerRifle(CGameObject* pPrototype)
-{
-	if (!pPrototype) return nullptr;
-
-	auto pItem = std::make_shared<WeaponItem>(
-		ItemGrade::GRADE_1,
-		ItemType::RIFLE
-	);
-
-	pItem->SetModelPrototype(pPrototype);
-	return pItem;
-}
-
-//void CraftBox::Init()
-//{
-//
-//}
-//
-//bool CraftBox::TryCraft(ItemID target, Inventory* playerinventory)
-//{
-//	auto it = recipeTable.find(target);
-//	if (it == recipeTable.end())return false;
-//
-//	const Recipe& r = it->second;
-//
-//	for (const auto& req : r.ingredients)
-//	{
-//		if (playerinventory->GetItemCnt(req.itemID) < req.reuireCnt)
-//			return false;
-//	}
-//	for (const auto& req : r.ingredients)
-//	{
-//		playerinventory->ConsumeItem(req.itemID, req.reuireCnt);
-//	}
-//	//playerinventory 아이템 추가
-//	return true;
-//}
 
 Equip::Equip()
 {

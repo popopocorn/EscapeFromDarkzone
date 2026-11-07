@@ -6,7 +6,6 @@
 #include "FontResource.h"
 #include "ParticleResource.h"
 
-
 void ResourceManager::CreateCbvSrvDescriptorHeaps(
 	ID3D12Device* pd3dDevice,
 	int nConstantBufferViews,
@@ -142,39 +141,6 @@ bool ResourceManager::AllocateNextSrvDescriptor(
 	OutputDebugStringW(debugText);
 
 	return true;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE ResourceManager::CreateConstantBufferViews(
-	ID3D12Device* pd3dDevice,
-	int nConstantBufferViews,
-	ID3D12Resource* pd3dConstantBuffers,
-	UINT nStride)
-{
-	D3D12_GPU_DESCRIPTOR_HANDLE d3dCbvGPUDescriptorHandle =
-		m_d3dCbvGPUDescriptorNextHandle;
-
-	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress =
-		pd3dConstantBuffers->GetGPUVirtualAddress();
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC d3dCBVDesc{};
-	d3dCBVDesc.SizeInBytes = nStride;
-
-	for (int j = 0; j < nConstantBufferViews; j++)
-	{
-		d3dCBVDesc.BufferLocation = d3dGpuVirtualAddress + (nStride * j);
-
-
-
-		pd3dDevice->CreateConstantBufferView(
-			&d3dCBVDesc,
-			m_d3dCbvCPUDescriptorNextHandle
-		);
-
-		m_d3dCbvCPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
-		m_d3dCbvGPUDescriptorNextHandle.ptr += ::gnCbvSrvDescriptorIncrementSize;
-	}
-
-	return d3dCbvGPUDescriptorHandle;
 }
 
 void ResourceManager::CreateShaderResourceViews(
@@ -410,8 +376,6 @@ bool ResourceManager::LoadAndRegisterSkinnedModelPrototype(
 	m_SkinnedModelPrototypes.emplace(key, pLoadedModel);
 	return true;
 }
-
-
 
 bool ResourceManager::ShareSkinnedAnimationSets(ModelName targetKey, ModelName sourceKey)
 {

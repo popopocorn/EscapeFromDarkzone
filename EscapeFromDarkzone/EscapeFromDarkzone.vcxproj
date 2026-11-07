@@ -162,6 +162,9 @@
     <ClInclude Include="FullScreenRenderer.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="InputManager.h" />
+    <ClInclude Include="Interpolation.h" />
+    <ClInclude Include="BodyYaw.h" />
+    <ClInclude Include="TurnInPlace.h" />
     <ClInclude Include="InventoryManager.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemDef.h" />

@@ -1,7 +1,4 @@
-//-----------------------------------------------------------------------------
-// File: CPlayer.cpp
-//-----------------------------------------------------------------------------
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "Player.h"
 #include "Shader.h"
 #include "object.h"
@@ -19,20 +16,8 @@
 #include "NetSession.h"
 #include "GameFramework.h"
 #include "WeaponAttachment.h"
+#include "BodyYaw.h"
 
-static XMVECTOR SafeNormalize3(XMVECTOR v)
-{
-	XMVECTOR lenSq = XMVector3LengthSq(v);
-	if (XMVectorGetX(lenSq) < 0.000001f) return XMVectorZero();
-	return XMVector3Normalize(v);
-}
-
-static float ClampFloat(float v, float vmin, float vmax)
-{
-	if (v < vmin) return vmin;
-	if (v > vmax) return vmax;
-	return v;
-}
 static constexpr float PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 static constexpr float PLAYER_RUN_FOOTSTEP_INTERVAL = 0.5f / PLAYER_RUN_ANIM_SPEED;
@@ -220,7 +205,6 @@ void CPlayer::Update(float fTimeElapsed)
 		m_xmf3Position.z += (m_xmf3ServerPosition.z - m_xmf3Position.z) * alpha;
 	}
 
-	//UpdateWeaponCombat(fTimeElapsed);
 	// Weapon attachment is finalized after movement, snapshots and collision.
 
 	UpdateTransform(NULL);
@@ -308,6 +292,7 @@ void CPlayer::Update(float fTimeElapsed)
 
 		m_bWasMoving = bHasInput;
 	}
+	UpdateBodyYaw(fTimeElapsed);
 	if (m_pWeaponSocket)
 	{
 		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
@@ -359,6 +344,45 @@ CCamera* CPlayer::OnChangeCamera(DWORD nNewCameraMode, DWORD nCurrentCameraMode)
 	return pNewCamera;
 }
 
+void CPlayer::CacheUpperBodyYawBones()
+{
+	m_pUpperBodyYawBones = BodyYaw::CacheBones(this);
+	m_turnFeet.Cache(this);
+	m_standingTurn.Reset(m_fRenderLowerBodyYaw);
+}
+
+void CPlayer::ApplyServerLowerBodyYaw(float lowerYawRad)
+{
+	if (m_bIsDead || !std::isfinite(lowerYawRad)) return;
+	m_fLowerBodyYawTarget = BodyYaw::NormalizeDegrees(XMConvertToDegrees(lowerYawRad));
+}
+
+void CPlayer::UpdateBodyYaw(float fTimeElapsed)
+{
+	if (m_bIsDead || !m_pUpperBodyYawBones[0]) return;
+	if (m_pCamera && m_pCamera->GetMode() == SPACESHIP_CAMERA)
+	{
+		m_fLowerBodyYawTarget = m_fRenderLowerBodyYaw = m_fYaw;
+		m_standingTurn.Reset(m_fYaw);
+		return;
+	}
+	const bool moving = MoveDir.x * MoveDir.x + MoveDir.z * MoveDir.z > 0.000001f;
+	if (moving)
+	{
+		m_fLowerBodyYawTarget = m_fYaw;
+		m_standingTurn.Reset(m_fYaw);
+		const float blend = 1.0f - expf(-BodyYaw::LOWER_BODY_YAW_RESPONSE * std::max(fTimeElapsed, 0.0f));
+		m_fRenderLowerBodyYaw = BodyYaw::NormalizeDegrees(m_fRenderLowerBodyYaw +
+			BodyYaw::ShortestDeltaDegrees(m_fRenderLowerBodyYaw, m_fYaw) * blend);
+		m_fRenderLowerBodyYaw = BodyYaw::ConstrainLowerYaw(m_fYaw, m_fRenderLowerBodyYaw);
+	}
+	else
+	{
+		// 서버 패킷마다 회전 목표를 덮지 않아, 시작한 발 디딤을 끝까지 마친다.
+		m_fRenderLowerBodyYaw = m_standingTurn.Update(m_fYaw, m_fRenderLowerBodyYaw, fTimeElapsed);
+	}
+}
+
 void CPlayer::OnPrepareRender()
 {
 	m_xmf4x4ToParent._11 = m_xmf3Right.x; m_xmf4x4ToParent._12 = m_xmf3Right.y; m_xmf4x4ToParent._13 = m_xmf3Right.z;
@@ -372,6 +396,16 @@ void CPlayer::OnPrepareRender()
 		XMMatrixScaling(m_xmf3Scale.x, m_xmf3Scale.y, m_xmf3Scale.z),
 		m_xmf4x4ToParent
 	);
+	if (m_pUpperBodyYawBones[0] && (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA))
+	{
+		// 카메라와 이동 벡터는 조준 방향을 유지하고 모델의 기준 회전만 하체에 맞춘다.
+		XMMATRIX world = XMLoadFloat4x4(&m_xmf4x4ToParent);
+		const XMVECTOR position = world.r[3];
+		world.r[3] = XMVectorSet(0, 0, 0, 1);
+		world = world * XMMatrixRotationY(XMConvertToRadians(BodyYaw::ShortestDeltaDegrees(m_fYaw, m_fRenderLowerBodyYaw)));
+		world.r[3] = position;
+		XMStoreFloat4x4(&m_xmf4x4ToParent, world);
+	}
 }
 
 void CPlayer::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -723,12 +757,6 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	m_pWeapon = pWeapon;
 	m_pWeaponSocket = pWeaponSocket;
 
-	//m_pWeapon->m_pParent = m_pWeaponSocket;
-	//m_pWeapon->m_pSibling = m_pWeaponSocket->m_pChild;
-	//m_pWeaponSocket->m_pChild = m_pWeapon;
-
-	//XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, XMMatrixIdentity());
-
 	// 1. 이 무기가 최초로 장착되는 거라면, 오프셋이 묻지 않은 '순정 FBX 행렬'을 백업합니다.
 	if (m_weaponImportedTransforms.find(m_pWeapon) == m_weaponImportedTransforms.end())
 	{
@@ -738,7 +766,6 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	// 2. 무기를 장착할 때마다, 누적된 찌꺼기를 날리고 '순정 FBX 행렬'로 깨끗하게 복구합니다.
 	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(
 		m_weaponImportedTransforms[m_pWeapon], GetPlayerWeaponVisualConfig(GetCurrentPlayerWeaponType()).modelName);
-
 
 	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
 	m_bWeaponBaseLocalSaved = true;
@@ -959,6 +986,12 @@ void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 
 void CPlayer::FinalizeWeaponPose(float fTimeElapsed)
 {
+	// 최종 이동/충돌과 애니메이션을 반영한 뒤 상체를 돌리고 무기/손을 보정한다.
+	if (!m_bIsDead && (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA))
+		BodyYaw::ApplyTorsoYaw(m_pUpperBodyYawBones, m_fYaw, m_fRenderLowerBodyYaw);
+	const bool standing = !m_bIsDead && MoveDir.x * MoveDir.x + MoveDir.z * MoveDir.z < 0.000001f
+		&& (!m_pCamera || m_pCamera->GetMode() != SPACESHIP_CAMERA);
+	m_turnFeet.Update(fTimeElapsed, m_fRenderLowerBodyYaw, standing);
 	if (!m_pWeapon || !m_pWeaponSocket) return;
 	UpdateWeaponPose(fTimeElapsed);
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
@@ -987,7 +1020,6 @@ void CPlayer::EndGrenadeWeaponPose()
 	m_bWeaponGrenadeStartCaptured = false;
 }
 
-
 void CPlayer::DetachCurrentWeapon()
 {
 	m_pWeapon = nullptr;
@@ -1006,86 +1038,6 @@ void CPlayer::ApplyWeaponVisualConfig(PlayerWeaponType weaponType)
 	m_xmf3WeaponGrenadePos = config.grenadePos;
 	m_xmf3WeaponGrenadeRot = config.grenadeRot;
 }
-
-//디버그용 무조건 장착 함수
-//bool CPlayer::EquipDebugWeapon(PlayerWeaponType weaponType)
-//{
-//	PlayerWeaponVisualConfig config = GetPlayerWeaponVisualConfig(weaponType);
-//
-//	CGameObject* pWeaponPrototype =
-//		ResourceManager::Instance().GetModelPrototype(config.modelName);
-//
-//	if (!pWeaponPrototype)
-//	{
-//		OutputDebugString(L"[Weapon] weapon prototype not found.\n");
-//		return false;
-//	}
-//
-//	if (!pWeaponPrototype)
-//	{
-//		OutputDebugString(L"[Weapon] weapon instance create failed.\n");
-//		return false;
-//	}
-//
-//	auto pWeaponItem = new WeaponItem(
-//		ItemGrade::GRADE_1,
-//		config.itemType
-//	);
-//
-//	pWeaponItem->SetModelPrototype(pWeaponPrototype);
-//
-//	DetachCurrentWeapon();
-//
-//	m_eCurrentWeaponType = weaponType;
-//	m_pEquippedWeaponItem = pWeaponItem;
-//
-//	m_bReloading = false;
-//	m_fReloadElapsed = 0.0f;
-//	m_fFireCooldown = 0.0f;
-//	m_bShotAnimRequest = false;
-//
-//	ApplyWeaponVisualConfig(weaponType);
-//
-//	EquipWeapon(pWeaponPrototype, "mixamorig:RightHand");
-//
-//	if (m_pWeapon != pWeaponPrototype)
-//	{
-//		DeleteGameObjectTree(pWeaponPrototype);
-//		m_pEquippedWeaponItem = NULL;
-//		OutputDebugString(L"[Weapon] debug weapon equip failed.\n");
-//		return false;
-//	}
-//
-//	InitializeWeaponAmmo();
-//
-//	ApplyWeaponPose(WEAPON_POSE::IDLE);
-//
-//	if (m_pSkinnedAnimationController)
-//	{
-//		int idleAnim = GetIdleAnimationByWeapon();
-//
-//		m_pSkinnedAnimationController->SetTrackType(0, ANIMATION_TYPE_LOOP);
-//		m_pSkinnedAnimationController->SetTrackType(1, ANIMATION_TYPE_LOOP);
-//
-//		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(0, idleAnim);
-//		m_pSkinnedAnimationController->SetTrackAnimationSetIfChanged(1, idleAnim);
-//
-//		m_pSkinnedAnimationController->SetTrackPosition(0, 0.0f);
-//		m_pSkinnedAnimationController->SetTrackPosition(1, 0.0f);
-//
-//		m_pSkinnedAnimationController->SetTrackEnable(0, true);
-//		m_pSkinnedAnimationController->SetTrackEnable(1, true);
-//
-//		m_pSkinnedAnimationController->SetTrackWeight(0, 1.0f);
-//		m_pSkinnedAnimationController->SetTrackWeight(1, 1.0f);
-//	}
-//
-//	ChangeState(std::make_unique<PlayerIdle>());
-//
-//	OutputDebugString(L"[Weapon] debug weapon equipped.\n");
-//	return true;
-//}
-
 
 CGameObject* CPlayer::FindFirstFrameByNames(const char* const* ppNames, int nCount)
 {
@@ -1210,7 +1162,7 @@ void CPlayer::InitializeWeaponAmmo()
 	OutputDebugStringW(debugBuf);
 }
 
-void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
+void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager, bool allowFire)
 {
 	if (m_fFireCooldown > 0.0f)
 	{
@@ -1218,9 +1170,10 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		if (m_fFireCooldown < 0.0f)
 			m_fFireCooldown = 0.0f;
 	}
-	if (m_bFireHeld)
+	// 인벤토리는 새 사격 입력만 막는다. 재장전과 쿨다운 시간은 계속 진행한다.
+	if (!allowFire) m_bFireHeld = false;
+	if (allowFire && m_bFireHeld && m_pEquippedWeaponItem)
 	{
-
 		if (m_fFireCooldown <= 0.0f)
 		{
 			FireOneShot(ppShaders, pEffectManager);
@@ -1231,7 +1184,7 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 			}
 		}
 	}
-	if (!m_bReloading)
+	if (!m_bReloading || !m_pEquippedWeaponItem)
 		return;
 
 	m_fReloadElapsed += fTimeElapsed;
@@ -1247,6 +1200,69 @@ void CPlayer::UpdateWeaponCombat(float fTimeElapsed, const std::vector<CShader*>
 		OutputDebugStringW(debugBuf);
 	}
 }
+// 서버 배열 순서는 권총/소총/SMG/샷건이며 PlayerWeaponType 선언 순서와 다르다.
+void CPlayer::ApplyServerAmmo(const short (&ammo)[4])
+{
+	constexpr PlayerWeaponType wireOrder[] = {
+		PlayerWeaponType::Pistol, PlayerWeaponType::Rifle,
+		PlayerWeaponType::SMG, PlayerWeaponType::Shotgun
+	};
+	for (size_t i = 0; i < 4; ++i)
+	{
+		auto found = PlayerOwnWeapons.find(wireOrder[i]);
+		if (found == PlayerOwnWeapons.end() || !found->second) continue;
+		WeaponItem& weapon = *found->second;
+		weapon.CurAmmo = std::clamp(static_cast<int>(ammo[i]), 0, weapon.maxAmmo);
+	}
+	if (!m_pEquippedWeaponItem) return;
+	if (m_pEquippedWeaponItem->CurAmmo == 0) m_bFireHeld = false;
+	// 서버가 먼저 재장전을 완료하면 로컬 애니메이션 예측 시간에 묶이지 않는다.
+	if (m_bReloading && m_pEquippedWeaponItem->CurAmmo >= m_pEquippedWeaponItem->maxAmmo)
+	{
+		m_bReloading = false;
+		m_fReloadElapsed = 0.0f;
+	}
+}
+
+void CPlayer::CancelWeaponCombat()
+{
+	ReleaseGameplayInput();
+	m_bReloading = false;
+	m_fReloadElapsed = 0.0f;
+	m_fFireCooldown = 0.0f;
+}
+
+void CPlayer::ReleaseGameplayInput()
+{
+	// 창 전환 시 놓친 버튼 해제를 대신한다. 진행 중인 재장전은 취소하지 않는다.
+	m_bFireHeld = false;
+	m_bShotAnimRequest = false;
+	m_xmf3Velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	MoveDir = XMFLOAT3(0.0f, 0.0f, 0.0f);
+	while (!event_queue.empty()) event_queue.pop();
+}
+
+bool CPlayer::GetWeaponMuzzlePose(XMFLOAT3& position, XMFLOAT3& look, XMFLOAT3& right, XMFLOAT3& up) const
+{
+	look = GetLookVector();
+	right = GetRightVector();
+	up = GetUpVector();
+	if (Vector3::Length(look) < 0.0001f) look = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	if (Vector3::Length(right) < 0.0001f) right = XMFLOAT3(1.0f, 0.0f, 0.0f);
+	if (Vector3::Length(up) < 0.0001f) up = XMFLOAT3(0.0f, 1.0f, 0.0f);
+	look = Vector3::Normalize(look);
+	right = Vector3::Normalize(right);
+	up = Vector3::Normalize(up);
+	// 이 프레임의 충돌 보정과 무기 부착을 마친 월드 변환을 읽기만 한다.
+	// 여기서 플레이어 변환을 다시 갱신하면 확정한 손/총구 자세와 시점이 달라진다.
+	position = m_pWeaponMuzzleSocket ? m_pWeaponMuzzleSocket->GetPosition() : GetPosition();
+	if (m_pWeaponMuzzleSocket)
+		position = Vector3::Add(position, look, 0.05f);
+	else
+		position = Vector3::Add(position, up, 1.2f);
+	return true;
+}
+
 #include"SoundManager.h"
 void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager* pEffectManager)
 {
@@ -1260,37 +1276,14 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 	NotifyWeaponFired();
 
 	XMFLOAT3 muzzlePos, muzzleLook, muzzleRight, muzzleUp;
-	muzzleLook = GetLookVector();
-	muzzleRight = GetRightVector();
-	muzzleUp = GetUpVector();
+	GetWeaponMuzzlePose(muzzlePos, muzzleLook, muzzleRight, muzzleUp);
+	const bool isOnline = NetworkManager::Instance().IsConnected();
 
-	if (Vector3::Length(muzzleLook) < 0.0001f) muzzleLook = XMFLOAT3(0.0f, 0.0f, 1.0f);
-	if (Vector3::Length(muzzleRight) < 0.0001f) muzzleRight = XMFLOAT3(1.0f, 0.0f, 0.0f);
-	if (Vector3::Length(muzzleUp) < 0.0001f) muzzleUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
-
-	muzzleLook = Vector3::Normalize(muzzleLook);
-	muzzleRight = Vector3::Normalize(muzzleRight);
-	muzzleUp = Vector3::Normalize(muzzleUp);
-
-	if (m_pWeaponMuzzleSocket)
-	{
-		UpdateTransform(NULL);
-		muzzlePos = m_pWeaponMuzzleSocket->GetPosition();
-		muzzlePos.x += muzzleLook.x * 0.05f;
-		muzzlePos.y += muzzleLook.y * 0.05f;
-		muzzlePos.z += muzzleLook.z * 0.05f;
-	}
-	else
-	{
-		muzzlePos = GetPosition();
-		muzzlePos.y += 1.2f;
-	}
-
-	if (NetworkManager::Instance().IsConnected())
+	if (isOnline)
 	{
 		short wType = GetEquippedWeaponTypeForWire();
 		short wGrade = GetEquippedWeaponGradeForWire();
-		NetSession::Instance().FireHitPlayer(muzzlePos, muzzleLook, wType, wGrade);
+		// 한 발당 한 요청만 전송한다. 서버 방 스레드가 NPC/플레이어/벽을 함께 판정한다.
 		NetSession::Instance().FireHit(muzzlePos, muzzleLook, wType, wGrade);
 	}
 
@@ -1323,7 +1316,7 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		pEffectManager->UpdateLaser(0, muzzlePos, muzzleRight, muzzleUp, muzzleLook, 15.0f);
 	}
 
-	float maxRange = 100.0f;
+	const float maxRange = m_pEquippedWeaponItem->GetSpec().range;
 
 	float enemyDistance = maxRange;
 	float mapDistance = maxRange;
@@ -1428,7 +1421,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		decalInfo.decalType = 0;
 		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-		DecalManager::Instance()->SpawnBloodDecalOnFloor(hitEnemyPos, mapObjects);
+		// 온라인 혈흔은 서버 확정 결과에서만 만든다. 오프라인 연습은 로컬 판정을 쓴다.
+		if (!isOnline) DecalManager::Instance()->SpawnBloodDecalOnFloor(hitEnemyPos, mapObjects);
 	}
 	else if (hitMap)
 	{
@@ -1443,6 +1437,8 @@ void CPlayer::FireOneShot(const std::vector<CShader*>& ppShaders, EffectManager*
 		decalInfo.normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
 	}
 
+	// 총성과 궤적은 즉시 예측하되 온라인 벽 탄흔은 서버의 명중 결과를 기다린다.
+	if (isOnline) decalInfo.enable = false;
 	ProjectileManager::Instance()->SpawnProjectile(ProjectileType::RIFLE_BULLET, muzzlePos, muzzleLook, hitDistance, decalInfo);
 }
 
@@ -1749,6 +1745,8 @@ void CPlayer::ResetForNewRound(short fullHp)
 	m_fPitch = 0.0f;
 	m_fYaw = 0.0f;
 	m_fRoll = 0.0f;
+	m_fLowerBodyYawTarget = m_fRenderLowerBodyYaw = m_fYaw;
+	CacheUpperBodyYawBones();
 
 	// 서버 송신 기록 초기화 (서버도 라운드 시작 시 yaw = 0으로 맞춘다)
 	m_dwLastMoveSendTick = 0;
@@ -1826,14 +1824,12 @@ void CPlayer::ResetForNewRound(short fullHp)
 
 	OutputDebugString(L"[RoundReset] CPlayer 초기화 완료\n");
 }
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 
+
 void CPlayerAnimationController::OnAnimationIK(CGameObject* pRootGameObject)
 {
 	if (!m_pOwner) return;
 	if (m_pOwner->IsGrenadeState()) return;
 }
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define _WITH_DEBUG_CALLBACK_DATA
 
@@ -1880,7 +1876,7 @@ CTerrainPlayer::CTerrainPlayer(
 		this
 	);
 	SetChild(pPlayerModel->m_pRootObject.release(), true);
-
+	CacheUpperBodyYawBones();
 
 	BoundingOrientedBox playerBox;
 	playerBox.Center = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -1908,12 +1904,9 @@ CTerrainPlayer::CTerrainPlayer(
 		ResourceManager::Instance().GetModelInstance(ModelName::PISTOL)
 	);
 
-
 	EquipWeaponItem(PlayerWeaponType::Pistol, "mixamorig:RightHand");
 
-
 	InitializeLeftHandIK();
-
 
 	m_pSkinnedAnimationController->BuildUpperBodyMask(this, "mixamorig:Spine");
 	m_pSkinnedAnimationController->SetSplitBodyTrackIndices(0, 1);
@@ -1939,7 +1932,7 @@ CTerrainPlayer::CTerrainPlayer(
 
 CTerrainPlayer::~CTerrainPlayer()
 {
-	//if (m_pChild)m_pChild->Release();
+
 }
 
 CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
@@ -2116,7 +2109,6 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 	CPlayer::Update(fTimeElapsed);
 }
 
-//-------------------------------------------------------------------------
 bool PlayerLowerIdle::Enter(CPlayer* Player)
 {
 	Player->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
@@ -2167,7 +2159,6 @@ void PlayerLowerIdle::Exit(CPlayer* Player)
 	UNREFERENCED_PARAMETER(Player);
 }
 
-//-------------------------------------------------------------------------
 bool PlayerLowerRun::Enter(CPlayer* Player)
 {
 	m_fFootstepTimer = 0.0f;
@@ -2251,7 +2242,6 @@ void PlayerLowerRun::Exit(CPlayer* Player)
 	UNREFERENCED_PARAMETER(Player);
 }
 
-//-------------------------------------------------------------------------
 bool PlayerUpperIdle::Enter(CPlayer* Player)
 {
 	auto* pCtrl = Player->GetAnimationController();
@@ -2309,7 +2299,6 @@ void PlayerUpperIdle::Exit(CPlayer* Player)
 	UNREFERENCED_PARAMETER(Player);
 }
 
-//-------------------------------------------------------------------------
 bool PlayerUpperGrenade::Enter(CPlayer* Player)
 {
 	m_fElapsed = 0.0f;
@@ -2345,7 +2334,6 @@ void PlayerUpperGrenade::Exit(CPlayer* Player)
 	Player->EndGrenadeWeaponPose();
 }
 
-//-------------------------------------------------------------------------
 bool PlayerUpperShoot::Enter(CPlayer* Player)
 {
 	m_fElapsed = 0.0f;
@@ -2442,7 +2430,6 @@ void PlayerUpperShoot::Exit(CPlayer* Player)
 	pCtrl->SetTrackWeight(0, 1.0f);
 }
 
-//-------------------------------------------------------------------------
 bool PlayerUpperReload::Enter(CPlayer* Player)
 {
 	auto* pCtrl = Player->GetAnimationController();

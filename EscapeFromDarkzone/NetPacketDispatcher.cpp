@@ -48,7 +48,7 @@ static bool GetAttachedEffectMuzzleInfo(
 
 	if (!pMuzzle)
 	{
-		//OutputDebugString(L"[Effect] Socket_Muzzle not found. attached effect skipped.\n");
+
 		return false;
 	}
 
@@ -60,7 +60,7 @@ static bool GetAttachedEffectMuzzleInfo(
 	outPos.x += outDir.x * 0.05f;
 	outPos.y += outDir.y * 0.05f -0.55;
 	outPos.z += outDir.z * 0.05f;
-	
+
 	return true;
 }
 
@@ -212,12 +212,12 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		if (gf.m_pNetEntityMgr) {
 			gf.m_pNetEntityMgr->OnRoundReset();
 		}
-		// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함. 
+		// 여기서 게임 시작 상태로 초기화(삭제 등) 하는 코드가 동작해야 함.
 		// 아니면 위 OnRoundReset() 함수에서 처리
 
 		// 테스트 용도로 자동 재참가 기능 추가
-		// 나중에 다시 하기 버튼같은 걸 붙이면 좋을 듯. 
-		//NetSession::Instance().RoundJoin();		// 주석처리함. 사망했을 때랑 동일하게 로비로 내보내고 재진입하도록 바꿀 것. 
+		// 나중에 다시 하기 버튼같은 걸 붙이면 좋을 듯.
+		//NetSession::Instance().RoundJoin();		// 주석처리함. 사망했을 때랑 동일하게 로비로 내보내고 재진입하도록 바꿀 것.
 		break;
 	}
 	case SC_ADD_NPC:
@@ -248,11 +248,11 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		gf.m_pNetEntityMgr->OnNpcStateChange(&p);
 		break;
 	}
-	case SC_AMMO_STATE: {
+	case SC_AMMO_STATE:
+	{
 		const auto value = ReadPacket<SC_AMMO_STATE_PACKET>(packet);
-		const auto* p = &value;
-		//p->ammo : short[4] 형태의 배열
-		//if (gf.m_pPlayer) 총알개수를배열로덮어씌우는함수호출(p->ammo);
+		// 서버의 확정 탄약을 장착 무기뿐 아니라 보유 무기 전체에 반영한다.
+		if (gf.m_pPlayer) gf.m_pPlayer->ApplyServerAmmo(value.ammo);
 		break;
 	}
 	case SC_GRENADE_COUNT:
@@ -290,14 +290,13 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		const auto value = ReadPacket<SC_EQUIPMENT_UPDATE_PACKET>(packet);
 		const auto* p = &value;
 		if (gf.m_pScene.empty() || !gf.m_pScene.back()->equipUI) break;
-		
+
 		// 장비 시스템 미구현 - 현재는 콘솔 출력만
-		//gf.m_pNetEntityMgr->OnApplyEquip(reinterpret_cast<SC_EQUIPMENT_UPDATE_PACKET*>(packet.data()));
+
 		gf.m_pScene.back()->equipUI->EquipItem(p->equip_id);
 		wchar_t buf[128];
 		swprintf_s(buf, L"[EQUIP_CRAFTED] equip_id:%d\n", static_cast<int>(p->equip_id));
 		OutputDebugStringW(buf);
-
 
 		break;
 	}
@@ -360,10 +359,9 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		const auto value = ReadPacket<SC_FIRE_TRACER_PACKET>(packet);
 		const auto* p = &value;
 
-		if (gf.m_pNetEntityMgr && p->shooter_id == gf.m_pNetEntityMgr->GetMyId())
-		{
-			break;
-		}
+		// 자기 사격도 서버 확정 명중은 반영하되 총성/궤적은 다시 재생하지 않는다.
+		const bool isLocalShooter = gf.m_pNetEntityMgr && p->shooter_id >= 0 &&
+			p->shooter_id == gf.m_pNetEntityMgr->GetMyId();
 
 		if (gf.m_pScene.empty()) break;
 
@@ -381,7 +379,7 @@ void NetPacketDispatcher::Handle(const std::vector<char>& packet)
 		XMFLOAT3 normal = XMFLOAT3(p->nx, p->ny, p->nz);
 		ItemType type = static_cast<ItemType>(p->weapon_type);
 
-		pMainScene->ProcessFireRequest(type, origin, dir, p->distance, p->hit_kind, normal);
+		pMainScene->ProcessFireRequest(type, origin, dir, p->distance, p->hit_kind, normal, isLocalShooter);
 
 		break;
 	}

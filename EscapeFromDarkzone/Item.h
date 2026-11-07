@@ -3,11 +3,10 @@
 #include<algorithm>
 #include "ItemDef.h"
 
-
-
 struct WeaponSpec
 {
 	float damage = 0.0f;
+	float range = 0.0f; // 서버 유효 사거리와 같은 범위에서 로컬 궤적을 예측한다.
 	float rpm = 0.0f;
 	float dps = 0.0f;
 
@@ -18,7 +17,7 @@ struct WeaponSpec
 	float reloadTime = 0.0f;
 };
 
-
+// 추후 제작 재료 UI에서 사용할 레시피 데이터 형식이다.
 struct RecipeElement {
 	ItemID itemID;
 	int reuireCnt;
@@ -30,14 +29,10 @@ struct Recipe {
 	vector<RecipeElement>ingredients;
 };
 
-
-
 class CGameObject;
 class UIObject;
 class UIObjectShader;
 class CShader;
-
-
 
 class Item {
 public:
@@ -62,10 +57,6 @@ protected:
 
 //아이템 데이터와 출력 구조체로 나눠서 관리
 //아이템 데이터 슬롯
-/*struct ItemSlot {
-	ItemID item;
-	int count = 0;
-};*/
 
 //아이템 출력 슬롯
 struct ItemSlotView {
@@ -74,17 +65,6 @@ struct ItemSlotView {
 	std::unique_ptr<UIObject> textCell;
 	std::unique_ptr<UIObject> countCell;
 };
-
-//아이템 제작시스템
-//class CraftBox {
-//private:
-//	map<ItemID, Recipe> recipeTable;
-//public:
-//	void Init();
-//
-//	bool TryCraft(ItemID target, Inventory* playerinventory);
-//};
-
 
 //무기 선언
 class WeaponItem : public Item
@@ -97,7 +77,6 @@ public:
 
 	static WeaponSpec BuildSpec(ItemType category, ItemGrade grade);
 
-	static std::shared_ptr<WeaponItem> CreateDefaultPlayerRifle(CGameObject* pPrototype);
 	int maxAmmo;
 	int CurAmmo;
 private:
@@ -134,4 +113,3 @@ struct Equip
 	ArmorItem shoes;
 	Plate plate;
 };
-

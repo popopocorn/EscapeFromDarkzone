@@ -64,7 +64,7 @@ void CollisionManager::DoCollision(
 	if (not main || not target) return;
 	for (const auto& other : *target)
 	{
-		
+
 		if (!other) continue;
 		CGameObject* pTarget = other;
 
@@ -85,12 +85,12 @@ void CollisionManager::CheckCollision(CGameObject* main, CGameObject* target)
 		for (const BoundingOrientedBox* obb2 : oobbs2)
 		{
 			if (!obb1 || !obb2) continue;
-			
+
 			ColResult cresult = CalcCollision(*obb1, *obb2);
-			if (cresult.isCollide) 
+			if (cresult.isCollide)
 			{
 				main->HandleCollision(cresult);
-				//target->HandleCollision(cresult);
+
 			}
 		}
 	}
@@ -153,7 +153,7 @@ ColResult CollisionManager::CalcCollision(
 		float dist = std::abs(XMVectorGetX(XMVector3Dot(centerDiff, axis)));
 		float penetration = (rA + rB) - dist;
 
-		// [핵심 수정] 
+		// [핵심 수정]
 		// 침투 깊이가 0보다 작으면 두 박스 사이에 빈 공간이 있다는 뜻(분리축 발견)
 		// 절대 충돌할 수 없으므로 즉시 false 반환 (최적화)
 		if (penetration < 0.0f)
@@ -183,7 +183,7 @@ ColResult CollisionManager::CalcCollision(
 
 	// 노멀 벡터 저장
 	XMStoreFloat3(&result.normal, bestAxis);
-	
+
 	// 밀어낼 벡터 (MTV) = 노멀 방향 * 최소 침투 깊이
 	XMVECTOR mtv = XMVectorScale(bestAxis, minPenetration);
 	XMStoreFloat3(&result.mtv, mtv);

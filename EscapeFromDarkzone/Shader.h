@@ -1,7 +1,3 @@
-//-----------------------------------------------------------------------------
-// File: Shader.h
-//-----------------------------------------------------------------------------
-
 #pragma once
 
 #include "Object.h"
@@ -40,7 +36,6 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 
 	D3D12_SHADER_BYTECODE CompileShaderFromFile(const WCHAR *pszFileName, LPCSTR pszShaderName, LPCSTR pszShaderProfile, ID3DBlob **ppd3dShaderBlob);
-	D3D12_SHADER_BYTECODE ReadCompiledShaderFromFile(const WCHAR *pszFileName, ID3DBlob **ppd3dShaderBlob=NULL);
 
 	virtual void CreateShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
 	virtual void CreateShadowShader(ID3D12Device *pd3dDevice, ID3D12GraphicsCommandList *pd3dCommandList, ID3D12RootSignature *pd3dGraphicsRootSignature);
@@ -70,16 +65,13 @@ protected:
 	ID3DBlob							*m_pd3dVertexShaderBlob = NULL;
 	ID3DBlob							*m_pd3dPixelShaderBlob = NULL;
 
-
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC	m_d3dPipelineStateDesc;
 
 	float								m_fElapsedTime = 0.0f;
 	std::queue<Trash>					GarbageQueue;
-public: 
+public:
 	std::vector<ID3D12PipelineState*> m_pd3dPipelineState;
 };
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Bounding Box Shader선언
 struct VS_CB_DEBUG_INFO
@@ -120,7 +112,6 @@ public:
 	void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, int nPipelineState);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class CSkyBoxShader : public CShader
 {
 public:
@@ -134,7 +125,6 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 class CStandardShader : public CShader
 {
 public:
@@ -146,8 +136,6 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader();
 };
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //스텐실X쉐이더
 class CStandardObjectsShader : public CStandardShader
@@ -165,7 +153,7 @@ public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 	virtual void DeleteObject(UINT64 fence);
 	virtual void ProcessingGarbageQueue(UINT64 completed);
-	
+
 };
 
 class CLaserShader : public CStandardObjectsShader
@@ -178,9 +166,6 @@ public:
 };
 //map, object
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 class CSkinnedAnimationStandardShader : public CStandardShader
 {
 public:
@@ -191,7 +176,6 @@ public:
 	virtual D3D12_SHADER_BYTECODE CreateVertexShader();
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //스텐실O
 class CSkinnedAnimationObjectsShader : public CSkinnedAnimationStandardShader
 {
@@ -206,7 +190,7 @@ public:
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 	virtual void Render(ID3D12GraphicsCommandList *pd3dCommandList, CCamera *pCamera, bool batch, int nPipelineState);
 	virtual void DeleteObject(UINT64 fence);
-	virtual void ProcessingGarbageQueue(UINT64 completed);	
+	virtual void ProcessingGarbageQueue(UINT64 completed);
 };
 
 class ViewShader : public CStandardShader
@@ -223,7 +207,7 @@ public:
 
 	virtual void CreateThroughShader(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature);
 	virtual D3D12_DEPTH_STENCIL_DESC CreateThroughDepthStencilState();
-	
+
 	virtual void ReleaseObjects();
 	//시야 오브젝트 갱신
 	virtual void AnimateObjects(float fTimeElapsed);
@@ -239,7 +223,6 @@ public:
 	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 };
 
-
 class UIObjectShader : public CShader {
 private:
 	std::vector<UIObject*>		m_ppObjects;
@@ -251,7 +234,6 @@ public:
 	void addObjects(UIObject* obj) { m_ppObjects.push_back(obj); }
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, bool batch, int nPipelineState);
 
-	
 };
 
 class CFogOverlayShader : public CShader

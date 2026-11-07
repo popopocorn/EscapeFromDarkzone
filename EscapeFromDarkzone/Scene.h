@@ -1,7 +1,3 @@
-//-----------------------------------------------------------------------------
-// File: Scene.h
-//-----------------------------------------------------------------------------
-
 #pragma once
 
 #include "Shader.h"
@@ -12,7 +8,7 @@
 #include "Network.h"	// 05.14 추가: 네트워크 피격
 #include "UI.h"
 
-#define MAX_LIGHTS						16 
+#define MAX_LIGHTS						16
 
 #define POINT_LIGHT						1
 #define SPOT_LIGHT						2
@@ -34,10 +30,10 @@ struct LIGHT
 	int									m_nType;
 	float								m_fRange;
 	float								padding;
-};										
-										
-struct LIGHTS							
-{										
+};
+
+struct LIGHTS
+{
 	LIGHT								m_pLights[MAX_LIGHTS];
 	XMFLOAT4							m_xmf4GlobalAmbient;
 	int									m_nLights;
@@ -95,13 +91,14 @@ public:
 	virtual bool ProcessInput(UCHAR *pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed) {};
 	virtual void ResolvePlayerCamera(float fTimeElapsed) {};
+	virtual void FinalizeFrame(float fTimeElapsed) {};
+	virtual void OnWindowActivationChanged(bool active) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera = NULL) {};
 	void AddObj(CGameObject* obj) { GameObjects.push_back(unique_ptr<CGameObject>(obj)); }
 	virtual void ReleaseUploadBuffers() {
-		//if (m_pSkyBox) m_pSkyBox->ReleaseUploadBuffers();
 
 		for (int i = 0; i < m_ppShaders.size(); i++)
 		{
@@ -115,12 +112,12 @@ public:
 	CGameFramework* frame;
 protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
-	CCamera*							m_pCamera = nullptr;	
-	
+	CCamera*							m_pCamera = nullptr;
+
 	std::unique_ptr<LightCameraManager>   ShadowCameraManager;
-	
+
 	unique_ptr<HUDManager>				uiManager;
-	
+
 	vector<unique_ptr<CGameObject>>		GameObjects;
 
 public:
@@ -140,7 +137,6 @@ public:
 
 	ID3D12Resource						*m_pd3dcbLights = NULL;
 	LIGHTS								*m_pcbMappedLights = NULL;
-	
 
 	unique_ptr<UIObjectShader>			UIShader;
 
@@ -153,7 +149,7 @@ public:
 	{
 		return uiManager.get();
 	}
-	
+
 public:
 	virtual void SetPlayer(CPlayer* p) { m_pPlayer = p; }
 
@@ -171,11 +167,10 @@ public:
 
 class LobbyScene : public CScene {
 public:
-	LobbyScene(CGameFramework* game);
+	LobbyScene(CGameFramework* game, const std::wstring& notice = L"");
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
@@ -183,9 +178,8 @@ public:
 	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	
 private:
-
+	std::wstring m_connectionNotice;
 };
-
 
 class MainScene : public CScene{
 public:
@@ -195,13 +189,14 @@ public:
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 
 	virtual bool ProcessInput(UCHAR* pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed);
 	virtual void ResolvePlayerCamera(float fTimeElapsed) override;
+	virtual void FinalizeFrame(float fTimeElapsed) override;
+	virtual void OnWindowActivationChanged(bool active) override;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
@@ -222,10 +217,6 @@ public:
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
 	float m_fLaserLength = 15.0f;
-
-	bool m_bSparkFireActive = false;
-	float m_fSparkSpawnTimer = 0.0f;
-	float m_fSparkSpawnInterval = 0.03f;
 
 	bool m_bGrenadeAimMode = false;
 	float m_fGrenadeAimDistance = 6.0f;
@@ -272,6 +263,7 @@ private:
 
 	float m_fLootInteractDistance = 3.0f;
 	bool	IsGameStart = false;
+	bool m_bGameplayCursorInitialized = false;
 
 	std::unique_ptr<CFogOverlayShader> m_pFogOverlayShader;
 	void LinkToPlayer();
@@ -307,8 +299,6 @@ public:
 		float value = 0.0f
 	);
 
-	void PlayTestEffectByKey(WPARAM keyCode);
-
 	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager.get(); }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence) {};
@@ -316,7 +306,6 @@ public:
 
 	//인벤토리용 함수
 	bool IsAnyInventoryOpen() const;
-	void CloseCorpseInventory();
 	void OpenLootContainer(CLootContainerObject* pLoot);
 
 	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager.get(); }
@@ -327,7 +316,8 @@ public:
 		XMFLOAT3 direction,
 		float distance,
 		unsigned char hitKind = 0,
-		XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f)
+		XMFLOAT3 hitNormal = XMFLOAT3(0.0f, 0.0f, 0.0f),
+		bool isLocalShooter = false
 	);
 
 	void ResetForNewRound(short fullHp = 100);
@@ -340,7 +330,6 @@ public:
 	virtual void OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 	virtual bool OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-
 	virtual void BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
 	virtual void ReleaseObjects();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
@@ -352,5 +341,3 @@ private:
 };
 
 XMFLOAT3 GetSparkPositionByWeapon(PlayerWeaponType weaponType, const XMFLOAT3& muzzlePos, const XMFLOAT3& muzzleLook, const XMFLOAT3& muzzleUp);
-
-
