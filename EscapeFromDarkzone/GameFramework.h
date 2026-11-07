@@ -101,7 +101,7 @@ public:
 	ShaderManager* GetShaderManager() { return shadermanager.get(); }
 	POINT						m_ptOldCursorPos;
 	HWND GetHWND() { return m_hWnd; }
-	CCamera* GetObserver() { return observer.get(); }
+	//CCamera* GetObserver() { return observer.get(); }
 	void CreatePopSceneRequest(SceneName target);
 	int slot = 0;
 private:
