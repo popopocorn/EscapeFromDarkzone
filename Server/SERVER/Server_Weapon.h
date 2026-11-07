@@ -15,36 +15,36 @@ enum class WeaponGrade : short {
     GRADE_4 = 4,
 };
 
-// ±øÅë (NPC/ÇÃ·¹ÀÌ¾î ¼ÒÀ¯)
+// ê¹¡í†µ (NPC/í”Œë ˆì´ì–´ ì†Œìœ )
 struct WeaponSpec {
     short damage = 0;
     float rpm = 0.0f;
-    float range = 0.0f;         // ÇÇ°İ ¹«È¿ ÆÇÁ¤
+    float range = 0.0f;         // í”¼ê²© ë¬´íš¨ íŒì •
     short magazineSize = 0;
     float reloadTime = 0.0f;
-    // °Å¸® °¨¼è
-    float maxDistanceDamageReductionRatio = 0.0f;       // µ¥¹ÌÁö °¨¼è °è¼ö. 0ÀÌ¸é °¨¼è ¾øÀ½. 
+    // ê±°ë¦¬ ê°ì‡ 
+    float maxDistanceDamageReductionRatio = 0.0f;       // ë°ë¯¸ì§€ ê°ì‡  ê³„ìˆ˜. 0ì´ë©´ ê°ì‡  ì—†ìŒ. 
 };
 
-// °Å¸® ±â¹İ ÃÖÁ¾ µ¥¹ÌÁö °è»ê. 
+// ê±°ë¦¬ ê¸°ë°˜ ìµœì¢… ë°ë¯¸ì§€ ê³„ì‚°. 
 inline short ComputeDamage(const WeaponSpec& spec, float dist)
 {
     if (dist < 0.0f) dist = 0.0f;
-    if (dist > spec.range) return 0;   // ÄÆ¿ÀÇÁ °Å¸® ÃÊ°ú -> ¹ÌÀû¿ë
+    if (dist > spec.range) return 0;   // ì»·ì˜¤í”„ ê±°ë¦¬ ì´ˆê³¼ -> ë¯¸ì ìš©
 
     float dmg = static_cast<float>(spec.damage);
     if (spec.maxDistanceDamageReductionRatio > 0.0f) {
         float falloff = 1.0f - spec.maxDistanceDamageReductionRatio * (dist / spec.range);
         dmg *= falloff;
     }
-    short result = static_cast<short>(dmg + 0.5f);   // ¹İ¿Ã¸²
-    if (result < 1) result = 1;                       // ¸íÁßÇßÀ¸¸é ÃÖ¼Ò 1
+    short result = static_cast<short>(dmg + 0.5f);   // ë°˜ì˜¬ë¦¼
+    if (result < 1) result = 1;                       // ëª…ì¤‘í–ˆìœ¼ë©´ ìµœì†Œ 1
     return result;
 }
 
-// type x grade = spec / Å¬¶ó BuildSpec º¹Á¦
-// PISTOLÀº µî±Ş ¹«°ü °íÁ¤. 
-// RIFLE/SMG/SHOTGUNÀº GRADE_1~4¸¸ À¯È¿.
+// type x grade = spec / í´ë¼ BuildSpec ë³µì œ
+// PISTOLì€ ë“±ê¸‰ ë¬´ê´€ ê³ ì •. 
+// RIFLE/SMG/SHOTGUNì€ GRADE_1~4ë§Œ ìœ íš¨.
 inline WeaponSpec LookupWeaponSpec(WeaponType type, WeaponGrade grade)
 {
     WeaponSpec s;
@@ -111,13 +111,13 @@ inline GrenadeSpec GetGrenadeSpec()
 inline short ComputeGrenadeDamage(const GrenadeSpec& g, float dist) 
 { 
     if (dist < 0.0f) dist = 0.0f;
-    if (dist > g.radius) return 0;   // ¹İ°æ ¹Û -> ¹ÌÀû¿ë
+    if (dist > g.radius) return 0;   // ë°˜ê²½ ë°– -> ë¯¸ì ìš©
     float dmg = static_cast<float>(g.damageMax);
     if (g.falloffRatio > 0.0f) {
         float falloff = 1.0f - g.falloffRatio * (dist / g.radius);
         dmg *= falloff;
     }
-    short result = static_cast<short>(dmg + 0.5f);   // ¹İ¿Ã¸²
-    if (result < 1) result = 1;                       // ¹İ°æ ³»¸é ÃÖ¼Ò 1
+    short result = static_cast<short>(dmg + 0.5f);   // ë°˜ì˜¬ë¦¼
+    if (result < 1) result = 1;                       // ë°˜ê²½ ë‚´ë©´ ìµœì†Œ 1
     return result;
-}
+} 

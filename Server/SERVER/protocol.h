@@ -66,7 +66,7 @@ constexpr char SC_ROUND_START = 27;
 // 탈출 성공 패킷
 constexpr char SC_ESCAPE_SUCCESS = 28;
 
-// 수류탄 폭발 (C2S) — 클라가 최종 폭발 위치 전송 
+// 수류탄 폭발 (C2S) — 클라가 최종 폭발 위치 전송
 constexpr char CS_GRENADE_EXPLODE = 29;
 
 // OtherPlayer 상태 변환
@@ -79,7 +79,7 @@ constexpr char SC_FIRE_TRACER = 31;
 constexpr char SC_GAME_OVER = 32;
 
 constexpr char CS_RELOAD_REQUEST = 33;		// C2S 재장전 시도
-constexpr char SC_AMMO_STATE = 34;			// S2C 
+constexpr char SC_AMMO_STATE = 34;			// S2C
 constexpr char SC_GRENADE_COUNT = 35;
 
 constexpr char SC_ESCAPE_PROGRESS = 36;
@@ -89,7 +89,7 @@ constexpr char CS_ROUND_JOIN = 38;			// 로비에서 라운드로 들어올 때
 constexpr char CS_ROUND_LEAVE = 39;			// 게임오버 후 로비로 나가기 (연결끊기 아님)
 
 // C2S 무적 모드 토글 (디버그용)
-constexpr char CS_TOGGLE_GODMODE = 40;		
+constexpr char CS_TOGGLE_GODMODE = 40;
 
 constexpr char ESCAPE_PROG_START = 0;		// 탈출 진행 시작
 constexpr char ESCAPE_PROG_RESET = 1;		// 영역 내 피격으로 인한 타이머 리셋
@@ -116,6 +116,8 @@ constexpr char NPC_STATE_DIE = 2;
 constexpr char NPC_STATE_RETURN = 3;
 constexpr char NPC_STATE_ATTACK = 4;
 constexpr char NPC_STATE_RELOAD = 5;
+constexpr char NPC_STATE_SEARCH = 6;
+constexpr char NPC_STATE_INVESTIGATE = 7;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -129,7 +131,7 @@ struct CS_MOVE_PACKET {
 	char          type;
 	char          inputs;       // WASD 비트 플래그 (MOVE_W, MOVE_S, MOVE_A, MOVE_D)
 	float         yaw;          // 카메라 Yaw (도 단위) — 이동 방향 계산용
-	unsigned int  move_time;    // 패킷 순서 보정용 
+	unsigned int  move_time;    // 패킷 순서 보정용
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -144,9 +146,10 @@ struct SC_ADD_PLAYER_PACKET {
 	char          type;
 	short         id;
 	float         x, y, z;
-	float         yaw;
+	float         yaw;			// 상체
 	char          state;
 	char          name[NAME_SIZE];
+	float         lower_yaw;	// 하체
 };
 
 struct SC_REMOVE_PLAYER_PACKET {
@@ -160,8 +163,9 @@ struct SC_MOVE_PLAYER_PACKET {
 	char          type;
 	short         id;
 	float         x, y, z;
-	float         yaw;
+	float         yaw;			// 상체
 	unsigned int  move_time;
+	float         lower_yaw;	// 하체
 };
 
 struct CS_INVENTORY_CLICK_PACKET {

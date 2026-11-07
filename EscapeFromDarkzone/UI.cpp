@@ -149,6 +149,7 @@ void UIObject::SetScale(float x, float y, float z)
 	world._11 = x;
 	world._22 = y;
 	world._33 = z;
+	if (m_hasHitBox) setAABB();
 }
 
 void UIObject::SetLocate(float x, float y, float z)
@@ -156,6 +157,7 @@ void UIObject::SetLocate(float x, float y, float z)
 	world._41 = x;
 	world._42 = y;
 	world._43 = z;
+	if (m_hasHitBox) setAABB();
 }
 
 void UIObject::setAABB()
@@ -170,6 +172,7 @@ void UIObject::setAABB()
 	CollisionBox.maxX = cx + sx * 0.5f;
 	CollisionBox.minY = cy - sy * 0.5f;
 	CollisionBox.maxY = cy + sy * 0.5f;
+	m_hasHitBox = true;
 }
 
 void UIObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera)
@@ -560,6 +563,36 @@ void Inventory::SlotClicked(int slotidx)
 	}
 }
 
+void Inventory::SlotDoubleClicked(int slotidx)
+{
+	if (ID >= 0)
+		return;
+
+	if (slotidx < 0 || slotidx >= MAX_SLOTS)
+		return;
+
+	ItemSlot* pSlot = GetSlot(slotidx);
+	if (!pSlot || pSlot->count <= 0)
+		return;
+
+	switch (pSlot->item)
+	{
+	case ItemID::WEAPON_UPGRADE_2:
+	case ItemID::WEAPON_UPGRADE_3:
+	case ItemID::WEAPON_UPGRADE_4:
+	{
+		if (NetworkManager::Instance().IsConnected())
+		{
+			NetworkManager::Instance().SendWeaponUpgradeRequest(static_cast<short>(slotidx));
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
 bool Inventory::ProcessClick(POINT mouse)
 {
 	for (int i = 0; i < MAX_SLOTS; ++i)
@@ -567,14 +600,58 @@ bool Inventory::ProcessClick(POINT mouse)
 		auto* hitBox = slotViews[i].hitBox.get();
 		if (!hitBox) continue;
 
-		if (hitBox->GetBox().Intersects(mouse))
+		if (hitBox->ContainsPoint(mouse))
 		{
-			hitBox->HandleClick();
-			return true; // UI 클릭 소비됨
+			if (ID >= 0)
+			{
+				hitBox->HandleClick();
+				return true;
+			}
+
+			ItemSlot* pSlot = GetSlot(i);
+			if (!pSlot)
+				return true;
+
+			bool bWeaponUpgradePart =
+				pSlot->item == ItemID::WEAPON_UPGRADE_2 ||
+				pSlot->item == ItemID::WEAPON_UPGRADE_3 ||
+				pSlot->item == ItemID::WEAPON_UPGRADE_4;
+
+			if (!bWeaponUpgradePart)
+			{
+				m_nLastClickedSlot = -1;
+				m_ullLastClickTime = 0;
+
+				hitBox->HandleClick();
+				return true;
+			}
+
+			ULONGLONG currentClickTime = GetTickCount64();
+			ULONGLONG doubleClickInterval = static_cast<ULONGLONG>(GetDoubleClickTime());
+
+			bool bDoubleClick =
+				m_nLastClickedSlot == i &&
+				m_ullLastClickTime != 0 &&
+				(currentClickTime - m_ullLastClickTime) <= doubleClickInterval;
+
+			if (bDoubleClick)
+			{
+				m_nLastClickedSlot = -1;
+				m_ullLastClickTime = 0;
+
+				SlotDoubleClicked(i);
+			}
+			else
+			{
+				m_nLastClickedSlot = i;
+				m_ullLastClickTime = currentClickTime;
+			}
+
+			return true;
 		}
 	}
 
-	return false; // UI 클릭 아님
+	return false;
 }
 
 void Inventory::SetPosition(float x, float y)
@@ -831,31 +908,34 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 
 	float BtnSize = 0.15f;
 	XMFLOAT3 scale = CalcPixelByRatio(1.0f);
+
 	UIs[ItemType::ARMOR_HELMET] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_HELMET]->SetLocate(0.38, 0.25, 0.5);
 	UIs[ItemType::ARMOR_HELMET]->SetScale(scale.x * BtnSize, scale.y * BtnSize, 1.0f);
 	UIs[ItemType::ARMOR_HELMET]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_HELMET]->SetFunc([this]() {
 		ItemID i = this->helmet;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_HELMET_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_HELMET_01);
 			}
 			break;
+
 		case ItemID::ARMOR_HELMET_01:
 		case ItemID::ARMOR_HELMET_02:
 		case ItemID::ARMOR_HELMET_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_HELMET]->setAABB();
-
 
 	UIs[ItemType::ARMOR_BODY] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_BODY]->SetLocate(0.38, 0.08, 0.5);
@@ -863,25 +943,27 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_BODY]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_BODY]->SetFunc([this]() {
 		ItemID i = this->body;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_BODY_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_BODY_01);
 			}
 			break;
+
 		case ItemID::ARMOR_BODY_01:
 		case ItemID::ARMOR_BODY_02:
 		case ItemID::ARMOR_BODY_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_BODY]->setAABB();
-
 
 	UIs[ItemType::ARMOR_SHOES] = make_unique<UIObject>();
 	UIs[ItemType::ARMOR_SHOES]->SetLocate(0.38, -0.09, 0.5);
@@ -889,25 +971,27 @@ void EquipUI::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dComm
 	UIs[ItemType::ARMOR_SHOES]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::PANEL_001));
 	UIs[ItemType::ARMOR_SHOES]->SetFunc([this]() {
 		ItemID i = this->shoes;
+
 		switch (i)
 		{
 		case ItemID::NONE:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(ItemID::ARMOR_SHOES_01);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(ItemID::ARMOR_SHOES_01);
 			}
 			break;
+
 		case ItemID::ARMOR_SHOES_01:
 		case ItemID::ARMOR_SHOES_02:
 		case ItemID::ARMOR_SHOES_03:
-			if (NetworkManager::Instance().IsConnected()) {
-				NetworkManager::Instance().SendCraftRequest(++i);
+			if (NetworkManager::Instance().IsConnected())
+			{
+				NetworkManager::Instance().SendArmorUpgradeRequest(++i);
 			}
 			break;
 		}
-
 		});
 	UIs[ItemType::ARMOR_SHOES]->setAABB();
-
 }
 
 void EquipUI::EquipItem(ItemID item)
@@ -1022,11 +1106,13 @@ void EquipUI::ResetForNewRound()
 
 bool EquipUI::ProcessClick(POINT mouse)
 {
+	if (!isOpen) return false;
 	for (auto& p : UIs)
 	{
-		if (p.second->GetBox().Intersects(mouse))
+		if (p.second->IsClickable() && p.second->ContainsPoint(mouse))
 		{
 			p.second->HandleClick();
+			return true;
 		}
 	}
 	return false;
@@ -1057,6 +1143,7 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	SMG = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SMG_BULLET);
 	Shotgun = ResourceManager::Instance().GetUIMesh(UIName::STATUS_SHOTGUN_BULLET);
 	Pistol = ResourceManager::Instance().GetUIMesh(UIName::STATUS_PISTOL_BULLET);
+	Grenade = ResourceManager::Instance().GetUIMesh(UIName::STATUS_GRENADE);
 	bullet = ResourceManager::Instance().GetUIMesh(UIName::STATUS_BULLET_DOT);
 
 	curammo = player ? player->GetCurrentAmmo() : 0;
@@ -1080,8 +1167,9 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 	UIs[HP_MAIN]->SetLocate(HEALTH_MAIN_CENTER_OFFSET_X, -0.9f, 0.5f);
 	UIs[HP_MAIN]->SetUIMesh(ResourceManager::Instance().GetUIMesh(UIName::STATUS_HEALTH_DOT));
 
-	UIs[MAG_BASE] = make_unique<UIObject>();
 	XMFLOAT3 r = CalcPixelByRatio(1.0f);
+
+	UIs[MAG_BASE] = make_unique<UIObject>();
 	float wr = 0.15f;
 	UIs[MAG_BASE]->SetScale(r.x * wr, r.y * wr, 1.0f);
 	UIs[MAG_BASE]->SetLocate(0.25f, -0.9f, 0.5f);
@@ -1101,6 +1189,28 @@ void PlayerStatus::Init(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3
 		t->SetUIMesh(bullet);
 		Bullets.push_back(unique_ptr<UIObject>(t));
 	}
+
+	UIs[GRENADE_ICON] = make_unique<UIObject>();
+	float grenadeSize = 0.08f;
+	UIs[GRENADE_ICON]->SetScale(r.x * grenadeSize, r.y * grenadeSize, 1.0f);
+	UIs[GRENADE_ICON]->SetLocate(0.91f, -0.9f, 0.5f);
+	UIs[GRENADE_ICON]->SetUIMesh(Grenade);
+
+	constexpr float GRENADE_TEXT_NDC_X = 0.955f;
+	constexpr float GRENADE_TEXT_NDC_Y = -0.90f;
+
+	float grenadeTextX = (GRENADE_TEXT_NDC_X + 1.0f) * 0.5f * static_cast<float>(FRAME_BUFFER_WIDTH);
+	float grenadeTextY = (1.0f - GRENADE_TEXT_NDC_Y) * 0.5f * static_cast<float>(FRAME_BUFFER_HEIGHT);
+
+	grenadeTextY -= 16.0f;
+
+	m_pGrenadeCountText = make_unique<UIText>(
+		L"x" + std::to_wstring(grenadeCount),
+		XMFLOAT2(grenadeTextX, grenadeTextY),
+		UITextAlign::LEFT
+	);
+
+	m_pGrenadeCountText->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 	float prb = 0.05f;
 
@@ -1134,17 +1244,32 @@ void PlayerStatus::ResetForNewRound(short fullHp)
 	OutputDebugString(L"[RoundReset] PlayerStatus 초기화 완료\n");
 }
 
+void PlayerStatus::SetGrenadeCount(int count)
+{
+	if (count < 0)
+		count = 0;
+
+	grenadeCount = count;
+
+	if (m_pGrenadeCountText)
+	{
+		m_pGrenadeCountText->SetText(L"x" + std::to_wstring(grenadeCount));
+	}
+}
+
 bool PlayerStatus::ProcessClick(POINT mouse)
 {
 	for (auto& p : UIs)
 	{
-		if (p.second->GetBox().Intersects(mouse))
+		if (p.second->IsClickable() && p.second->ContainsPoint(mouse))
 		{
 			p.second->HandleClick();
+			return true;
 		}
 	}
 	return false;
 }
+
 void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 {
 	for (auto& p : UIs)
@@ -1164,6 +1289,19 @@ void PlayerStatus::SubmitToShader(UIObjectShader* shader)
 	}
 }
 
+void PlayerStatus::SubmitText(TextRenderer* renderer)
+{
+	if (!renderer)
+		return;
+
+	if (!isOpen)
+		return;
+
+	if (m_pGrenadeCountText)
+	{
+		renderer->SubmitText(m_pGrenadeCountText.get());
+	}
+}
 void PlayerStatus::Update(float fTimeElapsed)
 {
 	if (!player) return;
@@ -1260,20 +1398,19 @@ void HUDManager::CloseUI(int idx)
 
 bool HUDManager::ProcessClick(POINT mouse)
 {
-	for (auto& o : objs)
+	// Panels are drawn after standalone objects, so test them first.
+	for (auto it = panels.rbegin(); it != panels.rend(); ++it)
 	{
-		if (o->GetBox().Intersects(mouse))
+		if ((*it)->isOpen && (*it)->ProcessClick(mouse))
+			return true;
+	}
+	for (auto it = objs.rbegin(); it != objs.rend(); ++it)
+	{
+		auto& o = *it;
+		if (o->IsClickable() && o->ContainsPoint(mouse))
 		{
 			o->HandleClick();
 			return true;
-		}
-	}
-	for (auto& o : panels)
-	{
-		if (o->isOpen)
-		{
-			o->ProcessClick(mouse);
-
 		}
 	}
 	return false;
@@ -1324,5 +1461,13 @@ void HUDManager::SubmitText(TextRenderer* renderer)
 			continue;
 
 		renderer->SubmitText(text.get());
+	}
+
+	for (const auto& panel : panels)
+	{
+		if (!panel)
+			continue;
+
+		panel->SubmitText(renderer);
 	}
 }

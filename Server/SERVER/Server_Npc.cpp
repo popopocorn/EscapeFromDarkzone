@@ -1,7 +1,7 @@
 ﻿#include "Server_Npc.h"
 
 // NpcInputQueue
-NpcInputQueue g_npc_input_queue;
+std::array<NpcInputQueue, ROOM_THREAD_COUNT> g_npc_queues;
 
 void NpcInputQueue::Push(NpcInputEvent e)
 {

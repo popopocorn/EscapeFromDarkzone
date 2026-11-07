@@ -114,7 +114,7 @@ void NetEntityManager::OnAddPlayer(const SC_ADD_PLAYER_PACKET* p)
 	if (FindOtherPlayer(p->id)) return;
 
 	OtherPlayer* pOther = OtherPlayer::Create(m_pd3dDevice, m_pd3dCommandList, m_pRootSignature, p->x, p->y, p->z, p->id);
-	pOther->SetServerYaw(p->yaw);
+	pOther->SetServerYaw(p->yaw, p->lower_yaw, true);	// 생성 시에는 보간 없이 바로 맞춘다
 
 	switch (p->state) {
 	case PLAYER_STATE_IDLE:
@@ -152,7 +152,7 @@ void NetEntityManager::OnMovePlayer(const SC_MOVE_PLAYER_PACKET* p)
 
 	if (OtherPlayer* pOther = FindOtherPlayer(p->id)) {
 		pOther->UpdatePosition(p->x, p->y, p->z);
-		pOther->SetServerYaw(p->yaw);
+		pOther->SetServerYaw(p->yaw, p->lower_yaw);
 	}
 }
 
@@ -192,8 +192,6 @@ void NetEntityManager::OnPlayerStateChange(const SC_PLAYER_STATE_CHANGE_PACKET* 
 
 static ModelName NpcModelFromTierOutfit(int tier, int outfit)
 {
-	return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1));
-
 	if (tier < 0 || tier > 2) tier = 0;
 	if (outfit < 0 || outfit > 2) outfit = 0;
 	switch (tier) {
@@ -204,7 +202,6 @@ static ModelName NpcModelFromTierOutfit(int tier, int outfit)
 	case 0:
 	default:
 		return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1) + outfit);
-		//return static_cast<ModelName>(static_cast<int>(ModelName::ENEMY_01_1));
 	}
 }
 
@@ -298,7 +295,8 @@ void NetEntityManager::OnNpcStateChange(const SC_NPC_STATE_CHANGE_PACKET* p)
 			break;
 		// 08.13 한준수 추가(행동트리)
 		case NPC_STATE_SEARCH:
-			pNpc->ChangeState(std::make_unique<EnemyRun>());
+			//pNpc->ChangeState(std::make_unique<EnemyRun>());
+			pNpc->ChangeState(std::make_unique<EnemySearch>());
 			break;
 		case NPC_STATE_INVESTIGATE:
 			pNpc->ChangeState(std::make_unique<EnemyRun>());

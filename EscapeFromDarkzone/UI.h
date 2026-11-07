@@ -30,11 +30,11 @@ public:
 };
 
 struct CheckBox {
-	float minX;
-	float minY;
-	float maxX;
-	float maxY;
-	bool Intersects(POINT p)
+	float minX = 0.0f;
+	float minY = 0.0f;
+	float maxX = 0.0f;
+	float maxY = 0.0f;
+	bool Intersects(POINT p) const
 	{
 		float ndcX = (2.0f * static_cast<float>(p.x)) / FRAME_BUFFER_WIDTH - 1.0f;
 		float ndcY = 1.0f - (2.0f * static_cast<float>(p.y)) / FRAME_BUFFER_HEIGHT; // DirectX 기준 Y축 상하 반전
@@ -50,12 +50,14 @@ struct CheckBox {
 
 class UIObject {
 protected:
-	UIMesh*					object;
+	UIMesh*					object = nullptr;
 	XMFLOAT4X4				world;
 	std::function<void()>	Task = nullptr;
-	CheckBox				CollisionBox;
+	CheckBox				CollisionBox{};
+	bool                    m_hasHitBox = false;
 public:
 	UIObject();
+	virtual ~UIObject() = default;
 
 	void SetUIMesh(UIMesh* mesh) { object = mesh; }
 	void SetScale(float x, float y, float z);
@@ -64,6 +66,8 @@ public:
 	void SetFunc(std::function<void()> func) { Task = func; }
 	void setAABB();
 	CheckBox GetBox() { return CollisionBox; }
+	bool ContainsPoint(POINT mouse) const { return isopen && m_hasHitBox && CollisionBox.Intersects(mouse); }
+	bool IsClickable() const { return isopen && m_hasHitBox && static_cast<bool>(Task); }
 
 	bool isopen = true;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, bool batch, int nPipelineState, CCamera* pCamera = NULL);
@@ -94,6 +98,9 @@ private:
 
 	int ID;
 
+	int m_nLastClickedSlot = -1;
+	ULONGLONG m_ullLastClickTime = 0;
+
 	UIMesh* m_pSharedMesh;
 	UIMesh* m_pSharedMiddleMesh;
 
@@ -106,6 +113,8 @@ private:
 	void UpdateSlotNameText(int slotIndex);
 	void UpdateSlotCountText(int slotIndex);
 	void UpdateSlotTexts(int slotIndex);
+
+	void SlotDoubleClicked(int slotidx);
 
 	static XMFLOAT2 ConvertNdcToPixel(float ndcX, float ndcY);
 public:
@@ -138,6 +147,7 @@ public:
 	virtual ~UIPanel() = default;
 	virtual bool ProcessClick(POINT mouse) = 0;
 	virtual void SubmitToShader(UIObjectShader* shader) = 0;
+	virtual void SubmitText(TextRenderer* renderer) {};
 	virtual void ToggleOpen() { isOpen = !isOpen; }
 	virtual void Update(float fTimeElapsed) {};
 };
@@ -164,6 +174,7 @@ enum StatusType {
 	HP_BASE,
 	HP_MAIN,
 	MAG_BASE,
+	GRENADE_ICON,
 	WEAPON_SLOT_1,
 	WEAPON_SLOT_2,
 	WEAPON_SLOT_3,
@@ -178,7 +189,9 @@ public:
 	void StartEscape() { Escape = true; EscapeTime = 0; }
 	void ResetEscape() { Escape = false; EscapeTime = 0; }
 	void ResetForNewRound(short fullHp = 100);
+	void SetGrenadeCount(int count);
 
+	virtual void SubmitText(TextRenderer* renderer) override;
 	virtual void SubmitToShader(UIObjectShader* shader);
 	virtual void Update(float fTimeElapsed);
 
@@ -187,11 +200,17 @@ private:
 	short hp;
 	short FullHp;
 	int curammo = 0;
+	int grenadeCount = 3;
+
 	UIMesh* Rifle = NULL;
 	UIMesh* SMG = NULL;
 	UIMesh* Pistol = NULL;
 	UIMesh* Shotgun = NULL;
 	UIMesh* bullet = NULL;
+	UIMesh* Grenade = NULL;
+
+	unique_ptr<UIText> m_pGrenadeCountText;
+
 	bool Escape = false;
 	float EscapeTime = 0;
 	unordered_map<StatusType, unique_ptr<UIObject>> UIs;

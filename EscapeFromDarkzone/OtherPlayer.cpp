@@ -1,4 +1,5 @@
 #include "OtherPlayer.h"
+#include "WeaponAttachment.h"
 #include "ResourceManager.h"
 #include"SoundManager.h"
 #include"Shader.h"
@@ -36,37 +37,6 @@ static ModelName GetOtherPlayerWeaponModelNameFromPacket(short weaponType)
 		return ModelName::RIFLE;
 	}
 }
-static void GetOtherPlayerWeaponVisualConfig(ModelName modelName, XMFLOAT3& outPos, XMFLOAT3& outRot, XMFLOAT3& outScale)
-{
-	switch (modelName)
-	{
-		//권총은 애니메이션 추가된 후 추가 수정
-	case ModelName::PISTOL:
-		outPos = XMFLOAT3(-0.0f, 0.0f, 0.05f);
-		outRot = XMFLOAT3(180.0f, 180.0f, 0.0f);
-		outScale = XMFLOAT3(1.0f, 1.0f, 1.0f);
-		break;
-
-	case ModelName::SMG:
-		outPos = XMFLOAT3(0.1f, 0.10f, 0.16f);
-		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
-		outScale = XMFLOAT3(1.1f * 0.90f, 1.1f * 0.90f, 1.1f * 0.90f);
-		break;
-
-	case ModelName::SHOTGUN:
-		outPos = XMFLOAT3(-0.20f, 0.15f, 0.f);
-		outRot = XMFLOAT3(180.0f, 0.0f, 105.0f);
-		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-		break;
-
-	case ModelName::RIFLE:
-	default:
-		outPos = XMFLOAT3(-0.05f, 0.30f, 0.1f);
-		outRot = XMFLOAT3(105.0f, 0.0f, 0.0f);
-		outScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-		break;
-	}
-}
 static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
 {
 	ItemType itemType = static_cast<ItemType>(weaponType);
@@ -90,6 +60,32 @@ static PlayerWeaponType GetOtherPlayerWeaponTypeFromPacket(short weaponType)
 static constexpr float OTHER_PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float OTHER_PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 
+// 상/하체 방향 보간
+static constexpr float OTHER_PLAYER_YAW_LERP_SPEED = 15.0f;	// 보간 보정치 (클수록 휙휙 돌아감)
+
+// 서버 라디안을 도 단위로
+static float Radian2Deg(float deg)
+{
+	deg = fmodf(deg, 360.0f);
+	if (deg < 0.0f)    deg += 360.0f;
+	if (deg >= 360.0f) deg -= 360.0f;
+	return deg;
+}
+
+// 최소 회전량 계산
+static float ShortestDeltaDeg(float from, float to)
+{
+	float d = fmodf(to - from, 360.0f);
+	if (d > 180.0f)  d -= 360.0f;
+	if (d < -180.0f) d += 360.0f;
+	return d;
+}
+
+// cur를 target 쪽으로 t(0~1) 비율만큼 최단 방향으로 회전
+static float LerpAngle(float cur, float target, float t)
+{
+	return Radian2Deg(cur + ShortestDeltaDeg(cur, target) * t);
+}
 
 OtherPlayer::OtherPlayer(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList, ID3D12RootSignature* pd3dGraphicsRootSignature, short playerID)
 {
@@ -193,7 +189,13 @@ void OtherPlayer::Update(float fTimeElapsed)
 		cur.z += (m_xmf3ServerPosition.z - cur.z) * ALPHA;
 		SetPosition(cur);
 
-		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fServerYawDeg, 0.0f);
+		// 방향 보간
+		const float t = 1.0f - expf(-OTHER_PLAYER_YAW_LERP_SPEED * fTimeElapsed);
+		m_fRenderYawDeg      = LerpAngle(m_fRenderYawDeg, m_fServerYawDeg, t);
+		m_fRenderLowerYawDeg = LerpAngle(m_fRenderLowerYawDeg, m_fServerLowerYawDeg, t);
+
+		// 상체 기준으로 방향 적용
+		m_xmf4x4ToParent = Matrix4x4::Rotate(0.0f, m_fRenderYawDeg, 0.0f);
 		m_xmf4x4ToParent._41 = cur.x;
 		m_xmf4x4ToParent._42 = cur.y;
 		m_xmf4x4ToParent._43 = cur.z;
@@ -201,6 +203,11 @@ void OtherPlayer::Update(float fTimeElapsed)
 
 	UpdateTransform(NULL);
 
+	// The shader calls OnLateUpdate after this frame's animation evaluation.
+}
+
+void OtherPlayer::OnLateUpdate()
+{
 	if (m_pRenderWeapon && m_pWeaponSocket)
 	{
 		m_pRenderWeapon->m_xmf4x4ToParent = m_pWeaponSocket->m_xmf4x4World;
@@ -210,6 +217,12 @@ void OtherPlayer::Update(float fTimeElapsed)
 	{
 		m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 	}
+	if (!m_pWeapon || !m_pSkinnedAnimationController || m_pSkinnedAnimationController->m_nAnimationTracks < 2 || m_bDead) return;
+	const int animation = m_pSkinnedAnimationController->m_pAnimationTracks[1].m_nAnimationSet;
+	if (animation == GetGrenadeAnimationByWeapon() || animation == GetReloadAnimationByWeapon() ||
+		(m_eWeaponType == PlayerWeaponType::Shotgun && animation == GetShootAnimationByWeapon())) return;
+	WeaponAttachment::SolveSupportHand(FindFrame("mixamorig:LeftArm"),FindFrame("mixamorig:LeftForeArm"),
+		FindFrame("mixamorig:LeftHand"),m_pWeapon->FindFrame("LeftHandGrip"),m_eWeaponType == PlayerWeaponType::Pistol);
 }
 
 void OtherPlayer::Render(
@@ -706,12 +719,21 @@ void OtherPlayer::UpdatePosition(float x, float y, float z)
 	}
 }
 
-void OtherPlayer::SetServerYaw(float yawRad)
+// 서버가 보낸 상체/하체 방향 저장 (보간 목표값으로)
+// bSnap: 보간 없이 바로 그 방향으로 (생성 직후 사용)
+void OtherPlayer::SetServerYaw(float yawRad, float lowerYawRad, bool bSnap)
 {
 	if (m_bDead)
 		return;
 
-	m_fServerYawDeg = XMConvertToDegrees(yawRad);
+	m_fServerYawDeg      = Radian2Deg(XMConvertToDegrees(yawRad));			// 보간 목표(상체)
+	m_fServerLowerYawDeg = Radian2Deg(XMConvertToDegrees(lowerYawRad));		// 보간 목표(하체)
+
+	if (bSnap)
+	{
+		m_fRenderYawDeg      = m_fServerYawDeg;
+		m_fRenderLowerYawDeg = m_fServerLowerYawDeg;
+	}
 }
 
 void OtherPlayer::EquipDefaultPistol()
@@ -758,15 +780,7 @@ void OtherPlayer::EquipWeaponModel(ModelName modelName)
 	m_pWeapon = m_pRenderWeapon->m_pChild.get();
 
 
-	XMFLOAT3 weaponPos;
-	XMFLOAT3 weaponRot;
-	XMFLOAT3 weaponScale;
-
-	GetOtherPlayerWeaponVisualConfig(modelName, weaponPos, weaponRot, weaponScale);
-
-	m_pWeapon->SetPosition(weaponPos.x, weaponPos.y, weaponPos.z);
-	m_pWeapon->SetScale(weaponScale.x, weaponScale.y, weaponScale.z);
-	m_pWeapon->Rotate(weaponRot.x, weaponRot.y, weaponRot.z);
+	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(m_pWeapon->m_xmf4x4ToParent,modelName);
 
 	m_pWeaponMuzzleSocket = m_pWeapon->FindFrame("Socket_Muzzle");
 

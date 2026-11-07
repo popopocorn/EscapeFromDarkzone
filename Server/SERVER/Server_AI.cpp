@@ -1,4 +1,7 @@
-#include "Server_AI.h"
+﻿#include "Server_AI.h"
+
+#include <iostream>
+#include <algorithm>
 
 #include <fstream>
 #include <map>
@@ -7,6 +10,20 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+
+// 정점 용접 전용 비교.
+//  - XZ만 본다: 바닥 높이가 삼각형마다 미세하게 달라도 같은 정점으로 붙인다.
+//  - 1cm 허용: 익스포터 정밀도가 1mm보다 나빠도 이음매가 끊기지 않는다.
+// funnel에서 쓰는 아래 IsSamePosition은 정밀 비교라 절대 여기에 맞추면 안 된다.
+constexpr float NAV_WELD_EPSILON    = 0.01f;                                // 1cm
+constexpr float NAV_WELD_EPSILON_SQ = NAV_WELD_EPSILON * NAV_WELD_EPSILON;
+
+static bool IsSameWeldPosition(const XMFLOAT3& a, const XMFLOAT3& b)
+{
+    const float dx = a.x - b.x;
+    const float dz = a.z - b.z;
+    return (dx * dx + dz * dz) < NAV_WELD_EPSILON_SQ;
+}
 
 bool IsSamePosition(const XMFLOAT3& p1, const XMFLOAT3& p2)
 {
@@ -115,7 +132,7 @@ void AstarNavigation::LoadNavMeshFromFile(const char* file)
 
         for (int j = 0; j < uniqueVertices.size(); ++j)
         {
-            if (IsSamePosition(temp.vertices[i], uniqueVertices[j]))
+            if (IsSameWeldPosition(temp.vertices[i], uniqueVertices[j]))
             {
                 foundIndex = j;
                 break;
@@ -143,6 +160,54 @@ void AstarNavigation::LoadNavMeshFromFile(const char* file)
 
     BuildMesh(temp);
     FindNeighbor();
+    BuildComponents();
+}
+
+// 인접 그래프의 연결 성분을 미리 계산해 둔다.
+// A*가 오갈 수 있는 덩어리 단위이며, 수색 지점을 고를 때 필터로 쓴다.
+void AstarNavigation::BuildComponents()
+{
+    const int n = static_cast<int>(mesh.size());
+
+    polyComponent.assign(n, -1);
+
+    std::vector<int> stack;
+    int nextComponent = 0;
+
+    for (int i = 0; i < n; ++i)
+    {
+        if (polyComponent[i] != -1) continue;
+
+        const int cid = nextComponent++;
+
+        stack.clear();
+        stack.push_back(i);
+        polyComponent[i] = cid;
+
+        while (!stack.empty())
+        {
+            const int cur = stack.back();
+            stack.pop_back();
+
+            for (int k = 0; k < 3; ++k)
+            {
+                const int nb = mesh[cur].neighborIDs[k];
+                if (nb >= 0 && nb < n && polyComponent[nb] == -1)
+                {
+                    polyComponent[nb] = cid;
+                    stack.push_back(nb);
+                }
+            }
+        }
+    }
+}
+
+int AstarNavigation::GetPolyComponent(int polyID) const
+{
+    if (polyID < 0 || polyID >= static_cast<int>(polyComponent.size()))
+        return -1;
+
+    return polyComponent[polyID];
 }
 
 float CalculateDistance(const XMFLOAT3& a, const XMFLOAT3& b)
@@ -282,7 +347,11 @@ std::vector<XMFLOAT3> AstarNavigation::FindPath(XMFLOAT3 start, XMFLOAT3 end)
     int endID = FindPolyID(end);
 
     if (startID == -1 || endID == -1)
+    {
+        std::cout << "[AI] FindPath failed: startID=" << startID
+            << " endID=" << endID << "  (내비메시 밖)\n";
         return std::vector<XMFLOAT3>();
+    }
 
     std::priority_queue<AStarNode, std::vector<AStarNode>, std::greater<AStarNode>> openList;
 
@@ -351,7 +420,9 @@ std::vector<XMFLOAT3> AstarNavigation::FindPath(XMFLOAT3 start, XMFLOAT3 end)
     else
     {
         std::cout << "[AI] FindPath failed: startID=" << startID
-                  << " endID=" << endID << "\n";
+                  << " endID=" << endID
+                  << "  comp=" << GetPolyComponent(startID)
+                  << "/" << GetPolyComponent(endID) << "\n";
         return std::vector<XMFLOAT3>();
     }
 
@@ -375,7 +446,7 @@ bool IsPointInTriangle(const XMFLOAT3& pt, const XMFLOAT3& v0, const XMFLOAT3& v
     return !(has_neg && has_pos);
 }
 
-int AstarNavigation::FindPolyID(const XMFLOAT3& pos)
+int AstarNavigation::FindPolyID(const XMFLOAT3& pos) const
 {
     for (int i = 0; i < mesh.size(); ++i)
     {
@@ -386,4 +457,170 @@ int AstarNavigation::FindPolyID(const XMFLOAT3& pos)
     }
 
     return -1;
+}
+
+bool AstarNavigation::FindSearchPointAround(const XMFLOAT3& center,
+    float minRadius, float maxRadius, float random01, XMFLOAT3& outPoint) const
+{
+    std::vector<int> candidates;
+    candidates.reserve(mesh.size());
+
+    const float minRadiusSq = minRadius * minRadius;
+    const float maxRadiusSq = maxRadius * maxRadius;
+
+    // center와 같은 연결 성분에 있는 폴리곤만 고른다.
+    // 이걸 안 하면 걸어서 갈 수 없는 섬을 목표로 잡고 A*가 매번 실패한다.
+    const int centerComponent = GetPolyComponent(FindPolyID(center));
+
+    for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+    {
+        const XMFLOAT3& point = mesh[i].centroid;
+
+        const float dx = point.x - center.x;
+        const float dz = point.z - center.z;
+        const float distanceSq = dx * dx + dz * dz;
+
+        if (distanceSq < minRadiusSq) continue;
+        if (distanceSq > maxRadiusSq) continue;
+
+        if (centerComponent >= 0 && GetPolyComponent(i) != centerComponent) continue;
+
+        candidates.push_back(i);
+    }
+
+    if (candidates.empty())
+        return false;
+
+    if (random01 < 0.0f)   random01 = 0.0f;
+    if (random01 >= 1.0f)  random01 = 0.999999f;
+
+    size_t selectedIndex = static_cast<size_t>(random01 * static_cast<float>(candidates.size()));
+    if (selectedIndex >= candidates.size())
+        selectedIndex = candidates.size() - 1;
+
+    outPoint = mesh[candidates[selectedIndex]].centroid;
+    return true;
+}
+
+bool AstarNavigation::FindNearestPointOnMesh(const XMFLOAT3& pos, XMFLOAT3& outPoint) const
+{
+    if (mesh.empty())
+        return false;
+
+    int   bestIndex = -1;
+    float bestSq    = 0.0f;
+
+    for (int i = 0; i < static_cast<int>(mesh.size()); ++i)
+    {
+        const XMFLOAT3& c = mesh[i].centroid;
+
+        const float dx = c.x - pos.x;
+        const float dz = c.z - pos.z;
+        const float dsq = dx * dx + dz * dz;
+
+        if (bestIndex < 0 || dsq < bestSq)
+        {
+            bestIndex = i;
+            bestSq    = dsq;
+        }
+    }
+
+    if (bestIndex < 0)
+        return false;
+
+    outPoint = mesh[bestIndex].centroid;
+    return true;
+}
+
+//=============================================================================
+// 내비메시 인접 그래프 진단.
+// LoadNavMeshFromFile() 직후에 한 번만 호출한다.
+//=============================================================================
+void AstarNavigation::DumpNavMeshDiagnostics() const
+{
+    const int n = static_cast<int>(mesh.size());
+
+    std::cout << "[NAV] polygons = " << n << "\n";
+    if (n == 0) return;
+
+    // 1. 폴리곤별 이웃 개수 분포
+    int degCount[4] = { 0, 0, 0, 0 };
+    for (const auto& p : mesh)
+    {
+        int d = 0;
+        for (int k = 0; k < 3; ++k)
+            if (p.neighborIDs[k] >= 0) ++d;
+        ++degCount[d];
+    }
+    std::cout << "[NAV] 이웃 0개=" << degCount[0]
+        << "  1개=" << degCount[1]
+        << "  2개=" << degCount[2]
+        << "  3개=" << degCount[3] << "\n";
+
+    // 2. 연결 성분 (A*가 실제로 오갈 수 있는 덩어리)
+    std::vector<int> comp(n, -1);
+    std::vector<int> sizes;
+    std::vector<int> stack;
+
+    for (int i = 0; i < n; ++i)
+    {
+        if (comp[i] != -1) continue;
+
+        const int cid = static_cast<int>(sizes.size());
+        int cnt = 0;
+
+        stack.clear();
+        stack.push_back(i);
+        comp[i] = cid;
+
+        while (!stack.empty())
+        {
+            const int cur = stack.back();
+            stack.pop_back();
+            ++cnt;
+
+            for (int k = 0; k < 3; ++k)
+            {
+                const int nb = mesh[cur].neighborIDs[k];
+                if (nb >= 0 && nb < n && comp[nb] == -1)
+                {
+                    comp[nb] = cid;
+                    stack.push_back(nb);
+                }
+            }
+        }
+        sizes.push_back(cnt);
+    }
+
+    std::vector<int> sorted = sizes;
+    std::sort(sorted.rbegin(), sorted.rend());
+
+    std::cout << "[NAV] 연결 성분 = " << sizes.size() << "개,  상위 10: ";
+    for (int i = 0; i < static_cast<int>(sorted.size()) && i < 10; ++i)
+        std::cout << sorted[i] << " ";
+    std::cout << "\n";
+
+    // 3. 엣지 공유 분포 (FindNeighbor와 같은 방식으로 재계산)
+    std::map<std::pair<int, int>, int> edgeCount;
+    for (int i = 0; i < n; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            const int v1 = mesh[i].vindex[j];
+            const int v2 = mesh[i].vindex[(j + 1) % 3];
+            ++edgeCount[{ std::min(v1, v2), std::max(v1, v2) }];
+        }
+    }
+
+    int e1 = 0, e2 = 0, e3 = 0;
+    for (const auto& e : edgeCount)
+    {
+        if (e.second == 1)      ++e1;
+        else if (e.second == 2) ++e2;
+        else                    ++e3;
+    }
+
+    std::cout << "[NAV] 엣지: 1폴리=" << e1 << " (경계)"
+        << "  2폴리=" << e2 << " (정상 연결)"
+        << "  3폴리이상=" << e3 << " (FindNeighbor가 버림)\n";
 }

@@ -63,6 +63,9 @@ public:
     bool SendLootPickup(short box_id, short slotidx);
     bool SendCraftRequest(ItemID target);
 
+	bool SendArmorUpgradeRequest(ItemID targetArmor);       //업그레이드 요청  
+    bool SendWeaponUpgradeRequest(short slotidx);
+
     bool SendRoundJoin();
     bool SendRoundLeave();
 

@@ -1005,6 +1005,49 @@ void CAnimationController::SetTrackAnimationSetIfChanged(int nAnimationTrack, in
 	m_pAnimationTracks[nAnimationTrack].SetPosition(0.0f);
 }
 
+void CAnimationController::SetTrackAnimationSetImmediate(int nAnimationTrack, int nAnimationSet, bool bPreserveNormalizedPosition)
+{
+	if (!m_pAnimationTracks) return;
+	if (!m_pAnimationSets) return;
+	if (nAnimationTrack < 0 || nAnimationTrack >= m_nAnimationTracks) return;
+	if (nAnimationSet < 0 || nAnimationSet >= static_cast<int>(m_pAnimationSets->m_vAnimationSets.size())) return;
+
+	CAnimationTrack& track = m_pAnimationTracks[nAnimationTrack];
+
+	if (track.m_nAnimationSet == nAnimationSet)
+		return;
+
+	float nextPosition = 0.0f;
+
+	if (bPreserveNormalizedPosition)
+	{
+		int oldAnimationSet = track.m_nAnimationSet;
+
+		if (oldAnimationSet >= 0 && oldAnimationSet < static_cast<int>(m_pAnimationSets->m_vAnimationSets.size()))
+		{
+			CAnimationSet* pOldAnimationSet = m_pAnimationSets->m_vAnimationSets[oldAnimationSet];
+			CAnimationSet* pNewAnimationSet = m_pAnimationSets->m_vAnimationSets[nAnimationSet];
+
+			if (pOldAnimationSet && pNewAnimationSet && pOldAnimationSet->m_fLength > 0.0f && pNewAnimationSet->m_fLength > 0.0f)
+			{
+				float normalizedPosition = track.m_fPosition / pOldAnimationSet->m_fLength;
+
+				if (normalizedPosition < 0.0f)
+					normalizedPosition = 0.0f;
+				else if (normalizedPosition > 1.0f)
+					normalizedPosition = 1.0f;
+
+				nextPosition = normalizedPosition * pNewAnimationSet->m_fLength;
+			}
+		}
+	}
+
+	m_bIsBlending = false;
+	m_fBlendTime = 0.0f;
+
+	track.SetAnimationSet(nAnimationSet);
+	track.SetPosition(nextPosition);
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 ModelResource::ModelResource()

@@ -1,4 +1,4 @@
-﻿//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 // File: CPlayer.cpp
 //-----------------------------------------------------------------------------
 #include "stdafx.h"
@@ -18,6 +18,7 @@
 #include "Network.h"	// 03.27 추가
 #include "NetSession.h"
 #include "GameFramework.h"
+#include "WeaponAttachment.h"
 
 static XMVECTOR SafeNormalize3(XMVECTOR v)
 {
@@ -35,6 +36,20 @@ static float ClampFloat(float v, float vmin, float vmax)
 static constexpr float PLAYER_RUN_ANIM_SPEED = 1.2f;
 static constexpr float PLAYER_NORMAL_ANIM_SPEED = 1.0f;
 static constexpr float PLAYER_RUN_FOOTSTEP_INTERVAL = 0.5f / PLAYER_RUN_ANIM_SPEED;
+
+// 회전 송신
+static constexpr float PLAYER_ROTATE_SEND_THRESHOLD_DEG = 1.0f;	// 이만큼 달라지면 보내기
+static constexpr DWORD PLAYER_ROTATE_SEND_INTERVAL_MS   = 50;	// 회전 패킷 최소 간격
+
+// yaw 차 계산 함수
+static float CalYawDelta(float a, float b)
+{
+	float d = fmodf(a - b, 360.0f);
+	if (d < 0.0f)   d += 360.0f;
+	if (d > 180.0f) d = 360.0f - d;
+	return d;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CPlayer::CPlayer()
@@ -206,7 +221,7 @@ void CPlayer::Update(float fTimeElapsed)
 	}
 
 	//UpdateWeaponCombat(fTimeElapsed);
-	UpdateWeaponPose(fTimeElapsed);
+	// Weapon attachment is finalized after movement, snapshots and collision.
 
 	UpdateTransform(NULL);
 
@@ -249,21 +264,46 @@ void CPlayer::Update(float fTimeElapsed)
 
 		bool bHasInput = (inputs != 0);
 
+		// 기준 시각
+		const DWORD dwNow = GetTickCount();
+
+		// yaw가 마지막으로 바뀐 시각을 기록 (회전이 멈췄는지 판단용)
+		if (m_fYaw != m_fPrevFrameYaw) {
+			m_fPrevFrameYaw = m_fYaw;
+			m_dwLastYawChangeTick = dwNow;
+		}
+
+		bool bSend = false;
+
 		if (bHasInput) {
-			NetSession::Instance().Move(inputs, m_fYaw,
-				static_cast<unsigned int>(GetTickCount()));
-			//NetworkManager::Instance().SendMove(
-			//	inputs, m_fYaw,
-			//	static_cast<unsigned int>(GetTickCount())
-			//);
+			// 움직이면
+			bSend = true;
 		}
 		else if (m_bWasMoving) {
-			NetSession::Instance().Move(0, m_fYaw,
-				static_cast<unsigned int>(GetTickCount()));
-			//NetworkManager::Instance().SendMove(
-			//	0, m_fYaw,
-			//	static_cast<unsigned int>(GetTickCount())
-			//);
+			// 움직였으면
+			bSend = true;
+		}
+		else if (!m_bIsDead) {
+			// 카메라만 돌린 케이스 체크
+			const float fDelta = CalYawDelta(m_fYaw, m_fLastSentYaw);
+			const bool bDTimeSendOK = (dwNow - m_dwLastMoveSendTick >= PLAYER_ROTATE_SEND_INTERVAL_MS);
+
+			if (fDelta != 0.0f && bDTimeSendOK) {
+				// 카메라 회전 임계값 체크
+				if (fDelta >= PLAYER_ROTATE_SEND_THRESHOLD_DEG) {
+					bSend = true;
+				}
+				// 카메라 돌리고 나서 시간 경과 체크 (마지막 1번 보정)
+				else if (dwNow - m_dwLastYawChangeTick >= PLAYER_ROTATE_SEND_INTERVAL_MS) {
+					bSend = true;
+				}
+			}
+		}
+
+		if (bSend) {
+			NetSession::Instance().Move(bHasInput ? inputs : 0, m_fYaw, static_cast<unsigned int>(dwNow));
+			m_dwLastMoveSendTick = dwNow;
+			m_fLastSentYaw = m_fYaw;
 		}
 
 		m_bWasMoving = bHasInput;
@@ -483,48 +523,60 @@ void CPlayer::RefreshAnimationTracksFromStates()
 	if (!pCtrl)
 		return;
 
+	bool bRunning = m_LowerStateMachine.IsCurrentState<PlayerLowerRun>();
+
 	int lowerAnim = GetIdleAnimationByWeapon();
 	float lowerSpeed = PLAYER_NORMAL_ANIM_SPEED;
 
-	if (m_LowerStateMachine.IsCurrentState<PlayerLowerRun>())
+	if (bRunning)
 	{
 		lowerAnim = GetRunAnimationFromInput(GetMoveInput2D());
 		lowerSpeed = PLAYER_RUN_ANIM_SPEED;
 	}
 
 	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-	pCtrl->SetTrackAnimationSetIfChanged(0, lowerAnim);
+	pCtrl->SetTrackAnimationSetImmediate(0, lowerAnim, true);
 	pCtrl->SetTrackSpeed(0, lowerSpeed);
 	pCtrl->SetTrackEnable(0, true);
 	pCtrl->SetTrackWeight(0, 1.0f);
 
-	int upperAnim = GetIdleAnimationByWeapon();
+	int upperAnim = bRunning ? lowerAnim : GetIdleAnimationByWeapon();
 	int upperType = ANIMATION_TYPE_LOOP;
+	float upperSpeed = bRunning ? PLAYER_RUN_ANIM_SPEED : PLAYER_NORMAL_ANIM_SPEED;
 
 	if (m_UpperStateMachine.IsCurrentState<PlayerUpperGrenade>())
 	{
 		upperAnim = GetGrenadeAnimationByWeapon();
 		upperType = ANIMATION_TYPE_ONCE;
+		upperSpeed = PLAYER_NORMAL_ANIM_SPEED;
 	}
 	else if (m_UpperStateMachine.IsCurrentState<PlayerUpperReload>())
 	{
 		upperAnim = GetReloadAnimationByWeapon();
 		upperType = ANIMATION_TYPE_ONCE;
+		upperSpeed = PLAYER_NORMAL_ANIM_SPEED;
 	}
 	else if (m_UpperStateMachine.IsCurrentState<PlayerUpperShoot>())
 	{
 		upperAnim = GetShootAnimationByWeapon();
 		upperType = ANIMATION_TYPE_ONCE;
+		upperSpeed = PLAYER_NORMAL_ANIM_SPEED;
 	}
 
 	pCtrl->SetTrackType(1, upperType);
-	pCtrl->SetTrackAnimationSetIfChanged(1, upperAnim);
-	pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
+	pCtrl->SetTrackAnimationSetImmediate(1, upperAnim, false);
+	pCtrl->SetTrackSpeed(1, upperSpeed);
 	pCtrl->SetTrackEnable(1, true);
 	pCtrl->SetTrackWeight(1, 1.0f);
 
 	if (upperType == ANIMATION_TYPE_ONCE)
+	{
 		pCtrl->SetTrackPosition(1, 0.0f);
+	}
+	else if (bRunning)
+	{
+		pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+	}
 }
 
 bool CPlayer::IsLowerRunState() const
@@ -620,21 +672,8 @@ void CPlayer::UpdateDirection()
 struct PlayerWeaponVisualConfig
 {
 	ModelName modelName;
-	ItemType itemType;
-
-	XMFLOAT3 idlePos;
-	XMFLOAT3 idleRot;
-
-	XMFLOAT3 runPos;
-	XMFLOAT3 runRot;
-
 	XMFLOAT3 grenadePos;
 	XMFLOAT3 grenadeRot;
-
-	XMFLOAT3 shootPos;
-	XMFLOAT3 shootRot;
-
-	XMFLOAT3 scale;
 };
 
 static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
@@ -657,139 +696,17 @@ static PlayerWeaponType GetPlayerWeaponTypeFromItemType(ItemType itemType)
 }
 static PlayerWeaponVisualConfig GetPlayerWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-	// Rifle 테스트값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 rifleIdlePos = XMFLOAT3(-0.15f, 0.2f, 0.1f);
-	const XMFLOAT3 rifleRunPos = XMFLOAT3(0.0f, 0.10f, -0.0f);
-	const XMFLOAT3 rifleShootPos = XMFLOAT3(-0.10f, 0.0f, -0.0f);
-
-	const XMFLOAT3 rifleIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 rifleRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 rifleShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 rifleGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 rifleGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
-
-	const XMFLOAT3 rifleScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-
-	// SMG 기준값
-	//x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 smgIdlePos = XMFLOAT3(-0.14f, 0.10f, 0.16f);
-	const XMFLOAT3 smgRunPos = XMFLOAT3(0.18f, 0.10f, -0.08f);
-	const XMFLOAT3 smgShootPos = XMFLOAT3(0.20f, -0.10f, -0.20f);
-
-	const XMFLOAT3 smgIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 smgRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 smgShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 smgGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
-	const XMFLOAT3 smgGrenadeRot = XMFLOAT3(90.0f, -90.0f, 90.0f);
-
-	// Shotgun 테스트값
-	// x값 수정 시 좌+ 우-, y값 수정 시 앞+ 뒤-, z값 수정 시 위- 아래+
-	const XMFLOAT3 shotgunIdlePos = XMFLOAT3(-0.15f, 0.3f, 0.05f);
-	const XMFLOAT3 shotgunRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-	const XMFLOAT3 shotgunShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 shotgunIdleRot = XMFLOAT3(180.0f, 0.0f, 90.0f);
-	const XMFLOAT3 shotgunRunRot = XMFLOAT3(0.0f, 0.0f, -0.50f);
-	const XMFLOAT3 shotgunShootRot = XMFLOAT3(0.40f, 0.0f, -0.0f);
-
-	const XMFLOAT3 shotgunGrenadePos = XMFLOAT3(0.0f, 0.10f, 0.0f);
-	const XMFLOAT3 shotgunGrenadeRot = XMFLOAT3(180.0f, -90.0f, 180.0f);
-
-	const XMFLOAT3 shotgunScale = XMFLOAT3(1.1f, 1.1f, 1.1f);
-
-	// 권총 테스트값
-	// x값 수정 시 위- 아래+, y값 수정 시 앞+ 뒤-, z값 수정 시 좌+ 우-
-	const XMFLOAT3 pistolIdlePos = XMFLOAT3(-0.0f, 0.3f, 0.05f);
-	const XMFLOAT3 pistolRunPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolShootPos = XMFLOAT3(-0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 pistolIdleRot = XMFLOAT3(90.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolRunRot = XMFLOAT3(8.0f, 0.0f, 0.0f);
-	const XMFLOAT3 pistolShootRot = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	const XMFLOAT3 pistolGrenadePos = XMFLOAT3(-0.0f, 0.f, 0.0f);
-	const XMFLOAT3 pistolGrenadeRot = XMFLOAT3(180.0f, 0.0f, 110.0f);
-
-
-	PlayerWeaponVisualConfig config{};
 	switch (weaponType)
 	{
-	case PlayerWeaponType::SMG:
-		config.modelName = ModelName::SMG;
-		config.itemType = ItemType::SMG;
-
-		config.idlePos = smgIdlePos;
-		config.idleRot = smgIdleRot;
-		config.runPos = smgRunPos;
-		config.runRot = smgRunRot;
-		config.grenadePos = smgGrenadePos;
-		config.grenadeRot = smgGrenadeRot;
-		config.shootPos = smgShootPos;
-		config.shootRot = smgShootRot;
-
-		config.scale = XMFLOAT3(
-			rifleScale.x * 0.90f,
-			rifleScale.y * 0.90f,
-			rifleScale.z * 0.90f
-		);
-		break;
-
-	case PlayerWeaponType::Shotgun:
-		config.modelName = ModelName::SHOTGUN;
-		config.itemType = ItemType::SHOTGUN;
-
-		config.idlePos = shotgunIdlePos;
-		config.idleRot = shotgunIdleRot;
-
-		config.runPos = shotgunRunPos;
-		config.runRot = shotgunRunRot;
-
-		config.grenadePos = shotgunGrenadePos;
-		config.grenadeRot = shotgunGrenadeRot;
-
-		config.shootPos = shotgunShootPos;
-		config.shootRot = shotgunShootRot;
-
-		config.scale = shotgunScale;
-
-		break;
-
 	case PlayerWeaponType::Pistol:
-		config.modelName = ModelName::PISTOL;
-		config.itemType = ItemType::PISTOL;
-
-		config.idlePos = pistolIdlePos;
-		config.idleRot = pistolIdleRot;
-		config.runPos = pistolRunPos;
-		config.runRot = pistolRunRot;
-		config.grenadePos = pistolGrenadePos;
-		config.grenadeRot = pistolGrenadeRot;
-		config.shootPos = pistolShootPos;
-		config.shootRot = pistolShootRot;
-		config.scale = XMFLOAT3(1.0f, 1.0f, 1.0f);
-		break;
-
-	case PlayerWeaponType::Rifle:
+		return { ModelName::PISTOL, {0,0,0}, {180,0,110} };
+	case PlayerWeaponType::SMG:
+		return { ModelName::SMG, {0.01f,0.05f,0.01f}, {90,-90,90} };
+	case PlayerWeaponType::Shotgun:
+		return { ModelName::SHOTGUN, {0,0.10f,0}, {180,-90,180} };
 	default:
-		config.modelName = ModelName::RIFLE;
-		config.itemType = ItemType::RIFLE;
-
-		config.idlePos = rifleIdlePos;
-		config.idleRot = rifleIdleRot;
-		config.runPos = rifleRunPos;
-		config.runRot = rifleRunRot;
-		config.grenadePos = rifleGrenadePos;
-		config.grenadeRot = rifleGrenadeRot;
-		config.shootPos = rifleShootPos;
-		config.shootRot = rifleShootRot;
-		config.scale = rifleScale;
-		break;
+		return { ModelName::RIFLE, {0.01f,0.05f,0.01f}, {90,-90,90} };
 	}
-
-	return config;
 }
 void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 {
@@ -811,33 +728,16 @@ void CPlayer::EquipWeapon(CGameObject* pWeapon, const char* pstrSocketName)
 	//m_pWeaponSocket->m_pChild = m_pWeapon;
 
 	//XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, XMMatrixIdentity());
-	static std::unordered_map<CGameObject*, XMFLOAT4X4> s_originalTransformMap;
 
 	// 1. 이 무기가 최초로 장착되는 거라면, 오프셋이 묻지 않은 '순정 FBX 행렬'을 백업합니다.
-	if (s_originalTransformMap.find(m_pWeapon) == s_originalTransformMap.end())
+	if (m_weaponImportedTransforms.find(m_pWeapon) == m_weaponImportedTransforms.end())
 	{
-		s_originalTransformMap[m_pWeapon] = m_pWeapon->m_xmf4x4ToParent;
+		m_weaponImportedTransforms[m_pWeapon] = m_pWeapon->m_xmf4x4ToParent;
 	}
 
 	// 2. 무기를 장착할 때마다, 누적된 찌꺼기를 날리고 '순정 FBX 행렬'로 깨끗하게 복구합니다.
-	m_pWeapon->m_xmf4x4ToParent = s_originalTransformMap[m_pWeapon];
-	pWeapon->SetPosition(
-		m_xmf3WeaponIdlePos.x,
-		m_xmf3WeaponIdlePos.y,
-		m_xmf3WeaponIdlePos.z
-	);
-
-	pWeapon->SetScale(
-		m_xmf3WeaponScale.x,
-		m_xmf3WeaponScale.y,
-		m_xmf3WeaponScale.z
-	);
-
-	pWeapon->Rotate(
-		m_xmf3WeaponIdleRot.x,
-		m_xmf3WeaponIdleRot.y,
-		m_xmf3WeaponIdleRot.z
-	);
+	m_pWeapon->m_xmf4x4ToParent = WeaponAttachment::BuildLocal(
+		m_weaponImportedTransforms[m_pWeapon], GetPlayerWeaponVisualConfig(GetCurrentPlayerWeaponType()).modelName);
 
 
 	m_xmf4x4WeaponBaseLocal = m_pWeapon->m_xmf4x4ToParent;
@@ -886,51 +786,15 @@ void CPlayer::ApplyWeaponPose(WEAPON_POSE ePose)
 		return;
 
 	case WEAPON_POSE::RUN:
-		ApplyRunWeaponPose();
 		return;
 
 	case WEAPON_POSE::SHOOT:
-		ApplyShootWeaponPose();
 		return;
 
 	case WEAPON_POSE::GRENADE:
 		ApplyGrenadeWeaponPose();
 		return;
 	}
-}
-
-void CPlayer::ApplyRunWeaponPose()
-{
-	XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-	XMMATRIX mRunRot = XMMatrixRotationRollPitchYaw(
-		XMConvertToRadians(m_xmf3WeaponRunRot.x),
-		XMConvertToRadians(m_xmf3WeaponRunRot.y),
-		XMConvertToRadians(m_xmf3WeaponRunRot.z)
-	);
-
-	XMMATRIX mFinal = XMMatrixMultiply(mRunRot, mBase);
-	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
-
-	m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponRunPos.x;
-	m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponRunPos.y;
-	m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponRunPos.z;
-}
-
-void CPlayer::ApplyShootWeaponPose()
-{
-	XMMATRIX mBase = XMLoadFloat4x4(&m_pWeapon->m_xmf4x4ToParent);
-	XMMATRIX mShootRot = XMMatrixRotationRollPitchYaw(
-		XMConvertToRadians(m_xmf3WeaponShootRot.x),
-		XMConvertToRadians(m_xmf3WeaponShootRot.y),
-		XMConvertToRadians(m_xmf3WeaponShootRot.z)
-	);
-
-	XMMATRIX mFinal = XMMatrixMultiply(mShootRot, mBase);
-	XMStoreFloat4x4(&m_pWeapon->m_xmf4x4ToParent, mFinal);
-
-	m_pWeapon->m_xmf4x4ToParent._41 += m_xmf3WeaponShootPos.x;
-	m_pWeapon->m_xmf4x4ToParent._42 += m_xmf3WeaponShootPos.y;
-	m_pWeapon->m_xmf4x4ToParent._43 += m_xmf3WeaponShootPos.z;
 }
 
 void CPlayer::ApplyGrenadeWeaponPose()
@@ -1093,6 +957,18 @@ void CPlayer::UpdateWeaponPose(float fTimeElapsed)
 	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
 }
 
+void CPlayer::FinalizeWeaponPose(float fTimeElapsed)
+{
+	if (!m_pWeapon || !m_pWeaponSocket) return;
+	UpdateWeaponPose(fTimeElapsed);
+	m_pWeapon->UpdateTransform(&m_pWeaponSocket->m_xmf4x4World);
+	// Let authored animations release the support hand for these actions.
+	if (m_bIsDead || IsGrenadeState() || IsReloading() ||
+		(GetCurrentPlayerWeaponType() == PlayerWeaponType::Shotgun && IsShootState())) return;
+	WeaponAttachment::SolveSupportHand(m_pLeftUpperArm,m_pLeftForeArm,m_pLeftHand,m_pLeftHandGrip,
+		GetCurrentPlayerWeaponType() == PlayerWeaponType::Pistol);
+}
+
 void CPlayer::BeginGrenadeWeaponPose()
 {
 	if (!m_pWeapon) return;
@@ -1126,21 +1002,9 @@ void CPlayer::DetachCurrentWeapon()
 
 void CPlayer::ApplyWeaponVisualConfig(PlayerWeaponType weaponType)
 {
-	PlayerWeaponVisualConfig config = GetPlayerWeaponVisualConfig(weaponType);
-
-	m_xmf3WeaponIdlePos = config.idlePos;
-	m_xmf3WeaponIdleRot = config.idleRot;
-
-	m_xmf3WeaponRunPos = config.runPos;
-	m_xmf3WeaponRunRot = config.runRot;
-
+	const auto config = GetPlayerWeaponVisualConfig(weaponType);
 	m_xmf3WeaponGrenadePos = config.grenadePos;
 	m_xmf3WeaponGrenadeRot = config.grenadeRot;
-
-	m_xmf3WeaponShootPos = config.shootPos;
-	m_xmf3WeaponShootRot = config.shootRot;
-
-	m_xmf3WeaponScale = config.scale;
 }
 
 //디버그용 무조건 장착 함수
@@ -1886,6 +1750,12 @@ void CPlayer::ResetForNewRound(short fullHp)
 	m_fYaw = 0.0f;
 	m_fRoll = 0.0f;
 
+	// 서버 송신 기록 초기화 (서버도 라운드 시작 시 yaw = 0으로 맞춘다)
+	m_dwLastMoveSendTick = 0;
+	m_fLastSentYaw = m_fYaw;
+	m_fPrevFrameYaw = m_fYaw;
+	m_dwLastYawChangeTick = 0;
+
 	// 소유 중인 모든 무기의 탄창을 최대치로 초기화
 	for (auto& weaponPair : PlayerOwnWeapons)
 	{
@@ -2113,7 +1983,7 @@ CCamera* CTerrainPlayer::ChangeCamera(DWORD nNewCameraMode, float fTimeElapsed)
 		m_pCamera = OnChangeCamera(THIRD_PERSON_CAMERA, nCurrentCameraMode);
 		m_pCamera->SetTimeLag(0.0f);
 		m_pCamera->SetOffset(XMFLOAT3(0.0f, cameraDistance, -5.0f));
-		m_pCamera->GenerateProjectionMatrix(1.01f, 5000.0f, ASPECT_RATIO, 60.0f);
+		m_pCamera->GenerateProjectionMatrix(0.1f, 5000.0f, ASPECT_RATIO, 60.0f);
 		m_pCamera->SetViewport(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT, 0.0f, 1.0f);
 		m_pCamera->SetScissorRect(0, 0, FRAME_BUFFER_WIDTH, FRAME_BUFFER_HEIGHT);
 		break;
@@ -2226,7 +2096,7 @@ void CTerrainPlayer::Update(float fTimeElapsed)
 		{
 			m_bDeathResultRequested = true;
 			if (frame)
-				frame->nextScene = new ResultScene(frame, false);
+				frame->nextScene = std::make_unique<ResultScene>(frame, false);
 		}
 
 		CPlayer::Update(fTimeElapsed);
@@ -2254,11 +2124,24 @@ bool PlayerLowerIdle::Enter(CPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
+		int idleAnim = Player->GetIdleAnimationByWeapon();
+
 		pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(0, Player->GetIdleAnimationByWeapon());
+		pCtrl->SetTrackAnimationSetIfChanged(0, idleAnim);
 		pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
+
+		if (Player->IsUpperIdleState())
+		{
+			pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+			pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
+			pCtrl->SetTrackEnable(1, true);
+			pCtrl->SetTrackWeight(1, 1.0f);
+
+			pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+		}
 	}
 
 	return true;
@@ -2300,9 +2183,21 @@ bool PlayerLowerRun::Enter(CPlayer* Player)
 		pCtrl->SetTrackSpeed(0, PLAYER_RUN_ANIM_SPEED);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
+
+		if (Player->IsUpperIdleState())
+		{
+			pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(1, nextAnim);
+			pCtrl->SetTrackSpeed(1, PLAYER_RUN_ANIM_SPEED);
+			pCtrl->SetTrackEnable(1, true);
+			pCtrl->SetTrackWeight(1, 1.0f);
+
+			pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+		}
 	}
 
 	Player->SetMoveDir(Player->GetMoveDirectionFromInput(dir));
+
 	return true;
 }
 
@@ -2318,6 +2213,7 @@ void PlayerLowerRun::Update(CPlayer* Player, float fTimeElapsed)
 	}
 
 	m_fFootstepTimer += fTimeElapsed;
+
 	if (m_fFootstepTimer > PLAYER_RUN_FOOTSTEP_INTERVAL)
 	{
 		SoundManager::Instance()->Play(SoundName::FOOSTEP, Player->GetPosition());
@@ -2334,6 +2230,17 @@ void PlayerLowerRun::Update(CPlayer* Player, float fTimeElapsed)
 		pCtrl->SetTrackSpeed(0, PLAYER_RUN_ANIM_SPEED);
 		pCtrl->SetTrackEnable(0, true);
 		pCtrl->SetTrackWeight(0, 1.0f);
+
+		if (Player->IsUpperIdleState())
+		{
+			pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(1, nextAnim);
+			pCtrl->SetTrackSpeed(1, PLAYER_RUN_ANIM_SPEED);
+			pCtrl->SetTrackEnable(1, true);
+			pCtrl->SetTrackWeight(1, 1.0f);
+
+			pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+		}
 	}
 
 	Player->SetMoveDir(Player->GetMoveDirectionFromInput(dir));
@@ -2350,11 +2257,31 @@ bool PlayerUpperIdle::Enter(CPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
-		pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
-		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetIdleAnimationByWeapon());
-		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
-		pCtrl->SetTrackEnable(1, true);
-		pCtrl->SetTrackWeight(1, 1.0f);
+		if (Player->IsLowerRunState())
+		{
+			XMFLOAT2 dir = Player->GetMoveInput2D();
+			int runAnim = Player->GetRunAnimationFromInput(dir);
+
+			pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(1, runAnim);
+			pCtrl->SetTrackSpeed(1, PLAYER_RUN_ANIM_SPEED);
+			pCtrl->SetTrackEnable(1, true);
+			pCtrl->SetTrackWeight(1, 1.0f);
+
+			pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+		}
+		else
+		{
+			int idleAnim = Player->GetIdleAnimationByWeapon();
+
+			pCtrl->SetTrackType(1, ANIMATION_TYPE_LOOP);
+			pCtrl->SetTrackAnimationSetIfChanged(1, idleAnim);
+			pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
+			pCtrl->SetTrackEnable(1, true);
+			pCtrl->SetTrackWeight(1, 1.0f);
+
+			pCtrl->SetTrackPosition(1, pCtrl->GetTrackPosition(0));
+		}
 	}
 
 	return true;
@@ -2429,8 +2356,20 @@ bool PlayerUpperShoot::Enter(CPlayer* Player)
 	auto* pCtrl = Player->GetAnimationController();
 	if (pCtrl)
 	{
+		int shootAnim = Player->GetShootAnimationByWeapon();
+
+		if (!Player->IsLowerRunState())
+		{
+			pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+			pCtrl->SetTrackAnimationSetIfChanged(0, shootAnim);
+			pCtrl->SetTrackPosition(0, 0.0f);
+			pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
+			pCtrl->SetTrackEnable(0, true);
+			pCtrl->SetTrackWeight(0, 1.0f);
+		}
+
 		pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-		pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
+		pCtrl->SetTrackAnimationSetIfChanged(1, shootAnim);
 		pCtrl->SetTrackPosition(1, 0.0f);
 		pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
 		pCtrl->SetTrackEnable(1, true);
@@ -2457,9 +2396,22 @@ void PlayerUpperShoot::Update(CPlayer* Player, float fTimeElapsed)
 		auto* pCtrl = Player->GetAnimationController();
 		if (pCtrl)
 		{
+			int shootAnim = Player->GetShootAnimationByWeapon();
+
+			if (!Player->IsLowerRunState())
+			{
+				pCtrl->SetTrackType(0, ANIMATION_TYPE_ONCE);
+				pCtrl->SetTrackAnimationSetIfChanged(0, shootAnim);
+				pCtrl->SetTrackPosition(0, 0.0f);
+				pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
+				pCtrl->SetTrackEnable(0, true);
+				pCtrl->SetTrackWeight(0, 1.0f);
+			}
+
 			pCtrl->SetTrackType(1, ANIMATION_TYPE_ONCE);
-			pCtrl->SetTrackAnimationSetIfChanged(1, Player->GetShootAnimationByWeapon());
+			pCtrl->SetTrackAnimationSetIfChanged(1, shootAnim);
 			pCtrl->SetTrackPosition(1, 0.0f);
+			pCtrl->SetTrackSpeed(1, PLAYER_NORMAL_ANIM_SPEED);
 			pCtrl->SetTrackEnable(1, true);
 			pCtrl->SetTrackWeight(1, 1.0f);
 		}
@@ -2473,7 +2425,21 @@ void PlayerUpperShoot::Update(CPlayer* Player, float fTimeElapsed)
 
 void PlayerUpperShoot::Exit(CPlayer* Player)
 {
-	UNREFERENCED_PARAMETER(Player);
+	auto* pCtrl = Player->GetAnimationController();
+	if (!pCtrl)
+		return;
+
+	if (Player->IsLowerRunState())
+		return;
+
+	int idleAnim = Player->GetIdleAnimationByWeapon();
+
+	pCtrl->SetTrackType(0, ANIMATION_TYPE_LOOP);
+	pCtrl->SetTrackAnimationSetIfChanged(0, idleAnim);
+	pCtrl->SetTrackPosition(0, 0.0f);
+	pCtrl->SetTrackSpeed(0, PLAYER_NORMAL_ANIM_SPEED);
+	pCtrl->SetTrackEnable(0, true);
+	pCtrl->SetTrackWeight(0, 1.0f);
 }
 
 //-------------------------------------------------------------------------

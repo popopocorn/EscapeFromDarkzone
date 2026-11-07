@@ -97,24 +97,14 @@ protected:
 
 	XMFLOAT4X4 m_xmf4x4WeaponBaseLocal = Matrix4x4::Identity();
 	bool m_bWeaponBaseLocalSaved = false;
+	std::unordered_map<CGameObject*, XMFLOAT4X4> m_weaponImportedTransforms;
 
 	WEAPON_POSE m_eWeaponPose = WEAPON_POSE::IDLE;
-
-	XMFLOAT3 m_xmf3WeaponIdlePos = XMFLOAT3(-0.14f, 0.20f, 0.16f);
-	XMFLOAT3 m_xmf3WeaponIdleRot = XMFLOAT3(-90.0f, -90.0f, 28.0f);
-
-	XMFLOAT3 m_xmf3WeaponRunPos = XMFLOAT3(0.18f, 0.1f, -0.08f);
-	XMFLOAT3 m_xmf3WeaponRunRot = XMFLOAT3(8.0f, 0.0f, -25.0f);
 
 	XMFLOAT3 m_xmf3WeaponGrenadePos = XMFLOAT3(0.01f, 0.05f, 0.01f);
 	XMFLOAT3 m_xmf3WeaponGrenadeRot = XMFLOAT3(-90.0f, 0.0f, 0.0f);
 	XMFLOAT4X4 m_xmf4x4WeaponGrenadeStartLocal = Matrix4x4::Identity();
 	bool m_bWeaponGrenadeStartCaptured = false;
-
-	XMFLOAT3 m_xmf3WeaponShootPos = XMFLOAT3(0.02f, 0.00f, 0.00f);
-	XMFLOAT3 m_xmf3WeaponShootRot = XMFLOAT3(0.0f, 8.0f, 0.0f);
-
-	XMFLOAT3 m_xmf3WeaponScale = XMFLOAT3(1.2f, 1.2f, 1.2f);
 
 	bool m_bWeaponBlending = false;
 	float m_fWeaponBlendTime = 0.0f;
@@ -130,9 +120,7 @@ protected:
 	CGameObject* FindFirstFrameByNames(const char* const* ppNames, int nCount);
 	bool InitializeLeftHandIK();
 
-	void ApplyRunWeaponPose();
 	void ApplyGrenadeWeaponPose();
-	void ApplyShootWeaponPose();
 
 	XMFLOAT3 m_xmf3ServerPosition = XMFLOAT3(0, 0, 0);
 
@@ -149,6 +137,12 @@ protected:
 	bool  m_bShotAnimRequest = false;
 
 	bool m_bWasMoving = false;
+
+	// CS_MOVE ì†¡ì‹  ê¸°ë¡ (P4: ì •ì§€ ì¤‘ íšŒì „ ì†¡ì‹ )
+	DWORD m_dwLastMoveSendTick  = 0;		// ë§ˆì§€ë§‰ CS_MOVE ì†¡ì‹  ì‹œê° (GetTickCount)
+	float m_fLastSentYaw        = 0.0f;		// ë§ˆì§€ë§‰ CS_MOVEì— ì‹¤ì€ yaw (ë„)
+	float m_fPrevFrameYaw       = 0.0f;		// ì§ì „ í”„ë ˆì„ yaw (ë„) â€” íšŒì „ ì¤‘ì¸ì§€ íŒë‹¨
+	DWORD m_dwLastYawChangeTick = 0;		// yawê°€ ë§ˆì§€ë§‰ìœ¼ë¡œ ë°”ë€ ì‹œê° (GetTickCount)
 
 	short m_hp = 100;
 
@@ -218,7 +212,7 @@ public:
 
 	void ChangeLowerState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
 	void ChangeUpperState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false);
-	void ChangeState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false); // ±âÁ¸ ¿ÜºÎ È£Ãâ È£È¯¿ë
+	void ChangeState(std::unique_ptr<State<CPlayer>> pNewState, bool bForce = false); // ê¸°ì¡´ ì™¸ë¶€ í˜¸ì¶œ í˜¸í™˜ìš©
 	void EnterDeadState();
 	void ReportStateToServer(bool bForce = false);
 	void RefreshAnimationTracksFromStates();
@@ -235,6 +229,7 @@ public:
 	CGameObject* GetWeapon() { return m_pWeapon; }
 	CGameObject* GetWeaponMuzzleSocket() const { return m_pWeaponMuzzleSocket; }
 	void UpdateWeaponPose(float fTimeElapsed);
+	void FinalizeWeaponPose(float fTimeElapsed);
 	void ApplyWeaponPose(WEAPON_POSE ePose);
 
 	//bool EquipDebugWeapon(PlayerWeaponType weaponType);
@@ -257,25 +252,10 @@ public:
 	bool IsMoveInputActive(const XMFLOAT2& dir) const;
 	XMFLOAT3 GetMoveDirectionFromInput(const XMFLOAT2& dir) const;
 
-	void SetWeaponIdlePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
-	{
-		m_xmf3WeaponIdlePos = pos;
-		m_xmf3WeaponIdleRot = rot;
-	}
-	void SetWeaponRunPose(const XMFLOAT3& pos, const XMFLOAT3& rot)
-	{
-		m_xmf3WeaponRunPos = pos;
-		m_xmf3WeaponRunRot = rot;
-	}
 	void SetWeaponGrenadePose(const XMFLOAT3& pos, const XMFLOAT3& rot)
 	{
 		m_xmf3WeaponGrenadePos = pos;
 		m_xmf3WeaponGrenadeRot = rot;
-	}
-	void SetWeaponShootPose(const XMFLOAT3& pos, const XMFLOAT3& rot)
-	{
-		m_xmf3WeaponShootPos = pos;
-		m_xmf3WeaponShootRot = rot;
 	}
 
 	void SetWeaponBlending(bool bBlending) { m_bWeaponBlending = bBlending; }
@@ -461,14 +441,14 @@ public:
 	virtual void Exit(CPlayer* Player) override;
 };
 
-// ±âÁ¸ ÄÚµå¿Í ¿ÜºÎ È£ÃâÀ» ÇÑ ¹ø¿¡ ±úÁö ¾Ê±â À§ÇÑ È£È¯ º°Äª.
+// ê¸°ì¡´ ì½”ë“œì™€ ì™¸ë¶€ í˜¸ì¶œì„ í•œ ë²ˆì— ê¹¨ì§€ ì•Šê¸° ìœ„í•œ í˜¸í™˜ ë³„ì¹­.
 using PlayerIdle = PlayerLowerIdle;
 using PlayerRun = PlayerLowerRun;
 using PlayerGrenade = PlayerUpperGrenade;
 using PlayerShoot = PlayerUpperShoot;
 using PlayerReload = PlayerUpperReload;
 
-// ±âÁ¸ PlayerDie »ı¼º È£ÃâÀÌ ³²¾Æ ÀÖ¾îµµ ÄÄÆÄÀÏµÇµµ·Ï µÎ´Â È£È¯ ¸¶Ä¿.
+// ê¸°ì¡´ PlayerDie ìƒì„± í˜¸ì¶œì´ ë‚¨ì•„ ìˆì–´ë„ ì»´íŒŒì¼ë˜ë„ë¡ ë‘ëŠ” í˜¸í™˜ ë§ˆì»¤.
 class PlayerDie : public State<CPlayer>
 {
 };

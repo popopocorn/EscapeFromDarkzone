@@ -1,4 +1,4 @@
-﻿//#include "stdafx.h"
+//#include "stdafx.h"
 #include "Network.h"
 
 bool NetworkManager::Init(const char* playerName)
@@ -371,6 +371,16 @@ bool NetworkManager::SendCraftRequest(ItemID target)
 	pkt.target = target;
 	OutputDebugString(L"SendItemRequest\n");
 	return SendRaw(reinterpret_cast<char*>(&pkt), pkt.size);
+}
+
+bool NetworkManager::SendArmorUpgradeRequest(ItemID targetArmor)
+{
+	return SendCraftRequest(targetArmor);
+}
+
+bool NetworkManager::SendWeaponUpgradeRequest(short slotidx)
+{
+	return SendInventoryClick(INV_ACTION_CLICK, slotidx);
 }
 
 bool NetworkManager::SendRoundJoin()

@@ -39,6 +39,9 @@
     <ClInclude Include="Server_Room.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="Server_BT.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server_Collision.cpp">
@@ -51,6 +54,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Server.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Server_BT.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

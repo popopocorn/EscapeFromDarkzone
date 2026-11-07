@@ -1193,9 +1193,8 @@ void EnemySearch::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsDying())
 		return;
 
-	if (NetworkManager::Instance().IsConnected())
-	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	if (NetworkManager::Instance().IsConnected()) {
+		pEnemy->UpdateServerAnimation(fTimeElapsed, nullptr);
 		return;
 	}
 
@@ -1321,10 +1320,8 @@ void EnemyInvestigate::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->IsDying())
 		return;
 
-	// 서버 Blackboard의 Hearing.xmf3SoundPosition을 목적지로 사용하고 이동
-	if (NetworkManager::Instance().IsConnected())
-	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+	if (NetworkManager::Instance().IsConnected()) {
+		pEnemy->UpdateServerAnimation(fTimeElapsed, nullptr);
 		return;
 	}
 
@@ -1452,37 +1449,8 @@ void EnemyRun::Update(CEnemyObject* pEnemy, float fTimeElapsed)
 	if (pEnemy->m_bDying)
 		return;
 
-	if (NetworkManager::Instance().IsConnected())
-	{
-		pEnemy->SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
-
-		XMFLOAT3 toServer;
-		toServer.x = pEnemy->m_xmf3ServerPosition.x - pEnemy->m_xmf3Position.x;
-		toServer.y = 0.0f;
-		toServer.z = pEnemy->m_xmf3ServerPosition.z - pEnemy->m_xmf3Position.z;
-
-		float moveLen = Vector3::Length(toServer);
-
-		constexpr float MOVE_ANIM_THRESHOLD = 0.05f;
-
-		if (moveLen < MOVE_ANIM_THRESHOLD)
-		{
-			pEnemy->SetEnemyAnimation(pEnemy->GetIdleAnimationByWeapon(), true, false);
-			m_fFootstepTimer = 0.0f;
-		}
-		else
-		{
-			pEnemy->SetEnemyAnimation(pEnemy->GetForwardRunAnimationByWeapon(), true, false);
-
-			m_fFootstepTimer += fTimeElapsed;
-
-			if (m_fFootstepTimer > 0.5f)
-			{
-				SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, pEnemy->GetPosition());
-				m_fFootstepTimer -= 0.5f;
-			}
-		}
-
+	if (NetworkManager::Instance().IsConnected()) {
+		pEnemy->UpdateServerAnimation(fTimeElapsed, &m_fFootstepTimer);
 		return;
 	}
 
@@ -2025,3 +1993,34 @@ void CEnemyObject::SnapToServerPosition()
 	m_xmf4x4ToParent._43 = m_xmf3Position.z;
 }
 
+void CEnemyObject::UpdateServerAnimation(float fTimeElapsed, float* pFootstepTimer)
+{
+	SetMoveDir(XMFLOAT3(0.0f, 0.0f, 0.0f));
+
+	XMFLOAT3 toServer;
+	toServer.x = m_xmf3ServerPosition.x - m_xmf3Position.x;
+	toServer.y = 0.0f;
+	toServer.z = m_xmf3ServerPosition.z - m_xmf3Position.z;
+
+	constexpr float MOVE_ANIM_THRESHOLD = 0.05f;
+
+	if (Vector3::Length(toServer) < MOVE_ANIM_THRESHOLD)
+	{
+		SetEnemyAnimation(GetIdleAnimationByWeapon(), true, false);
+		if (pFootstepTimer) *pFootstepTimer = 0.0f;
+	}
+	else
+	{
+		SetEnemyAnimation(GetForwardRunAnimationByWeapon(), true, false);
+
+		if (pFootstepTimer)
+		{
+			*pFootstepTimer += fTimeElapsed;
+			if (*pFootstepTimer > 0.5f)
+			{
+				SoundManager::Instance()->Play(SoundName::ENEMY_FOOSTEP, GetPosition());
+				*pFootstepTimer -= 0.5f;
+			}
+		}
+	}
+}

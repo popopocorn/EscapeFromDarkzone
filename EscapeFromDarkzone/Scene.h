@@ -94,6 +94,7 @@ public:
 
 	virtual bool ProcessInput(UCHAR *pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed) {};
+	virtual void ResolvePlayerCamera(float fTimeElapsed) {};
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
 	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL) {};
@@ -116,7 +117,7 @@ protected:
 	ID3D12RootSignature					*m_pd3dGraphicsRootSignature = NULL;
 	CCamera*							m_pCamera = nullptr;	
 	
-	LightCameraManager*					ShadowCameraManager;
+	std::unique_ptr<LightCameraManager>   ShadowCameraManager;
 	
 	unique_ptr<HUDManager>				uiManager;
 	
@@ -160,7 +161,7 @@ public:
 	CCamera* GetCamera() { return m_pCamera; }
 
 
-	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager.get(); }
 	virtual void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	virtual void DeleteDeadObject(UINT64 Fence);
 	virtual void DeleteTrash(UINT64 Fence);
@@ -200,6 +201,7 @@ public:
 
 	virtual bool ProcessInput(UCHAR* pKeysBuffer);
 	virtual void AnimateObjects(float fTimeElapsed);
+	virtual void ResolvePlayerCamera(float fTimeElapsed) override;
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
 	virtual void UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera = NULL);
@@ -214,8 +216,8 @@ public:
 	CBoundingBoxShader* GetLootBoxShader() { return m_pLootBoxShader.get(); }
 
 	// 이펙트/레이저 렌더링은 EffectManager가 담당
-	EffectManager* m_pEffectManager = nullptr;
-	virtual EffectManager* GetEffectManager() { return m_pEffectManager; }
+	std::unique_ptr<EffectManager> m_pEffectManager;
+	virtual EffectManager* GetEffectManager() { return m_pEffectManager.get(); }
 
 	// 입력/무기 상태는 Scene이 계속 들고 있음
 	bool m_bLaserActive = false;
@@ -256,10 +258,12 @@ public:
 
 	vector<CGameObject*> m_vVisionMapChunks;	//blocker용 벡터
 	std::vector<CGameObject*> m_vFrameVisionBlockers;
+	std::vector<CGameObject*> m_vCameraBoundaryChunks;
 private:
 	unique_ptr<CollisionManager> colManager;
+	float m_fCameraBoundaryDistance = -1.0f;
 
-	InventoryManager* m_pInventoryManager = nullptr;
+	std::unique_ptr<InventoryManager> m_pInventoryManager;
 	//InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
 
 	Inventory* inventory = nullptr;
@@ -273,6 +277,7 @@ private:
 	void LinkToPlayer();
 
 	void SetGrenadeAimMode(HWND hWnd, bool bEnable);
+
 	void ClampGameplayCursorToAimLine(HWND hWnd);
 	void ReleaseGameplayCursor();
 
@@ -288,7 +293,10 @@ private:
 	void UpdateGrenade(float fTimeElapsed);
 	void ExplodeGrenade();
 	bool CheckGrenadeMapCollision(const XMFLOAT3& prevPos, const XMFLOAT3& nextPos, XMFLOAT3& outHitPos, XMFLOAT3& outHitNormal);
+
 public:
+	void SetGrenadeCount(int count);
+	int GetGrenadeCount() const { return m_nGrenadeCount; }
 
 	//이펙트	재생용 함수
 	void PlayEffectFromServerLikeRequest(
@@ -301,17 +309,17 @@ public:
 
 	void PlayTestEffectByKey(WPARAM keyCode);
 
-	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager; }
+	LightCameraManager* GetLightCameraManager() { return ShadowCameraManager.get(); }
 	void SetCamera(CCamera* pCamera) { m_pCamera = pCamera; }
 	void DeleteDeadObject(UINT64 Fence) {};
 	void DeleteTrash(UINT64 Fence) {};
 
 	//인벤토리용 함수
 	bool IsAnyInventoryOpen() const;
-	void CloseCorpseInventory();												// 시체 인벤토리 닫고 표시 데이터 초기화
-	void OpenLootContainer(CLootContainerObject* pLoot);						// 특정 루팅 오브젝트의 인벤토리를 UI에 열기
+	void CloseCorpseInventory();
+	void OpenLootContainer(CLootContainerObject* pLoot);
 
-	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager; }
+	virtual InventoryManager* GetInventoryManager() { return m_pInventoryManager.get(); }
 
 	void ProcessFireRequest(
 		ItemType weapon,

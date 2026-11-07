@@ -18,11 +18,12 @@ enum class SoundName {
 
     RELOAD_PLAYER_RIFLE,
     RELOAD_ENEMY_RIFLE,
-    GRANDEBOOM, 
+    GRANDEBOOM,
 
     DRY_RIFLE,
 
     EQUIP_WEAPON,
+    EQUIP_GRENADE,
     GRAB_ITEM,
 };
 

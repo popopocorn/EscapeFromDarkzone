@@ -3,7 +3,7 @@
 enum class EffectID : unsigned char {
     NONE = 0,
     GRENADE_EXPLOSION = 1,
-    SPARK = 2,   // ธำม๑ วรทกฝรทฮ ป็ฟ๋
+    SPARK = 2,   // ๋จธ์ฆ ํ”๋์๋ก ์ฌ์ฉ
     BLOOD = 3,
     HIT = 4
 };
