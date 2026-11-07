@@ -111,6 +111,7 @@ cbuffer cbCameraInfo : register(b1)
     matrix gmtxView : packoffset(c0);
     matrix gmtxProjection : packoffset(c4);
     float3 gvCameraPosition : packoffset(c8);
+    matrix gmtxInvViewProjection : packoffset(c9); // 디퍼드 위치 복원용 (C++: padding 후 InvViewProjection)
 };
 
 cbuffer cbGameObjectInfo : register(b2)
@@ -132,6 +133,15 @@ Texture2D FullScreenTexture : register(t15);
 Texture2D ColorTexture : register(t16);
 Texture2D NormalTexture : register(t17);
 Texture2D MaterialTexture : register(t18);
+Texture2D DepthTexture : register(t19);    // 깊이 버퍼 (R24_UNORM_X8_TYPELESS SRV, 0=near 1=far)
+
+// 화면 uv + 깊이(NDC z) → 월드 좌표
+float3 ReconstructWorldPosition(float2 uv, float depth)
+{
+    float4 ndc = float4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, depth, 1.0f);
+    float4 positionW = mul(ndc, gmtxInvViewProjection);
+    return positionW.xyz / positionW.w;
+}
 SamplerState gssWrap : register(s0);
 
 

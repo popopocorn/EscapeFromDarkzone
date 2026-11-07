@@ -4,7 +4,7 @@
 RootSignature::RootSignature(ID3D12Device* pd3dDevice)
 {
 
-	D3D12_DESCRIPTOR_RANGE pd3dDescriptorRanges[15];
+	D3D12_DESCRIPTOR_RANGE pd3dDescriptorRanges[16];
 
 	pd3dDescriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	pd3dDescriptorRanges[0].NumDescriptors = 1;
@@ -95,6 +95,12 @@ RootSignature::RootSignature(ID3D12Device* pd3dDevice)
 	pd3dDescriptorRanges[14].BaseShaderRegister = 18; //material buffer
 	pd3dDescriptorRanges[14].RegisterSpace = 0;
 	pd3dDescriptorRanges[14].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	pd3dDescriptorRanges[15].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	pd3dDescriptorRanges[15].NumDescriptors = 1;
+	pd3dDescriptorRanges[15].BaseShaderRegister = 19; //depth buffer
+	pd3dDescriptorRanges[15].RegisterSpace = 0;
+	pd3dDescriptorRanges[15].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 
 	D3D12_ROOT_PARAMETER pd3dRootParameters[19 + 1];
@@ -196,7 +202,7 @@ RootSignature::RootSignature(ID3D12Device* pd3dDevice)
 	pd3dRootParameters[18].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	pd3dRootParameters[19].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	pd3dRootParameters[19].DescriptorTable.NumDescriptorRanges = 3;
+	pd3dRootParameters[19].DescriptorTable.NumDescriptorRanges = 4;
 	pd3dRootParameters[19].DescriptorTable.pDescriptorRanges = &(pd3dDescriptorRanges[12]);
 	pd3dRootParameters[19].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 

@@ -160,6 +160,11 @@ void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList *pd3dCommandList)
 
 	::memcpy(&m_pcbMappedCamera->m_xmf3Position, &m_xmf3Position, sizeof(XMFLOAT3));
 
+	XMMATRIX xmmtxViewProjection = XMMatrixMultiply(XMLoadFloat4x4(&m_xmf4x4View), XMLoadFloat4x4(&m_xmf4x4Projection));
+	XMFLOAT4X4 xmf4x4InvViewProjection;
+	XMStoreFloat4x4(&xmf4x4InvViewProjection, XMMatrixTranspose(XMMatrixInverse(nullptr, xmmtxViewProjection)));
+	::memcpy(&m_pcbMappedCamera->m_xmf4x4InvViewProjection, &xmf4x4InvViewProjection, sizeof(XMFLOAT4X4));
+
 	D3D12_GPU_VIRTUAL_ADDRESS d3dGpuVirtualAddress = m_pd3dcbCamera->GetGPUVirtualAddress();
 	pd3dCommandList->SetGraphicsRootConstantBufferView(0, d3dGpuVirtualAddress);
 }

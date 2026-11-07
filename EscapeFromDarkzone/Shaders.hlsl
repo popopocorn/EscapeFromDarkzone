@@ -79,8 +79,8 @@ PS_GBUFFER_OUTPUT PSStandard(VS_STANDARD_OUTPUT input) : SV_Target
     output.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
     
     float emissiveStrength = dot(cEmissionColor.rgb, float3(0.333f, 0.333f, 0.333f));
-    output.Material = float4(specStrength, metalStrength, emissiveStrength, 1.0f);
-    //output.Material = float4(input.position.zzz, 1.0f);
+    output.Material = float4(specStrength, metalStrength, emissiveStrength,
+                         saturate(gMaterial.m_cSpecular.a / 256.0f));
     return output;
 }
 
@@ -209,38 +209,34 @@ float4 PSLighting(VS_UI_OUTPUT input):SV_Target
     float4 albedoSample = ColorTexture.Sample(gssWrap, input.uv);
     float4 normalSample = NormalTexture.Sample(gssWrap, input.uv);
     float4 materialSample = MaterialTexture.Sample(gssWrap, input.uv);
-    
-    float3 albedo = albedoSample.rgb;
-    float3 normalW = normalize(normalSample.xyz * 2.0f - 1.0f); // 0~1 → -1~1 디코딩
 
-    float specStrength = materialSample.r;
-    float metalStrength = materialSample.g;
+    // 깊이는 보간하면 안 되므로 픽셀 단위 Load
+    float depth = DepthTexture.Load(int3(input.position.xy, 0)).r;
+    bool bBackground = (depth >= 1.0f);   // 지오메트리 없음 (클리어 값 1.0)
+    float3 positionW = ReconstructWorldPosition(input.uv, depth);
+
+    if (bBackground)
+        return float4(albedoSample.rgb, 1.0f);
+    
+    GBufferSurface s;
+    s.positionW = positionW;
+    s.normalW = normalize(normalSample.xyz * 2.0f - 1.0f);
+    s.albedo = albedoSample.rgb;
+    s.specStrength = materialSample.r;
+    s.shininess = max(materialSample.a * 256.0f, 8.0f); 
+
     float emissiveStrength = materialSample.b;
 
-    float3 lightAccum = float3(0.0f, 0.0f, 0.0f);
+    float viewDepth = mul(float4(positionW, 1.0f), gmtxView).z;
+    float shadow = CalcShadowFactor(positionW, viewDepth);
 
-    for (int i = 0; i < gnLights; i++)
-    {
-        if (!gLights[i].m_bEnable)
-            continue;
+    
+    float3 finalColor = DeferredLighting(s, shadow);
 
-        if (gLights[i].m_nType == DIRECTIONAL_LIGHT)
-        {
-            float3 lightDir = normalize(-gLights[i].m_vDirection);
-            float ndl = saturate(dot(normalW, lightDir));
-            lightAccum += gLights[i].m_cDiffuse.rgb * ndl;
-        }
-    }
+    
+    finalColor += s.albedo * emissiveStrength * 0.08f;
 
-    float3 ambient = gcGlobalAmbientLight.rgb;
-    float3 lightingTerm = ambient + lightAccum;
-
-    float3 finalColor = albedo * lightingTerm;
-    finalColor += lightAccum * saturate(specStrength * 0.06f + metalStrength * 0.04f);
-
- 
-    finalColor += albedo * emissiveStrength * 0.08f;
-
+    
     finalColor = finalColor / (finalColor + float3(0.65f, 0.65f, 0.65f));
     finalColor *= 1.25f;
 

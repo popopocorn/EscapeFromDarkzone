@@ -11,6 +11,8 @@ struct VS_CB_CAMERA_INFO
 	XMFLOAT4X4						m_xmf4x4View;
 	XMFLOAT4X4						m_xmf4x4Projection;
 	XMFLOAT3						m_xmf3Position;
+	float							m_fPadding0;				// HLSL packoffset(c8.w) 맞춤
+	XMFLOAT4X4						m_xmf4x4InvViewProjection;	// 디퍼드 위치 복원용 (packoffset c9)
 };
 
 class CPlayer;

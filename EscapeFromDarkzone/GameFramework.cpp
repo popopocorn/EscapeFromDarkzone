@@ -16,6 +16,7 @@
 #include "TextRenderer.h"
 #include"Scene.h"
 #include "RenderTarget.h"
+#include "DepthBuffer.h"
 
 
 #include "GameFramework.h"
@@ -361,42 +362,18 @@ void CGameFramework::CreateRenderTargetViews()
 
 void CGameFramework::CreateDepthStencilView()
 {
-	D3D12_RESOURCE_DESC d3dResourceDesc;
-	d3dResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	d3dResourceDesc.Alignment = 0;
-	d3dResourceDesc.Width = m_nWndClientWidth;
-	d3dResourceDesc.Height = m_nWndClientHeight;
-	d3dResourceDesc.DepthOrArraySize = 1;
-	d3dResourceDesc.MipLevels = 1;
-	d3dResourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	d3dResourceDesc.SampleDesc.Count = (m_bMsaa4xEnable) ? 4 : 1;
-	d3dResourceDesc.SampleDesc.Quality = (m_bMsaa4xEnable) ? (m_nMsaa4xQualityLevels - 1) : 0;
-	d3dResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	d3dResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-	D3D12_HEAP_PROPERTIES d3dHeapProperties;
-	::ZeroMemory(&d3dHeapProperties, sizeof(D3D12_HEAP_PROPERTIES));
-	d3dHeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-	d3dHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	d3dHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	d3dHeapProperties.CreationNodeMask = 1;
-	d3dHeapProperties.VisibleNodeMask = 1;
-
-	D3D12_CLEAR_VALUE d3dClearValue;
-	d3dClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	d3dClearValue.DepthStencil.Depth = 1.0f;
-	d3dClearValue.DepthStencil.Stencil = 0;
-
-	m_pd3dDevice->CreateCommittedResource(&d3dHeapProperties, D3D12_HEAP_FLAG_NONE, &d3dResourceDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &d3dClearValue, __uuidof(ID3D12Resource), (void**)&m_pd3dDepthStencilBuffer);
-
-	D3D12_DEPTH_STENCIL_VIEW_DESC d3dDepthStencilViewDesc;
-	::ZeroMemory(&d3dDepthStencilViewDesc, sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC));
-	d3dDepthStencilViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	d3dDepthStencilViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	d3dDepthStencilViewDesc.Flags = D3D12_DSV_FLAG_NONE;
-
+	if (not m_DepthBuffer)
+		m_DepthBuffer = make_unique<DepthBuffer>();
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_pd3dDevice->CreateDepthStencilView(m_pd3dDepthStencilBuffer, &d3dDepthStencilViewDesc, d3dDsvCPUDescriptorHandle);
+
+	if (!m_DepthBuffer->CreateDepthBuffer(
+		m_pd3dDevice, m_nWndClientWidth, m_nWndClientHeight,
+		DXGI_FORMAT_D24_UNORM_S8_UINT, 
+		d3dDsvCPUDescriptorHandle))
+	{
+		OutputDebugStringW(L"[GameFramework] Depth buffer creation failed.\n");
+	}
+
 }
 
 void CGameFramework::CreateRenderBuffers()
@@ -455,18 +432,22 @@ void CGameFramework::CreateRenderBuffers()
 
 void CGameFramework::CreateRenderBuffersSRV()
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dCpuSrvHandle;
-	D3D12_GPU_DESCRIPTOR_HANDLE d3dGpuSrvHandle;
-
-	for (int i = 0; i < renderBuffers.size();++i) {
-		if (!ResourceManager::Instance().AllocateNextSrvDescriptor(d3dCpuSrvHandle, d3dGpuSrvHandle))
+	auto Allocate = [](D3D12_CPU_DESCRIPTOR_HANDLE& cpu, D3D12_GPU_DESCRIPTOR_HANDLE& gpu) -> bool
 		{
-			OutputDebugStringW(L"[GameFramework] Color buffer SRV slot allocation failed.\n");
-			return;
-		}
+			if (ResourceManager::Instance().AllocateNextSrvDescriptor(cpu, gpu)) return true;
+			OutputDebugStringW(L"[GameFramework] Render buffer SRV slot allocation failed.\n");
+			return false;
+		};
 
-		renderBuffers[i].CreateSRV(m_pd3dDevice, d3dCpuSrvHandle, d3dGpuSrvHandle);
-	}
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
+
+	if (!Allocate(cpu, gpu)) return; renderBuffers[BufferName::COLOR].CreateSRV(m_pd3dDevice, cpu, gpu);
+	if (!Allocate(cpu, gpu)) return; renderBuffers[BufferName::NORMAL].CreateSRV(m_pd3dDevice, cpu, gpu);
+	if (!Allocate(cpu, gpu)) return; renderBuffers[BufferName::MATRIAL].CreateSRV(m_pd3dDevice, cpu, gpu);
+	if (!Allocate(cpu, gpu)) return; m_DepthBuffer->CreateSRV(m_pd3dDevice, cpu, gpu);                       
+
+	if (!Allocate(cpu, gpu)) return; renderBuffers[BufferName::RENDERBASE].CreateSRV(m_pd3dDevice, cpu, gpu);
 }
 
 void CGameFramework::ChangeSwapChainState()
@@ -639,7 +620,7 @@ void CGameFramework::OnDestroy()
 
 	::CloseHandle(m_hFenceEvent);
 
-	if (m_pd3dDepthStencilBuffer) m_pd3dDepthStencilBuffer->Release();
+	if (m_DepthBuffer) m_DepthBuffer->Release();
 	if (m_pd3dDsvDescriptorHeap) m_pd3dDsvDescriptorHeap->Release();
 
 	if (m_pd3dCommandList) m_pd3dCommandList->Release();
@@ -1094,10 +1075,11 @@ void CGameFramework::PrepareMainRender()
 		m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+	// 이전 프레임 LightRendering에서 SRV로 바뀐 깊이 버퍼를 다시 쓰기 상태로
+	m_DepthBuffer->TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	m_DepthBuffer->Clear(m_pd3dCommandList);
 
-	m_pd3dCommandList->OMSetRenderTargets(3, RtvCPUDescriptorHandles.data(), TRUE, &d3dDsvCPUDescriptorHandle);
+	m_pd3dCommandList->OMSetRenderTargets(3, RtvCPUDescriptorHandles.data(), TRUE, &m_DepthBuffer->GetDSV());
 
 }
 
@@ -1122,10 +1104,9 @@ void CGameFramework::BlitToBackBuffer()
 
 	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
 	m_pd3dCommandList->ClearRenderTargetView(d3dRtvCPUDescriptorHandle, pfClearColor, 0, NULL);
-	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle = m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, &d3dDsvCPUDescriptorHandle);
+	// 풀스크린 복사는 깊이를 쓰지 않음 (깊이 버퍼는 이 시점에 SRV 상태)
+	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, TRUE, nullptr);
 	//color->backbuffer
 	fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[BufferName::RENDERBASE], FShaderType::FSTANDARD);
 	//fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[slot], FSTANDARD);
@@ -1160,7 +1141,7 @@ void CGameFramework::MainRendering()
 	if (!m_pScene.empty() && m_pScene.back()) m_pScene.back()->Render(m_pd3dCommandList, MAIN, m_pCamera);
 
 #ifdef _WITH_PLAYER_TOP
-	m_pd3dCommandList->ClearDepthStencilView(d3dDsvCPUDescriptorHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+	m_DepthBuffer->Clear(m_pd3dCommandList);
 #endif
 
 	m_pScene.back()->ThroughRender(m_pd3dCommandList, m_pCamera);
@@ -1175,6 +1156,9 @@ void CGameFramework::LightRendering()
 		renderBuffers[i].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	}
 
+	// 깊이 버퍼를 t19로 읽기 위해 SRV 상태로 (다음 프레임 PrepareMainRender에서 DEPTH_WRITE로 복귀)
+	m_DepthBuffer->TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
 	renderBuffers[BufferName::RENDERBASE].TransitionTo(m_pd3dCommandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE colorRtv = renderBuffers[BufferName::RENDERBASE].GetRTV();
@@ -1182,6 +1166,9 @@ void CGameFramework::LightRendering()
 	
 	m_pd3dCommandList->SetGraphicsRootConstantBufferView(0, m_pCamera->GetCameraInfo()->GetGPUVirtualAddress());
 	m_pd3dCommandList->SetGraphicsRootConstantBufferView(2, m_pScene.back()->m_pd3dcbLights->GetGPUVirtualAddress());
+
+	m_pScene.back()->GetLightCameraManager()->UpdateShaderVariables(m_pd3dCommandList); 
+	shadowmap->SetTextureOnParameter(m_pd3dCommandList);                                
 
 	fscreenrenderer.Render(m_pd3dCommandList, &renderBuffers[0], FShaderType::FLIGHT);
 

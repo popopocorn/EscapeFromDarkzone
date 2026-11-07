@@ -21,6 +21,7 @@ class TextRenderer;
 class ShaderManager;
 class RenderTarget;
 class FullScreenRenderer;
+class DepthBuffer;
 
 enum RtvSlot
 {
@@ -128,7 +129,9 @@ private:
 	vector<RenderTarget>		renderBuffers;
 	ID3D12DescriptorHeap		*m_pd3dRtvDescriptorHeap = NULL;
 
-	ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
+	//ID3D12Resource				*m_pd3dDepthStencilBuffer = NULL;
+	unique_ptr<DepthBuffer>		m_DepthBuffer;
+
 	ID3D12DescriptorHeap		*m_pd3dDsvDescriptorHeap = NULL;
 
 	//ID3D12CommandAllocator		*m_pd3dCommandAllocator = NULL;
