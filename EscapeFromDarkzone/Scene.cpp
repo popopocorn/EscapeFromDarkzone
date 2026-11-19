@@ -2169,6 +2169,9 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 				m_ppShaders[i]->Render(pd3dCommandList, pCamera, true, nPipelineState);
 		}
 
+		if (m_pInventoryManager)
+			m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, SHADOW);
+
 		if (m_pPlayer)
 		{
 			pd3dCommandList->OMSetStencilRef(0x04);
@@ -2195,6 +2198,9 @@ void MainScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeline
 		m_pPlayer->Render(pd3dCommandList, nPipelineState, pCamera);
 		pd3dCommandList->OMSetStencilRef(0xff);
 	}
+
+	if (m_pInventoryManager)
+		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
 }
 
 void MainScene::EffectRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipelineState, CCamera* pCamera)
@@ -2239,12 +2245,6 @@ void MainScene::UIRender(ID3D12GraphicsCommandList* pd3dCommandList, int nPipeli
 	{
 		UIShader->Render(pd3dCommandList, pCamera, true, nPipelineState);
 	}
-
-	if (m_pInventoryManager)
-	{
-		m_pInventoryManager->RenderLootWorld(pd3dCommandList, pCamera, MAIN);
-	}
-
 }
 
 void MainScene::ThroughRender(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
