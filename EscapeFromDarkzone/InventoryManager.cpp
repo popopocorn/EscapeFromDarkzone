@@ -148,7 +148,7 @@ void InventoryManager::RenderLootWorld(ID3D12GraphicsCommandList* pd3dCommandLis
 	if (!m_pLootShader) return;
 
 	pd3dCommandList->OMSetStencilRef(0xff);
-	m_pLootShader->OnPrepareRender(pd3dCommandList, 0);
+	m_pLootShader->OnPrepareRender(pd3dCommandList, nPipelineState);
 
 	for (auto& loot : m_vLootContainers)
 	{
@@ -156,7 +156,7 @@ void InventoryManager::RenderLootWorld(ID3D12GraphicsCommandList* pd3dCommandLis
 		if (!loot->IsAlive()) continue;
 
 		loot->UpdateTransform(NULL);
-		loot->Render(pd3dCommandList, true, 0, pCamera);
+		loot->Render(pd3dCommandList, true, nPipelineState, pCamera);
 	}
 }
 
