@@ -1,4 +1,4 @@
-﻿#ifndef NOMINMAX
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
@@ -696,9 +696,9 @@ static void start_new_round(Room& r)
 
 			// 인벤토리 완전 초기화 및 테스트 아이템 지급 (CS_LOGIN에서 옮김, 수정 필요?)
 			clients[cid]._inventory.fill(ItemSlot{});
-			clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
-			clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
-			clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+			//clients[cid]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+			//clients[cid]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+			//clients[cid]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
 			//clients[cid]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };
 		}
 
@@ -3176,21 +3176,21 @@ void process_packet(int c_id, char* packet)
 		}
 
 		// 동기화 검증용 테스트 아이템 (05.15)
-		{
-			std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
+		//{
+		//	std::lock_guard<std::mutex> ll(clients[c_id]._s_lock);
 
-			clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
-			clients[c_id].send_inventory_update_packet(0);
+		//	clients[c_id]._inventory[0] = ItemSlot{ ItemID::MAT_1_FIBER, 99 };
+		//	clients[c_id].send_inventory_update_packet(0);
 
-			clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
-			clients[c_id].send_inventory_update_packet(1);
+		//	clients[c_id]._inventory[1] = ItemSlot{ ItemID::MAT_2_METAL_PLATE, 99 };
+		//	clients[c_id].send_inventory_update_packet(1);
 
-			clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
-			clients[c_id].send_inventory_update_packet(2);
+		//	clients[c_id]._inventory[2] = ItemSlot{ ItemID::MAT_3_BOLT_AND_NUT, 99 };
+		//	clients[c_id].send_inventory_update_packet(2);
 
-			clients[c_id]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };		// 탈출키 임시 추가
-			clients[c_id].send_inventory_update_packet(3);
-		}
+		//	clients[c_id]._inventory[3] = ItemSlot{ ItemID::ESCAPE_KEY, 1 };		// 탈출키 임시 추가
+		//	clients[c_id].send_inventory_update_packet(3);
+		//}
 
 		break;
 	}
@@ -3817,18 +3817,23 @@ static void GenerateNpcLoot(SERVER_NPC& npc)
 	}
 
 	// --- 업그레이드 재료 랜덤 드랍 처리 ---
-	if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+	//if (currentSlot < INVENTORY_SIZE && (rand() % 100 < 50)) {
+	if (currentSlot < INVENTORY_SIZE) {
 		ItemID upgradeItem = ItemID::NONE;
 
 		switch (npc.kind) {
 		case NPC_TIER_3:
-			upgradeItem = ItemID::WEAPON_UPGRADE_4;
+			//upgradeItem = ItemID::WEAPON_UPGRADE_4;
+			upgradeItem = ItemID::ESCAPE_KEY;
 			break;
 		case NPC_TIER_2:
-			upgradeItem = (rand() % 100 < 70) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3; break;
+			//upgradeItem = (rand() % 100 < 70) ? ItemID::WEAPON_UPGRADE_2 : ItemID::WEAPON_UPGRADE_3; 
+			upgradeItem = ItemID::NONE;
+			break;
 		case NPC_TIER_1:
 		default:
-			upgradeItem = ItemID::WEAPON_UPGRADE_2;
+			//upgradeItem = ItemID::WEAPON_UPGRADE_2;
+			upgradeItem = ItemID::NONE;
 			break;
 		}
 
