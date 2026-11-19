@@ -1265,7 +1265,6 @@ static void BroadcastFireTracer(
 	for (int k = 0; k < ROOM_CAPACITY; ++k) {
 		int i = r.participants[k];
 		if (i < 0) continue;
-		if (shooter_id == i) continue;				// 발사자 본인 제외
 		clients[i].do_send(&tp);
 	}
 }
